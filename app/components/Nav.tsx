@@ -26,12 +26,6 @@ export default function Nav() {
             ))}
           </div>
         </div>
-        <Link
-          href="/cards/new"
-          className="bg-blue-600 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-        >
-          + Add Card
-        </Link>
       </div>
     </nav>
   )

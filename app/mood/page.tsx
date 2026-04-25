@@ -65,6 +65,9 @@ export default async function MoodPage() {
                         <JournalDeleteButton entryId={entry.id} />
                       </div>
                     </div>
+                    {entry.grateful_for && (
+                      <p className="text-sm text-gray-500 mt-0.5 line-clamp-1 italic">{entry.grateful_for}</p>
+                    )}
                     {entry.note && (
                       <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{entry.note}</p>
                     )}

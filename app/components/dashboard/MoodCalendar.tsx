@@ -112,7 +112,6 @@ export default function MoodCalendar({ initialEntries }: { initialEntries: MoodE
           const inner = (
             <div className={`${base} ${size} ${color} ${ring} ${cursor}`}>
               <span className="text-xs font-medium text-gray-700 leading-none">{cell.day}</span>
-              {entry && <span className="text-sm leading-none mt-px">{MOOD_EMOJI[entry.mood]}</span>}
             </div>
           )
 
@@ -125,10 +124,10 @@ export default function MoodCalendar({ initialEntries }: { initialEntries: MoodE
       {/* Legend */}
       <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
         <span className="text-xs text-gray-400">Mood:</span>
-        {[1, 2, 3, 4, 5].map(n => (
+        {([1, 2, 3, 4, 5] as const).map(n => (
           <span key={n} className="text-xs flex items-center gap-1">
             <span className={`inline-block w-3 h-3 rounded-sm ${MOOD_BG[n]}`} />
-            {MOOD_EMOJI[n]}
+            <span className="text-gray-500">{['Bad','Low','Okay','Good','Great'][n-1]}</span>
           </span>
         ))}
         <span className="text-xs text-gray-400 ml-auto">Click empty day to log</span>
