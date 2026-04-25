@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(standup)",
+      "Skill(standup:*)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-git --yes)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-git --yes --name life-tracker)",
+      "Read(//c/Users/Tim/OneDrive/**)",
+      "Bash(npx create-next-app@latest life-tracker-temp --typescript --tailwind --app --no-git --yes)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\('URL set:', !!process.env.NEXT_PUBLIC_SUPABASE_URL, '| starts with https:', process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith\\('https'\\)\\)\")",
+      "Skill(update-config)",
+      "WebSearch",
+      "PowerShell(taskkill *)",
+      "Bash(taskkill /PID 34104 /F)",
+      "PowerShell(Stop-Process *)",
+      "WebFetch(domain:creditcards.chase.com)",
+      "WebFetch(domain:account.chase.com)",
+      "WebFetch(domain:www.americanexpress.com)",
+      "WebFetch(domain:thepointsguy.com)",
+      "Bash(node *)",
+      "Skill(wrap)",
+      "PowerShell(Set-ExecutionPolicy *)",
+      "PowerShell(Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression)",
+      "PowerShell(scoop install *)",
+      "PowerShell(& \"$env:USERPROFILE\\\\scoop\\\\shims\\\\scoop.ps1\" install supabase)",
+      "WebFetch(domain:supabase.com)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration"
+    ]
+  }
+}

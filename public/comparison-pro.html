@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chase Sapphire Reserve vs American Express Platinum 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Sora', sans-serif; }
+    .card-csr { border-top: 4px solid #0066cc; }
+    .card-amex { border-top: 4px solid #006fcf; }
+    .badge-csr { background: linear-gradient(135deg, #0066cc 0%, #004a99 100%); }
+    .badge-amex { background: linear-gradient(135deg, #006fcf 0%, #004a99 100%); }
+    .comparison-row:nth-child(even) { background: #f9fafb; }
+    .comparison-row:hover { background: #f3f4f6; transition: all 0.2s; }
+  </style>
+</head>
+<body class="bg-white text-gray-900">
+  <!-- Navigation -->
+  <nav class="border-b border-gray-200 sticky top-0 bg-white z-40">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="font-bold text-lg">Card Comparison 2026</div>
+      <div class="flex gap-6 text-sm font-medium text-gray-600">
+        <button onclick="scrollTo('overview')" class="hover:text-gray-900">Overview</button>
+        <button onclick="scrollTo('credits')" class="hover:text-gray-900">Credits</button>
+        <button onclick="scrollTo('verdict')" class="hover:text-gray-900">Verdict</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <div class="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
+    <div class="max-w-6xl mx-auto px-6 py-16">
+      <h1 class="text-5xl font-bold mb-4">Sapphire Reserve vs Platinum</h1>
+      <p class="text-xl text-gray-600 mb-8">The definitive comparison of two elite premium cards for 2026</p>
+      <div class="grid grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl shadow-sm p-6 card-csr">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h2 class="text-2xl font-bold">Chase Sapphire Reserve</h2>
+              <p class="text-gray-600 text-sm mt-1">Visa Infinite</p>
+            </div>
+            <span class="badge-csr text-white px-3 py-1 rounded-full text-sm font-semibold">$795/yr</span>
+          </div>
+          <p class="text-gray-600 mb-4">Premium travel card with flexible credits and best-in-class transfer partners.</p>
+          <div class="pt-4 border-t border-gray-200">
+            <div class="text-sm text-gray-600">Est. Annual Value</div>
+            <div class="text-3xl font-bold text-green-600">$1,500+</div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 card-amex">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h2 class="text-2xl font-bold">American Express Platinum</h2>
+              <p class="text-gray-600 text-sm mt-1">Charge Card</p>
+            </div>
+            <span class="badge-amex text-white px-3 py-1 rounded-full text-sm font-semibold">$895/yr</span>
+          </div>
+          <p class="text-gray-600 mb-4">Elite travel card with hotel status and unmatched lounge access.</p>
+          <div class="pt-4 border-t border-gray-200">
+            <div class="text-sm text-gray-600">Est. Annual Value</div>
+            <div class="text-3xl font-bold text-green-600">$3,500+</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Comparison -->
+  <div id="overview" class="max-w-6xl mx-auto px-6 py-16">
+    <h2 class="text-3xl font-bold mb-12">Quick Comparison</h2>
+
+    <div class="grid grid-cols-3 gap-6 mb-12">
+      <!-- Annual Fee -->
+      <div class="bg-gray-50 rounded-lg p-6 border border-gray-200">
+        <div class="text-sm font-semibold text-gray-600 mb-4">ANNUAL FEE</div>
+        <div class="space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="text-sm">Chase Sapphire</span>
+            <span class="font-bold">$795</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm">Amex Platinum</span>
+            <span class="font-bold">$895</span>
+          </div>
+          <div class="pt-3 border-t border-gray-300 text-xs text-gray-600">Both increased in 2025</div>
+        </div>
+      </div>
+
+      <!-- Best For Travel -->
+      <div class="bg-gray-50 rounded-lg p-6 border border-gray-200">
+        <div class="text-sm font-semibold text-gray-600 mb-4">FOR FREQUENT TRAVELERS</div>
+        <div class="space-y-3">
+          <div>
+            <div class="text-sm font-medium mb-1">Lounge Access</div>
+            <div class="text-xs text-gray-600">CSR: Sapphire Lounges + Priority Pass</div>
+            <div class="text-xs text-gray-600 mt-1">Amex: Centurion + Priority Pass + Delta Sky Club</div>
+          </div>
+          <div class="pt-3 border-t border-gray-300">
+            <div class="text-xs font-semibold text-green-600">✓ Winner: Amex Platinum</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Credit Value -->
+      <div class="bg-gray-50 rounded-lg p-6 border border-gray-200">
+        <div class="text-sm font-semibold text-gray-600 mb-4">TOTAL ANNUAL CREDITS</div>
+        <div class="space-y-3">
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm">CSR Credits</span>
+              <span class="font-bold text-lg">~$1,500</span>
+            </div>
+            <div class="w-full bg-gray-300 rounded-full h-2">
+              <div class="bg-blue-500 h-2 rounded-full" style="width: 43%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm">Amex Credits</span>
+              <span class="font-bold text-lg">~$3,500</span>
+            </div>
+            <div class="w-full bg-gray-300 rounded-full h-2">
+              <div class="bg-green-500 h-2 rounded-full" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Differences Table -->
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="grid grid-cols-3 bg-gray-50 border-b border-gray-200">
+        <div class="col-span-1 px-6 py-4 font-semibold text-sm">Benefit</div>
+        <div class="px-6 py-4 font-semibold text-sm text-center">Chase Sapphire</div>
+        <div class="px-6 py-4 font-semibold text-sm text-center">Amex Platinum</div>
+      </div>
+
+      <!-- Travel Credit -->
+      <div class="grid grid-cols-3 comparison-row border-b border-gray-200">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Travel Credit</div>
+          <div class="text-xs text-gray-600">Flexible use</div>
+        </div>
+        <div class="px-6 py-4 text-center"><span class="text-green-600 font-semibold">$300/yr</span></div>
+        <div class="px-6 py-4 text-center">—</div>
+      </div>
+
+      <!-- Hotel Credits -->
+      <div class="grid grid-cols-3 comparison-row border-b border-gray-200">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Hotel Credit</div>
+          <div class="text-xs text-gray-600">Prepaid bookings</div>
+        </div>
+        <div class="px-6 py-4 text-center"><span class="text-green-600 font-semibold">$500/yr</span></div>
+        <div class="px-6 py-4 text-center"><span class="text-green-600 font-semibold">$600/yr</span></div>
+      </div>
+
+      <!-- Dining Credits -->
+      <div class="grid grid-cols-3 comparison-row border-b border-gray-200">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Dining Credit</div>
+          <div class="text-xs text-gray-600">Restaurants & services</div>
+        </div>
+        <div class="px-6 py-4 text-center"><span class="text-green-600 font-semibold">$300/yr</span></div>
+        <div class="px-6 py-4 text-center"><span class="text-green-600 font-semibold">$400/yr</span></div>
+      </div>
+
+      <!-- Lounges -->
+      <div class="grid grid-cols-3 comparison-row border-b border-gray-200">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Premium Lounge Access</div>
+          <div class="text-xs text-gray-600">Airport lounge network</div>
+        </div>
+        <div class="px-6 py-4 text-center">
+          <div class="text-xs">Sapphire Lounges</div>
+          <div class="text-xs">Priority Pass</div>
+        </div>
+        <div class="px-6 py-4 text-center">
+          <div class="text-xs font-semibold text-green-600">Centurion</div>
+          <div class="text-xs">Delta Sky Club</div>
+          <div class="text-xs">Priority Pass</div>
+        </div>
+      </div>
+
+      <!-- Hotel Status -->
+      <div class="grid grid-cols-3 comparison-row border-b border-gray-200">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Elite Hotel Status</div>
+          <div class="text-xs text-gray-600">Perks & upgrades</div>
+        </div>
+        <div class="px-6 py-4 text-center"><div class="text-xs">Limited</div></div>
+        <div class="px-6 py-4 text-center">
+          <div class="text-xs font-semibold text-green-600">Hilton Gold</div>
+          <div class="text-xs">Marriott Gold Elite</div>
+        </div>
+      </div>
+
+      <!-- Points Earning -->
+      <div class="grid grid-cols-3 comparison-row border-b border-gray-200">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Best Earning Rate</div>
+          <div class="text-xs text-gray-600">Points per dollar</div>
+        </div>
+        <div class="px-6 py-4 text-center"><span class="font-bold">8x</span><br><span class="text-xs">Chase Travel</span></div>
+        <div class="px-6 py-4 text-center"><span class="font-bold">5x</span><br><span class="text-xs">Flights & Hotels</span></div>
+      </div>
+
+      <!-- Transfer Partners -->
+      <div class="grid grid-cols-3 comparison-row">
+        <div class="px-6 py-4">
+          <div class="font-semibold text-sm">Transfer Partners</div>
+          <div class="text-xs text-gray-600">Airlines & hotels</div>
+        </div>
+        <div class="px-6 py-4 text-center"><div class="text-xs text-green-600 font-semibold">40+</div></div>
+        <div class="px-6 py-4 text-center"><div class="text-xs text-green-600 font-semibold">50+</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Credits Section -->
+  <div id="credits" class="bg-gray-50 border-y border-gray-200 py-16">
+    <div class="max-w-6xl mx-auto px-6">
+      <h2 class="text-3xl font-bold mb-12">All Credits Breakdown</h2>
+
+      <div class="grid grid-cols-2 gap-8">
+        <!-- CSR Credits -->
+        <div>
+          <h3 class="text-2xl font-bold mb-6 pb-4 border-b-2 border-blue-500">Chase Sapphire Reserve</h3>
+          <div class="space-y-4">
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Travel Credit</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$300/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">Flexible $300 annual credit for any travel purchase</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Dining Credit</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$300/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">Exclusive Tables at Sapphire Reserve partners</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Hotel Credit</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$500/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">The Edit Hotel stays with breakfast & upgrade</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Lyft & DoorDash</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$300/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">$120 Lyft + $180 DoorDash credits</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Entertainment & Other</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$400/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">Apple services, StubHub, Global Entry</p>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-4 border-2 border-blue-200 mt-6">
+              <div class="text-sm text-gray-600">Est. Annual Credit Value</div>
+              <div class="text-3xl font-bold text-blue-600">~$1,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Amex Credits -->
+        <div>
+          <h3 class="text-2xl font-bold mb-6 pb-4 border-b-2 border-green-500">American Express Platinum</h3>
+          <div class="space-y-4">
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Hotel Credit</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$600/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">FHR/The Hotel Collection with breakfast & upgrade</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Resy Dining Credit</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$400/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">10,000+ participating restaurants quarterly</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Entertainment Credit</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$300/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">Disney+, Hulu, NYT, Paramount+, ESPN+ & more</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Uber & Fitness</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$500/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">$200 Uber + $300 Equinox credits</p>
+            </div>
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
+              <div class="flex justify-between items-start mb-2">
+                <div class="font-semibold">Other Credits</div>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">$700/yr</span>
+              </div>
+              <p class="text-sm text-gray-600">Airline fees, CLEAR+, Walmart+, Lululemon, etc.</p>
+            </div>
+            <div class="bg-green-50 rounded-lg p-4 border-2 border-green-200 mt-6">
+              <div class="text-sm text-gray-600">Est. Annual Credit Value</div>
+              <div class="text-3xl font-bold text-green-600">~$3,500</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Verdict Section -->
+  <div id="verdict" class="max-w-6xl mx-auto px-6 py-16">
+    <h2 class="text-3xl font-bold mb-12">The Verdict</h2>
+
+    <div class="grid grid-cols-2 gap-8 mb-12">
+      <div class="bg-blue-50 rounded-xl p-8 border-2 border-blue-200">
+        <h3 class="text-2xl font-bold text-blue-900 mb-4">Choose Chase Sapphire if you:</h3>
+        <ul class="space-y-3 text-gray-800">
+          <li class="flex gap-3">
+            <span class="text-blue-600 font-bold text-xl">✓</span>
+            <span>Want maximum transfer partner flexibility with 40+ airline/hotel programs</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-blue-600 font-bold text-xl">✓</span>
+            <span>Prefer a lower annual fee with strong credit value ($795 vs $895)</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-blue-600 font-bold text-xl">✓</span>
+            <span>Use the flexible $300 travel credit (no category restrictions)</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-blue-600 font-bold text-xl">✓</span>
+            <span>Value dining at Sapphire Reserve Exclusive Tables partners</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-blue-600 font-bold text-xl">✓</span>
+            <span>Want a Visa card with excellent everyday earning (3x dining)</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="bg-green-50 rounded-xl p-8 border-2 border-green-200">
+        <h3 class="text-2xl font-bold text-green-900 mb-4">Choose Amex Platinum if you:</h3>
+        <ul class="space-y-3 text-gray-800">
+          <li class="flex gap-3">
+            <span class="text-green-600 font-bold text-xl">✓</span>
+            <span>Stay at Hilton, Marriott, or other hotel chains (elite status perks)</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-green-600 font-bold text-xl">✓</span>
+            <span>Fly Delta frequently (Sky Club access)</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-green-600 font-bold text-xl">✓</span>
+            <span>Use premium lounges everywhere (Centurion + Priority Pass + Delta)</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-green-600 font-bold text-xl">✓</span>
+            <span>Want the highest total annual benefits ($3,500+)</span>
+          </li>
+          <li class="flex gap-3">
+            <span class="text-green-600 font-bold text-xl">✓</span>
+            <span>Prefer Amex's Resy dining network (10,000+ restaurants)</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="bg-gray-100 rounded-xl p-8 text-center">
+      <h3 class="text-2xl font-bold mb-3">Bottom Line</h3>
+      <p class="text-lg text-gray-700 max-w-2xl mx-auto">
+        <strong>Chase Sapphire Reserve</strong> is best for flexible travelers who maximize transfer partners. <strong>American Express Platinum</strong> wins for frequent hotel/airline users with specific brand loyalties. Both cards offer exceptional value when their credits are fully utilized.
+      </p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="bg-gray-900 text-white mt-16">
+    <div class="max-w-6xl mx-auto px-6 py-12 text-center text-sm text-gray-400">
+      <p>Card benefits and fees accurate as of April 2026. Offers and terms subject to change.</p>
+    </div>
+  </div>
+
+  <script>
+    function scrollTo(id) {
+      const element = document.getElementById(id);
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>
