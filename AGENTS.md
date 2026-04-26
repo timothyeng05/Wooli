@@ -11,6 +11,22 @@
 
 ---
 
+## Token-efficient reading (read this first)
+
+The codebase has per-module docs in `docs/modules/` (MOOD, BUDGET, CARDS, CALENDAR). When working on a single module, **read the module doc first** — it has the schema, routes, and components in 50–100 lines. That's much cheaper than greppling source.
+
+**Default reading order for any module work:**
+1. `docs/modules/{module}.md` (if it exists)
+2. The single page or component file you're modifying
+3. Only fan out from there if the doc and target file aren't enough
+
+**Don't load:**
+- Other modules' source files unless you're integrating with them
+- `~/.claude/MEMORY.md`, `goals.md`, `projects.md` unless yesterday's log references them
+- Files that the user hasn't asked you to change
+
+**Plans for new features should reference docs/modules paths**, not enumerate source files. The implementing agent can decide what to read.
+
 ## Quick Reminders (Lessons from Sessions 1-2)
 
 1. **Auth Flow:** Profiles table needs `handle_new_user()` trigger. Don't skip database migrations.
