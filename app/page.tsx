@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { logout } from '@/app/auth/actions'
 import { computeCardStats } from '@/lib/card-utils'
-import MoodCalendar from '@/app/components/dashboard/MoodCalendar'
+import LifeCalendar from '@/app/components/dashboard/LifeCalendar'
+import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
+import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -14,13 +16,18 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
 
-  const [moodResult, transactionResult, cardsResult] = await Promise.all([
+  const moodLookbackStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
+  const [moodResult, periodResult, transactionResult, cardsResult] = await Promise.all([
     supabase
       .from('mood_entries')
-      .select('id, mood, logged_at')
+      .select('id, mood, note, grateful_for, activities, logged_at')
       .eq('user_id', user.id)
-      .gte('logged_at', monthStart)
-      .lte('logged_at', monthEnd),
+      .gte('logged_at', moodLookbackStart),
+    supabase
+      .from('period_entries')
+      .select('id, start_date, end_date, flow_level, symptoms, notes')
+      .eq('user_id', user.id)
+      .order('start_date', { ascending: false }),
     supabase
       .from('transactions')
       .select('id, amount, description, merchant, transacted_at, categories(id, name, color)')
@@ -45,6 +52,8 @@ export default async function DashboardPage() {
   ])
 
   const moodEntries = moodResult.data || []
+  const periodEntries = periodResult.data || []
+  const moodEntriesThisMonth = moodEntries.filter(e => e.logged_at >= monthStart && e.logged_at <= monthEnd)
   const transactions = transactionResult.data || []
   const rawCards = cardsResult.data || []
 
@@ -82,21 +91,24 @@ export default async function DashboardPage() {
 
       {/* Main layout */}
       <div className="max-w-7xl mx-auto px-6 py-8">
+        <WeeklySummary />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Left column: Big calendar */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">Mood</h2>
+                  <h2 className="text-lg font-bold text-gray-900">Daily Log</h2>
                   <p className="text-sm text-gray-500">Click any past day to log or view</p>
                 </div>
-                <Link href="/mood" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  All entries →
-                </Link>
+                <div className="flex items-center gap-3 text-sm">
+                  <Link href="/period" className="text-pink-600 hover:text-pink-700 font-medium">Period</Link>
+                  <Link href="/mood" className="text-blue-600 hover:text-blue-700 font-medium">All entries →</Link>
+                </div>
               </div>
-              <MoodCalendar initialEntries={moodEntries} />
+              <CalendarInsights moodEntries={moodEntries} periodEntries={periodEntries} />
+              <LifeCalendar initialMoodEntries={moodEntriesThisMonth} initialPeriodEntries={periodEntries} />
             </div>
           </div>
 

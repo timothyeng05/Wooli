@@ -1,10 +1,33 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 
-const ACTIVITIES = ['Exercised', 'Read', 'Good sleep', 'Meditated', 'Period']
+const ACTIVITIES = ['Exercised', 'Read', 'Good sleep', 'Meditated']
+
+const PROMPT_CACHE_KEY = 'wooli_journal_prompts'
+
+function getCachedPrompts(): string[] | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(PROMPT_CACHE_KEY)
+    if (!raw) return null
+    const { date, prompts } = JSON.parse(raw)
+    if (date !== new Date().toISOString().split('T')[0]) return null
+    return prompts
+  } catch {
+    return null
+  }
+}
+
+function setCachedPrompts(prompts: string[]) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(
+    PROMPT_CACHE_KEY,
+    JSON.stringify({ date: new Date().toISOString().split('T')[0], prompts })
+  )
+}
 
 export default function MoodFormClient({ userId, entry, initialDate, onDelete }: {
   userId: string
@@ -22,6 +45,35 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete }:
     entry?.logged_at?.split('T')[0] || initialDate || new Date().toISOString().split('T')[0]
   )
   const [loading, setLoading] = useState(false)
+  const [prompts, setPrompts] = useState<string[]>([])
+  const noteRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (entry) return
+    const cached = getCachedPrompts()
+    if (cached) {
+      setPrompts(cached)
+      return
+    }
+    fetch('/api/journal-prompts')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.prompts)) {
+          setPrompts(d.prompts)
+          setCachedPrompts(d.prompts)
+        }
+      })
+      .catch(() => {})
+  }, [entry])
+
+  const insertPrompt = (p: string) => {
+    setNote(prev => (prev ? `${prev}\n\n${p} ` : `${p} `))
+    setTimeout(() => {
+      noteRef.current?.focus()
+      const len = noteRef.current?.value.length || 0
+      noteRef.current?.setSelectionRange(len, len)
+    }, 0)
+  }
 
   const toggleActivity = (activity: string) => {
     setActivities(prev =>
@@ -110,7 +162,22 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete }:
 
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-2">Notable events</label>
+        {prompts.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {prompts.map((p, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => insertPrompt(p)}
+                className="text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 transition border border-blue-100"
+              >
+                ✨ {p}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
+          ref={noteRef}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="What happened today?"
