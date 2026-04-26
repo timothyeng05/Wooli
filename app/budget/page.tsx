@@ -93,6 +93,9 @@ export default async function BudgetPage() {
               <p className="text-gray-600">{monthLabel}</p>
             </div>
             <div className="flex items-center gap-3">
+              <Link href="/budget/accounts" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
+                Accounts
+              </Link>
               <Link href="/budget/categories" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
                 Categories
               </Link>
