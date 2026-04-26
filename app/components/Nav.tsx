@@ -4,17 +4,19 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_LINKS = [
-  { href: '/mood', label: 'Journal' },
-  { href: '/period', label: 'Period' },
+  { href: '/mood', label: 'Journal', alsoMatches: ['/period'] },
+  { href: '/lists', label: 'Lists' },
   { href: '/budget', label: 'Budget' },
   { href: '/cards', label: 'Cards' },
-]
+] as const
 
 export default function Nav() {
   const pathname = usePathname()
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + '/')
+  const isActive = (href: string, alsoMatches: readonly string[] = []) => {
+    const all = [href, ...alsoMatches]
+    return all.some(p => pathname === p || pathname.startsWith(p + '/'))
+  }
 
   return (
     <nav className="border-b border-gray-200 bg-white sticky top-0 z-50">
@@ -23,8 +25,9 @@ export default function Nav() {
           Wooli
         </Link>
         <div className="flex items-center gap-1 overflow-x-auto">
-          {NAV_LINKS.map(({ href, label }) => {
-            const active = isActive(href)
+          {NAV_LINKS.map(link => {
+            const { href, label } = link
+            const active = isActive(href, 'alsoMatches' in link ? link.alsoMatches : [])
             return (
               <Link
                 key={href}
