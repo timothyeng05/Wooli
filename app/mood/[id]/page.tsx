@@ -1,7 +1,7 @@
-import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import MoodDetailClient from '@/app/components/mood/MoodDetailClient'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function MoodDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -21,14 +21,16 @@ export default async function MoodDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="p-8 max-w-2xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Edit Entry</h1>
-          <Link href="/mood" className="text-gray-600 hover:text-gray-900">
-            ← Back
-          </Link>
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <Breadcrumbs items={[
+            { label: 'Journal', href: '/mood' },
+            { label: 'Edit Entry' },
+          ]} />
         </div>
-
+      </div>
+      <div className="p-8 max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Edit Entry</h1>
         <MoodDetailClient entry={entry} entryId={id} />
       </div>
     </div>

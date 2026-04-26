@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import CardTemplateSelector from '@/app/components/cards/CardTemplateSelector'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function AddCardPage() {
   const supabase = await createServerSupabaseClient()
@@ -73,9 +74,15 @@ export default async function AddCardPage() {
     <div className="min-h-screen bg-white">
       {/* Header Section */}
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Add Card</h1>
-          <p className="text-gray-600">Choose a card template</p>
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <Breadcrumbs items={[
+            { label: 'Cards', href: '/cards' },
+            { label: 'Add Card' },
+          ]} />
+          <div className="mt-4">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Add Card</h1>
+            <p className="text-gray-600">Choose a card template</p>
+          </div>
         </div>
       </div>
 

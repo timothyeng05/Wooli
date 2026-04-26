@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import RedemptionFormClient from '@/app/components/cards/RedemptionFormClient'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function RedeemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,15 +21,26 @@ export default async function RedeemPage({ params }: { params: Promise<{ id: str
   if (!card) redirect('/cards')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-500 to-primary-400 p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-primary-600 mb-2">Log Redemption</h1>
-            <p className="text-gray-600">Record points/miles you've redeemed from {card.name}</p>
-          </div>
+    <div className="min-h-screen">
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <Breadcrumbs items={[
+            { label: 'Cards', href: '/cards' },
+            { label: card.name, href: `/cards/${id}` },
+            { label: 'Redeem' },
+          ]} />
+        </div>
+      </div>
+      <div className="bg-gradient-to-br from-primary-500 to-primary-400 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-primary-600 mb-2">Log Redemption</h1>
+              <p className="text-gray-600">Record points/miles you've redeemed from {card.name}</p>
+            </div>
 
-          <RedemptionFormClient cardId={id} userId={user.id} />
+            <RedemptionFormClient cardId={id} userId={user.id} />
+          </div>
         </div>
       </div>
     </div>

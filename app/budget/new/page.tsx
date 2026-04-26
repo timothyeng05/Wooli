@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionForm from '@/app/components/budget/TransactionForm'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function NewTransactionPage({
   searchParams
@@ -23,9 +24,10 @@ export default async function NewTransactionPage({
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <Link href="/budget" className="text-blue-600 hover:text-blue-700 font-medium text-sm inline-block">
-            ← Back to Budget
-          </Link>
+          <Breadcrumbs items={[
+            { label: 'Budget', href: '/budget' },
+            { label: 'New Transaction' },
+          ]} />
         </div>
       </div>
 

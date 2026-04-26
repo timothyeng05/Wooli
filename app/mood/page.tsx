@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import JournalDeleteButton from '@/app/components/mood/JournalDeleteButton'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 const MOOD_EMOJI: Record<number, string> = { 1: '😢', 2: '😕', 3: '😐', 4: '😊', 5: '😄' }
 const MOOD_LABEL: Record<number, string> = { 1: 'Bad', 2: 'Stressed', 3: 'Okay', 4: 'Good', 5: 'Great' }
@@ -28,8 +29,9 @@ export default async function MoodPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <Breadcrumbs items={[{ label: 'Journal' }]} />
+          <div className="flex items-center justify-between mt-4">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Journal</h1>
               <p className="text-gray-600">Your daily log</p>

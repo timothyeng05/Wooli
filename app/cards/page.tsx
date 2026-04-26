@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { computeCardStats } from '@/lib/card-utils'
 import CardListView from '@/app/components/cards/CardListView'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function CardsPage() {
   const supabase = await createServerSupabaseClient()
@@ -35,8 +36,9 @@ export default async function CardsPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <Breadcrumbs items={[{ label: 'Cards' }]} />
+          <div className="flex items-center justify-between mt-4">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">My Cards</h1>
               <p className="text-gray-600">Track your credit card benefits and annual fee value</p>

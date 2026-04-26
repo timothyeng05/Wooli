@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 function monthRange(year: number, month: number) {
   const start = new Date(year, month, 1).toISOString()
@@ -41,8 +42,9 @@ export default async function BudgetPage() {
     return (
       <div className="min-h-screen bg-white">
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-6 py-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Budget</h1>
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            <Breadcrumbs items={[{ label: 'Budget' }]} />
+            <h1 className="text-4xl font-bold text-gray-900 mb-2 mt-4">Budget</h1>
             <p className="text-gray-600">Track your spending</p>
           </div>
         </div>
@@ -83,8 +85,9 @@ export default async function BudgetPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <Breadcrumbs items={[{ label: 'Budget' }]} />
+          <div className="flex items-center justify-between mt-4">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Budget</h1>
               <p className="text-gray-600">{monthLabel}</p>

@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { computeCardStats } from '@/lib/card-utils'
 import CardDetailView from '@/app/components/cards/CardDetailView'
 import CardBenefitsView from '@/app/components/cards/CardBenefitsView'
+import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function CardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -49,9 +49,10 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <Link href="/cards" className="text-blue-600 hover:text-blue-700 font-medium inline-block">
-            ← Back to Cards
-          </Link>
+          <Breadcrumbs items={[
+            { label: 'Cards', href: '/cards' },
+            { label: card.name },
+          ]} />
         </div>
       </div>
 
