@@ -127,7 +127,7 @@ export default function MoodCalendar({ initialEntries }: { initialEntries: MoodE
         {([1, 2, 3, 4, 5] as const).map(n => (
           <span key={n} className="text-xs flex items-center gap-1">
             <span className={`inline-block w-3 h-3 rounded-sm ${MOOD_BG[n]}`} />
-            <span className="text-gray-500">{['Bad','Low','Okay','Good','Great'][n-1]}</span>
+            <span className="text-gray-500">{['Bad','Stressed','Okay','Good','Great'][n-1]}</span>
           </span>
         ))}
         <span className="text-xs text-gray-400 ml-auto">Click empty day to log</span>
