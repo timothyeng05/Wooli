@@ -29,7 +29,6 @@ export default async function AddCardPage() {
     .select('*')
     .order('name')
 
-  console.log('Raw templates:', rawTemplates)
 
   let templates: any[] = []
   if (rawTemplates && rawTemplates.length > 0) {
@@ -92,10 +91,9 @@ export default async function AddCardPage() {
           {(templates && templates.length > 0) ? (
             <CardTemplateSelector templates={templates} userId={user.id} />
           ) : (
-            <div className="text-center text-gray-600 space-y-4">
-              <p>No card templates available.</p>
-              {templates && <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto text-left">{JSON.stringify(templates, null, 2)}</pre>}
-              {error && <pre className="text-xs bg-red-100 p-2 rounded overflow-auto text-left text-red-800">{JSON.stringify(error, null, 2)}</pre>}
+            <div className="text-center text-gray-500 py-8">
+              <p className="font-medium text-gray-700 mb-2">No card templates available</p>
+              <p className="text-sm">Templates haven&apos;t been seeded yet. Contact support or set up templates via the admin tools.</p>
             </div>
           )}
         </div>

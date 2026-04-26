@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase-client'
 
 interface Transaction {
   id: string
@@ -10,10 +11,6 @@ interface Transaction {
   merchant: string | null
   transacted_at: string
   categories: { id: string; name: string; color: string } | null
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function groupByDate(txns: Transaction[]) {
@@ -27,9 +24,17 @@ function groupByDate(txns: Transaction[]) {
 }
 
 export default function TransactionList({ transactions }: { transactions: Transaction[] }) {
+  const [items, setItems] = useState<Transaction[]>(transactions)
   const [search, setSearch] = useState('')
 
-  const filtered = transactions.filter(t => {
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this transaction?')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('transactions').delete().eq('id', id)
+    if (!error) setItems(prev => prev.filter(t => t.id !== id))
+  }
+
+  const filtered = items.filter(t => {
     if (!search) return true
     const q = search.toLowerCase()
     return (
@@ -41,7 +46,7 @@ export default function TransactionList({ transactions }: { transactions: Transa
 
   const grouped = groupByDate(filtered)
 
-  if (transactions.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No transactions yet</p>
@@ -70,7 +75,7 @@ export default function TransactionList({ transactions }: { transactions: Transa
               {txns.map(t => (
                 <div
                   key={t.id}
-                  className="flex items-center gap-3 px-4 py-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition"
+                  className="group relative flex items-center gap-3 px-4 py-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition"
                 >
                   {/* Category dot */}
                   <div
@@ -78,8 +83,8 @@ export default function TransactionList({ transactions }: { transactions: Transa
                     style={{ backgroundColor: t.categories?.color || '#d1d5db' }}
                   />
 
-                  {/* Description + merchant */}
-                  <div className="flex-1 min-w-0">
+                  {/* Description + merchant — clicking opens edit */}
+                  <Link href={`/budget/${t.id}`} className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {t.description || t.merchant || 'No description'}
                     </p>
@@ -87,12 +92,21 @@ export default function TransactionList({ transactions }: { transactions: Transa
                       {t.categories?.name || 'Uncategorized'}
                       {t.merchant && t.description && ` · ${t.merchant}`}
                     </p>
-                  </div>
+                  </Link>
 
                   {/* Amount */}
                   <span className={`text-sm font-semibold flex-shrink-0 ${t.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
                     {t.amount >= 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
                   </span>
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => handleDelete(t.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-500 transition flex-shrink-0 text-xs"
+                    aria-label="Delete transaction"
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
@@ -101,7 +115,7 @@ export default function TransactionList({ transactions }: { transactions: Transa
       </div>
 
       {filtered.length === 0 && search && (
-        <p className="text-center text-gray-500 py-8">No transactions match "{search}"</p>
+        <p className="text-center text-gray-500 py-8">No transactions match &quot;{search}&quot;</p>
       )}
     </div>
   )

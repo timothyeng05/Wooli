@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { logout } from '@/app/auth/actions'
 
 const NAV_LINKS = [
   { href: '/mood', label: 'Journal', alsoMatches: ['/period'] },
   { href: '/lists', label: 'Lists' },
+  { href: '/friends', label: 'Friends' },
   { href: '/budget', label: 'Budget' },
   { href: '/cards', label: 'Cards' },
 ] as const
@@ -24,7 +26,7 @@ export default function Nav() {
         <Link href="/" className="font-bold text-lg text-blue-600 tracking-tight">
           Wooli
         </Link>
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-auto flex-1">
           {NAV_LINKS.map(link => {
             const { href, label } = link
             const active = isActive(href, 'alsoMatches' in link ? link.alsoMatches : [])
@@ -43,6 +45,11 @@ export default function Nav() {
             )
           })}
         </div>
+        <form>
+          <button formAction={logout} className="text-sm text-gray-400 hover:text-gray-600 transition whitespace-nowrap">
+            Sign out
+          </button>
+        </form>
       </div>
     </nav>
   )

@@ -46,9 +46,9 @@ export default function ListItemRow({
   onEdit,
 }: {
   item: ListItemData
-  onToggle: (id: string, isDone: boolean) => void
-  onDelete: (id: string) => void
-  onEdit: (id: string, patch: { title?: string; notes?: string | null; url?: string | null; due_date?: string | null; importance?: number | null }) => void
+  onToggle?: (id: string, isDone: boolean) => void
+  onDelete?: (id: string) => void
+  onEdit?: (id: string, patch: { title?: string; notes?: string | null; url?: string | null; due_date?: string | null; importance?: number | null }) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(item.title)
@@ -59,7 +59,7 @@ export default function ListItemRow({
 
   const save = () => {
     if (!title.trim()) return
-    onEdit(item.id, {
+    onEdit?.(item.id, {
       title: title.trim(),
       notes: notes.trim() || null,
       url: url.trim() || null,
@@ -158,7 +158,7 @@ export default function ListItemRow({
     <div className="group flex items-start gap-3 px-3 py-2.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition">
       <button
         type="button"
-        onClick={() => onToggle(item.id, !item.is_done)}
+        onClick={() => onToggle?.(item.id, !item.is_done)}
         aria-label={item.is_done ? 'Mark not done' : 'Mark done'}
         className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center transition ${
           item.is_done ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300 hover:border-blue-400'
@@ -211,12 +211,16 @@ export default function ListItemRow({
       </div>
 
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-        <button onClick={() => setEditing(true)} aria-label="Edit" className="text-xs text-gray-500 hover:text-gray-900 px-1.5">
-          Edit
-        </button>
-        <button onClick={() => onDelete(item.id)} aria-label="Delete" className="text-xs text-red-500 hover:text-red-700 px-1.5">
-          Delete
-        </button>
+        {onEdit && (
+          <button onClick={() => setEditing(true)} aria-label="Edit" className="text-xs text-gray-500 hover:text-gray-900 px-1.5">
+            Edit
+          </button>
+        )}
+        {onDelete && (
+          <button onClick={() => onDelete(item.id)} aria-label="Delete" className="text-xs text-red-500 hover:text-red-700 px-1.5">
+            Delete
+          </button>
+        )}
       </div>
     </div>
   )

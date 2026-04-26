@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import ListItemRow, { type ListItemData } from './ListItemRow'
+import ListSharePanel from './ListSharePanel'
 
 export type ListItem = ListItemData
 
@@ -27,14 +28,36 @@ interface ListMeta {
   is_archived: boolean
 }
 
+interface Friend {
+  id: string
+  full_name: string | null
+  email: string | null
+}
+
+interface Share {
+  id: string
+  shared_with_user_id: string
+  can_edit: boolean
+  friend_name: string | null
+  friend_email: string | null
+}
+
 export default function ListDetailView({
   userId,
   list,
   initialItems,
+  isOwner = true,
+  canEdit = true,
+  friends = [],
+  shares = [],
 }: {
   userId: string
   list: ListMeta
   initialItems: ListItem[]
+  isOwner?: boolean
+  canEdit?: boolean
+  friends?: Friend[]
+  shares?: Share[]
 }) {
   const router = useRouter()
   const [items, setItems] = useState<ListItem[]>(initialItems)
@@ -159,7 +182,7 @@ export default function ListDetailView({
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          {editingName ? (
+          {isOwner && editingName ? (
             <input
               type="text"
               value={name}
@@ -174,9 +197,9 @@ export default function ListDetailView({
             />
           ) : (
             <h1
-              onClick={() => setEditingName(true)}
-              className="text-3xl font-bold text-gray-900 cursor-text hover:bg-gray-50 rounded px-1 -mx-1"
-              title="Click to rename"
+              onClick={() => isOwner && setEditingName(true)}
+              className={`text-3xl font-bold text-gray-900 rounded px-1 -mx-1 ${isOwner ? 'cursor-text hover:bg-gray-50' : ''}`}
+              title={isOwner ? 'Click to rename' : undefined}
             >
               {name}
             </h1>
@@ -187,43 +210,46 @@ export default function ListDetailView({
               Archived
             </span>
           )}
+          {!isOwner && (
+            <span className="inline-block mt-2 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+              {canEdit ? 'Shared with you · can edit' : 'Shared with you · view only'}
+            </span>
+          )}
         </div>
-        <div className="flex flex-col gap-1.5 text-sm flex-shrink-0">
-          <button
-            onClick={toggleArchive}
-            className="text-gray-500 hover:text-gray-900 text-right"
-          >
-            {archived ? 'Unarchive' : 'Archive'}
-          </button>
-          <button
-            onClick={deleteList}
-            className="text-red-500 hover:text-red-700 text-right"
-          >
-            Delete
-          </button>
-        </div>
+        {isOwner && (
+          <div className="flex flex-col gap-1.5 text-sm flex-shrink-0">
+            <button onClick={toggleArchive} className="text-gray-500 hover:text-gray-900 text-right">
+              {archived ? 'Unarchive' : 'Archive'}
+            </button>
+            <button onClick={deleteList} className="text-red-500 hover:text-red-700 text-right">
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Add item */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={newTitle}
-          onChange={e => setNewTitle(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); addItem() }
-          }}
-          placeholder="Add an item and press Enter..."
-          className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={addItem}
-          disabled={!newTitle.trim() || adding}
-          className="px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-        >
-          Add
-        </button>
-      </div>
+      {/* Add item — only for editors */}
+      {canEdit && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); addItem() }
+            }}
+            placeholder="Add an item and press Enter..."
+            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={addItem}
+            disabled={!newTitle.trim() || adding}
+            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            Add
+          </button>
+        </div>
+      )}
 
       {/* Active items */}
       {visible.length > 0 && (
@@ -232,9 +258,9 @@ export default function ListDetailView({
             <ListItemRow
               key={i.id}
               item={i}
-              onToggle={toggleItem}
-              onDelete={deleteItem}
-              onEdit={editItem}
+              onToggle={canEdit ? toggleItem : undefined}
+              onDelete={canEdit ? deleteItem : undefined}
+              onEdit={canEdit ? editItem : undefined}
             />
           ))}
         </div>
@@ -260,9 +286,9 @@ export default function ListDetailView({
                 <ListItemRow
                   key={i.id}
                   item={i}
-                  onToggle={toggleItem}
-                  onDelete={deleteItem}
-                  onEdit={editItem}
+                  onToggle={canEdit ? toggleItem : undefined}
+                  onDelete={canEdit ? deleteItem : undefined}
+                  onEdit={canEdit ? editItem : undefined}
                 />
               ))}
             </div>
@@ -271,7 +297,12 @@ export default function ListDetailView({
       )}
 
       {items.length === 0 && (
-        <p className="text-center text-gray-400 py-8 text-sm">No items yet — add one above</p>
+        <p className="text-center text-gray-400 py-8 text-sm">No items yet{canEdit ? ' — add one above' : ''}</p>
+      )}
+
+      {/* Share panel — owner only */}
+      {isOwner && (
+        <ListSharePanel listId={list.id} friends={friends} shares={shares} />
       )}
 
       <Link href="/lists" className="block text-center text-sm text-gray-500 hover:text-gray-900 pt-4">

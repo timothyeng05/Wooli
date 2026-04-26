@@ -88,7 +88,7 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete }:
 
     try {
       const supabase = createClient()
-      const loggedAtIso = new Date(loggedAt).toISOString()
+      const loggedAtIso = new Date(loggedAt + 'T12:00:00').toISOString()
       const payload = { mood, note, logged_at: loggedAtIso, grateful_for: gratefulFor, activities }
 
       if (entry) {

@@ -21,15 +21,24 @@ export default async function ListsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: rawLists } = await supabase
-    .from('lists')
-    .select('id, name, description, is_archived, created_at')
-    .eq('user_id', user.id)
-    .order('is_archived', { ascending: true })
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: false })
+  const [{ data: rawLists }, { data: rawShares }] = await Promise.all([
+    supabase
+      .from('lists')
+      .select('id, name, description, is_archived, created_at')
+      .eq('user_id', user.id)
+      .order('is_archived', { ascending: true })
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('list_shares')
+      .select('id, can_edit, lists(id, name, description, is_archived)')
+      .eq('shared_with_user_id', user.id) as any,
+  ])
 
   const lists = (rawLists || []) as ListRow[]
+  const sharedLists = ((rawShares || []) as any[])
+    .filter(s => s.lists && !(s.lists as any).is_archived)
+    .map(s => ({ ...(s.lists as ListRow), shareId: s.id, canEdit: s.can_edit as boolean }))
   const listIds = lists.map(l => l.id)
 
   let counts: ItemCountRow[] = []
@@ -62,12 +71,17 @@ export default async function ListsPage() {
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Lists</h1>
               <p className="text-gray-600">Wish lists, to-dos, anything</p>
             </div>
-            <Link
-              href="/lists/new"
-              className="bg-blue-600 text-white font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition"
-            >
-              + New List
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/friends" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
+                Friends
+              </Link>
+              <Link
+                href="/lists/new"
+                className="bg-blue-600 text-white font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition"
+              >
+                + New List
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -112,6 +126,30 @@ export default async function ListsPage() {
             >
               Create your first list
             </Link>
+          </div>
+        )}
+
+        {sharedLists.length > 0 && (
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Shared with me</h2>
+            <div className="space-y-3">
+              {sharedLists.map(l => (
+                <Link key={l.id} href={`/lists/${l.id}`}>
+                  <div className="flex items-center gap-4 p-4 rounded-lg border border-blue-100 bg-blue-50 hover:border-blue-300 transition">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{l.name}</p>
+                      {l.description && (
+                        <p className="text-sm text-gray-500 truncate mt-0.5">{l.description}</p>
+                      )}
+                      <span className="text-xs text-blue-600 mt-1 inline-block">
+                        {(l as any).canEdit ? 'Can edit' : 'View only'}
+                      </span>
+                    </div>
+                    <span className="text-gray-300">›</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 

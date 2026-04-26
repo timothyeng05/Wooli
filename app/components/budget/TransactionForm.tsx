@@ -12,23 +12,49 @@ interface Category {
   parent_id: string | null
 }
 
+interface Account {
+  id: string
+  name: string
+  type: string
+}
+
+interface ExistingTransaction {
+  id: string
+  amount: number
+  description: string | null
+  merchant: string | null
+  category_id: string | null
+  account_id: string | null
+  transacted_at: string
+}
+
 export default function TransactionForm({
   userId,
   categories,
-  defaultDate
+  accounts = [],
+  defaultDate,
+  transaction,
 }: {
   userId: string
   categories: Category[]
+  accounts?: Account[]
   defaultDate?: string
+  transaction?: ExistingTransaction
 }) {
   const router = useRouter()
+  const isEdit = !!transaction
   const [loading, setLoading] = useState(false)
-  const [isIncome, setIsIncome] = useState(false)
-  const [amount, setAmount] = useState('')
-  const [description, setDescription] = useState('')
-  const [merchant, setMerchant] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [date, setDate] = useState(defaultDate || new Date().toISOString().split('T')[0])
+  const [isIncome, setIsIncome] = useState(isEdit ? transaction.amount > 0 : false)
+  const [amount, setAmount] = useState(isEdit ? Math.abs(transaction.amount).toString() : '')
+  const [description, setDescription] = useState(isEdit ? (transaction.description || '') : '')
+  const [merchant, setMerchant] = useState(isEdit ? (transaction.merchant || '') : '')
+  const [categoryId, setCategoryId] = useState(isEdit ? (transaction.category_id || '') : '')
+  const [accountId, setAccountId] = useState(isEdit ? (transaction.account_id || '') : '')
+  const [date, setDate] = useState(
+    isEdit
+      ? transaction.transacted_at.split('T')[0]
+      : defaultDate || new Date().toISOString().split('T')[0]
+  )
 
   const filteredCategories = categories.filter(c => c.is_income === isIncome)
   const parents = filteredCategories.filter(c => !c.parent_id)
@@ -42,15 +68,23 @@ export default function TransactionForm({
     try {
       const supabase = createClient()
       const signedAmount = isIncome ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount))
-      const { error } = await supabase.from('transactions').insert({
-        user_id: userId,
+      const payload = {
         amount: signedAmount,
         description: description || null,
         merchant: merchant || null,
         category_id: categoryId || null,
-        transacted_at: new Date(date).toISOString(),
-      })
-      if (error) throw error
+        account_id: accountId || null,
+        transacted_at: new Date(date + 'T12:00:00').toISOString(),
+      }
+
+      if (isEdit) {
+        const { error } = await supabase.from('transactions').update(payload).eq('id', transaction.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('transactions').insert({ user_id: userId, ...payload })
+        if (error) throw error
+      }
+
       router.push('/budget')
       router.refresh()
     } catch (err) {
@@ -147,6 +181,23 @@ export default function TransactionForm({
         </select>
       </div>
 
+      {/* Account */}
+      {accounts.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-1.5">Account <span className="text-gray-400 font-normal">(optional)</span></label>
+          <select
+            value={accountId}
+            onChange={e => setAccountId(e.target.value)}
+            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">No account</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Date */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-1.5">Date</label>
@@ -164,7 +215,7 @@ export default function TransactionForm({
         disabled={loading}
         className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
       >
-        {loading ? 'Saving...' : 'Save Transaction'}
+        {loading ? 'Saving...' : isEdit ? 'Save Changes' : 'Save Transaction'}
       </button>
     </form>
   )

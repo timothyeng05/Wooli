@@ -14,11 +14,19 @@ export default async function NewTransactionPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('id, name, color, is_income, parent_id, sort_order')
-    .eq('user_id', user.id)
-    .order('sort_order', { ascending: true }) as any
+  const [{ data: categories }, { data: accounts }] = await Promise.all([
+    supabase
+      .from('categories')
+      .select('id, name, color, is_income, parent_id, sort_order')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }) as any,
+    supabase
+      .from('accounts')
+      .select('id, name, type')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .order('name') as any,
+  ])
 
   return (
     <div className="min-h-screen bg-white">
@@ -46,6 +54,7 @@ export default async function NewTransactionPage({
           <TransactionForm
             userId={user.id}
             categories={categories || []}
+            accounts={accounts || []}
             defaultDate={date}
           />
         </div>

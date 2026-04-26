@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
 
   const moodLookbackStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
-  const [moodResult, periodResult, transactionResult, cardsResult] = await Promise.all([
+  const [moodResult, periodResult, transactionResult, cardsResult, listsResult] = await Promise.all([
     supabase
       .from('mood_entries')
       .select('id, mood, note, grateful_for, activities, logged_at')
@@ -48,7 +48,15 @@ export default async function DashboardPage() {
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-      .limit(3) as any
+      .limit(3) as any,
+    supabase
+      .from('lists')
+      .select('id, name, is_archived')
+      .eq('user_id', user.id)
+      .eq('is_archived', false)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(4) as any,
   ])
 
   const moodEntries = moodResult.data || []
@@ -56,6 +64,7 @@ export default async function DashboardPage() {
   const moodEntriesThisMonth = moodEntries.filter(e => e.logged_at >= monthStart && e.logged_at <= monthEnd)
   const transactions = transactionResult.data || []
   const rawCards = cardsResult.data || []
+  const activeLists = listsResult.data || []
 
   const cards = rawCards.map((c: any) => ({
     ...c,
@@ -168,6 +177,38 @@ export default async function DashboardPage() {
                     + Add transaction
                   </Link>
                 </>
+              )}
+            </div>
+
+            {/* Lists summary */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-900">Lists</h2>
+                <Link href="/lists" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  View all →
+                </Link>
+              </div>
+              {activeLists.length > 0 ? (
+                <div className="space-y-2">
+                  {(activeLists as any[]).map((l: any) => (
+                    <Link key={l.id} href={`/lists/${l.id}`}>
+                      <div className="flex items-center gap-2 py-1.5 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
+                        <span className="text-sm text-gray-700 flex-1 truncate">{l.name}</span>
+                        <span className="text-gray-300 text-xs">›</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-gray-400 mb-3">No active lists</p>
+                  <Link
+                    href="/lists/new"
+                    className="block w-full text-center py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition"
+                  >
+                    + New list
+                  </Link>
+                </div>
               )}
             </div>
 
