@@ -139,15 +139,13 @@ export default function LifeCalendar({
                 <span className="absolute top-1 right-1 text-[8px] text-gray-600">✏️</span>
               )}
 
-              {/* Activity dots */}
+              {/* Activity emojis (spread full-width) */}
               {activities.length > 0 && (
-                <div className="absolute left-1 right-1 bottom-2 flex gap-0.5 justify-center">
-                  {activities.slice(0, 4).map(a => (
-                    <span
-                      key={a}
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: ACTIVITY_CONFIG[a].color }}
-                    />
+                <div className="absolute left-1 right-1 bottom-1.5 flex justify-around items-center text-[10px] leading-none">
+                  {activities.map(a => (
+                    <span key={a} aria-label={a}>
+                      {ACTIVITY_CONFIG[a].emoji}
+                    </span>
                   ))}
                 </div>
               )}
@@ -183,24 +181,24 @@ export default function LifeCalendar({
           <span className="text-xs text-gray-400">Activity:</span>
           {(Object.keys(ACTIVITY_CONFIG) as ActivityName[]).map(a => (
             <span key={a} className="text-xs flex items-center gap-1">
-              <span
-                className="inline-block w-2 h-2 rounded-full"
-                style={{ backgroundColor: ACTIVITY_CONFIG[a].color }}
-              />
+              <span>{ACTIVITY_CONFIG[a].emoji}</span>
               <span className="text-gray-500">{a}</span>
             </span>
           ))}
-          <span className="text-xs flex items-center gap-1 ml-2">
+          <span className="text-xs flex items-center gap-1">
+            <span>✏️</span>
+            <span className="text-gray-500">Has notes</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-gray-400">Period:</span>
+          <span className="text-xs flex items-center gap-1">
             <span className="inline-block w-3 h-1 rounded-sm" style={{ backgroundColor: FLOW_COLORS.medium }} />
-            <span className="text-gray-500">Period</span>
+            <span className="text-gray-500">Logged</span>
           </span>
           <span className="text-xs flex items-center gap-1">
             <span className="inline-block w-3 h-3 rounded-sm border border-dashed border-pink-400" />
             <span className="text-gray-500">Predicted</span>
-          </span>
-          <span className="text-xs flex items-center gap-1">
-            <span>✏️</span>
-            <span className="text-gray-500">Has notes</span>
           </span>
         </div>
       </div>

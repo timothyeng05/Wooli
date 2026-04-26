@@ -1,12 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import ListItemRow, { type ListItemData } from './ListItemRow'
 
 export type ListItem = ListItemData
+
+function sortActiveItems(items: ListItem[]): ListItem[] {
+  return [...items].sort((a, b) => {
+    const impA = a.importance ?? 0
+    const impB = b.importance ?? 0
+    if (impA !== impB) return impB - impA
+    const dueA = a.due_date || '9999-12-31'
+    const dueB = b.due_date || '9999-12-31'
+    if (dueA !== dueB) return dueA.localeCompare(dueB)
+    return a.created_at.localeCompare(b.created_at)
+  })
+}
 
 interface ListMeta {
   id: string
@@ -34,8 +46,27 @@ export default function ListDetailView({
 
   const supabase = createClient()
 
-  const visible = items.filter(i => !i.is_done)
-  const done = items.filter(i => i.is_done)
+  const [showDone, setShowDone] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = localStorage.getItem(`wooli_list_${list.id}_show_done`)
+    if (stored === '1') setShowDone(true)
+  }, [list.id])
+  const toggleShowDone = () => {
+    setShowDone(prev => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`wooli_list_${list.id}_show_done`, next ? '1' : '0')
+      }
+      return next
+    })
+  }
+
+  const visible = useMemo(() => sortActiveItems(items.filter(i => !i.is_done)), [items])
+  const done = useMemo(
+    () => items.filter(i => i.is_done).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    [items]
+  )
 
   const addItem = async () => {
     const title = newTitle.trim()
@@ -44,7 +75,7 @@ export default function ListDetailView({
     const { data, error } = await supabase
       .from('list_items')
       .insert({ list_id: list.id, user_id: userId, title })
-      .select('id, title, notes, url, is_done, sort_order, created_at')
+      .select('id, title, notes, url, is_done, sort_order, created_at, due_date, importance')
       .single()
     setAdding(false)
     if (error || !data) {
@@ -212,20 +243,30 @@ export default function ListDetailView({
       {/* Done items */}
       {done.length > 0 && (
         <div className="pt-4 border-t border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          <button
+            type="button"
+            onClick={toggleShowDone}
+            className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 hover:text-gray-700 transition flex items-center gap-1"
+          >
+            <span>{showDone ? '▾' : '▸'}</span>
             Done · {done.length}
-          </p>
-          <div className="space-y-1">
-            {done.map(i => (
-              <ListItemRow
-                key={i.id}
-                item={i}
-                onToggle={toggleItem}
-                onDelete={deleteItem}
-                onEdit={editItem}
-              />
-            ))}
-          </div>
+            <span className="text-gray-300 normal-case font-normal tracking-normal ml-1">
+              {showDone ? '(hide)' : '(show)'}
+            </span>
+          </button>
+          {showDone && (
+            <div className="space-y-1">
+              {done.map(i => (
+                <ListItemRow
+                  key={i.id}
+                  item={i}
+                  onToggle={toggleItem}
+                  onDelete={deleteItem}
+                  onEdit={editItem}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

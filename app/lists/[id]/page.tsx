@@ -20,7 +20,7 @@ export default async function ListDetailPage({ params }: { params: Promise<{ id:
 
   const { data: items } = await supabase
     .from('list_items')
-    .select('id, title, notes, url, is_done, sort_order, created_at')
+    .select('id, title, notes, url, is_done, sort_order, created_at, due_date, importance')
     .eq('list_id', id)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
