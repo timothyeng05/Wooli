@@ -7,7 +7,7 @@ import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
 import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
 import TripWidget from '@/app/components/dashboard/TripWidget'
 import GoogleCalendarWidget from '@/app/components/dashboard/GoogleCalendarWidget'
-import { fetchGCalEventsByDate } from '@/lib/google-calendar'
+import { fetchGCalData } from '@/lib/google-calendar'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -49,8 +49,8 @@ export default async function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(4) as any,
     session?.provider_token
-      ? fetchGCalEventsByDate(session.provider_token, now.getFullYear(), now.getMonth() + 1)
-      : Promise.resolve({}),
+      ? fetchGCalData(session.provider_token, now.getFullYear(), now.getMonth() + 1)
+      : Promise.resolve({ calendars: [], eventsByDate: {} }),
   ])
 
   const moodEntries = moodResult.data || []
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
               <CalendarInsights moodEntries={moodEntries} periodEntries={periodEntries} />
-              <LifeCalendar initialMoodEntries={moodEntriesThisMonth} initialPeriodEntries={periodEntries} initialCalendarEvents={calendarEvents} />
+              <LifeCalendar initialMoodEntries={moodEntriesThisMonth} initialPeriodEntries={periodEntries} initialGCalData={calendarEvents} />
             </div>
           </div>
 

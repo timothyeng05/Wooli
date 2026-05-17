@@ -10,23 +10,24 @@ import {
   FLOW_COLORS,
   type PeriodEntry,
 } from '@/lib/period-utils'
-import type { GCalEventsByDate } from '@/lib/google-calendar'
+import type { GCalData } from '@/lib/google-calendar'
 
 export default function LifeCalendar({
   initialMoodEntries,
   initialPeriodEntries,
-  initialCalendarEvents = {},
+  initialGCalData = { calendars: [], eventsByDate: {} },
 }: {
   initialMoodEntries: MoodEntry[]
   initialPeriodEntries: PeriodEntry[]
-  initialCalendarEvents?: GCalEventsByDate
+  initialGCalData?: GCalData
 }) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(initialMoodEntries)
   const [periodEntries, setPeriodEntries] = useState<PeriodEntry[]>(initialPeriodEntries)
-  const [calendarEvents, setCalendarEvents] = useState<GCalEventsByDate>(initialCalendarEvents)
+  const [gcalData, setGcalData] = useState<GCalData>(initialGCalData)
+  const [enabledCalIds, setEnabledCalIds] = useState<Set<string>>(() => new Set(initialGCalData.calendars.map(c => c.id)))
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -42,7 +43,10 @@ export default function LifeCalendar({
       .then(d => {
         setMoodEntries(d.moodEntries || [])
         setPeriodEntries(d.periodEntries || [])
-        setCalendarEvents(d.calendarEvents || {})
+        if (d.gcalData) {
+          setGcalData(d.gcalData)
+          setEnabledCalIds(new Set(d.gcalData.calendars.map((c: { id: string }) => c.id)))
+        }
       })
       .finally(() => setLoading(false))
   }, [year, month])
@@ -110,7 +114,8 @@ export default function LifeCalendar({
           const hasNotes = !!(mood && (mood.note || mood.grateful_for))
           const activities = (mood?.activities || []).filter(a => a in ACTIVITY_CONFIG) as ActivityName[]
 
-          const gcalTitles = calendarEvents[cell.dateStr] ?? []
+          const gcalEvents = (gcalData.eventsByDate[cell.dateStr] ?? []).filter(e => enabledCalIds.has(e.calendarId))
+          const gcalTitles = gcalEvents.map(e => e.title)
 
           const bgColor = mood
             ? MOOD_BG[mood.mood]
@@ -158,12 +163,13 @@ export default function LifeCalendar({
                 </div>
               )}
 
-              {/* Google Calendar dot */}
-              {gcalTitles.length > 0 && (
+              {/* Google Calendar dots */}
+              {gcalEvents.length > 0 && (
                 <div className="absolute bottom-1 right-1 flex gap-0.5">
-                  {gcalTitles.slice(0, 3).map((_, i) => (
-                    <span key={i} className="w-1 h-1 rounded-full bg-blue-500 flex-shrink-0" />
-                  ))}
+                  {gcalEvents.slice(0, 3).map((e, i) => {
+                    const cal = gcalData.calendars.find(c => c.id === e.calendarId)
+                    return <span key={i} className="w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: cal?.color ?? '#3b82f6' }} />
+                  })}
                 </div>
               )}
 
@@ -182,6 +188,31 @@ export default function LifeCalendar({
           return <div key={cell.dateStr}>{inner}</div>
         })}
       </div>
+
+      {/* Calendar toggles */}
+      {gcalData.calendars.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          {gcalData.calendars.map(cal => {
+            const enabled = enabledCalIds.has(cal.id)
+            return (
+              <button
+                key={cal.id}
+                onClick={() => setEnabledCalIds(prev => {
+                  const next = new Set(prev)
+                  if (next.has(cal.id)) next.delete(cal.id)
+                  else next.add(cal.id)
+                  return next
+                })}
+                className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border transition ${enabled ? 'border-transparent' : 'border-gray-200 opacity-40'}`}
+                style={enabled ? { backgroundColor: cal.color + '22', borderColor: cal.color + '55', color: cal.color } : {}}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cal.color }} />
+                {cal.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Legend */}
       <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">

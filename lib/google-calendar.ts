@@ -1,10 +1,26 @@
-export type GCalEventsByDate = Record<string, string[]> // date -> event titles
+export interface GCalCalendar {
+  id: string
+  name: string
+  color: string
+}
 
-export async function fetchGCalEventsByDate(
+export interface GCalEvent {
+  title: string
+  calendarId: string
+}
+
+export type GCalEventsByDate = Record<string, GCalEvent[]>
+
+export interface GCalData {
+  calendars: GCalCalendar[]
+  eventsByDate: GCalEventsByDate
+}
+
+export async function fetchGCalData(
   providerToken: string,
   year: number,
   month: number // 1-based
-): Promise<GCalEventsByDate> {
+): Promise<GCalData> {
   const now = new Date()
   const isEDT = now.toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).includes('EDT')
   const offset = isEDT ? '-04:00' : '-05:00'
@@ -19,11 +35,17 @@ export async function fetchGCalEventsByDate(
       headers: { Authorization: `Bearer ${providerToken}` },
       cache: 'no-store',
     })
-    if (!calListRes.ok) return {}
+    if (!calListRes.ok) return { calendars: [], eventsByDate: {} }
     const calList = await calListRes.json()
-    const calendars: { id: string }[] = calList.items ?? []
+    const rawCals: { id: string; summary: string; backgroundColor: string }[] = calList.items ?? []
 
-    const byDate: GCalEventsByDate = {}
+    const calendars: GCalCalendar[] = rawCals.map(c => ({
+      id: c.id,
+      name: c.summary,
+      color: c.backgroundColor ?? '#3b82f6',
+    }))
+
+    const eventsByDate: GCalEventsByDate = {}
 
     await Promise.all(calendars.map(async (cal) => {
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&maxResults=50&timeZone=America%2FNew_York`
@@ -33,13 +55,13 @@ export async function fetchGCalEventsByDate(
       for (const event of data.items ?? []) {
         const dateStr: string = event.start?.date ?? event.start?.dateTime?.split('T')[0]
         if (!dateStr) continue
-        if (!byDate[dateStr]) byDate[dateStr] = []
-        byDate[dateStr].push(event.summary ?? '(No title)')
+        if (!eventsByDate[dateStr]) eventsByDate[dateStr] = []
+        eventsByDate[dateStr].push({ title: event.summary ?? '(No title)', calendarId: cal.id })
       }
     }))
 
-    return byDate
+    return { calendars, eventsByDate }
   } catch {
-    return {}
+    return { calendars: [], eventsByDate: {} }
   }
 }

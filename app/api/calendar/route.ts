@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { fetchGCalEventsByDate } from '@/lib/google-calendar'
+import { fetchGCalData } from '@/lib/google-calendar'
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabaseClient()
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  const [moodResult, periodResult, calendarEvents] = await Promise.all([
+  const [moodResult, periodResult, gcalData] = await Promise.all([
     supabase
       .from('mood_entries')
       .select('id, mood, note, grateful_for, activities, logged_at')
@@ -29,13 +29,13 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
       .order('start_date', { ascending: false }),
     session?.provider_token
-      ? fetchGCalEventsByDate(session.provider_token, year, month)
-      : Promise.resolve({}),
+      ? fetchGCalData(session.provider_token, year, month)
+      : Promise.resolve({ calendars: [], eventsByDate: {} }),
   ])
 
   return NextResponse.json({
     moodEntries: moodResult.data || [],
     periodEntries: periodResult.data || [],
-    calendarEvents,
+    gcalData,
   })
 }
