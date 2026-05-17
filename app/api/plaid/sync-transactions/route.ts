@@ -1,6 +1,65 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { plaidClient } from '@/lib/plaid-client'
+import Groq from 'groq-sdk'
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+
+interface Category { id: string; name: string }
+interface PlaidTx {
+  transaction_id: string
+  name: string
+  merchant_name?: string | null
+  amount: number
+  date: string
+  personal_finance_category?: { primary?: string; detailed?: string } | null
+}
+
+async function categorizeWithGroq(
+  transactions: PlaidTx[],
+  categories: Category[]
+): Promise<Map<string, string | null>> {
+  if (!categories.length || !transactions.length) return new Map()
+
+  const categoryList = categories.map(c => `- ${c.name} (id: ${c.id})`).join('\n')
+  const txList = transactions.map((t, i) =>
+    `${i}: merchant="${t.merchant_name ?? t.name}" plaid_category="${t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? 'unknown'}"`
+  ).join('\n')
+
+  const prompt = `You are a transaction categorizer. Given a list of transactions and categories, assign the best category id to each transaction. If none fit, use null.
+
+Categories:
+${categoryList}
+
+Transactions (index: details):
+${txList}
+
+Respond with ONLY a JSON array of category ids (or null) in the same order as the transactions. Example: ["uuid-1", null, "uuid-2"]`
+
+  try {
+    const res = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0,
+      max_tokens: 1024,
+    })
+
+    const text = res.choices[0]?.message?.content ?? ''
+    const match = text.match(/\[[\s\S]*\]/)
+    if (!match) return new Map()
+
+    const ids: (string | null)[] = JSON.parse(match[0])
+    const result = new Map<string, string | null>()
+    transactions.forEach((t, i) => {
+      const catId = ids[i]
+      const valid = catId && categories.some(c => c.id === catId)
+      result.set(t.transaction_id, valid ? catId : null)
+    })
+    return result
+  } catch {
+    return new Map()
+  }
+}
 
 export async function POST() {
   const supabase = await createServerSupabaseClient()
@@ -14,18 +73,10 @@ export async function POST() {
 
   if (!items?.length) return NextResponse.json({ added: 0, modified: 0, removed: 0 })
 
-  // Fetch user categories for matching
   const { data: categories } = await supabase
     .from('categories')
     .select('id, name')
     .eq('user_id', user.id)
-
-  const matchCategory = (plaidCategory: string | null): string | null => {
-    if (!plaidCategory || !categories?.length) return null
-    const needle = plaidCategory.toLowerCase().replace(/_/g, ' ')
-    const match = categories.find(c => needle.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(needle.split(' ')[0]))
-    return match?.id ?? null
-  }
 
   let totalAdded = 0
   let totalModified = 0
@@ -43,23 +94,29 @@ export async function POST() {
       })
       const { added, modified, removed, next_cursor, has_more } = res.data
 
-      // Upsert added transactions
       if (added.length) {
+        // Batch categorize with Groq in chunks of 50
+        const CHUNK = 50
+        const categoryMap = new Map<string, string | null>()
+        for (let i = 0; i < added.length; i += CHUNK) {
+          const chunk = added.slice(i, i + CHUNK)
+          const partial = await categorizeWithGroq(chunk, categories ?? [])
+          partial.forEach((v, k) => categoryMap.set(k, v))
+        }
+
         const rows = added.map(t => ({
           user_id: user.id,
           plaid_transaction_id: t.transaction_id,
-          // Plaid: positive = expense, negative = income — flip for our schema
           amount: -(t.amount),
           description: t.name,
           merchant: t.merchant_name ?? null,
           transacted_at: t.date + 'T00:00:00',
-          category_id: matchCategory(t.personal_finance_category?.primary ?? null),
+          category_id: categoryMap.get(t.transaction_id) ?? null,
         }))
         await supabase.from('transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })
         totalAdded += added.length
       }
 
-      // Update modified transactions
       for (const t of modified) {
         await supabase
           .from('transactions')
@@ -73,7 +130,6 @@ export async function POST() {
         totalModified++
       }
 
-      // Remove deleted transactions
       for (const t of removed) {
         await supabase
           .from('transactions')
@@ -86,7 +142,6 @@ export async function POST() {
       hasMore = has_more
     }
 
-    // Save cursor for next incremental sync
     await supabase
       .from('plaid_items')
       .update({ cursor })
