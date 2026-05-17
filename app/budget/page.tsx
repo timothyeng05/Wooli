@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
 import Breadcrumbs from '@/app/components/Breadcrumbs'
+import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
 
 function monthRange(year: number, month: number) {
   const start = new Date(year, month, 1).toISOString()
@@ -99,6 +100,7 @@ export default async function BudgetPage() {
               <Link href="/budget/categories" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
                 Categories
               </Link>
+              <SyncTransactionsButton />
               <Link
                 href="/budget/new"
                 className="bg-blue-600 text-white font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition text-sm"
