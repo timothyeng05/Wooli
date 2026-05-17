@@ -7,7 +7,7 @@ import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
 import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
 import TripWidget from '@/app/components/dashboard/TripWidget'
 import GoogleCalendarWidget from '@/app/components/dashboard/GoogleCalendarWidget'
-import UpcomingReservations from '@/app/components/dashboard/UpcomingReservations'
+import { fetchGCalEventsByDate } from '@/lib/google-calendar'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -18,8 +18,10 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
 
+  const { data: { session } } = await supabase.auth.getSession()
+
   const moodLookbackStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
-  const [moodResult, periodResult, transactionResult, listsResult] = await Promise.all([
+  const [moodResult, periodResult, transactionResult, listsResult, calendarEvents] = await Promise.all([
     supabase
       .from('mood_entries')
       .select('id, mood, note, grateful_for, activities, logged_at')
@@ -46,6 +48,9 @@ export default async function DashboardPage() {
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(4) as any,
+    session?.provider_token
+      ? fetchGCalEventsByDate(session.provider_token, now.getFullYear(), now.getMonth() + 1)
+      : Promise.resolve({}),
   ])
 
   const moodEntries = moodResult.data || []
@@ -98,9 +103,8 @@ export default async function DashboardPage() {
                   <Link href="/mood" className="text-blue-600 hover:text-blue-700 font-medium">All entries →</Link>
                 </div>
               </div>
-              <UpcomingReservations userId={user.id} />
               <CalendarInsights moodEntries={moodEntries} periodEntries={periodEntries} />
-              <LifeCalendar initialMoodEntries={moodEntriesThisMonth} initialPeriodEntries={periodEntries} />
+              <LifeCalendar initialMoodEntries={moodEntriesThisMonth} initialPeriodEntries={periodEntries} initialCalendarEvents={calendarEvents} />
             </div>
           </div>
 

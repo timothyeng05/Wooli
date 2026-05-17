@@ -10,19 +10,23 @@ import {
   FLOW_COLORS,
   type PeriodEntry,
 } from '@/lib/period-utils'
+import type { GCalEventsByDate } from '@/lib/google-calendar'
 
 export default function LifeCalendar({
   initialMoodEntries,
   initialPeriodEntries,
+  initialCalendarEvents = {},
 }: {
   initialMoodEntries: MoodEntry[]
   initialPeriodEntries: PeriodEntry[]
+  initialCalendarEvents?: GCalEventsByDate
 }) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(initialMoodEntries)
   const [periodEntries, setPeriodEntries] = useState<PeriodEntry[]>(initialPeriodEntries)
+  const [calendarEvents, setCalendarEvents] = useState<GCalEventsByDate>(initialCalendarEvents)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -38,6 +42,7 @@ export default function LifeCalendar({
       .then(d => {
         setMoodEntries(d.moodEntries || [])
         setPeriodEntries(d.periodEntries || [])
+        setCalendarEvents(d.calendarEvents || {})
       })
       .finally(() => setLoading(false))
   }, [year, month])
@@ -105,6 +110,8 @@ export default function LifeCalendar({
           const hasNotes = !!(mood && (mood.note || mood.grateful_for))
           const activities = (mood?.activities || []).filter(a => a in ACTIVITY_CONFIG) as ActivityName[]
 
+          const gcalTitles = calendarEvents[cell.dateStr] ?? []
+
           const bgColor = mood
             ? MOOD_BG[mood.mood]
             : isFuture ? 'bg-gray-50' : 'bg-gray-100 hover:bg-gray-200'
@@ -119,10 +126,11 @@ export default function LifeCalendar({
 
           const flowColor = periodToday ? FLOW_COLORS[periodToday.flow_level || 'medium'] : null
 
+          const gcalTooltip = gcalTitles.join(', ')
           const tooltip =
             mood
-              ? `${MOOD_LABELS[mood.mood]}${mood.note ? ' — ' + mood.note.slice(0, 60) : ''}`
-              : periodToday ? 'Period day' : ''
+              ? `${MOOD_LABELS[mood.mood]}${mood.note ? ' — ' + mood.note.slice(0, 60) : ''}${gcalTooltip ? '\n' + gcalTooltip : ''}`
+              : gcalTooltip || (periodToday ? 'Period day' : '')
 
           const inner = (
             <div
@@ -146,6 +154,15 @@ export default function LifeCalendar({
                     <span key={a} aria-label={a}>
                       {ACTIVITY_CONFIG[a].emoji}
                     </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Google Calendar dot */}
+              {gcalTitles.length > 0 && (
+                <div className="absolute bottom-1 right-1 flex gap-0.5">
+                  {gcalTitles.slice(0, 3).map((_, i) => (
+                    <span key={i} className="w-1 h-1 rounded-full bg-blue-500 flex-shrink-0" />
                   ))}
                 </div>
               )}
