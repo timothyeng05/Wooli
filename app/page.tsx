@@ -6,6 +6,8 @@ import { computeCardStats } from '@/lib/card-utils'
 import LifeCalendar from '@/app/components/dashboard/LifeCalendar'
 import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
 import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
+import TripWidget from '@/app/components/dashboard/TripWidget'
+import GoogleCalendarWidget from '@/app/components/dashboard/GoogleCalendarWidget'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -123,6 +125,9 @@ export default async function DashboardPage() {
 
           {/* Right column */}
           <div className="space-y-6">
+
+            <GoogleCalendarWidget />
+            <TripWidget userId={user.id} />
 
             {/* Budget summary */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">

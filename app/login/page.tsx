@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react'
 import { login } from '@/app/auth/actions'
+import GoogleSignInButton from '@/app/components/GoogleSignInButton'
 
 export default function LoginPage() {
   const [state, formAction] = useActionState(login, null)
@@ -52,6 +53,15 @@ export default function LoginPage() {
             Sign up
           </a>
         </p>
+
+        <div className="mt-5 flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400">or</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+        <div className="mt-4">
+          <GoogleSignInButton />
+        </div>
       </div>
     </div>
   )
