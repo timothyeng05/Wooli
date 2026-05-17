@@ -80,9 +80,18 @@ export async function POST() {
 
   // Only allow subcategories (or parents with no children) — mirrors TransactionForm logic
   const parentIds = new Set(allCategories?.filter(c => c.parent_id).map(c => c.parent_id))
-  const categories = (allCategories ?? []).filter(c =>
+  const selectableCategories = (allCategories ?? []).filter(c =>
     c.parent_id !== null || !parentIds.has(c.id)
   )
+
+  // Build full path names (e.g. "Food & Drink → Restaurants") for better Groq context
+  const parentMap = new Map((allCategories ?? []).map(c => [c.id, c.name]))
+  const categories = selectableCategories.map(c => ({
+    id: c.id,
+    name: c.parent_id
+      ? `${parentMap.get(c.parent_id) ?? ''} → ${c.name}`
+      : c.name,
+  }))
 
   let totalAdded = 0
   let totalModified = 0
