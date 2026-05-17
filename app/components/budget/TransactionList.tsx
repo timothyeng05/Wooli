@@ -10,6 +10,7 @@ interface Transaction {
   description: string | null
   merchant: string | null
   transacted_at: string
+  plaid_transaction_id: string | null
   categories: { id: string; name: string; color: string } | null
 }
 
@@ -88,9 +89,17 @@ export default function TransactionList({ transactions }: { transactions: Transa
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {t.description || t.merchant || 'No description'}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      {t.categories?.name || 'Uncategorized'}
-                      {t.merchant && t.description && ` · ${t.merchant}`}
+                    <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                      <span className={t.categories ? '' : 'text-orange-400'}>
+                        {t.categories?.name || 'Uncategorized'}
+                      </span>
+                      {t.merchant && t.description && <span>· {t.merchant}</span>}
+                      {t.plaid_transaction_id && t.categories && (
+                        <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
+                      )}
+                      {t.plaid_transaction_id && !t.categories && (
+                        <span className="text-[10px] font-semibold bg-orange-100 text-orange-500 px-1 py-0.5 rounded">needs category</span>
+                      )}
                     </p>
                   </Link>
 

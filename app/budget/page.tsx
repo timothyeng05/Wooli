@@ -23,7 +23,7 @@ export default async function BudgetPage() {
     supabase
       .from('transactions')
       .select(`
-        id, amount, description, merchant, transacted_at,
+        id, amount, description, merchant, transacted_at, plaid_transaction_id,
         categories ( id, name, color )
       `)
       .eq('user_id', user.id)
