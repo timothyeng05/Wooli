@@ -7,6 +7,7 @@ import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
 import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
 import TripWidget from '@/app/components/dashboard/TripWidget'
 import GoogleCalendarWidget from '@/app/components/dashboard/GoogleCalendarWidget'
+import UpcomingReservations from '@/app/components/dashboard/UpcomingReservations'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -97,6 +98,7 @@ export default async function DashboardPage() {
                   <Link href="/mood" className="text-blue-600 hover:text-blue-700 font-medium">All entries →</Link>
                 </div>
               </div>
+              <UpcomingReservations userId={user.id} />
               <CalendarInsights moodEntries={moodEntries} periodEntries={periodEntries} />
               <LifeCalendar initialMoodEntries={moodEntriesThisMonth} initialPeriodEntries={periodEntries} />
             </div>
