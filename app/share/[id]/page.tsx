@@ -1,0 +1,129 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
+import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
+
+function serviceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
+function generateDays(startDate: string, endDate: string): string[] {
+  const days: string[] = []
+  const current = new Date(startDate + 'T00:00:00')
+  const end = new Date(endDate + 'T00:00:00')
+  while (current <= end) {
+    days.push(current.toISOString().split('T')[0])
+    current.setDate(current.getDate() + 1)
+  }
+  return days
+}
+
+function groupByLegs(allDays: string[], legs: Leg[]) {
+  if (!legs.length) return [{ leg: null as Leg | null, days: allDays }]
+  return legs
+    .map(leg => ({ leg, days: allDays.filter(d => d >= leg.from && d <= leg.to) }))
+    .filter(g => g.days.length > 0)
+}
+
+function shortDate(date: string, opts?: Intl.DateTimeFormatOptions) {
+  return new Date(date + 'T00:00:00').toLocaleDateString('en-US', opts ?? { month: 'short', day: 'numeric' })
+}
+
+export default async function ShareTripPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase = serviceClient()
+
+  const { data: trip } = await supabase.from('trips').select('*').eq('id', id).single()
+  if (!trip) notFound()
+
+  const { data: tripDays } = await supabase
+    .from('trip_days')
+    .select('date, title, notes')
+    .eq('trip_id', id)
+    .order('date')
+
+  const dayDataByDate = new Map(tripDays?.map(d => [d.date, d]) ?? [])
+  const allDays = generateDays(trip.start_date, trip.end_date)
+  const legs = TRIP_LEGS[id] ?? []
+  const groups = groupByLegs(allDays, legs)
+
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 bg-white border border-gray-200 rounded-full px-3 py-1 mb-4">
+            <span>👁</span> View only
+          </div>
+          <h1 className="text-4xl font-bold text-gray-900">{trip.name}</h1>
+          {trip.destination && <p className="text-gray-500 mt-1">📍 {trip.destination}</p>}
+          <p className="text-sm text-gray-400 mt-1">
+            {shortDate(trip.start_date, { month: 'long', day: 'numeric' })} –{' '}
+            {shortDate(trip.end_date, { month: 'long', day: 'numeric', year: 'numeric' })}
+            {' · '}{allDays.length} days
+          </p>
+          {trip.description && (
+            <p className="text-gray-600 mt-3 text-sm max-w-xl">{trip.description}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+        {groups.map((group, gi) => {
+          const colors = LEG_COLORS[gi % LEG_COLORS.length]
+          const { leg, days: legDays } = group
+
+          return (
+            <div key={gi}>
+              {leg && (
+                <div className={`flex items-center gap-3 px-5 py-4 rounded-xl border mb-2 ${colors.bg} ${colors.border}`}>
+                  <span className="text-2xl leading-none">{leg.emoji}</span>
+                  <div>
+                    <h2 className={`font-bold text-base ${colors.text}`}>{leg.name}</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {shortDate(legDays[0])} – {shortDate(legDays[legDays.length - 1])}
+                      {' · '}{legDays.length} day{legDays.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
+                {legDays.map(date => {
+                  const dayData = dayDataByDate.get(date)
+                  const dayNum = allDays.indexOf(date) + 1
+                  const dateObj = new Date(date + 'T00:00:00')
+                  const dateLabel = dateObj.toLocaleDateString('en-US', {
+                    weekday: 'short', month: 'short', day: 'numeric',
+                  })
+                  const hasContent = !!(dayData?.notes || dayData?.title)
+
+                  return (
+                    <Link key={date} href={`/share/${id}/${date}`}>
+                      <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition group">
+                        <span className={`text-xs font-bold rounded-full w-7 h-7 flex-shrink-0 flex items-center justify-center ${
+                          hasContent ? `${colors.badge} text-white` : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          {dayNum}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {dayData?.title || dateLabel}
+                          </p>
+                          {dayData?.title && <p className="text-xs text-gray-400">{dateLabel}</p>}
+                        </div>
+                        <span className="text-gray-300 group-hover:text-gray-500 transition flex-shrink-0 text-base">›</span>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
