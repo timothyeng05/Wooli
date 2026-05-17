@@ -73,10 +73,16 @@ export async function POST() {
 
   if (!items?.length) return NextResponse.json({ added: 0, modified: 0, removed: 0 })
 
-  const { data: categories } = await supabase
+  const { data: allCategories } = await supabase
     .from('categories')
-    .select('id, name')
+    .select('id, name, parent_id')
     .eq('user_id', user.id)
+
+  // Only allow subcategories (or parents with no children) — mirrors TransactionForm logic
+  const parentIds = new Set(allCategories?.filter(c => c.parent_id).map(c => c.parent_id))
+  const categories = (allCategories ?? []).filter(c =>
+    c.parent_id !== null || !parentIds.has(c.id)
+  )
 
   let totalAdded = 0
   let totalModified = 0
