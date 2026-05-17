@@ -203,10 +203,9 @@ export default function LifeCalendar({
                   else next.add(cal.id)
                   return next
                 })}
-                className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border transition ${enabled ? 'border-transparent' : 'border-gray-200 opacity-40'}`}
-                style={enabled ? { backgroundColor: cal.color + '22', borderColor: cal.color + '55', color: cal.color } : {}}
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium transition ${enabled ? 'text-white' : 'border-gray-200 text-gray-400 bg-white'}`}
+                style={enabled ? { backgroundColor: cal.color, borderColor: cal.color } : {}}
               >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cal.color }} />
                 {cal.name}
               </button>
             )

@@ -39,11 +39,13 @@ export async function fetchGCalData(
     const calList = await calListRes.json()
     const rawCals: { id: string; summary: string; backgroundColor: string }[] = calList.items ?? []
 
-    const calendars: GCalCalendar[] = rawCals.map(c => ({
-      id: c.id,
-      name: c.summary,
-      color: c.backgroundColor ?? '#3b82f6',
-    }))
+    const calendars: GCalCalendar[] = rawCals
+      .filter(c => !c.summary?.toLowerCase().includes('holiday'))
+      .map(c => ({
+        id: c.id,
+        name: c.summary,
+        color: c.backgroundColor ?? '#3b82f6',
+      }))
 
     const eventsByDate: GCalEventsByDate = {}
 
