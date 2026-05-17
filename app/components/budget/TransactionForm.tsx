@@ -159,7 +159,7 @@ export default function TransactionForm({
         />
       </div>
 
-      {/* Category */}
+      {/* Category — only subcategories selectable; parent shown only if it has no children */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-1.5">Category</label>
         <select
@@ -168,16 +168,19 @@ export default function TransactionForm({
           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">No category</option>
-          {parents.map(parent => (
-            <optgroup key={parent.id} label={parent.name}>
-              <option value={parent.id}>{parent.name} (general)</option>
-              {children
-                .filter(c => c.parent_id === parent.id)
-                .map(child => (
-                  <option key={child.id} value={child.id}>  {child.name}</option>
+          {parents.map(parent => {
+            const subs = children.filter(c => c.parent_id === parent.id)
+            if (subs.length === 0) {
+              return <option key={parent.id} value={parent.id}>{parent.name}</option>
+            }
+            return (
+              <optgroup key={parent.id} label={parent.name}>
+                {subs.map(child => (
+                  <option key={child.id} value={child.id}>{child.name}</option>
                 ))}
-            </optgroup>
-          ))}
+              </optgroup>
+            )
+          })}
         </select>
       </div>
 
