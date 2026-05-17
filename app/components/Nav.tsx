@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/friends', label: 'Friends' },
   { href: '/budget', label: 'Budget' },
   { href: '/cards', label: 'Cards' },
+  { href: '/trips', label: 'Trips' },
 ] as const
 
 export default function Nav() {
