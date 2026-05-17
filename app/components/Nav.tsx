@@ -7,10 +7,9 @@ import { logout } from '@/app/auth/actions'
 const NAV_LINKS = [
   { href: '/mood', label: 'Journal', alsoMatches: ['/period'] },
   { href: '/lists', label: 'Lists' },
-  { href: '/friends', label: 'Friends' },
   { href: '/budget', label: 'Budget' },
-  { href: '/cards', label: 'Cards' },
   { href: '/trips', label: 'Trips' },
+  { href: '/friends', label: 'Friends' },
 ] as const
 
 export default function Nav() {

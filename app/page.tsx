@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { logout } from '@/app/auth/actions'
-import { computeCardStats } from '@/lib/card-utils'
 import LifeCalendar from '@/app/components/dashboard/LifeCalendar'
 import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
 import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
@@ -19,7 +18,7 @@ export default async function DashboardPage() {
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
 
   const moodLookbackStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
-  const [moodResult, periodResult, transactionResult, cardsResult, listsResult] = await Promise.all([
+  const [moodResult, periodResult, transactionResult, listsResult] = await Promise.all([
     supabase
       .from('mood_entries')
       .select('id, mood, note, grateful_for, activities, logged_at')
@@ -39,19 +38,6 @@ export default async function DashboardPage() {
       .order('transacted_at', { ascending: false })
       .limit(8) as any,
     supabase
-      .from('cards')
-      .select(`
-        id, name, issuer, annual_fee, is_active,
-        card_benefits (
-          is_core,
-          benefits ( amount, amount_unit, period_type )
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(3) as any,
-    supabase
       .from('lists')
       .select('id, name, is_archived')
       .eq('user_id', user.id)
@@ -65,13 +51,7 @@ export default async function DashboardPage() {
   const periodEntries = periodResult.data || []
   const moodEntriesThisMonth = moodEntries.filter(e => e.logged_at >= monthStart && e.logged_at <= monthEnd)
   const transactions = transactionResult.data || []
-  const rawCards = cardsResult.data || []
   const activeLists = listsResult.data || []
-
-  const cards = rawCards.map((c: any) => ({
-    ...c,
-    ...computeCardStats(c.annual_fee, c.card_benefits || [])
-  }))
 
   const income = transactions.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
   const expenses = transactions.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
@@ -81,7 +61,6 @@ export default async function DashboardPage() {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
   const hasTransactions = transactions.length > 0 && !transactionResult.error
-  const hasCards = cards.length > 0
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -217,45 +196,6 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            {/* Cards summary */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-900">Cards</h2>
-                <Link href="/cards" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  View all →
-                </Link>
-              </div>
-              {hasCards ? (
-                <div className="space-y-3">
-                  {cards.map((card: any) => (
-                    <Link key={card.id} href={`/cards/${card.id}`}>
-                      <div className="flex items-center justify-between py-2 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{card.name}</p>
-                          <p className="text-xs text-gray-500">{card.issuer}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-sm font-semibold ${card.netValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {card.netValue >= 0 ? '+' : '-'}${Math.abs(card.netValue).toFixed(0)}
-                          </p>
-                          <p className="text-xs text-gray-400">net/yr</p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-gray-400 mb-3">No active cards yet</p>
-                  <Link
-                    href="/cards/new"
-                    className="block w-full text-center py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition"
-                  >
-                    + Add card
-                  </Link>
-                </div>
-              )}
-            </div>
 
           </div>
         </div>
