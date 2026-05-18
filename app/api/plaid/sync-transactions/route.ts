@@ -67,15 +67,23 @@ export async function POST() {
           partial.forEach((v, k) => categoryMap.set(k, v))
         }
 
-        const rows = added.map(t => ({
-          user_id: user.id,
-          plaid_transaction_id: t.transaction_id,
-          amount: -(t.amount),
-          description: t.name,
-          merchant: t.merchant_name ?? null,
-          transacted_at: t.date + 'T00:00:00',
-          category_id: categoryMap.get(t.transaction_id) ?? null,
-        }))
+        const transferKeywords = /payment|transfer|zelle|venmo|paypal|cashapp|wire|ach|direct dep/i
+        const rows = added.map(t => {
+          const isTransfer = !!(
+            t.personal_finance_category?.primary?.includes('TRANSFER') ||
+            transferKeywords.test(t.name)
+          )
+          return {
+            user_id: user.id,
+            plaid_transaction_id: t.transaction_id,
+            amount: -(t.amount),
+            description: t.name,
+            merchant: t.merchant_name ?? null,
+            transacted_at: t.date + 'T00:00:00',
+            category_id: isTransfer ? null : (categoryMap.get(t.transaction_id) ?? null),
+            is_transfer: isTransfer,
+          }
+        })
         await supabase.from('transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })
         totalAdded += added.length
       }

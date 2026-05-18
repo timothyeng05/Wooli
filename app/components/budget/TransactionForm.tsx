@@ -26,6 +26,7 @@ interface ExistingTransaction {
   category_id: string | null
   account_id: string | null
   transacted_at: string
+  is_transfer: boolean | null
 }
 
 export default function TransactionForm({
@@ -44,7 +45,11 @@ export default function TransactionForm({
   const router = useRouter()
   const isEdit = !!transaction
   const [loading, setLoading] = useState(false)
-  const [isIncome, setIsIncome] = useState(isEdit ? transaction.amount > 0 : false)
+  const [mode, setMode] = useState<'expense' | 'income' | 'transfer'>(
+    isEdit ? (transaction.is_transfer ? 'transfer' : transaction.amount > 0 ? 'income' : 'expense') : 'expense'
+  )
+  const isIncome = mode === 'income'
+  const isTransfer = mode === 'transfer'
   const [amount, setAmount] = useState(isEdit ? Math.abs(transaction.amount).toString() : '')
   const [description, setDescription] = useState(isEdit ? (transaction.description || '') : '')
   const [merchant, setMerchant] = useState(isEdit ? (transaction.merchant || '') : '')
@@ -72,9 +77,10 @@ export default function TransactionForm({
         amount: signedAmount,
         description: description || null,
         merchant: merchant || null,
-        category_id: categoryId || null,
+        category_id: isTransfer ? null : (categoryId || null),
         account_id: accountId || null,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
+        is_transfer: isTransfer,
       }
 
       if (isEdit) {
@@ -95,25 +101,34 @@ export default function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Income / Expense toggle */}
+      {/* Expense / Income / Transfer toggle */}
       <div className="flex rounded-lg border border-gray-200 overflow-hidden">
         <button
           type="button"
-          onClick={() => { setIsIncome(false); setCategoryId('') }}
+          onClick={() => { setMode('expense'); setCategoryId('') }}
           className={`flex-1 py-2.5 text-sm font-medium transition ${
-            !isIncome ? 'bg-red-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+            mode === 'expense' ? 'bg-red-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
         >
           Expense
         </button>
         <button
           type="button"
-          onClick={() => { setIsIncome(true); setCategoryId('') }}
+          onClick={() => { setMode('income'); setCategoryId('') }}
           className={`flex-1 py-2.5 text-sm font-medium transition ${
-            isIncome ? 'bg-green-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+            mode === 'income' ? 'bg-green-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
         >
           Income
+        </button>
+        <button
+          type="button"
+          onClick={() => { setMode('transfer'); setCategoryId('') }}
+          className={`flex-1 py-2.5 text-sm font-medium transition ${
+            mode === 'transfer' ? 'bg-gray-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Transfer
         </button>
       </div>
 
@@ -159,8 +174,8 @@ export default function TransactionForm({
         />
       </div>
 
-      {/* Category — only subcategories selectable; parent shown only if it has no children */}
-      <div>
+      {/* Category — hidden for transfers */}
+      {!isTransfer && <div>
         <label className="block text-sm font-medium text-gray-900 mb-1.5">Category</label>
         <select
           value={categoryId}
@@ -182,7 +197,7 @@ export default function TransactionForm({
             )
           })}
         </select>
-      </div>
+      </div>}
 
       {/* Account */}
       {accounts.length > 0 && (

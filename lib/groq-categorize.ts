@@ -35,18 +35,37 @@ export async function categorizeWithGroq(
     `${i}: merchant="${t.merchant ?? t.description}" description="${t.description ?? ''}"`
   ).join('\n')
 
-  const prompt = `You are a personal finance transaction categorizer. Assign the best category id to each transaction based on the user's category list. Use null only if truly no category fits.
+  const prompt = `You are a personal finance transaction categorizer. Your job is to assign the best matching category to every transaction. Always pick the closest match — only use null if the transaction is completely unrecognizable.
 ${examplesSection}
 Available categories (use ONLY these ids):
 ${categoryList}
+
+Common merchant type hints (use to infer category when no example exists):
+- Transit/subway/bus: MTA, WMATA, BART, CTA, Metro, NJ Transit, PATH → Transportation
+- Rideshare: Uber, Lyft, Via → Transportation
+- Gas stations: Shell, BP, Exxon, Mobil, Sunoco, Gulf → Transportation / Gas
+- Grocery: Whole Foods, Trader Joe's, Safeway, Stop & Shop, Key Food, Kroger, Wegmans, Aldi, Sprouts → Groceries / Food
+- General retail: Target, Walmart, Costco, Kohl's, TJ Maxx, Marshalls, HomeGoods → Shopping
+- Online retail: Amazon, eBay, Etsy → Shopping
+- Pharmacy/drugstore: Walgreens, CVS, Rite Aid, Duane Reade → Health / Pharmacy / Personal Care
+- Restaurants/food: any restaurant or food delivery name (DoorDash, Grubhub, Uber Eats) → Dining / Restaurants / Food
+- Coffee: Starbucks, Dunkin, Blue Bottle, Intelligentsia → Dining / Coffee
+- Streaming: Netflix, Spotify, Hulu, Disney+, Apple TV, HBO, Peacock, Tidal → Entertainment / Subscriptions
+- Gym/fitness: Equinox, Planet Fitness, LA Fitness, ClassPass, Peloton → Health / Fitness
+- Utilities: electric, gas, water, internet, cable, phone bills → Bills / Utilities
+- Insurance: any insurance company → Insurance / Bills
+- Travel: airlines, hotels, Airbnb, Booking.com, Expedia → Travel
+- Bank/credit card payments, wire transfers, ACH: mark as null (these are transfers, not expenses)
 
 Transactions to categorize (index: details):
 ${txList}
 
 Rules:
 - Only use ids from the list above — never invent ids
-- Prefer the most specific match
-- Use null sparingly
+- Match the hint category concept to the closest available category name
+- Always pick SOMETHING reasonable rather than returning null
+- Only use null for bank/transfer transactions or truly unidentifiable entries
+- Prefer the most specific subcategory
 
 Respond with ONLY a JSON array of category ids (or null), one per transaction in order. Example: ["uuid-1", null, "uuid-2"]`
 

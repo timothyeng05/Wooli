@@ -11,6 +11,7 @@ interface Transaction {
   merchant: string | null
   transacted_at: string
   plaid_transaction_id: string | null
+  is_transfer: boolean | null
   categories: { id: string; name: string; color: string } | null
 }
 
@@ -81,7 +82,7 @@ export default function TransactionList({ transactions }: { transactions: Transa
                   {/* Category dot */}
                   <div
                     className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: t.categories?.color || '#d1d5db' }}
+                    style={{ backgroundColor: t.is_transfer ? '#9ca3af' : (t.categories?.color || '#d1d5db') }}
                   />
 
                   {/* Description + merchant — clicking opens edit */}
@@ -90,22 +91,28 @@ export default function TransactionList({ transactions }: { transactions: Transa
                       {t.description || t.merchant || 'No description'}
                     </p>
                     <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                      <span className={t.categories ? '' : 'text-orange-400'}>
-                        {t.categories?.name || 'Uncategorized'}
-                      </span>
+                      {t.is_transfer ? (
+                        <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Transfer</span>
+                      ) : (
+                        <>
+                          <span className={t.categories ? '' : 'text-orange-400'}>
+                            {t.categories?.name || 'Uncategorized'}
+                          </span>
+                          {t.plaid_transaction_id && t.categories && (
+                            <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
+                          )}
+                          {t.plaid_transaction_id && !t.categories && (
+                            <span className="text-[10px] font-semibold bg-orange-100 text-orange-500 px-1 py-0.5 rounded">needs category</span>
+                          )}
+                        </>
+                      )}
                       {t.merchant && t.description && <span>· {t.merchant}</span>}
-                      {t.plaid_transaction_id && t.categories && (
-                        <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
-                      )}
-                      {t.plaid_transaction_id && !t.categories && (
-                        <span className="text-[10px] font-semibold bg-orange-100 text-orange-500 px-1 py-0.5 rounded">needs category</span>
-                      )}
                     </p>
                   </Link>
 
                   {/* Amount */}
-                  <span className={`text-sm font-semibold flex-shrink-0 ${t.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                    {t.amount >= 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
+                  <span className={`text-sm font-semibold flex-shrink-0 ${t.is_transfer ? 'text-gray-400' : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                    {t.is_transfer ? '' : t.amount >= 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
                   </span>
 
                   {/* Delete */}

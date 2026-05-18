@@ -54,7 +54,7 @@ export default async function BudgetPage() {
     supabase
       .from('transactions')
       .select(`
-        id, amount, description, merchant, transacted_at, plaid_transaction_id,
+        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer,
         categories ( id, name, color )
       `)
       .eq('user_id', user.id)
@@ -98,13 +98,14 @@ export default async function BudgetPage() {
   const transactions = txnResult.data || []
   const categories = catResult.data || []
 
-  const income = transactions.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
-  const expenses = transactions.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
+  const nonTransfers = transactions.filter((t: any) => !t.is_transfer)
+  const income = nonTransfers.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
+  const expenses = nonTransfers.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
   const net = income - expenses
 
   // Category breakdown for expenses
   const catTotals = new Map<string, { name: string; color: string; total: number }>()
-  transactions.filter((t: any) => t.amount < 0 && t.categories).forEach((t: any) => {
+  nonTransfers.filter((t: any) => t.amount < 0 && t.categories).forEach((t: any) => {
     const key = t.categories.id
     const existing = catTotals.get(key)
     if (existing) { existing.total += Math.abs(Number(t.amount)) }
