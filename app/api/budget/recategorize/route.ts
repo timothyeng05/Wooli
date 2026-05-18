@@ -48,8 +48,9 @@ export async function POST() {
     const categoryMap = await categorizeWithGroq(chunk, categories, fewShot)
 
     for (const [txId, catId] of categoryMap) {
+      if (!catId) continue // never overwrite with null — leave existing category intact
       await supabase.from('transactions').update({ category_id: catId }).eq('id', txId)
-      if (catId) updated++
+      updated++
     }
   }
 

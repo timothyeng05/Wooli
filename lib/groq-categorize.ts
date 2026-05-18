@@ -55,6 +55,10 @@ Common merchant type hints (use to infer category when no example exists):
 - Utilities: electric, gas, water, internet, cable, phone bills → Bills / Utilities
 - Insurance: any insurance company → Insurance / Bills
 - Travel: airlines, hotels, Airbnb, Booking.com, Expedia → Travel
+- Home improvement/hardware: Home Depot, Lowe's, IKEA, Ace Hardware → Home
+- Furniture/home goods: Wayfair, Crate & Barrel, West Elm, Pottery Barn → Home
+- Rent/mortgage payments → Home / Housing
+- Cleaning/laundry services → Home
 - Bank/credit card payments, wire transfers, ACH: mark as null (these are transfers, not expenses)
 
 Transactions to categorize (index: details):
