@@ -11,6 +11,7 @@ export interface CategorizableTransaction {
 export interface SelectableCategory {
   id: string
   name: string // should be "Parent → Child" format
+  keywords?: string | null
 }
 
 export interface FewShotExample {
@@ -27,6 +28,14 @@ export async function categorizeWithGroq(
 
   const categoryList = categories.map(c => `- ${c.name} (id: ${c.id})`).join('\n')
 
+  const userKeywordHints = categories
+    .filter(c => c.keywords)
+    .map(c => `- If merchant/description contains any of [${c.keywords}] → use "${c.name}" (id: ${c.id})`)
+    .join('\n')
+  const keywordsSection = userKeywordHints
+    ? `\nUser-defined keyword rules (highest priority):\n${userKeywordHints}\n`
+    : ''
+
   const examplesSection = examples.length > 0
     ? `\nExamples from this user's history:\n${examples.slice(0, 30).map(e => `- "${e.merchant}" → ${e.categoryName}`).join('\n')}\n`
     : ''
@@ -35,41 +44,35 @@ export async function categorizeWithGroq(
     `${i}: merchant="${t.merchant ?? t.description}" description="${t.description ?? ''}"`
   ).join('\n')
 
-  const prompt = `You are a personal finance transaction categorizer. Your job is to assign the best matching category to every transaction. Always pick the closest match — only use null if the transaction is completely unrecognizable.
-${examplesSection}
+  const prompt = `You are a personal finance transaction categorizer. Assign the best matching category id to each transaction. Always pick the closest match — only use null for bank/credit card payments, wire transfers, or truly unrecognizable entries.
+${keywordsSection}${examplesSection}
 Available categories (use ONLY these ids):
 ${categoryList}
 
-Common merchant type hints (use to infer category when no example exists):
-- Transit/subway/bus: MTA, WMATA, BART, CTA, Metro, NJ Transit, PATH → Transportation
-- Rideshare: Uber, Lyft, Via → Transportation
-- Gas stations: Shell, BP, Exxon, Mobil, Sunoco, Gulf → Transportation / Gas
-- Grocery: Whole Foods, Trader Joe's, Safeway, Stop & Shop, Key Food, Kroger, Wegmans, Aldi, Sprouts → Groceries / Food
-- General retail: Target, Walmart, Costco, Kohl's, TJ Maxx, Marshalls, HomeGoods → Shopping
-- Online retail: Amazon, eBay, Etsy → Shopping
-- Pharmacy/drugstore: Walgreens, CVS, Rite Aid, Duane Reade → Health / Pharmacy / Personal Care
-- Restaurants/food: any restaurant or food delivery name (DoorDash, Grubhub, Uber Eats) → Dining / Restaurants / Food
-- Coffee: Starbucks, Dunkin, Blue Bottle, Intelligentsia → Dining / Coffee
-- Streaming: Netflix, Spotify, Hulu, Disney+, Apple TV, HBO, Peacock, Tidal → Entertainment / Subscriptions
-- Gym/fitness: Equinox, Planet Fitness, LA Fitness, ClassPass, Peloton → Health / Fitness
-- Utilities: electric, gas, water, internet, cable, phone bills → Bills / Utilities
-- Insurance: any insurance company → Insurance / Bills
-- Travel: airlines, hotels, Airbnb, Booking.com, Expedia → Travel
-- Home improvement/hardware: Home Depot, Lowe's, IKEA, Ace Hardware → Home
-- Furniture/home goods: Wayfair, Crate & Barrel, West Elm, Pottery Barn → Home
-- Rent/mortgage payments → Home / Housing
-- Cleaning/laundry services → Home
-- Bank/credit card payments, wire transfers, ACH: mark as null (these are transfers, not expenses)
+General merchant type hints (use when no keyword rule or example matches):
+- Transit/subway (MTA, WMATA, BART, Metro, NJ Transit) → transportation or transit subcategory
+- Rideshare (Uber, Lyft) → transportation subcategory
+- Gas stations (Shell, BP, Exxon, Mobil) → gas or transportation subcategory
+- Grocery stores (Whole Foods, Trader Joe's, Stop & Shop, Key Food, Kroger, Aldi) → groceries subcategory
+- General retail (Target, Walmart, Costco, TJ Maxx) → shopping subcategory
+- Online retail (Amazon, eBay, Etsy) → shopping subcategory
+- Pharmacy (Walgreens, CVS, Rite Aid, Duane Reade) → pharmacy or health subcategory
+- Restaurants and food delivery (DoorDash, Grubhub, Uber Eats, any restaurant) → dining or restaurants subcategory
+- Coffee shops (Starbucks, Dunkin) → coffee or dining subcategory
+- Streaming (Netflix, Spotify, Hulu, Disney+, HBO) → entertainment or subscriptions subcategory
+- Gym/fitness (Equinox, Planet Fitness, ClassPass, Peloton) → fitness or health subcategory
+- Home improvement (Home Depot, Lowe's, IKEA, Ace Hardware) → home improvement subcategory
+- Airlines, hotels, Airbnb, Expedia → travel subcategory
+- Credit card payments, autopay, bank payments, ACH, Zelle, Venmo, wire transfer → null
 
 Transactions to categorize (index: details):
 ${txList}
 
 Rules:
 - Only use ids from the list above — never invent ids
-- Match the hint category concept to the closest available category name
-- Always pick SOMETHING reasonable rather than returning null
-- Only use null for bank/transfer transactions or truly unidentifiable entries
-- Prefer the most specific subcategory
+- Keyword rules above take highest priority
+- Always pick the most specific subcategory available
+- Prefer any reasonable match over null
 
 Respond with ONLY a JSON array of category ids (or null), one per transaction in order. Example: ["uuid-1", null, "uuid-2"]`
 
@@ -100,7 +103,7 @@ Respond with ONLY a JSON array of category ids (or null), one per transaction in
 }
 
 export function buildSelectableCategories(
-  allCategories: { id: string; name: string; parent_id: string | null }[]
+  allCategories: { id: string; name: string; parent_id: string | null; keywords?: string | null }[]
 ): SelectableCategory[] {
   const parentIds = new Set(
     allCategories.filter(c => c.parent_id).map(c => c.parent_id as string)
@@ -114,5 +117,6 @@ export function buildSelectableCategories(
       name: c.parent_id
         ? `${parentMap.get(c.parent_id) ?? ''} → ${c.name}`
         : c.name,
+      keywords: c.keywords,
     }))
 }

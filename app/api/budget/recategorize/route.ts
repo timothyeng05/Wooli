@@ -9,7 +9,7 @@ export async function POST() {
 
   const { data: allCategories } = await supabase
     .from('categories')
-    .select('id, name, parent_id')
+    .select('id, name, parent_id, keywords')
     .eq('user_id', user.id)
 
   const categories = buildSelectableCategories(allCategories ?? [])

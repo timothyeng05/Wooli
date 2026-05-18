@@ -10,6 +10,7 @@ interface Category {
   is_income: boolean
   parent_id: string | null
   sort_order: number
+  keywords: string | null
 }
 
 const PRESET_COLORS = [
@@ -31,6 +32,7 @@ export default function CategoryManager({
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#6366f1')
   const [newIsIncome, setNewIsIncome] = useState(false)
+  const [newKeywords, setNewKeywords] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -73,12 +75,13 @@ export default function CategoryManager({
     setSaving(true)
     try {
       const supabase = createClient()
+      const keywords = newKeywords.trim() || null
       const { error } = await supabase
         .from('categories')
-        .update({ name: newName.trim(), color: newColor })
+        .update({ name: newName.trim(), color: newColor, keywords })
         .eq('id', id)
       if (error) throw error
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName.trim(), color: newColor } : c))
+      setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName.trim(), color: newColor, keywords } : c))
       setEditing(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update')
@@ -106,43 +109,54 @@ export default function CategoryManager({
     setEditing(cat.id)
     setNewName(cat.name)
     setNewColor(cat.color)
+    setNewKeywords(cat.keywords || '')
     setAdding(null)
   }
 
   const renderEditForm = (id: string) => (
-    <div className="flex items-center gap-2 p-3 bg-blue-50 border-t border-blue-100">
+    <div className="p-3 bg-blue-50 border-t border-blue-100 space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          autoFocus
+          className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <div className="flex gap-1 flex-wrap max-w-[120px]">
+          {PRESET_COLORS.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setNewColor(c)}
+              style={{ backgroundColor: c }}
+              className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
+            />
+          ))}
+        </div>
+      </div>
       <input
         type="text"
-        value={newName}
-        onChange={e => setNewName(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && handleEdit(id)}
-        autoFocus
-        className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+        value={newKeywords}
+        onChange={e => setNewKeywords(e.target.value)}
+        placeholder="AI hints: mta, subway, njtransit, path (comma-separated)"
+        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-400"
       />
-      <div className="flex gap-1 flex-wrap max-w-[120px]">
-        {PRESET_COLORS.map(c => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setNewColor(c)}
-            style={{ backgroundColor: c }}
-            className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
-          />
-        ))}
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleEdit(id)}
+          disabled={saving || !newName.trim()}
+          className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 transition"
+        >
+          Save
+        </button>
+        <button
+          onClick={() => setEditing(null)}
+          className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+        >
+          Cancel
+        </button>
       </div>
-      <button
-        onClick={() => handleEdit(id)}
-        disabled={saving || !newName.trim()}
-        className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 transition"
-      >
-        Save
-      </button>
-      <button
-        onClick={() => setEditing(null)}
-        className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
-      >
-        Cancel
-      </button>
     </div>
   )
 
@@ -220,7 +234,12 @@ export default function CategoryManager({
                 {/* Parent row */}
                 <div className="flex items-center gap-3 px-4 py-3 bg-white">
                   <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color }} />
-                  <span className="font-medium text-gray-900 flex-1">{parent.name}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-900">{parent.name}</span>
+                    {parent.keywords && (
+                      <p className="text-[11px] text-gray-400 truncate">{parent.keywords}</p>
+                    )}
+                  </div>
                   <button
                     onClick={() => { startEdit(parent) }}
                     className="text-xs text-gray-400 hover:text-blue-600 transition"
@@ -251,7 +270,12 @@ export default function CategoryManager({
                       <div key={child.id}>
                         <div className="flex items-center gap-3 px-4 py-2 pl-8">
                           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: child.color }} />
-                          <span className="text-sm text-gray-700 flex-1">{child.name}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-gray-700">{child.name}</span>
+                            {child.keywords && (
+                              <p className="text-[11px] text-gray-400 truncate">{child.keywords}</p>
+                            )}
+                          </div>
                           <button
                             onClick={() => startEdit(child)}
                             className="text-xs text-gray-400 hover:text-blue-600 transition"

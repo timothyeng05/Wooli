@@ -17,7 +17,7 @@ export async function POST() {
 
   const { data: allCategories } = await supabase
     .from('categories')
-    .select('id, name, parent_id')
+    .select('id, name, parent_id, keywords')
     .eq('user_id', user.id)
 
   const categories = buildSelectableCategories(allCategories ?? [])
@@ -67,7 +67,7 @@ export async function POST() {
           partial.forEach((v, k) => categoryMap.set(k, v))
         }
 
-        const transferKeywords = /payment|transfer|zelle|venmo|paypal|cashapp|wire|ach|direct dep/i
+        const transferKeywords = /payment|autopay|transfer|zelle|venmo|paypal|cashapp|wire|ach|direct dep/i
         const rows = added.map(t => {
           const isTransfer = !!(
             t.personal_finance_category?.primary?.includes('TRANSFER') ||
