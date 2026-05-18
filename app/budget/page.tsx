@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
+import MonthNav from '@/app/components/budget/MonthNav'
 import Breadcrumbs from '@/app/components/Breadcrumbs'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
 import RecategorizeButton from '@/app/components/budget/RecategorizeButton'
@@ -12,13 +13,16 @@ function monthRange(year: number, month: number) {
   return { start, end }
 }
 
-export default async function BudgetPage() {
+export default async function BudgetPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string }> }) {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { year: yearStr, month: monthStr } = await searchParams
   const now = new Date()
-  const { start, end } = monthRange(now.getFullYear(), now.getMonth())
+  const year = yearStr ? parseInt(yearStr) : now.getFullYear()
+  const month = monthStr ? parseInt(monthStr) : now.getMonth()
+  const { start, end } = monthRange(year, month)
 
   // Auto-generate any due recurring transactions
   const today = new Date().toISOString().split('T')[0]
@@ -63,7 +67,7 @@ export default async function BudgetPage() {
       .order('transacted_at', { ascending: false }) as any,
     supabase
       .from('categories')
-      .select('id, name, color, is_income')
+      .select('id, name, color, is_income, parent_id')
       .eq('user_id', user.id) as any
   ])
 
@@ -113,8 +117,6 @@ export default async function BudgetPage() {
   })
   const sortedCats = Array.from(catTotals.values()).sort((a, b) => b.total - a.total)
 
-  const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' })
-
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
@@ -122,9 +124,9 @@ export default async function BudgetPage() {
           <Breadcrumbs items={[{ label: 'Budget' }]} />
           <div className="mt-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-1">Budget</h1>
-                <p className="text-gray-600 text-sm">{monthLabel}</p>
+              <div className="flex items-center gap-1">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mr-2">Budget</h1>
+                <MonthNav year={year} month={month} />
               </div>
               <Link
                 href="/budget/new"
@@ -205,7 +207,7 @@ export default async function BudgetPage() {
           <div className={sortedCats.length > 0 ? 'lg:col-span-2' : 'lg:col-span-3'}>
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <h2 className="font-semibold text-gray-900 mb-4">Transactions</h2>
-              <TransactionList transactions={transactions} />
+              <TransactionList transactions={transactions} categories={categories} />
             </div>
           </div>
         </div>
