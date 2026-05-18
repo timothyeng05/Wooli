@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   description: "Personal wellness dashboard",
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,7 +37,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Nav />
-        {children}
+        <main className="flex-1 flex flex-col pb-16 md:pb-0">
+          {children}
+        </main>
       </body>
     </html>
   );

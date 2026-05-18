@@ -118,50 +118,52 @@ export default async function BudgetPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
           <Breadcrumbs items={[{ label: 'Budget' }]} />
-          <div className="flex items-center justify-between mt-4">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Budget</h1>
-              <p className="text-gray-600">{monthLabel}</p>
+          <div className="mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-1">Budget</h1>
+                <p className="text-gray-600 text-sm">{monthLabel}</p>
+              </div>
+              <Link
+                href="/budget/new"
+                className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm"
+              >
+                + Add
+              </Link>
             </div>
-            <div className="flex items-center gap-3">
-              <Link href="/budget/accounts" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
+            <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-1">
+              <Link href="/budget/accounts" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
                 Accounts
               </Link>
-              <Link href="/budget/categories" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
+              <Link href="/budget/categories" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
                 Categories
               </Link>
-              <Link href="/budget/recurring" className="text-sm text-gray-600 hover:text-gray-900 font-medium">
+              <Link href="/budget/recurring" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
                 Recurring
               </Link>
               <RecategorizeButton />
               <SyncTransactionsButton />
-              <Link
-                href="/budget/new"
-                className="bg-blue-600 text-white font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition text-sm"
-              >
-                + Add Transaction
-              </Link>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-            <p className="text-sm text-gray-500 mb-1">Income</p>
-            <p className="text-2xl font-bold text-green-600">+${income.toFixed(0)}</p>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-8">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Income</p>
+            <p className="text-lg sm:text-2xl font-bold text-green-600">+${income.toFixed(0)}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-            <p className="text-sm text-gray-500 mb-1">Expenses</p>
-            <p className="text-2xl font-bold text-red-600">-${expenses.toFixed(0)}</p>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Expenses</p>
+            <p className="text-lg sm:text-2xl font-bold text-red-600">-${expenses.toFixed(0)}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
-            <p className="text-sm text-gray-500 mb-1">Net</p>
-            <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Net</p>
+            <p className={`text-lg sm:text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {net >= 0 ? '+' : '-'}${Math.abs(net).toFixed(0)}
             </p>
           </div>
