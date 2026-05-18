@@ -32,7 +32,7 @@ export async function categorizeWithGroq(
     : ''
 
   const txList = transactions.map((t, i) =>
-    `${i}: merchant="${t.merchant ?? t.name ?? t.description}" description="${t.description ?? ''}"`
+    `${i}: merchant="${t.merchant ?? t.description}" description="${t.description ?? ''}"`
   ).join('\n')
 
   const prompt = `You are a personal finance transaction categorizer. Assign the best category id to each transaction based on the user's category list. Use null only if truly no category fits.
