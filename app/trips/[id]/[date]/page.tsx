@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 type DayData = { title: string | null; notes: string | null; date: string }
 
@@ -171,6 +170,7 @@ export default function TripDayPage() {
   const params = useParams<{ id: string; date: string }>()
   const [trip, setTrip] = useState<{ name: string; start_date: string; end_date: string } | null>(null)
   const [days, setDays] = useState<DayData[]>([])
+  const [allDates, setAllDates] = useState<string[]>([])
   const [form, setForm] = useState({ title: '', notes: '' })
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
@@ -196,14 +196,23 @@ export default function TripDayPage() {
       setTrip(tripData)
       setDays(allDays ?? [])
 
-      const currentIdx = allDays?.findIndex(d => d.date === params.date) ?? -1
-      const current = allDays?.[currentIdx] as DayData | undefined
-      const prev = allDays?.[currentIdx - 1] as DayData | undefined
-      const next = allDays?.[currentIdx + 1] as DayData | undefined
+      // Generate every date in the trip range for sidebar + prev/next
+      const generated: string[] = []
+      if (tripData) {
+        const cur = new Date(tripData.start_date + 'T00:00:00')
+        const end = new Date(tripData.end_date + 'T00:00:00')
+        while (cur <= end) {
+          generated.push(cur.toISOString().split('T')[0])
+          cur.setDate(cur.getDate() + 1)
+        }
+      }
+      setAllDates(generated)
 
-      setPrevDate(prev?.date ?? null)
-      setNextDate(next?.date ?? null)
+      const currentIdx = generated.indexOf(params.date)
+      setPrevDate(currentIdx > 0 ? generated[currentIdx - 1] : null)
+      setNextDate(currentIdx < generated.length - 1 ? generated[currentIdx + 1] : null)
 
+      const current = allDays?.find(d => d.date === params.date)
       if (current) {
         setForm({ title: current.title ?? '', notes: current.notes ?? '' })
       }
@@ -271,35 +280,39 @@ export default function TripDayPage() {
     return <div className="min-h-screen bg-white flex items-center justify-center text-gray-400 text-sm">Loading...</div>
   }
 
+  const dayTitleMap = new Map(days.map(d => [d.date, d.title]))
+
   return (
     <div className="min-h-screen bg-white flex">
 
-      {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col w-56 border-r border-gray-100 bg-gray-50 fixed top-0 left-0 h-screen z-20">
-        <div className="px-4 py-4 border-b border-gray-200">
-          <Link href={`/trips/${params.id}`} className="text-xs font-bold text-gray-500 uppercase tracking-wide hover:text-blue-600 transition">
+      {/* Sidebar — fixed below the main nav bar */}
+      <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-16 left-0 h-[calc(100vh-4rem)] z-20">
+        <div className="px-5 py-4 border-b border-gray-200">
+          <Link href={`/trips/${params.id}`} className="text-sm font-semibold text-gray-500 hover:text-blue-600 transition flex items-center gap-1">
             ← {trip?.name ?? 'Trip'}
           </Link>
+          <p className="text-xs text-gray-400 mt-0.5">{allDates.length} days</p>
         </div>
-        <nav className="flex-1 overflow-y-auto py-2">
-          {days.map((day, i) => {
-            const isActive = day.date === params.date
-            const label = new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        <nav className="flex-1 overflow-y-auto py-1">
+          {allDates.map((date, i) => {
+            const isActive = date === params.date
+            const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+            const title = dayTitleMap.get(date) ?? null
             return (
               <Link
-                key={day.date}
-                href={`/trips/${params.id}/${day.date}`}
-                className={`flex items-start gap-2 px-4 py-2.5 text-left transition group ${
-                  isActive ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'
+                key={date}
+                href={`/trips/${params.id}/${date}`}
+                className={`flex items-center gap-3 px-5 py-3 transition ${
+                  isActive ? 'bg-blue-600' : 'hover:bg-gray-100'
                 }`}
               >
-                <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-10 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>
+                <span className={`text-xs font-bold flex-shrink-0 w-12 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>
                   Day {i + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className={`text-xs font-semibold ${isActive ? 'text-blue-100' : 'text-gray-400'}`}>{label}</p>
-                  <p className={`text-xs leading-snug truncate ${isActive ? 'text-white' : 'text-gray-600'}`}>
-                    {day.title ?? '—'}
+                  <p className={`text-xs ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>{label}</p>
+                  <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : title ? 'text-gray-800' : 'text-gray-400'}`}>
+                    {title ?? '—'}
                   </p>
                 </div>
               </Link>
@@ -309,56 +322,56 @@ export default function TripDayPage() {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 lg:ml-56">
-      <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="mb-6">
-            <Breadcrumbs items={[
-              { label: 'Trips', href: '/trips' },
-              { label: trip?.name ?? '…', href: `/trips/${params.id}` },
-              { label: `Day ${dayNumber}` },
-            ]} />
-          </div>
+      <div className="flex-1 lg:ml-72">
 
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <span className="inline-block text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 mb-2">Day {dayNumber}</span>
-              <h1 className="text-3xl font-bold text-gray-900">{form.title || dateLabel}</h1>
-              <p className="text-sm text-gray-400 mt-1">{dateLabel}</p>
+      {/* Compact sticky header */}
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-10">
+        <div className="px-6 py-4 flex items-center justify-between gap-4">
+          {/* Left: day info */}
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 whitespace-nowrap">
+              Day {dayNumber}
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
+                {form.title || 'Untitled day'}
+              </h1>
+              <p className="text-xs text-gray-400 truncate">{dateLabel}</p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-              {prevDate && (
-                <Link
-                  href={`/trips/${params.id}/${prevDate}`}
-                  className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm flex items-center gap-1"
-                >
-                  ← Prev
-                </Link>
-              )}
-              {nextDate && (
-                <Link
-                  href={`/trips/${params.id}/${nextDate}`}
-                  className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm flex items-center gap-1"
-                >
-                  Next →
-                </Link>
-              )}
-              <button
-                onClick={() => setEditing(e => !e)}
-                className="border border-gray-300 text-gray-600 font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition text-sm"
+          </div>
+          {/* Right: actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {prevDate && (
+              <Link
+                href={`/trips/${params.id}/${prevDate}`}
+                className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
               >
-                {editing ? 'View' : 'Edit'}
+                ← Prev
+              </Link>
+            )}
+            {nextDate && (
+              <Link
+                href={`/trips/${params.id}/${nextDate}`}
+                className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
+              >
+                Next →
+              </Link>
+            )}
+            <button
+              onClick={() => setEditing(e => !e)}
+              className="border border-gray-200 text-gray-600 font-medium px-4 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
+            >
+              {editing ? 'View' : 'Edit'}
+            </button>
+            {editing && (
+              <button
+                onClick={save}
+                disabled={saving}
+                className="bg-blue-600 text-white font-medium px-4 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
+              >
+                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
               </button>
-              {editing && (
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
-                >
-                  {saving ? 'Saving...' : saved ? 'Saved ✓' : 'Save'}
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
