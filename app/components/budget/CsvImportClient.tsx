@@ -114,6 +114,9 @@ export default function CsvImportClient() {
     setStatus('importing')
     setError('')
     try {
+      // Ensure all CSV categories exist before importing
+      await fetch('/api/budget/sync-categories', { method: 'POST' })
+
       const res = await fetch('/api/budget/import-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

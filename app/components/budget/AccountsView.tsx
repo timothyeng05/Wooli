@@ -54,8 +54,9 @@ export default function AccountsView({
         current_balance: payload.current_balance ?? 0,
         is_asset: isAsset,
         notes: payload.notes || null,
+        owner: payload.owner || null,
       })
-      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order')
+      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner')
       .single()
     if (error || !data) {
       alert(error?.message || 'Failed to add account')
@@ -277,13 +278,14 @@ function AddAccountForm({
   onSubmit,
   onCancel,
 }: {
-  onSubmit: (payload: { name: string; type: AccountType; institution: string; current_balance: number }) => void
+  onSubmit: (payload: { name: string; type: AccountType; institution: string; current_balance: number; owner: string }) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
   const [institution, setInstitution] = useState('')
   const [type, setType] = useState<AccountType>('checking')
   const [balance, setBalance] = useState('0')
+  const [owner, setOwner] = useState('')
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -293,6 +295,7 @@ function AddAccountForm({
       type,
       institution: institution.trim(),
       current_balance: parseFloat(balance) || 0,
+      owner,
     })
   }
 
@@ -346,6 +349,17 @@ function AddAccountForm({
             className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
           />
         </div>
+      </div>
+      <div>
+        <label className="text-xs text-gray-500 mb-1 block">Owner</label>
+        <select
+          value={owner}
+          onChange={e => setOwner(e.target.value)}
+          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
+        >
+          <option value="">No owner</option>
+          {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
       </div>
       <div className="flex gap-2">
         <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">Create</button>

@@ -27,7 +27,11 @@ interface ExistingTransaction {
   account_id: string | null
   transacted_at: string
   is_transfer: boolean | null
+  owner: string | null
+  notes: string | null
 }
+
+const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
 
 export default function TransactionForm({
   userId,
@@ -60,6 +64,8 @@ export default function TransactionForm({
       ? transaction.transacted_at.split('T')[0]
       : defaultDate || new Date().toISOString().split('T')[0]
   )
+  const [owner, setOwner] = useState(isEdit ? (transaction.owner || '') : '')
+  const [notes, setNotes] = useState(isEdit ? (transaction.notes || '') : '')
 
   const filteredCategories = categories.filter(c => c.is_income === isIncome)
   const parents = filteredCategories.filter(c => !c.parent_id)
@@ -81,6 +87,8 @@ export default function TransactionForm({
         account_id: accountId || null,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
         is_transfer: isTransfer,
+        owner: owner || null,
+        notes: notes || null,
       }
 
       if (isEdit) {
@@ -225,6 +233,33 @@ export default function TransactionForm({
           onChange={e => setDate(e.target.value)}
           required
           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {/* Owner */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-1.5">Owner <span className="text-gray-400 font-normal">(optional)</span></label>
+        <select
+          value={owner}
+          onChange={e => setOwner(e.target.value)}
+          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">No owner</option>
+          {OWNERS.map(o => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-1.5">Notes <span className="text-gray-400 font-normal">(optional)</span></label>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Any additional notes..."
+          rows={3}
+          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
       </div>
 
