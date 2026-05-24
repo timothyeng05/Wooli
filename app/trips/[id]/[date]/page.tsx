@@ -46,7 +46,10 @@ function parseSections(notes: string) {
   return sections
 }
 
-function SectionCard({ meta, lines }: { meta: typeof SECTIONS[0]; lines: string[] }) {
+function SectionCard({ meta, lines, confirmed, onToggle }: {
+  meta: typeof SECTIONS[0]; lines: string[]
+  confirmed: boolean; onToggle: () => void
+}) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
 
   let duration: string | null = null
@@ -61,17 +64,28 @@ function SectionCard({ meta, lines }: { meta: typeof SECTIONS[0]; lines: string[
 
   if (!content.length && !duration) return null
   return (
-    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
+    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border} transition-opacity ${confirmed ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between mb-2">
         <div className={`flex items-center gap-2 font-semibold text-sm ${meta.text}`}>
           <span>{meta.icon}</span>
-          <span>{meta.label}</span>
+          <span className={confirmed ? 'line-through' : ''}>{meta.label}</span>
         </div>
-        {duration && (
-          <span className="text-xs font-semibold bg-teal-100 text-teal-700 rounded-full px-2.5 py-1 flex items-center gap-1">
-            <span>⏱</span> {duration}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {duration && (
+            <span className="text-xs font-semibold bg-teal-100 text-teal-700 rounded-full px-2.5 py-1 flex items-center gap-1">
+              <span>⏱</span> {duration}
+            </span>
+          )}
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={onToggle}
+              className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
+            />
+            <span className="text-xs text-gray-400">Done</span>
+          </label>
+        </div>
       </div>
       <ul className="space-y-1.5">
         {content.map((line, i) => {
@@ -89,7 +103,10 @@ function SectionCard({ meta, lines }: { meta: typeof SECTIONS[0]; lines: string[
   )
 }
 
-function HotelCard({ meta, lines }: { meta: typeof SECTIONS[0]; lines: string[] }) {
+function HotelCard({ meta, lines, confirmed, onToggle }: {
+  meta: typeof SECTIONS[0]; lines: string[]
+  confirmed: boolean; onToggle: () => void
+}) {
   const [open, setOpen] = useState(false)
   const content = lines.map(l => l.trim()).filter(Boolean)
   const name = content[0]
@@ -100,15 +117,24 @@ function HotelCard({ meta, lines }: { meta: typeof SECTIONS[0]; lines: string[] 
   const embedUrl = `https://maps.google.com/maps?q=${query}&output=embed&z=15`
   return (
     <div
-      className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden select-none`}
+      className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden select-none transition-opacity ${confirmed ? 'opacity-60' : ''}`}
       onDoubleClick={() => setOpen(o => !o)}
     >
       <div className="px-4 py-3 flex items-center gap-3">
         <span className="text-lg">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold ${meta.text}`}>{name}</p>
+          <p className={`text-sm font-semibold ${meta.text} ${confirmed ? 'line-through' : ''}`}>{name}</p>
           {location && <p className="text-xs text-gray-500">{location}</p>}
         </div>
+        <label className="flex items-center gap-1.5 cursor-pointer select-none" onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={onToggle}
+            className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
+          />
+          <span className="text-xs text-gray-400">Done</span>
+        </label>
         <span className="text-xs text-gray-400 flex-shrink-0">{open ? 'double-tap to close' : 'double-tap for map'}</span>
       </div>
       {open && (
@@ -181,6 +207,7 @@ export default function TripDayPage() {
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [confirmedSections, setConfirmedSections] = useState<string[]>([])
 
   useEffect(() => {
     const load = async () => {
@@ -190,7 +217,7 @@ export default function TripDayPage() {
 
       const [{ data: tripData }, { data: allDays }] = await Promise.all([
         supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
-        supabase.from('trip_days').select('date, title, notes').eq('trip_id', params.id).order('date'),
+        supabase.from('trip_days').select('date, title, notes, confirmed_sections').eq('trip_id', params.id).order('date'),
       ])
 
       setTrip(tripData)
@@ -215,6 +242,7 @@ export default function TripDayPage() {
       const current = allDays?.find(d => d.date === params.date)
       if (current) {
         setForm({ title: current.title ?? '', notes: current.notes ?? '' })
+        setConfirmedSections(current.confirmed_sections ?? [])
       }
       setLoading(false)
     }
@@ -264,6 +292,20 @@ export default function TripDayPage() {
     setSaved(true)
     setEditing(false)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const toggleConfirmed = async (label: string) => {
+    const next = confirmedSections.includes(label)
+      ? confirmedSections.filter(s => s !== label)
+      : [...confirmedSections, label]
+    setConfirmedSections(next)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('trip_days').upsert(
+      { trip_id: params.id, user_id: user.id, date: params.date, confirmed_sections: next },
+      { onConflict: 'trip_id,date' }
+    )
   }
 
   const dayNumber = trip
@@ -458,8 +500,8 @@ export default function TripDayPage() {
                   {/* Card */}
                   <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
                     {(s.meta.hotel || s.meta.car)
-                      ? <HotelCard meta={s.meta} lines={s.lines} />
-                      : <SectionCard meta={s.meta} lines={s.lines} />
+                      ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
+                      : <SectionCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
                     }
                   </div>
                 </div>
