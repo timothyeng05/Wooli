@@ -11,9 +11,9 @@ const SECTIONS: {
   bg: string; border: string; text: string
   dotColor: string; time: string; travel?: boolean; hotel?: boolean; car?: boolean; banner?: boolean; transit?: boolean; drive?: boolean
 }[] = [
-  { key: ['FLIGHT'],                        time: 'Depart', icon: '✈️', label: 'Flight',           bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   dotColor: '#0d9488', travel: true, banner: true },
-  { key: ['FAMILY FLIGHT'],                 time: 'Arrive', icon: '✈️', label: 'Mom & Aunt Flight', bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-600',   dotColor: '#e11d48', travel: true, banner: true },
-  { key: ['TRANSPORT','TRANSPORTATION','TRAIN','RAIL'], time: 'Train', icon: '🚄', label: 'Train', bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', dotColor: '#0d9488', travel: true, banner: true },
+  { key: ['FLIGHT'],                        time: 'Depart', icon: '✈️', label: 'Flight',           bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700',   dotColor: '#db2777', travel: true, banner: true },
+  { key: ['FAMILY FLIGHT'],                 time: 'Arrive', icon: '✈️', label: 'Mom & Aunt Flight', bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700',   dotColor: '#db2777', travel: true, banner: true },
+  { key: ['TRANSPORT','TRANSPORTATION','TRAIN','RAIL'], time: 'Train', icon: '🚄', label: 'Train', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dotColor: '#2563eb', travel: true, banner: true },
   { key: ['SUBWAY','METRO','TUBE'],         time: 'Transit',icon: '🚇', label: 'Subway',            bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true },
   { key: ['DRIVE','DRIVING'],               time: 'Drive',  icon: '🚙', label: 'Drive',             bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', dotColor: '#ea580c', drive: true },
   { key: ['RENTAL CAR','CAR RIDE','TAXI','UBER'], time: 'Car', icon: '🚗', label: 'Car',            bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true, car: true },
@@ -70,11 +70,11 @@ function SectionCard({ meta, lines, confirmed, onToggle }: {
 
   if (!content.length && !duration) return null
   return (
-    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border} transition-opacity ${confirmed ? 'opacity-60' : ''}`}>
+    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
       <div className="flex items-center justify-between mb-2">
         <div className={`flex items-center gap-2 font-semibold text-sm ${meta.text}`}>
           <span>{meta.icon}</span>
-          <span className={confirmed ? 'line-through' : ''}>{meta.label}</span>
+          <span>{meta.label}</span>
         </div>
         <div className="flex items-center gap-2">
           {duration && (
@@ -89,7 +89,7 @@ function SectionCard({ meta, lines, confirmed, onToggle }: {
               onChange={onToggle}
               className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
             />
-            <span className="text-xs text-gray-400">Done</span>
+            <span className="text-xs text-gray-400">Planned</span>
           </label>
         </div>
       </div>
@@ -123,13 +123,13 @@ function HotelCard({ meta, lines, confirmed, onToggle }: {
   const embedUrl = `https://maps.google.com/maps?q=${query}&output=embed&z=15`
   return (
     <div
-      className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden select-none transition-opacity ${confirmed ? 'opacity-60' : ''}`}
+      className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden select-none`}
       onDoubleClick={() => setOpen(o => !o)}
     >
       <div className="px-4 py-3 flex items-center gap-3">
         <span className="text-lg">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold ${meta.text} ${confirmed ? 'line-through' : ''}`}>{name}</p>
+          <p className={`text-sm font-semibold ${meta.text}`}>{name}</p>
           {location && <p className="text-xs text-gray-500">{location}</p>}
         </div>
         <label className="flex items-center gap-1.5 cursor-pointer select-none" onClick={e => e.stopPropagation()}>
@@ -139,7 +139,7 @@ function HotelCard({ meta, lines, confirmed, onToggle }: {
             onChange={onToggle}
             className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
           />
-          <span className="text-xs text-gray-400">Done</span>
+          <span className="text-xs text-gray-400">Planned</span>
         </label>
         <span className="text-xs text-gray-400 flex-shrink-0">{open ? 'double-tap to close' : 'double-tap for map'}</span>
       </div>
@@ -250,7 +250,13 @@ export default function TripDayPage() {
       const current = allDays?.find(d => d.date === params.date)
       if (current) {
         setForm({ title: current.title ?? '', notes: current.notes ?? '' })
-        setConfirmedSections(current.confirmed_sections ?? [])
+        if (current.confirmed_sections === null) {
+          const parsed = current.notes ? parseSections(current.notes) : []
+          const autoPlanned = parsed.filter(s => s.meta.hotel || s.meta.banner).map(s => s.meta.label)
+          setConfirmedSections(autoPlanned)
+        } else {
+          setConfirmedSections(current.confirmed_sections)
+        }
       }
       setLoading(false)
     }
@@ -498,7 +504,7 @@ export default function TripDayPage() {
                           width: '2px',
                           minHeight: '24px',
                           background: s.meta.travel
-                            ? 'repeating-linear-gradient(to bottom, #5eead4 0, #5eead4 5px, transparent 5px, transparent 10px)'
+                            ? `repeating-linear-gradient(to bottom, ${s.meta.dotColor} 0, ${s.meta.dotColor} 5px, transparent 5px, transparent 10px)`
                             : s.meta.transit
                             ? 'repeating-linear-gradient(to bottom, #818cf8 0, #818cf8 5px, transparent 5px, transparent 10px)'
                             : s.meta.drive
