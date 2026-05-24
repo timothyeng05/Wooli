@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
@@ -68,7 +70,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
     supabase
       .from('categories')
       .select('id, name, color, is_income, parent_id')
-      .eq('user_id', user.id) as any
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }) as any
   ])
 
   const needsMigration =
@@ -136,6 +139,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
               </Link>
             </div>
             <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-1">
+              <Link href="/budget/networth" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
+                Net Worth
+              </Link>
               <Link href="/budget/accounts" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
                 Accounts
               </Link>

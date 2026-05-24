@@ -292,9 +292,6 @@ export default function TransactionList({
                       {t.plaid_transaction_id && t.categories && !t.is_transfer && (
                         <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
                       )}
-                      {t.merchant && t.description && !t.is_transfer && (
-                        <span className="text-[10px] text-gray-400 truncate max-w-[100px]">{t.merchant}</span>
-                      )}
                     </div>
                   </div>
 

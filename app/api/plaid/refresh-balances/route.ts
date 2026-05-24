@@ -27,5 +27,23 @@ export async function POST() {
     ))
   }))
 
+  // Capture a net worth snapshot with the freshly-updated balances
+  const [{ data: manualAccounts }, { data: plaidAccounts }] = await Promise.all([
+    supabase.from('accounts').select('current_balance, is_asset').eq('user_id', user.id).eq('is_active', true),
+    supabase.from('plaid_accounts').select('type, current_balance').eq('user_id', user.id),
+  ])
+
+  const manualAssets = (manualAccounts ?? []).filter(a => a.is_asset).reduce((s, a) => s + Number(a.current_balance), 0)
+  const manualLiabilities = (manualAccounts ?? []).filter(a => !a.is_asset).reduce((s, a) => s + Math.abs(Number(a.current_balance)), 0)
+  const plaidAssets = (plaidAccounts ?? []).filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + (a.current_balance ?? 0), 0)
+  const plaidLiabilities = (plaidAccounts ?? []).filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + (a.current_balance ?? 0), 0)
+
+  const assets = manualAssets + plaidAssets
+  const liabilities = manualLiabilities + plaidLiabilities
+  await supabase.from('net_worth_history').upsert(
+    { user_id: user.id, recorded_on: new Date().toISOString().split('T')[0], assets, liabilities, net_worth: assets - liabilities },
+    { onConflict: 'user_id,recorded_on' }
+  )
+
   return NextResponse.json({ ok: true })
 }
