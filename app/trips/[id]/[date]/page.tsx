@@ -286,7 +286,7 @@ export default function TripDayPage() {
     <div className="min-h-screen bg-white flex">
 
       {/* Sidebar — fixed below the main nav bar */}
-      <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-16 left-0 h-[calc(100vh-4rem)] z-20">
+      <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-[49px] left-0 h-[calc(100vh-49px)] z-20">
         <div className="px-5 py-4 border-b border-gray-200">
           <Link href={`/trips/${params.id}`} className="text-sm font-semibold text-gray-500 hover:text-blue-600 transition flex items-center gap-1">
             ← {trip?.name ?? 'Trip'}
@@ -325,7 +325,7 @@ export default function TripDayPage() {
       <div className="flex-1 lg:ml-72">
 
       {/* Compact sticky header */}
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
         <div className="px-6 py-4 flex items-center justify-between gap-4">
           {/* Left: day info */}
           <div className="flex items-center gap-3 min-w-0">
