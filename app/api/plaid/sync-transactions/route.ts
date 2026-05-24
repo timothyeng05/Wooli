@@ -15,6 +15,15 @@ export async function POST() {
 
   if (!items?.length) return NextResponse.json({ added: 0, modified: 0, removed: 0 })
 
+  // Build account_id → display name map for enriching transactions
+  const { data: plaidAccounts } = await supabase
+    .from('plaid_accounts')
+    .select('account_id, name, mask')
+    .eq('user_id', user.id)
+  const accountNameMap = new Map(
+    (plaidAccounts ?? []).map(a => [a.account_id, a.mask ? `${a.name} ···${a.mask}` : a.name])
+  )
+
   const { data: allCategories } = await supabase
     .from('categories')
     .select('id, name, parent_id, keywords')
@@ -76,6 +85,8 @@ export async function POST() {
           return {
             user_id: user.id,
             plaid_transaction_id: t.transaction_id,
+            plaid_account_id: t.account_id,
+            account_name: accountNameMap.get(t.account_id) ?? null,
             amount: -(t.amount),
             description: t.name,
             merchant: t.merchant_name ?? null,

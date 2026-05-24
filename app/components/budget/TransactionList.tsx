@@ -21,6 +21,7 @@ interface Transaction {
   plaid_transaction_id: string | null
   is_transfer: boolean | null
   owner: string | null
+  account_name: string | null
   categories: { id: string; name: string; color: string } | null
 }
 
@@ -52,6 +53,7 @@ export default function TransactionList({
   const [items, setItems] = useState<Transaction[]>(transactions)
   const [search, setSearch] = useState('')
   const [ownerTab, setOwnerTab] = useState<OwnerTab>('All')
+  const [accountFilter, setAccountFilter] = useState('')
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -148,14 +150,18 @@ export default function TransactionList({
   }
 
   // ── Filter ────────────────────────────────────────────────────────────────
+  const uniqueAccounts = [...new Set(items.map(t => t.account_name).filter(Boolean) as string[])].sort()
+
   const filtered = items.filter(t => {
     if (ownerTab !== 'All' && t.owner !== ownerTab) return false
+    if (accountFilter && t.account_name !== accountFilter) return false
     if (!search) return true
     const q = search.toLowerCase()
     return (
       t.description?.toLowerCase().includes(q) ||
       t.merchant?.toLowerCase().includes(q) ||
-      t.categories?.name.toLowerCase().includes(q)
+      t.categories?.name.toLowerCase().includes(q) ||
+      t.account_name?.toLowerCase().includes(q)
     )
   })
 
@@ -200,14 +206,26 @@ export default function TransactionList({
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        {uniqueAccounts.length > 0 && (
+          <select
+            value={accountFilter}
+            onChange={e => setAccountFilter(e.target.value)}
+            className={`px-2 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+              accountFilter ? 'border-blue-400 text-blue-700 font-medium' : 'border-gray-300 text-gray-600'
+            }`}
+          >
+            <option value="">All accounts</option>
+            {uniqueAccounts.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        )}
         <button
           onClick={() => selectMode ? cancelSelect() : setSelectMode(true)}
           className={`px-3 py-2 text-sm font-medium rounded-lg border transition whitespace-nowrap ${
@@ -325,8 +343,13 @@ export default function TransactionList({
                       {t.plaid_transaction_id && t.categories && !t.is_transfer && (
                         <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
                       )}
+                      {t.account_name && !accountFilter && (
+                        <span className="text-[10px] text-gray-400 truncate max-w-[120px]" title={t.account_name}>
+                          {t.account_name}
+                        </span>
+                      )}
                       {t.owner && ownerTab === 'All' && (
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OWNER_BADGE[t.owner] ?? 'bg-gray-100 text-gray-500'}`}>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${OWNER_BADGE[t.owner] ?? 'bg-gray-100 text-gray-500'}`}>
                           {t.owner === 'Timothy Eng' ? 'Tim' : t.owner === 'Jessica Li' ? 'Jess' : t.owner}
                         </span>
                       )}

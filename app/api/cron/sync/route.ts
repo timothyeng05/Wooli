@@ -64,6 +64,14 @@ export async function GET(request: Request) {
 
     const transferKeywords = /payment|autopay|transfer|zelle|venmo|paypal|cashapp|wire|ach|direct dep/i
 
+    const { data: plaidAccts } = await supabase
+      .from('plaid_accounts')
+      .select('account_id, name, mask')
+      .eq('user_id', userId)
+    const accountNameMap = new Map(
+      (plaidAccts ?? []).map(a => [a.account_id, a.mask ? `${a.name} ···${a.mask}` : a.name])
+    )
+
     for (const item of items) {
       let cursor = item.cursor ?? undefined
       let hasMore = true
@@ -96,6 +104,8 @@ export async function GET(request: Request) {
             return {
               user_id: userId,
               plaid_transaction_id: t.transaction_id,
+              plaid_account_id: t.account_id,
+              account_name: accountNameMap.get(t.account_id) ?? null,
               amount: -(t.amount),
               description: t.name,
               merchant: t.merchant_name ?? null,

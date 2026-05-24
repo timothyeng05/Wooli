@@ -33,6 +33,22 @@ export async function POST(request: Request) {
   const catMap = new Map<string, string>()
   for (const c of categories ?? []) catMap.set(c.name.toLowerCase(), c.id)
 
+  // Build mask → plaid_account_id map for linking CSV rows to Plaid accounts
+  // CSV names look like "Chase Checking (...1234)" — extract the 4-digit mask
+  const { data: plaidAccounts } = await supabase
+    .from('plaid_accounts')
+    .select('account_id, name, mask')
+    .eq('user_id', user.id)
+
+  const maskToPlaidId = new Map<string, string>()
+  for (const a of plaidAccounts ?? []) {
+    if (a.mask) maskToPlaidId.set(a.mask, a.account_id)
+  }
+
+  function extractMask(accountName: string): string | null {
+    return accountName.match(/\.*\.(\d{4})\)?$/)?.[1] ?? accountName.match(/\(\.+(\d{4})\)/)?.[1] ?? null
+  }
+
   const transferKeywords = /^(transfer|payment|autopay|zelle|venmo|paypal|cashapp|wire|ach)$/i
 
   const batch = rows
@@ -41,6 +57,8 @@ export async function POST(request: Request) {
       const isTransfer = transferKeywords.test(r.category.trim()) || transferKeywords.test(r.merchant.trim())
       const catId = isTransfer ? null : (catMap.get(r.category.toLowerCase()) ?? null)
       const owner = r.owner && VALID_OWNERS.has(r.owner) ? r.owner : null
+      const mask = extractMask(r.account)
+      const plaidAccountId = mask ? (maskToPlaidId.get(mask) ?? null) : null
       return {
         user_id: user.id,
         amount: r.amount,
@@ -51,6 +69,8 @@ export async function POST(request: Request) {
         is_transfer: isTransfer,
         notes: r.notes || null,
         owner,
+        account_name: r.account || null,
+        plaid_account_id: plaidAccountId,
       }
     })
 

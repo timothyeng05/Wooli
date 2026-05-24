@@ -60,7 +60,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
     supabase
       .from('transactions')
       .select(`
-        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer, owner,
+        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer, owner, account_name,
         categories ( id, name, color )
       `)
       .eq('user_id', user.id)
