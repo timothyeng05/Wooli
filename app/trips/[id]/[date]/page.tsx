@@ -9,18 +9,20 @@ type DayData = { title: string | null; notes: string | null; date: string }
 const SECTIONS: {
   key: string[]; icon: string; label: string
   bg: string; border: string; text: string
-  dotColor: string; time: string; travel?: boolean; hotel?: boolean; car?: boolean
+  dotColor: string; time: string; travel?: boolean; hotel?: boolean; car?: boolean; banner?: boolean; transit?: boolean; drive?: boolean
 }[] = [
-  { key: ['FLIGHT'],                    time: 'Depart', icon: '✈️', label: 'Flight',           bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   dotColor: '#0d9488', travel: true },
-  { key: ['FAMILY FLIGHT'],             time: 'Arrive', icon: '✈️', label: 'Mom & Aunt Flight', bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-600',   dotColor: '#e11d48', travel: true },
-  { key: ['TRANSPORT','TRANSPORTATION'],time: 'Travel',  icon: '🚄', label: 'Transport',        bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   dotColor: '#0d9488', travel: true },
-  { key: ['RENTAL CAR'],                time: 'Car',    icon: '🚗', label: 'Rental Car',        bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', dotColor: '#ea580c', car: true },
-  { key: ['MORNING'],                   time: '8 AM',   icon: '☀️', label: 'Morning',   bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
-  { key: ['AFTERNOON'],                 time: '2 PM',   icon: '🗺️', label: 'Afternoon', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
-  { key: ['NIGHT'],                     time: '9 PM',   icon: '🌙', label: 'Night',     bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
-  { key: ['LUNCH','LUNCH OPTIONS'],     time: '12 PM',  icon: '🍜', label: 'Lunch',     bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dotColor: '#d97706' },
-  { key: ['DINNER','DINNER OPTIONS'],   time: '7 PM',   icon: '🍽️', label: 'Dinner',    bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
-  { key: ['HOTEL'],                     time: 'Stay',   icon: '🏨', label: 'Hotel',     bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dotColor: '#7c3aed', hotel: true },
+  { key: ['FLIGHT'],                        time: 'Depart', icon: '✈️', label: 'Flight',           bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   dotColor: '#0d9488', travel: true, banner: true },
+  { key: ['FAMILY FLIGHT'],                 time: 'Arrive', icon: '✈️', label: 'Mom & Aunt Flight', bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-600',   dotColor: '#e11d48', travel: true, banner: true },
+  { key: ['TRANSPORT','TRANSPORTATION','TRAIN','RAIL'], time: 'Train', icon: '🚄', label: 'Train', bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', dotColor: '#0d9488', travel: true, banner: true },
+  { key: ['SUBWAY','METRO','TUBE'],         time: 'Transit',icon: '🚇', label: 'Subway',            bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true },
+  { key: ['DRIVE','DRIVING'],               time: 'Drive',  icon: '🚙', label: 'Drive',             bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', dotColor: '#ea580c', drive: true },
+  { key: ['RENTAL CAR','CAR RIDE','TAXI','UBER'], time: 'Car', icon: '🚗', label: 'Car',            bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true, car: true },
+  { key: ['MORNING'],                       time: '8 AM',   icon: '☀️', label: 'Morning',   bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
+  { key: ['AFTERNOON'],                     time: '2 PM',   icon: '🗺️', label: 'Afternoon', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
+  { key: ['NIGHT'],                         time: '9 PM',   icon: '🌙', label: 'Night',     bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
+  { key: ['LUNCH','LUNCH OPTIONS'],         time: '12 PM',  icon: '🍜', label: 'Lunch',     bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dotColor: '#d97706' },
+  { key: ['DINNER','DINNER OPTIONS'],       time: '7 PM',   icon: '🍽️', label: 'Dinner',    bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
+  { key: ['HOTEL'],                         time: 'Stay',   icon: '🏨', label: 'Hotel',     bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dotColor: '#7c3aed', hotel: true },
 ]
 
 function matchSection(header: string) {
@@ -30,8 +32,8 @@ function matchSection(header: string) {
 
 function parseSections(notes: string) {
   const lines = notes.split('\n')
-  const sections: { meta: typeof SECTIONS[0]; lines: string[] }[] = []
-  let current: { meta: typeof SECTIONS[0]; lines: string[] } | null = null
+  const sections: { meta: typeof SECTIONS[0]; lines: string[]; timeOverride?: string }[] = []
+  let current: { meta: typeof SECTIONS[0]; lines: string[]; timeOverride?: string } | null = null
 
   for (const line of lines) {
     const meta = matchSection(line)
@@ -39,7 +41,11 @@ function parseSections(notes: string) {
       if (current) sections.push(current)
       current = { meta, lines: [] }
     } else if (current) {
-      current.lines.push(line)
+      if (line.trim().startsWith('@')) {
+        current.timeOverride = line.trim().slice(1).trim()
+      } else {
+        current.lines.push(line)
+      }
     }
   }
   if (current) sections.push(current)
@@ -54,7 +60,7 @@ function SectionCard({ meta, lines, confirmed, onToggle }: {
 
   let duration: string | null = null
   let content = allContent
-  if (meta.travel) {
+  if (meta.travel || meta.drive) {
     const dl = allContent.find(l => l.startsWith('~'))
     if (dl) {
       duration = dl.slice(1).trim()
@@ -164,7 +170,7 @@ function HotelCard({ meta, lines, confirmed, onToggle }: {
 }
 
 function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections> }) {
-  const travel = sections.filter(s => s.meta.travel)
+  const travel = sections.filter(s => s.meta.banner)
   if (!travel.length) return null
   return (
     <div className="space-y-2">
@@ -174,6 +180,7 @@ function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections>
         const content = lines.filter(l => !l.startsWith('~')).map(l => l.replace(/^-\s*/, ''))
         const route = content.find(l => l.includes('→'))
         const detail = content.find(l => l !== route)
+        const time = s.timeOverride
         return (
           <div key={i} className={`rounded-xl border px-5 py-4 ${s.meta.bg} ${s.meta.border} flex items-center gap-4`}>
             <span className="text-2xl flex-shrink-0">{s.meta.icon}</span>
@@ -182,9 +189,10 @@ function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections>
               {route && <p className="text-base font-bold text-gray-900 leading-snug">{route}</p>}
               {detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{detail}</p>}
             </div>
-            {duration && (
-              <span className={`text-sm font-bold ${s.meta.text} flex-shrink-0`}>⏱ {duration}</span>
-            )}
+            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+              {time && <span className={`text-sm font-bold ${s.meta.text}`}>{time}</span>}
+              {duration && <span className={`text-sm font-bold ${s.meta.text}`}>⏱ {duration}</span>}
+            </div>
           </div>
         )
       })}
@@ -474,7 +482,7 @@ export default function TripDayPage() {
                 <div key={i} className="flex gap-3">
                   {/* Time column */}
                   <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
-                    <span className="text-xs font-semibold text-gray-400 leading-none">{s.meta.time}</span>
+                    <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride ?? s.meta.time}</span>
                   </div>
 
                   {/* Dot + vertical line */}
@@ -491,6 +499,10 @@ export default function TripDayPage() {
                           minHeight: '24px',
                           background: s.meta.travel
                             ? 'repeating-linear-gradient(to bottom, #5eead4 0, #5eead4 5px, transparent 5px, transparent 10px)'
+                            : s.meta.transit
+                            ? 'repeating-linear-gradient(to bottom, #818cf8 0, #818cf8 5px, transparent 5px, transparent 10px)'
+                            : s.meta.drive
+                            ? 'repeating-linear-gradient(to bottom, #fb923c 0, #fb923c 5px, transparent 5px, transparent 10px)'
                             : '#e2e8f0',
                         }}
                       />
