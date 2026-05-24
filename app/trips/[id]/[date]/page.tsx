@@ -170,6 +170,7 @@ function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections>
 export default function TripDayPage() {
   const params = useParams<{ id: string; date: string }>()
   const [trip, setTrip] = useState<{ name: string; start_date: string; end_date: string } | null>(null)
+  const [days, setDays] = useState<DayData[]>([])
   const [form, setForm] = useState({ title: '', notes: '' })
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
@@ -179,6 +180,7 @@ export default function TripDayPage() {
   const [editing, setEditing] = useState(false)
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -192,6 +194,7 @@ export default function TripDayPage() {
       ])
 
       setTrip(tripData)
+      setDays(allDays ?? [])
 
       const currentIdx = allDays?.findIndex(d => d.date === params.date) ?? -1
       const current = allDays?.[currentIdx] as DayData | undefined
@@ -212,23 +215,31 @@ export default function TripDayPage() {
   const updateWithAI = async () => {
     if (!aiInput.trim()) return
     setAiLoading(true)
-    const res = await fetch('/api/trips/update-day', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instruction: aiInput,
-        currentTitle: form.title,
-        currentNotes: form.notes,
-        date: params.date,
-        tripId: params.id,
-      }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      setForm({ title: data.title ?? form.title, notes: data.notes ?? form.notes })
-      setAiInput('')
+    setAiError(null)
+    try {
+      const res = await fetch('/api/trips/update-day', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instruction: aiInput,
+          currentTitle: form.title,
+          currentNotes: form.notes,
+          date: params.date,
+          tripId: params.id,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setForm({ title: data.title ?? form.title, notes: data.notes ?? form.notes })
+        setAiInput('')
+      } else {
+        setAiError(data.error ?? `Error ${res.status}`)
+      }
+    } catch {
+      setAiError('Network error — make sure the server is running')
+    } finally {
+      setAiLoading(false)
     }
-    setAiLoading(false)
   }
 
   const save = async () => {
@@ -261,7 +272,44 @@ export default function TripDayPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex">
+
+      {/* Sidebar */}
+      <aside className="hidden lg:flex flex-col w-56 border-r border-gray-100 bg-gray-50 fixed top-0 left-0 h-screen z-20">
+        <div className="px-4 py-4 border-b border-gray-200">
+          <Link href={`/trips/${params.id}`} className="text-xs font-bold text-gray-500 uppercase tracking-wide hover:text-blue-600 transition">
+            ← {trip?.name ?? 'Trip'}
+          </Link>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-2">
+          {days.map((day, i) => {
+            const isActive = day.date === params.date
+            const label = new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            return (
+              <Link
+                key={day.date}
+                href={`/trips/${params.id}/${day.date}`}
+                className={`flex items-start gap-2 px-4 py-2.5 text-left transition group ${
+                  isActive ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-700'
+                }`}
+              >
+                <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-10 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>
+                  Day {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className={`text-xs font-semibold ${isActive ? 'text-blue-100' : 'text-gray-400'}`}>{label}</p>
+                  <p className={`text-xs leading-snug truncate ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                    {day.title ?? '—'}
+                  </p>
+                </div>
+              </Link>
+            )
+          })}
+        </nav>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 lg:ml-56">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="mb-6">
@@ -318,22 +366,27 @@ export default function TripDayPage() {
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
         {sections.length > 0 && <TravelBanner sections={sections} />}
 
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={aiInput}
-            onChange={e => setAiInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !aiLoading && updateWithAI()}
-            placeholder="Tell AI what to change… e.g. swap lunch to ramen in Shibuya"
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            onClick={updateWithAI}
-            disabled={aiLoading || !aiInput.trim()}
-            className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm flex-shrink-0"
-          >
-            {aiLoading ? 'Updating…' : 'Update'}
-          </button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={aiInput}
+              onChange={e => { setAiInput(e.target.value); setAiError(null) }}
+              onKeyDown={e => e.key === 'Enter' && !aiLoading && updateWithAI()}
+              placeholder="Tell AI what to change… e.g. swap lunch to ramen in Shibuya"
+              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${aiError ? 'border-red-400' : 'border-gray-300'}`}
+            />
+            <button
+              onClick={updateWithAI}
+              disabled={aiLoading || !aiInput.trim()}
+              className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm flex-shrink-0"
+            >
+              {aiLoading ? 'Updating…' : 'Update'}
+            </button>
+          </div>
+          {aiError && (
+            <p className="text-xs text-red-600 px-1">⚠️ {aiError}</p>
+          )}
         </div>
 
         {editing ? (
@@ -408,6 +461,7 @@ export default function TripDayPage() {
           </div>
         )}
       </div>
+      </div>{/* end main content */}
     </div>
   )
 }
