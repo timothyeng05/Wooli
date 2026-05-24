@@ -1,5 +1,8 @@
 export type AccountType = 'checking' | 'savings' | 'credit' | 'investment' | 'cash' | 'loan' | 'other'
 
+export const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
+export type Owner = typeof OWNERS[number]
+
 export interface Account {
   id: string
   name: string
@@ -10,6 +13,7 @@ export interface Account {
   is_asset: boolean
   notes: string | null
   sort_order: number
+  owner: string | null
 }
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string; isAsset: boolean }[] = [

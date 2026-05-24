@@ -60,7 +60,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
     supabase
       .from('transactions')
       .select(`
-        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer,
+        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer, owner,
         categories ( id, name, color )
       `)
       .eq('user_id', user.id)
@@ -141,6 +141,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
             <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-1">
               <Link href="/budget/networth" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
                 Net Worth
+              </Link>
+              <Link href="/budget/import" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
+                Import CSV
               </Link>
               <Link href="/budget/accounts" className="text-sm text-gray-500 hover:text-gray-900 font-medium whitespace-nowrap">
                 Accounts

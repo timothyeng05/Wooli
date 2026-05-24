@@ -3,7 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
-import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, type Account, type AccountType } from '@/lib/account-utils'
+import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, OWNERS, type Account, type AccountType } from '@/lib/account-utils'
+
+const OWNER_BADGE: Record<string, string> = {
+  'Timothy Eng': 'bg-blue-100 text-blue-600',
+  'Jessica Li':  'bg-rose-100 text-rose-600',
+  'Shared':      'bg-gray-100 text-gray-500',
+}
 
 const TYPE_BADGE_COLOR: Record<AccountType, string> = {
   checking:   'bg-blue-50 text-blue-700',
@@ -149,6 +155,7 @@ function AccountRow({
   const [institution, setInstitution] = useState(account.institution || '')
   const [balance, setBalance] = useState(String(account.current_balance))
   const [type, setType] = useState<AccountType>(account.type)
+  const [owner, setOwner] = useState<string>(account.owner || '')
 
   const save = () => {
     const next: Partial<Account> = {
@@ -157,6 +164,7 @@ function AccountRow({
       current_balance: parseFloat(balance) || 0,
       type,
       is_asset: isAssetType(type),
+      owner: owner || null,
     }
     onUpdate(account.id, next)
     setEditing(false)
@@ -211,6 +219,19 @@ function AccountRow({
             />
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Owner</label>
+            <select
+              value={owner}
+              onChange={e => setOwner(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
+            >
+              <option value="">No owner</option>
+              {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        </div>
         <div className="flex gap-2">
           <button onClick={save} className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">Save</button>
           <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-gray-600 rounded text-sm font-medium hover:bg-gray-100">Cancel</button>
@@ -228,7 +249,14 @@ function AccountRow({
             {TYPE_LABEL[account.type]}
           </span>
         </div>
-        {account.institution && <p className="text-xs text-gray-500 mt-0.5">{account.institution}</p>}
+        <div className="flex items-center gap-2 mt-0.5">
+          {account.institution && <p className="text-xs text-gray-500">{account.institution}</p>}
+          {account.owner && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OWNER_BADGE[account.owner] ?? 'bg-gray-100 text-gray-500'}`}>
+              {account.owner === 'Timothy Eng' ? 'Tim' : account.owner === 'Jessica Li' ? 'Jess' : account.owner}
+            </span>
+          )}
+        </div>
       </div>
       <div className="text-right">
         <p className={`font-bold ${account.is_asset ? 'text-gray-900' : 'text-red-600'}`}>

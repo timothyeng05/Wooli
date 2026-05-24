@@ -21,7 +21,7 @@ export default async function AccountsPage() {
   const [{ data: manualAccounts }, { data: plaidItems }, { data: plaidAccounts }] = await Promise.all([
     supabase
       .from('accounts')
-      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order')
+      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner')
       .eq('user_id', user.id)
       .order('is_active', { ascending: false })
       .order('sort_order', { ascending: true })

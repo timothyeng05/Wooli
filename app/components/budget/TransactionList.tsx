@@ -20,8 +20,17 @@ interface Transaction {
   transacted_at: string
   plaid_transaction_id: string | null
   is_transfer: boolean | null
+  owner: string | null
   categories: { id: string; name: string; color: string } | null
 }
+
+const OWNER_BADGE: Record<string, string> = {
+  'Timothy Eng': 'bg-blue-100 text-blue-600',
+  'Jessica Li':  'bg-rose-100 text-rose-600',
+  'Shared':      'bg-gray-100 text-gray-500',
+}
+const OWNER_TABS = ['All', 'Timothy Eng', 'Jessica Li', 'Shared'] as const
+type OwnerTab = typeof OWNER_TABS[number]
 
 function groupByDate(txns: Transaction[]) {
   const groups = new Map<string, Transaction[]>()
@@ -42,6 +51,7 @@ export default function TransactionList({
 }) {
   const [items, setItems] = useState<Transaction[]>(transactions)
   const [search, setSearch] = useState('')
+  const [ownerTab, setOwnerTab] = useState<OwnerTab>('All')
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -139,6 +149,7 @@ export default function TransactionList({
 
   // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = items.filter(t => {
+    if (ownerTab !== 'All' && t.owner !== ownerTab) return false
     if (!search) return true
     const q = search.toLowerCase()
     return (
@@ -189,7 +200,7 @@ export default function TransactionList({
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         <input
           type="text"
           value={search}
@@ -208,6 +219,28 @@ export default function TransactionList({
           {selectMode ? 'Cancel' : 'Select'}
         </button>
       </div>
+
+      {/* Owner filter tabs */}
+      {items.some(t => t.owner) && (
+        <div className="flex gap-1 mb-4 flex-wrap">
+          {OWNER_TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setOwnerTab(tab)}
+              className={`px-3 py-1 text-xs font-semibold rounded-full border transition ${
+                ownerTab === tab
+                  ? tab === 'Timothy Eng' ? 'bg-blue-600 text-white border-blue-600'
+                  : tab === 'Jessica Li'  ? 'bg-rose-500 text-white border-rose-500'
+                  : tab === 'Shared'      ? 'bg-gray-700 text-white border-gray-700'
+                  :                         'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+              }`}
+            >
+              {tab === 'Timothy Eng' ? 'Tim' : tab === 'Jessica Li' ? 'Jess' : tab}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Select-all row */}
       {selectMode && (
@@ -291,6 +324,11 @@ export default function TransactionList({
                       )}
                       {t.plaid_transaction_id && t.categories && !t.is_transfer && (
                         <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
+                      )}
+                      {t.owner && ownerTab === 'All' && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OWNER_BADGE[t.owner] ?? 'bg-gray-100 text-gray-500'}`}>
+                          {t.owner === 'Timothy Eng' ? 'Tim' : t.owner === 'Jessica Li' ? 'Jess' : t.owner}
+                        </span>
                       )}
                     </div>
                   </div>
