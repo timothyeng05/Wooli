@@ -35,6 +35,35 @@ const OWNER_BADGE: Record<string, string> = {
 const OWNER_TABS = ['All', 'Timothy Eng', 'Jessica Li', 'Shared'] as const
 type OwnerTab = typeof OWNER_TABS[number]
 
+const CAT_EMOJI: Record<string, string> = {
+  'restaurants': '🍽️', 'dining': '🍽️', 'food & drink': '🍽️', 'food and drink': '🍽️',
+  'groceries': '🛒', 'supermarkets': '🛒',
+  'shopping': '🛍️', 'clothing': '👗', 'amazon': '📦', 'online shopping': '🛍️',
+  'entertainment': '🎬', 'movies': '🎬', 'music': '🎵', 'games': '🎮',
+  'transit': '🚇', 'transportation': '🚗', 'uber': '🚗', 'lyft': '🚗', 'parking': '🅿️',
+  'travel': '✈️', 'flights': '✈️', 'hotels': '🏨', 'airbnb': '🏠',
+  'health': '💊', 'healthcare': '💊', 'pharmacy': '💊', 'medical': '🏥', 'fitness': '💪',
+  'utilities': '💡', 'electric': '💡', 'gas': '⛽', 'water': '💧', 'internet': '📶',
+  'rent': '🏠', 'housing': '🏠', 'mortgage': '🏠',
+  'subscriptions': '📱', 'software': '💻', 'streaming': '📺',
+  'personal care': '💅', 'beauty': '💄',
+  'education': '📚', 'books': '📖',
+  'gifts': '🎁', 'donations': '❤️', 'charity': '❤️',
+  'pets': '🐾',
+  'insurance': '🛡️',
+  'savings': '💰', 'investments': '📈',
+  'income': '💵', 'paycheck': '💵', 'salary': '💵',
+  'fees': '💸', 'bank fees': '💸', 'interest': '💸',
+  'transfer': '↔️',
+}
+
+const ACCT_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b']
+function accountColor(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff
+  return ACCT_COLORS[Math.abs(hash) % ACCT_COLORS.length]
+}
+
 function groupByDate(txns: Transaction[]) {
   const groups = new Map<string, Transaction[]>()
   txns.forEach(t => {
@@ -310,107 +339,105 @@ export default function TransactionList({
       )}
 
       {/* Transaction rows */}
-      <div className="space-y-4">
-        {grouped.map(([date, txns]) => (
-          <div key={date}>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1">
-              {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-            </div>
-            <div className="space-y-px">
-              {txns.map(t => (
-                <div
-                  key={t.id}
-                  className={`group relative flex items-center gap-3 px-3 py-3 rounded-lg border transition ${
-                    selectMode && selectedIds.has(t.id)
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-white border-gray-100 hover:border-gray-200'
-                  }`}
-                  onClick={selectMode ? () => toggleSelect(t.id) : undefined}
-                >
-                  {/* Checkbox or dot */}
-                  {selectMode ? (
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(t.id)}
-                      onChange={() => toggleSelect(t.id)}
-                      onClick={e => e.stopPropagation()}
-                      className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-blue-600"
-                    />
-                  ) : (
+      <div>
+        {grouped.map(([date, txns]) => {
+          const dayTotal = txns.filter(t => !t.is_transfer && t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
+          return (
+            <div key={date}>
+              {/* Date header */}
+              <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100 mb-0.5">
+                <span className="text-xs font-semibold text-gray-500">
+                  {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
+                </span>
+                {dayTotal > 0 && <span className="text-xs font-semibold text-gray-400">${dayTotal.toFixed(2)}</span>}
+              </div>
+
+              {/* Rows */}
+              <div className="mb-4">
+                {txns.map(t => {
+                  const name = t.description || t.merchant || 'No description'
+                  const initial = name.trim()[0]?.toUpperCase() ?? '?'
+                  const catName = t.is_transfer ? 'Transfer' : (t.categories?.name || 'Uncategorized')
+                  const catEmoji = CAT_EMOJI[catName.toLowerCase()] ?? (t.is_transfer ? '↔' : '•')
+                  const acctInitial = (t.account_name ?? '?')[0].toUpperCase()
+                  const acctColor = accountColor(t.account_name ?? '')
+                  const ownerInitial = t.owner === 'Timothy Eng' ? 'T' : t.owner === 'Jessica Li' ? 'J' : t.owner === 'Shared' ? 'S' : null
+
+                  return (
                     <div
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: t.is_transfer ? '#9ca3af' : (t.categories?.color || '#d1d5db') }}
-                    />
-                  )}
-
-                  {/* Main content */}
-                  <div className="flex-1 min-w-0">
-                    {/* Description line */}
-                    <p
-                      className={`text-sm font-medium text-gray-900 truncate ${!selectMode ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
-                      onClick={e => { e.stopPropagation(); if (!selectMode) openReview(t) }}
+                      key={t.id}
+                      className={`group flex items-center gap-3 px-2 py-2.5 rounded-lg transition cursor-pointer ${
+                        selectMode && selectedIds.has(t.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
+                      onClick={selectMode ? () => toggleSelect(t.id) : () => openReview(t)}
                     >
-                      {t.description || t.merchant || 'No description'}
-                    </p>
-
-                    {/* Category row */}
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {t.is_transfer ? (
-                        <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Transfer</span>
-                      ) : editingCatId === t.id ? (
-                        <CategorySelect txId={t.id} currentCatId={t.categories?.id} />
+                      {/* Checkbox or merchant icon */}
+                      {selectMode ? (
+                        <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
+                          onClick={e => e.stopPropagation()} className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-blue-600" />
                       ) : (
-                        <button
-                          onClick={e => { e.stopPropagation(); if (!selectMode) setEditingCatId(t.id) }}
-                          className={`text-xs text-left transition rounded px-1 -mx-1 py-0.5 ${
-                            t.categories
-                              ? 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
-                              : 'text-orange-400 hover:text-orange-600 hover:bg-orange-50'
-                          } ${selectMode ? 'cursor-default' : 'cursor-pointer'}`}
-                        >
-                          {t.categories?.name || 'Uncategorized'}
-                        </button>
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-500">
+                          {initial}
+                        </div>
                       )}
-                      {t.plaid_transaction_id && t.categories && !t.is_transfer && (
-                        <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1 py-0.5 rounded">AI</span>
-                      )}
-                      {t.account_name && !accountFilter && (
-                        <span className="text-[10px] text-gray-400 truncate max-w-[120px]" title={t.account_name}>
-                          {t.account_name}
-                        </span>
-                      )}
-                      {t.owner && ownerTab === 'All' && (
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${OWNER_BADGE[t.owner] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {t.owner === 'Timothy Eng' ? 'Tim' : t.owner === 'Jessica Li' ? 'Jess' : t.owner}
-                        </span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Amount */}
-                  <span className={`text-sm font-semibold flex-shrink-0 tabular-nums ${
-                    t.is_transfer ? 'text-gray-400' : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
-                  }`}>
-                    {t.is_transfer ? '' : t.amount >= 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
-                  </span>
+                      {/* Merchant name */}
+                      <div className="w-0 flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
+                      </div>
 
-                  {/* Delete */}
-                  {!selectMode && (
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDelete(t.id) }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-500 transition flex-shrink-0"
-                      aria-label="Delete"
-                    >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      {/* Category */}
+                      <div className="hidden sm:flex items-center gap-1.5 w-40 flex-shrink-0">
+                        {editingCatId === t.id && !t.is_transfer ? (
+                          <CategorySelect txId={t.id} currentCatId={t.categories?.id} />
+                        ) : (
+                          <button
+                            onClick={e => { e.stopPropagation(); if (!selectMode && !t.is_transfer) setEditingCatId(t.id) }}
+                            className="flex items-center gap-1.5 group/cat"
+                          >
+                            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0"
+                              style={{ backgroundColor: t.is_transfer ? '#f3f4f6' : (t.categories?.color ? t.categories.color + '22' : '#f3f4f6') }}>
+                              {catEmoji}
+                            </span>
+                            <span className={`text-xs truncate max-w-[100px] ${
+                              t.is_transfer ? 'text-gray-400' : t.categories ? 'text-gray-600 group-hover/cat:text-blue-600' : 'text-orange-400 group-hover/cat:text-orange-600'
+                            }`}>{catName}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Account + owner */}
+                      <div className="hidden md:flex items-center gap-2 w-44 flex-shrink-0">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                          style={{ backgroundColor: acctColor }}>
+                          {acctInitial}
+                        </div>
+                        <span className="text-xs text-gray-500 truncate flex-1">{t.account_name ?? '—'}</span>
+                        {ownerInitial && (
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 ${
+                            t.owner === 'Timothy Eng' ? 'bg-blue-500' : t.owner === 'Jessica Li' ? 'bg-rose-400' : 'bg-gray-400'
+                          }`}>{ownerInitial}</div>
+                        )}
+                      </div>
+
+                      {/* Amount */}
+                      <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
+                        t.is_transfer ? 'text-gray-400' : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
+                      }`}>
+                        {t.amount >= 0 && !t.is_transfer ? '+' : ''}{t.is_transfer && t.amount > 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
+                      </span>
+
+                      {/* Chevron */}
+                      <svg className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 group-hover:text-gray-400 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
                       </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {filtered.length === 0 && search && (
