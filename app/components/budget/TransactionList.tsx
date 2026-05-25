@@ -4,6 +4,8 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 
+const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
+
 interface Category {
   id: string
   name: string
@@ -59,6 +61,40 @@ export default function TransactionList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
   const justSaved = useRef(false)
+
+  // Review panel
+  const [reviewTxn, setReviewTxn] = useState<Transaction | null>(null)
+  const [reviewIsTransfer, setReviewIsTransfer] = useState(false)
+  const [reviewCatId, setReviewCatId] = useState('')
+  const [reviewOwner, setReviewOwner] = useState('')
+  const [reviewSaving, setReviewSaving] = useState(false)
+
+  const openReview = (t: Transaction) => {
+    setReviewTxn(t)
+    setReviewIsTransfer(!!t.is_transfer)
+    setReviewCatId(t.categories?.id ?? '')
+    setReviewOwner(t.owner ?? '')
+  }
+
+  const saveReview = async () => {
+    if (!reviewTxn) return
+    setReviewSaving(true)
+    const supabase = createClient()
+    const catId = reviewIsTransfer ? null : (reviewCatId || null)
+    await supabase.from('transactions').update({
+      is_transfer: reviewIsTransfer,
+      category_id: catId,
+      owner: reviewOwner || null,
+    }).eq('id', reviewTxn.id)
+    const found = catId ? (categories.find(c => c.id === catId) ?? null) : null
+    setItems(prev => prev.map(t =>
+      t.id === reviewTxn.id
+        ? { ...t, is_transfer: reviewIsTransfer, categories: found ? { id: found.id, name: found.name, color: found.color } : null, owner: reviewOwner || null }
+        : t
+    ))
+    setReviewSaving(false)
+    setReviewTxn(null)
+  }
 
   const parents = categories.filter(c => !c.parent_id)
   const children = categories.filter(c => !!c.parent_id)
@@ -309,18 +345,13 @@ export default function TransactionList({
 
                   {/* Main content */}
                   <div className="flex-1 min-w-0">
-                    {/* Description line — links to edit page */}
-                    {selectMode ? (
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {t.description || t.merchant || 'No description'}
-                      </p>
-                    ) : (
-                      <Link href={`/budget/${t.id}`} className="block" onClick={e => e.stopPropagation()}>
-                        <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-600 transition">
-                          {t.description || t.merchant || 'No description'}
-                        </p>
-                      </Link>
-                    )}
+                    {/* Description line */}
+                    <p
+                      className={`text-sm font-medium text-gray-900 truncate ${!selectMode ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
+                      onClick={e => { e.stopPropagation(); if (!selectMode) openReview(t) }}
+                    >
+                      {t.description || t.merchant || 'No description'}
+                    </p>
 
                     {/* Category row */}
                     <div className="flex items-center gap-1.5 mt-0.5">
@@ -384,6 +415,118 @@ export default function TransactionList({
 
       {filtered.length === 0 && search && (
         <p className="text-center text-gray-500 py-8 text-sm">No transactions match &quot;{search}&quot;</p>
+      )}
+
+      {/* Review panel */}
+      {reviewTxn && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setReviewTxn(null)}>
+          <div className="absolute inset-0 bg-black/20" />
+          <div
+            className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-sm mx-0 sm:mx-4 p-6 space-y-5"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div>
+              <p className="font-semibold text-gray-900 truncate">{reviewTxn.description || reviewTxn.merchant || 'Transaction'}</p>
+              <p className="text-sm text-gray-400 mt-0.5">
+                {new Date(reviewTxn.transacted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {reviewTxn.account_name && <> · {reviewTxn.account_name}</>}
+              </p>
+              <p className={`text-2xl font-bold mt-1 ${reviewTxn.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                {reviewTxn.amount >= 0 ? '+' : ''}${Math.abs(reviewTxn.amount).toFixed(2)}
+              </p>
+            </div>
+
+            {/* Type toggle */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Type</p>
+              <div className="flex gap-2">
+                {(['income/expense', 'transfer'] as const).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setReviewIsTransfer(type === 'transfer')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+                      (type === 'transfer') === reviewIsTransfer
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    {type === 'transfer' ? 'Transfer' : 'Income / Expense'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Category — only shown for non-transfers */}
+            {!reviewIsTransfer && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Category</p>
+                <select
+                  value={reviewCatId}
+                  onChange={e => setReviewCatId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Uncategorized</option>
+                  {parents.map(parent => {
+                    const subs = children.filter(c => c.parent_id === parent.id)
+                    if (subs.length === 0) return <option key={parent.id} value={parent.id}>{parent.name}</option>
+                    return (
+                      <optgroup key={parent.id} label={parent.name}>
+                        {subs.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
+                      </optgroup>
+                    )
+                  })}
+                </select>
+              </div>
+            )}
+
+            {/* Owner */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Owner</p>
+              <div className="flex gap-2">
+                {(['', ...OWNERS] as const).map(o => (
+                  <button
+                    key={o}
+                    onClick={() => setReviewOwner(o)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${
+                      reviewOwner === o
+                        ? o === 'Timothy Eng' ? 'bg-blue-600 text-white border-blue-600'
+                          : o === 'Jessica Li' ? 'bg-rose-500 text-white border-rose-500'
+                          : o === 'Shared' ? 'bg-gray-700 text-white border-gray-700'
+                          : 'bg-gray-100 text-gray-600 border-gray-200'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    {o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : o === 'Shared' ? 'Shared' : 'None'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={saveReview}
+                disabled={reviewSaving}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {reviewSaving ? 'Saving…' : 'Save'}
+              </button>
+              <Link
+                href={`/budget/${reviewTxn.id}`}
+                className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+              >
+                Full Edit
+              </Link>
+              <button
+                onClick={() => setReviewTxn(null)}
+                className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bulk action bar */}
