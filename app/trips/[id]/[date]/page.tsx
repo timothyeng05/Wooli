@@ -60,12 +60,10 @@ function SectionCard({ meta, lines, confirmed, onToggle }: {
 
   let duration: string | null = null
   let content = allContent
-  if (meta.travel || meta.drive) {
-    const dl = allContent.find(l => l.startsWith('~'))
-    if (dl) {
-      duration = dl.slice(1).trim()
-      content = allContent.filter(l => !l.startsWith('~'))
-    }
+  const dl = allContent.find(l => l.startsWith('~'))
+  if (dl) {
+    duration = dl.slice(1).trim()
+    content = allContent.filter(l => !l.startsWith('~'))
   }
 
   if (!content.length && !duration) return null
