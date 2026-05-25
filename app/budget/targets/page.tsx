@@ -38,8 +38,7 @@ export default async function BudgetTargetsPage({
       .eq('is_transfer', false)
       .eq('is_pending', false)
       .gte('transacted_at', monthStart)
-      .lte('transacted_at', monthEnd)
-      .not('category_id', 'is', null),
+      .lte('transacted_at', monthEnd),
     supabase
       .from('budgets')
       .select('category_id, target_amount')
@@ -52,10 +51,17 @@ export default async function BudgetTargetsPage({
   )
 
   const actuals: Record<string, number> = {}
+  let uncategorizedIncome = 0
+  let uncategorizedExpenses = 0
   for (const t of (txnResult.data ?? [])) {
-    if (!t.category_id) continue
     if (transferCategoryIds.has(t.category_id)) continue
-    actuals[t.category_id] = (actuals[t.category_id] ?? 0) + Number(t.amount)
+    const amt = Number(t.amount)
+    if (!t.category_id) {
+      if (amt >= 0) uncategorizedIncome += amt
+      else uncategorizedExpenses += Math.abs(amt)
+      continue
+    }
+    actuals[t.category_id] = (actuals[t.category_id] ?? 0) + amt
   }
 
   const budgets: Record<string, number> = {}
@@ -71,6 +77,8 @@ export default async function BudgetTargetsPage({
         budgets={budgets}
         userId={user.id}
         month={month}
+        uncategorizedIncome={uncategorizedIncome}
+        uncategorizedExpenses={uncategorizedExpenses}
       />
     </div>
   )
