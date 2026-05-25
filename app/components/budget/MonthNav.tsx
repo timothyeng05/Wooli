@@ -1,14 +1,15 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 export default function MonthNav({ year, month }: { year: number; month: number }) {
   const router = useRouter()
+  const pathname = usePathname()
 
   const navigate = (y: number, m: number) => {
     if (m < 0) { y--; m = 11 }
     if (m > 11) { y++; m = 0 }
-    router.push(`/budget?year=${y}&month=${m}`)
+    router.push(`${pathname}?year=${y}&month=${m}`)
   }
 
   const now = new Date()
