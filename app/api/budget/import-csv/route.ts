@@ -49,12 +49,14 @@ export async function POST(request: Request) {
     return accountName.match(/\.*\.(\d{4})\)?$/)?.[1] ?? accountName.match(/\(\.+(\d{4})\)/)?.[1] ?? null
   }
 
-  const transferKeywords = /^(transfer|payment|autopay|zelle|venmo|paypal|cashapp|wire|ach)$/i
+  // Match Monarch's transfer categories and common transfer descriptions
+  const transferCategory = /^(transfer|credit card payment|loan payment|mortgage payment)$/i
+  const transferMerchant = /^(autopay|auto pay|automatic payment|zelle|venmo|paypal|cashapp|wire transfer|ach transfer)$/i
 
   const batch = rows
     .filter(r => isFinite(r.amount))
     .map(r => {
-      const isTransfer = transferKeywords.test(r.category.trim()) || transferKeywords.test(r.merchant.trim())
+      const isTransfer = transferCategory.test(r.category.trim()) || transferMerchant.test(r.merchant.trim())
       const catId = isTransfer ? null : (catMap.get(r.category.toLowerCase()) ?? null)
       const owner = r.owner && VALID_OWNERS.has(r.owner) ? r.owner : null
       const mask = extractMask(r.account)

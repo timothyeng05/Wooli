@@ -106,8 +106,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
   const categories = catResult.data || []
 
   const nonTransfers = transactions.filter((t: any) => !t.is_transfer)
+  const transferTxns = transactions.filter((t: any) => t.is_transfer)
   const income = nonTransfers.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
   const expenses = nonTransfers.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
+  const transfersOut = transferTxns.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
   const net = income - expenses
 
   // Category breakdown for expenses
@@ -163,7 +165,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
             <p className="text-xs sm:text-sm text-gray-500 mb-1">Income</p>
             <p className="text-lg sm:text-2xl font-bold text-green-600">+${income.toFixed(0)}</p>
@@ -171,6 +173,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
             <p className="text-xs sm:text-sm text-gray-500 mb-1">Expenses</p>
             <p className="text-lg sm:text-2xl font-bold text-red-600">-${expenses.toFixed(0)}</p>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Transfers</p>
+            <p className="text-lg sm:text-2xl font-bold text-gray-500">${transfersOut.toFixed(0)}</p>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-5">
             <p className="text-xs sm:text-sm text-gray-500 mb-1">Net</p>
