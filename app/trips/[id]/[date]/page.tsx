@@ -210,9 +210,6 @@ export default function TripDayPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [aiInput, setAiInput] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState<string | null>(null)
   const [confirmedSections, setConfirmedSections] = useState<string[]>([])
 
   useEffect(() => {
@@ -260,36 +257,6 @@ export default function TripDayPage() {
     }
     load()
   }, [params.id, params.date])
-
-  const updateWithAI = async () => {
-    if (!aiInput.trim()) return
-    setAiLoading(true)
-    setAiError(null)
-    try {
-      const res = await fetch('/api/trips/update-day', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instruction: aiInput,
-          currentTitle: form.title,
-          currentNotes: form.notes,
-          date: params.date,
-          tripId: params.id,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setForm({ title: data.title ?? form.title, notes: data.notes ?? form.notes })
-        setAiInput('')
-      } else {
-        setAiError(data.error ?? `Error ${res.status}`)
-      }
-    } catch {
-      setAiError('Network error — make sure the server is running')
-    } finally {
-      setAiLoading(false)
-    }
-  }
 
   const save = async () => {
     setSaving(true)
@@ -432,29 +399,6 @@ export default function TripDayPage() {
 
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
         {sections.length > 0 && <TravelBanner sections={sections} />}
-
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiInput}
-              onChange={e => { setAiInput(e.target.value); setAiError(null) }}
-              onKeyDown={e => e.key === 'Enter' && !aiLoading && updateWithAI()}
-              placeholder="Tell AI what to change… e.g. swap lunch to ramen in Shibuya"
-              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${aiError ? 'border-red-400' : 'border-gray-300'}`}
-            />
-            <button
-              onClick={updateWithAI}
-              disabled={aiLoading || !aiInput.trim()}
-              className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm flex-shrink-0"
-            >
-              {aiLoading ? 'Updating…' : 'Update'}
-            </button>
-          </div>
-          {aiError && (
-            <p className="text-xs text-red-600 px-1">⚠️ {aiError}</p>
-          )}
-        </div>
 
         {editing ? (
           <div className="space-y-4">
