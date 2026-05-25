@@ -102,10 +102,15 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const transactions = txnResult.data || []
   const categories   = catResult.data  || []
 
-  const nonTransfers = transactions.filter((t: any) => !t.is_transfer)
+  const transferCatIds = new Set(categories.filter((c: any) => c.is_transfer).map((c: any) => c.id))
+
+  // Exclude pending and transfer transactions (both row-level and category-level) from summary totals
+  const settled = transactions.filter((t: any) =>
+    !t.is_pending && !t.is_transfer && !transferCatIds.has(t.categories?.id)
+  )
   const transferTxns = transactions.filter((t: any) =>  t.is_transfer)
-  const income      = nonTransfers.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
-  const expenses    = nonTransfers.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
+  const income      = settled.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
+  const expenses    = settled.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
   const transfersOut = transferTxns.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
   const net = income - expenses
 

@@ -302,7 +302,8 @@ export default function TransactionList({
       {/* Transaction rows */}
       <div>
         {grouped.map(([date, txns]) => {
-          const dayTotal = txns.filter(t => !t.is_transfer && t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
+          const transferCatIds = new Set(categories.filter(c => c.is_transfer).map(c => c.id))
+          const dayTotal = txns.filter(t => !t.is_transfer && !t.is_pending && !transferCatIds.has(t.categories?.id ?? '') && t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
           return (
             <div key={date}>
               {/* Date header */}
