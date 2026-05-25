@@ -22,7 +22,9 @@ interface Category {
   id: string
   name: string
   color: string
+  icon: string | null
   is_income: boolean
+  is_transfer: boolean
   parent_id: string | null
   sort_order: number
   keywords: string | null
@@ -32,6 +34,13 @@ const PRESET_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
   '#f59e0b', '#10b981', '#3b82f6', '#06b6d4',
   '#22c55e', '#84cc16', '#f97316', '#64748b',
+]
+
+const PRESET_EMOJIS = [
+  '🍽️','🛒','🛍️','🎬','🚗','✈️','💊','💡','🏠','📱',
+  '💅','📚','🎁','🐾','🛡️','💰','💵','💸','💳','↔️',
+  '⛽','🏋️','🏥','📺','☕','🎵','🍺','🏨','💄','🎮',
+  '🐕','🧴','🎯','🚌','💻','📶','💧','🍕','🎪','👶',
 ]
 
 function DragHandle(props: React.HTMLAttributes<HTMLButtonElement>) {
@@ -47,6 +56,18 @@ function DragHandle(props: React.HTMLAttributes<HTMLButtonElement>) {
         <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
       </svg>
     </button>
+  )
+}
+
+function CatIcon({ icon, color, size = 'sm' }: { icon: string | null; color: string; size?: 'sm' | 'md' }) {
+  if (icon) {
+    return <span className={size === 'md' ? 'text-base flex-shrink-0' : 'text-sm flex-shrink-0 w-4 text-center'}>{icon}</span>
+  }
+  return (
+    <div
+      className={size === 'md' ? 'w-3 h-3 rounded-full flex-shrink-0' : 'w-2 h-2 rounded-full flex-shrink-0'}
+      style={{ backgroundColor: color }}
+    />
   )
 }
 
@@ -78,7 +99,7 @@ function SortableChildRow({
     <div ref={setNodeRef} style={style}>
       <div className="flex items-center gap-2 px-3 py-2 pl-6 bg-gray-50">
         <DragHandle {...attributes} {...listeners} />
-        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: child.color }} />
+        <CatIcon icon={child.icon} color={child.color} size="sm" />
         <div className="flex-1 min-w-0">
           <span className="text-sm text-gray-700">{child.name}</span>
           {child.keywords && (
@@ -109,7 +130,9 @@ export default function CategoryManager({
   const [editing, setEditing] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#6366f1')
+  const [newIcon, setNewIcon] = useState('')
   const [newIsIncome, setNewIsIncome] = useState(false)
+  const [newIsTransfer, setNewIsTransfer] = useState(false)
   const [newKeywords, setNewKeywords] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -135,14 +158,12 @@ export default function CategoryManager({
     const newIdx = subs.findIndex(c => c.id === over.id)
     const reordered = arrayMove(subs, oldIdx, newIdx)
 
-    // Optimistic update
     const updated = categories.map(c => {
       const idx = reordered.findIndex(r => r.id === c.id)
       return idx !== -1 ? { ...c, sort_order: idx } : c
     })
     setCategories(updated)
 
-    // Persist
     const supabase = createClient()
     for (let i = 0; i < reordered.length; i++) {
       await supabase.from('categories').update({ sort_order: i }).eq('id', reordered[i].id)
@@ -155,18 +176,17 @@ export default function CategoryManager({
     setSaving(true)
     try {
       const supabase = createClient()
-      const siblingCount = adding?.parentId
-        ? childrenOf(adding.parentId).length
-        : parents.length
+      const parent = adding?.parentId ? categories.find(c => c.id === adding.parentId) : null
+      const siblingCount = adding?.parentId ? childrenOf(adding.parentId).length : parents.length
       const { data, error } = await supabase
         .from('categories')
         .insert({
           user_id: userId,
           name: newName.trim(),
           color: newColor,
-          is_income: adding?.parentId
-            ? (categories.find(c => c.id === adding.parentId)?.is_income ?? newIsIncome)
-            : newIsIncome,
+          icon: newIcon.trim() || null,
+          is_income: parent ? parent.is_income : newIsIncome,
+          is_transfer: parent ? parent.is_transfer : newIsTransfer,
           parent_id: adding?.parentId || null,
           sort_order: siblingCount,
         })
@@ -177,6 +197,7 @@ export default function CategoryManager({
       setAdding(null)
       setNewName('')
       setNewColor('#6366f1')
+      setNewIcon('')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to add category')
     } finally {
@@ -191,12 +212,13 @@ export default function CategoryManager({
     try {
       const supabase = createClient()
       const keywords = newKeywords.trim() || null
+      const icon = newIcon.trim() || null
       const { error } = await supabase
         .from('categories')
-        .update({ name: newName.trim(), color: newColor, keywords })
+        .update({ name: newName.trim(), color: newColor, icon, keywords })
         .eq('id', id)
       if (error) throw error
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName.trim(), color: newColor, keywords } : c))
+      setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName.trim(), color: newColor, icon, keywords } : c))
       setEditing(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update')
@@ -225,13 +247,44 @@ export default function CategoryManager({
     setEditing(cat.id)
     setNewName(cat.name)
     setNewColor(cat.color)
+    setNewIcon(cat.icon || '')
     setNewKeywords(cat.keywords || '')
     setAdding(null)
   }
 
+  // ── Emoji picker ──────────────────────────────────────────────────────────
+  const renderEmojiPicker = () => (
+    <div>
+      <p className="text-[11px] text-gray-500 mb-1">Icon</p>
+      <div className="flex items-start gap-2">
+        <input
+          type="text"
+          value={newIcon}
+          onChange={e => setNewIcon(e.target.value)}
+          placeholder="?"
+          className="w-10 h-10 text-xl text-center border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0"
+        />
+        <div className="flex flex-wrap gap-0.5">
+          {PRESET_EMOJIS.map(e => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => setNewIcon(e)}
+              className={`w-7 h-7 text-sm rounded transition hover:bg-gray-100 flex items-center justify-center ${
+                newIcon === e ? 'bg-blue-100 ring-1 ring-blue-400' : ''
+              }`}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
   // ── Forms ─────────────────────────────────────────────────────────────────
   const renderEditForm = (id: string) => (
-    <div className="p-3 bg-blue-50 border-t border-blue-100 space-y-2">
+    <div className="p-3 bg-blue-50 border-t border-blue-100 space-y-2.5">
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -252,6 +305,7 @@ export default function CategoryManager({
           ))}
         </div>
       </div>
+      {renderEmojiPicker()}
       <input
         type="text"
         value={newKeywords}
@@ -273,78 +327,97 @@ export default function CategoryManager({
   )
 
   const renderAddForm = (parentId: string | null) => (
-    <div className="flex items-center gap-2 mt-2 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-      <input
-        type="text"
-        value={newName}
-        onChange={e => setNewName(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && handleAdd()}
-        placeholder="Category name"
-        autoFocus
-        className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-      />
-      <div className="flex gap-1 flex-wrap max-w-[120px]">
-        {PRESET_COLORS.map(c => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setNewColor(c)}
-            style={{ backgroundColor: c }}
-            className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
-          />
-        ))}
+    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="Category name"
+          autoFocus
+          className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <div className="flex gap-1 flex-wrap max-w-[120px]">
+          {PRESET_COLORS.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setNewColor(c)}
+              style={{ backgroundColor: c }}
+              className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
+            />
+          ))}
+        </div>
+        {!parentId && !newIsTransfer && (
+          <select
+            value={newIsIncome ? 'income' : 'expense'}
+            onChange={e => setNewIsIncome(e.target.value === 'income')}
+            className="text-xs border border-gray-300 rounded px-1.5 py-1.5 bg-white"
+          >
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        )}
       </div>
-      {!parentId && (
-        <select
-          value={newIsIncome ? 'income' : 'expense'}
-          onChange={e => setNewIsIncome(e.target.value === 'income')}
-          className="text-xs border border-gray-300 rounded px-1.5 py-1.5 bg-white"
-        >
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-        </select>
-      )}
-      <button
-        onClick={handleAdd}
-        disabled={saving || !newName.trim()}
-        className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 transition"
-      >Add</button>
-      <button
-        onClick={() => { setAdding(null); setNewName('') }}
-        className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
-      >Cancel</button>
+      {renderEmojiPicker()}
+      <div className="flex gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={saving || !newName.trim()}
+          className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 transition"
+        >Add</button>
+        <button
+          onClick={() => { setAdding(null); setNewName(''); setNewIcon('') }}
+          className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+        >Cancel</button>
+      </div>
     </div>
   )
 
-  const expenseParents = parents.filter(c => !c.is_income)
-  const incomeParents = parents.filter(c => c.is_income)
+  const expenseParents = parents.filter(c => !c.is_income && !c.is_transfer)
+  const incomeParents  = parents.filter(c =>  c.is_income && !c.is_transfer)
+  const transferParents = parents.filter(c => c.is_transfer)
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="space-y-8">
         {[
-          { label: 'Expense Categories', list: expenseParents, income: false },
-          { label: 'Income Categories', list: incomeParents, income: true },
-        ].map(({ label, list, income }) => (
+          { label: 'Expense Categories', list: expenseParents, income: false, isTransfer: false },
+          { label: 'Income Categories',  list: incomeParents,  income: true,  isTransfer: false },
+          { label: 'Transfer Categories', list: transferParents, income: false, isTransfer: true },
+        ].map(({ label, list, income, isTransfer }) => (
           <div key={label}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900">{label}</h3>
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h3 className="font-semibold text-gray-900">{label}</h3>
+                {isTransfer && (
+                  <p className="text-xs text-gray-400 mt-0.5">Assigning these auto-marks transactions as transfers</p>
+                )}
+              </div>
               <button
-                onClick={() => { setAdding({ parentId: null }); setEditing(null); setNewIsIncome(income); setNewName('') }}
+                onClick={() => {
+                  setAdding({ parentId: null })
+                  setEditing(null)
+                  setNewIsIncome(income)
+                  setNewIsTransfer(isTransfer)
+                  setNewName('')
+                  setNewIcon('')
+                }}
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
-                + Add Category
+                + Add
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 mt-3">
               {list.map(parent => {
                 const subs = childrenOf(parent.id)
                 return (
                   <div key={parent.id} className="border border-gray-200 rounded-lg overflow-hidden">
                     {/* Parent row */}
                     <div className="flex items-center gap-3 px-4 py-3 bg-white">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color }} />
+                      <CatIcon icon={parent.icon} color={parent.color} size="md" />
                       <div className="flex-1 min-w-0">
                         <span className="font-medium text-gray-900">{parent.name}</span>
                         {parent.keywords && (
@@ -353,7 +426,7 @@ export default function CategoryManager({
                       </div>
                       <button onClick={() => startEdit(parent)} className="text-xs text-gray-400 hover:text-blue-600 transition">Edit</button>
                       <button
-                        onClick={() => { setAdding({ parentId: parent.id }); setEditing(null); setNewName('') }}
+                        onClick={() => { setAdding({ parentId: parent.id }); setEditing(null); setNewName(''); setNewIcon('') }}
                         className="text-xs text-blue-600 hover:text-blue-700 ml-1"
                       >+ Sub</button>
                       <button
@@ -393,10 +466,16 @@ export default function CategoryManager({
                 )
               })}
 
-              {adding?.parentId === null && newIsIncome === income ? renderAddForm(null) : null}
+              {adding?.parentId === null && newIsIncome === income && newIsTransfer === isTransfer
+                ? renderAddForm(null)
+                : null}
 
-              {list.length === 0 && adding?.parentId !== null && (
-                <p className="text-sm text-gray-500 text-center py-4">No {label.toLowerCase()} yet</p>
+              {list.length === 0 && !adding && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  {isTransfer
+                    ? 'Add categories like "Credit Card Payment" here to auto-mark transactions as transfers'
+                    : `No ${label.toLowerCase()} yet`}
+                </p>
               )}
             </div>
           </div>

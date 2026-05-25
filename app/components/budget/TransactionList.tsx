@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
+import { getCatEmoji } from '@/app/components/budget/catEmoji'
 
 const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
 
@@ -10,7 +11,9 @@ interface Category {
   id: string
   name: string
   color: string
+  icon: string | null
   is_income: boolean
+  is_transfer: boolean
   parent_id: string | null
 }
 
@@ -25,7 +28,7 @@ interface Transaction {
   is_pending: boolean | null
   owner: string | null
   account_name: string | null
-  categories: { id: string; name: string; color: string } | null
+  categories: { id: string; name: string; color: string; icon?: string | null } | null
 }
 
 const OWNER_BADGE: Record<string, string> = {
@@ -36,27 +39,6 @@ const OWNER_BADGE: Record<string, string> = {
 const OWNER_TABS = ['All', 'Timothy Eng', 'Jessica Li', 'Shared'] as const
 type OwnerTab = typeof OWNER_TABS[number]
 
-const CAT_EMOJI: Record<string, string> = {
-  'restaurants': '🍽️', 'dining': '🍽️', 'food & drink': '🍽️', 'food and drink': '🍽️',
-  'groceries': '🛒', 'supermarkets': '🛒',
-  'shopping': '🛍️', 'clothing': '👗', 'amazon': '📦', 'online shopping': '🛍️',
-  'entertainment': '🎬', 'movies': '🎬', 'music': '🎵', 'games': '🎮',
-  'transit': '🚇', 'transportation': '🚗', 'uber': '🚗', 'lyft': '🚗', 'parking': '🅿️',
-  'travel': '✈️', 'flights': '✈️', 'hotels': '🏨', 'airbnb': '🏠',
-  'health': '💊', 'healthcare': '💊', 'pharmacy': '💊', 'medical': '🏥', 'fitness': '💪',
-  'utilities': '💡', 'electric': '💡', 'gas': '⛽', 'water': '💧', 'internet': '📶',
-  'rent': '🏠', 'housing': '🏠', 'mortgage': '🏠',
-  'subscriptions': '📱', 'software': '💻', 'streaming': '📺',
-  'personal care': '💅', 'beauty': '💄',
-  'education': '📚', 'books': '📖',
-  'gifts': '🎁', 'donations': '❤️', 'charity': '❤️',
-  'pets': '🐾',
-  'insurance': '🛡️',
-  'savings': '💰', 'investments': '📈',
-  'income': '💵', 'paycheck': '💵', 'salary': '💵',
-  'fees': '💸', 'bank fees': '💸', 'interest': '💸',
-  'transfer': '↔️',
-}
 
 const ACCT_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b']
 function accountColor(name: string): string {
@@ -86,11 +68,9 @@ export default function TransactionList({
   const [search, setSearch] = useState('')
   const [ownerTab, setOwnerTab] = useState<OwnerTab>('All')
   const [accountFilter, setAccountFilter] = useState('')
-  const [editingCatId, setEditingCatId] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
-  const justSaved = useRef(false)
 
   // Review panel
   const [reviewTxn, setReviewTxn] = useState<Transaction | null>(null)
@@ -131,17 +111,23 @@ export default function TransactionList({
 
   // ── Category inline edit ──────────────────────────────────────────────────
   const handleCategoryChange = async (txId: string, catId: string) => {
-    justSaved.current = true
     const supabase = createClient()
     const newCatId = catId || null
-    await supabase.from('transactions').update({ category_id: newCatId }).eq('id', txId)
     const found = categories.find(c => c.id === newCatId) ?? null
+    const makeTransfer = found?.is_transfer ?? false
+    const updates: Record<string, unknown> = makeTransfer
+      ? { category_id: null, is_transfer: true }
+      : { category_id: newCatId }
+    await supabase.from('transactions').update(updates).eq('id', txId)
     setItems(prev => prev.map(t =>
       t.id === txId
-        ? { ...t, categories: found ? { id: found.id, name: found.name, color: found.color } : null }
+        ? {
+            ...t,
+            is_transfer: makeTransfer ? true : t.is_transfer,
+            categories: found && !makeTransfer ? { id: found.id, name: found.name, color: found.color, icon: found.icon } : null,
+          }
         : t
     ))
-    setEditingCatId(null)
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -233,32 +219,6 @@ export default function TransactionList({
 
   const grouped = groupByDate(filtered)
 
-  // ── Category select dropdown (shared) ─────────────────────────────────────
-  const CategorySelect = ({ txId, currentCatId }: { txId: string; currentCatId?: string }) => (
-    <select
-      autoFocus
-      defaultValue={currentCatId ?? ''}
-      onChange={e => handleCategoryChange(txId, e.target.value)}
-      onBlur={() => {
-        if (!justSaved.current) setEditingCatId(null)
-        justSaved.current = false
-      }}
-      onKeyDown={e => e.key === 'Escape' && setEditingCatId(null)}
-      onClick={e => e.stopPropagation()}
-      className="text-xs border border-blue-400 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[160px]"
-    >
-      <option value="">No category</option>
-      {parents.map(parent => {
-        const subs = children.filter(c => c.parent_id === parent.id)
-        if (subs.length === 0) return <option key={parent.id} value={parent.id}>{parent.name}</option>
-        return (
-          <optgroup key={parent.id} label={parent.name}>
-            {subs.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
-          </optgroup>
-        )
-      })}
-    </select>
-  )
 
   if (items.length === 0) {
     return (
@@ -358,8 +318,6 @@ export default function TransactionList({
                 {txns.map(t => {
                   const name = t.description || t.merchant || 'No description'
                   const initial = name.trim()[0]?.toUpperCase() ?? '?'
-                  const catName = t.is_transfer ? 'Transfer' : (t.categories?.name || 'Uncategorized')
-                  const catEmoji = CAT_EMOJI[catName.toLowerCase()] ?? (t.is_transfer ? '↔' : '•')
                   const acctInitial = (t.account_name ?? '?')[0].toUpperCase()
                   const acctColor = accountColor(t.account_name ?? '')
                   const ownerInitial = t.owner === 'Timothy Eng' ? 'T' : t.owner === 'Jessica Li' ? 'J' : t.owner === 'Shared' ? 'S' : null
@@ -391,27 +349,41 @@ export default function TransactionList({
                       </div>
 
                       {/* Category */}
-                      <div className="hidden sm:flex items-center gap-1.5 w-36 flex-shrink-0">
-                        {editingCatId === t.id && !t.is_transfer ? (
-                          <CategorySelect txId={t.id} currentCatId={t.categories?.id} />
+                      <div className="hidden sm:flex items-center w-40 flex-shrink-0 overflow-hidden" onClick={e => e.stopPropagation()}>
+                        {t.is_transfer ? (
+                          <span className="text-xs text-gray-400">↔️ Transfer</span>
                         ) : (
-                          <button
-                            onClick={e => { e.stopPropagation(); if (!selectMode && !t.is_transfer) setEditingCatId(t.id) }}
-                            className="flex items-center gap-1.5 group/cat text-left"
+                          <select
+                            value={t.categories?.id ?? ''}
+                            onChange={e => !selectMode && handleCategoryChange(t.id, e.target.value)}
+                            disabled={selectMode}
+                            className={`w-full text-xs bg-transparent border-none outline-none cursor-pointer appearance-none p-0 ${
+                              t.categories ? 'text-gray-600' : 'text-orange-400'
+                            }`}
                           >
-                            <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0"
-                              style={{ backgroundColor: t.is_transfer ? '#f3f4f6' : (t.categories?.color ? t.categories.color + '22' : '#f3f4f6') }}>
-                              {catEmoji}
-                            </span>
-                            <span className={`text-xs truncate max-w-[88px] ${
-                              t.is_transfer ? 'text-gray-400' : t.categories ? 'text-gray-600 group-hover/cat:text-blue-600' : 'text-orange-400 group-hover/cat:text-orange-600'
-                            }`}>{catName}</span>
-                          </button>
+                            <option value="">Uncategorized</option>
+                            {parents.map(parent => {
+                              const subs = children.filter(c => c.parent_id === parent.id)
+                              const pEmoji = getCatEmoji(parent.name, parent.icon)
+                              if (subs.length === 0) return (
+                                <option key={parent.id} value={parent.id}>{pEmoji} {parent.name}</option>
+                              )
+                              return (
+                                <optgroup key={parent.id} label={`${pEmoji} ${parent.name}`}>
+                                  {subs.map(child => (
+                                    <option key={child.id} value={child.id}>
+                                      {getCatEmoji(child.name, child.icon)} {child.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )
+                            })}
+                          </select>
                         )}
                       </div>
 
                       {/* Account */}
-                      <div className="hidden md:flex items-center gap-1.5 w-40 flex-shrink-0">
+                      <div className="hidden md:flex items-center gap-1.5 w-48 flex-shrink-0 min-w-0">
                         <div className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0"
                           style={{ backgroundColor: acctColor }}>
                           {acctInitial}
@@ -420,24 +392,26 @@ export default function TransactionList({
                       </div>
 
                       {/* Owner */}
-                      <div className="hidden md:flex items-center w-14 flex-shrink-0">
-                        {ownerInitial && (
+                      <div className="hidden md:flex items-center justify-start w-16 flex-shrink-0">
+                        {ownerInitial ? (
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                             t.owner === 'Timothy Eng' ? 'bg-blue-100 text-blue-600'
                             : t.owner === 'Jessica Li' ? 'bg-rose-100 text-rose-500'
                             : 'bg-gray-100 text-gray-500'
                           }`}>{ownerInitial === 'T' ? 'Tim' : ownerInitial === 'J' ? 'Jess' : 'Shared'}</span>
-                        )}
+                        ) : <span className="w-10" />}
                       </div>
 
                       {/* Amount */}
-                      <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
-                        t.is_pending ? 'text-amber-600'
-                        : t.is_transfer ? 'text-gray-400'
-                        : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
-                      }`}>
-                        {t.amount >= 0 && !t.is_transfer ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
-                      </span>
+                      <div className="w-24 flex-shrink-0 text-right">
+                        <span className={`text-sm font-semibold tabular-nums ${
+                          t.is_pending ? 'text-amber-600'
+                          : t.is_transfer ? 'text-gray-400'
+                          : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
+                        }`}>
+                          {t.amount >= 0 && !t.is_transfer ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
+                        </span>
+                      </div>
 
                       {/* Chevron */}
                       <svg className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 group-hover:text-gray-400 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -508,10 +482,17 @@ export default function TransactionList({
                   <option value="">Uncategorized</option>
                   {parents.map(parent => {
                     const subs = children.filter(c => c.parent_id === parent.id)
-                    if (subs.length === 0) return <option key={parent.id} value={parent.id}>{parent.name}</option>
+                    const pEmoji = getCatEmoji(parent.name, parent.icon)
+                    if (subs.length === 0) return (
+                      <option key={parent.id} value={parent.id}>{pEmoji} {parent.name}</option>
+                    )
                     return (
-                      <optgroup key={parent.id} label={parent.name}>
-                        {subs.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
+                      <optgroup key={parent.id} label={`${pEmoji} ${parent.name}`}>
+                        {subs.map(child => (
+                          <option key={child.id} value={child.id}>
+                            {getCatEmoji(child.name, child.icon)} {child.name}
+                          </option>
+                        ))}
                       </optgroup>
                     )
                   })}
@@ -582,10 +563,17 @@ export default function TransactionList({
               <option value="">Set category…</option>
               {parents.map(parent => {
                 const subs = children.filter(c => c.parent_id === parent.id)
-                if (subs.length === 0) return <option key={parent.id} value={parent.id}>{parent.name}</option>
+                const pEmoji = getCatEmoji(parent.name, parent.icon)
+                if (subs.length === 0) return (
+                  <option key={parent.id} value={parent.id}>{pEmoji} {parent.name}</option>
+                )
                 return (
-                  <optgroup key={parent.id} label={parent.name}>
-                    {subs.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
+                  <optgroup key={parent.id} label={`${pEmoji} ${parent.name}`}>
+                    {subs.map(child => (
+                      <option key={child.id} value={child.id}>
+                        {getCatEmoji(child.name, child.icon)} {child.name}
+                      </option>
+                    ))}
                   </optgroup>
                 )
               })}
