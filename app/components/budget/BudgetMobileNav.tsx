@@ -43,7 +43,7 @@ const TABS = [
     label: 'Transactions',
     match: (p: string) =>
       p === '/budget/transactions' ||
-      (p.startsWith('/budget/') && !['accounts', 'categories', 'recurring', 'import', 'targets', 'networth'].some(s => p.startsWith(`/budget/${s}`))),
+      (p.startsWith('/budget/') && !['accounts', 'categories', 'recurring', 'import', 'targets', 'networth', 'cashflow'].some(s => p.startsWith(`/budget/${s}`))),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
         stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -62,9 +62,22 @@ const TABS = [
     ),
   },
   {
+    href: '/budget/cashflow',
+    label: 'Cash Flow',
+    match: (p: string) => p.startsWith('/budget/cashflow'),
+    icon: (filled: boolean) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth={filled ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="3" width="6" height="18" rx="1" fill={filled ? 'currentColor' : 'none'} />
+        <rect x="9" y="8" width="6" height="13" rx="1" fill={filled ? 'currentColor' : 'none'} />
+        <rect x="16" y="5" width="6" height="16" rx="1" fill={filled ? 'currentColor' : 'none'} />
+      </svg>
+    ),
+  },
+  {
     href: '/budget/targets',
     label: 'Budget',
-    match: (p: string) => p.startsWith('/budget/targets'),
+    match: (p: string) => p.startsWith('/budget/targets') || p.startsWith('/budget/categories') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import'),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth={filled ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -74,27 +87,6 @@ const TABS = [
         <circle cx="3.5" cy="6" r="1.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
         <circle cx="3.5" cy="12" r="1.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
         <circle cx="3.5" cy="18" r="1.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-      </svg>
-    ),
-  },
-  {
-    href: '/budget/categories',
-    label: 'Categories',
-    match: (p: string) => p.startsWith('/budget/categories') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import'),
-    icon: (filled: boolean) => (
-      <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
-        stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
-        {filled ? (
-          <>
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" fill="currentColor" />
-            <circle cx="7" cy="7" r="1.5" fill="white" />
-          </>
-        ) : (
-          <>
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-            <line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="2.5" />
-          </>
-        )}
       </svg>
     ),
   },
