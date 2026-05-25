@@ -540,9 +540,9 @@ export default function TripDayPage() {
 
         if (current.confirmed_sections === null) {
           const autoPlanned = sectionData
-            .map(s => findMeta(s.type))
-            .filter((m): m is NonNullable<typeof m> => !!(m?.hotel || m?.banner))
-            .map(m => m.label)
+            .map((s, idx) => ({ s, idx }))
+            .filter(({ s }) => { const m = findMeta(s.type); return !!(m?.hotel || m?.banner) })
+            .map(({ idx }) => String(idx))
           setConfirmedSections(autoPlanned)
         } else {
           setConfirmedSections(current.confirmed_sections)
@@ -821,8 +821,8 @@ export default function TripDayPage() {
                       </div>
                       <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
                         {(s.meta.hotel || s.meta.car)
-                          ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
-                          : <SectionCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
+                          ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} />
+                          : <SectionCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} />
                         }
                       </div>
                     </div>
