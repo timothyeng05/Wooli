@@ -213,12 +213,32 @@ export default function CategoryManager({
       const supabase = createClient()
       const keywords = newKeywords.trim() || null
       const icon = newIcon.trim() || null
-      const { error } = await supabase
-        .from('categories')
-        .update({ name: newName.trim(), color: newColor, icon, keywords })
-        .eq('id', id)
+      const cat = categories.find(c => c.id === id)!
+      const isParent = !cat.parent_id
+
+      const update: Record<string, unknown> = { name: newName.trim(), color: newColor, icon, keywords }
+      if (isParent) {
+        update.is_income = newIsIncome
+        update.is_transfer = newIsTransfer
+      }
+
+      const { error } = await supabase.from('categories').update(update).eq('id', id)
       if (error) throw error
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName.trim(), color: newColor, icon, keywords } : c))
+
+      let updated = categories.map(c => c.id === id ? { ...c, ...update } as Category : c)
+
+      // Cascade type change to children
+      if (isParent && (cat.is_income !== newIsIncome || cat.is_transfer !== newIsTransfer)) {
+        await supabase
+          .from('categories')
+          .update({ is_income: newIsIncome, is_transfer: newIsTransfer })
+          .eq('parent_id', id)
+        updated = updated.map(c =>
+          c.parent_id === id ? { ...c, is_income: newIsIncome, is_transfer: newIsTransfer } : c
+        )
+      }
+
+      setCategories(updated)
       setEditing(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update')
@@ -249,6 +269,8 @@ export default function CategoryManager({
     setNewColor(cat.color)
     setNewIcon(cat.icon || '')
     setNewKeywords(cat.keywords || '')
+    setNewIsIncome(cat.is_income)
+    setNewIsTransfer(cat.is_transfer)
     setAdding(null)
   }
 
@@ -283,48 +305,72 @@ export default function CategoryManager({
   )
 
   // ── Forms ─────────────────────────────────────────────────────────────────
-  const renderEditForm = (id: string) => (
-    <div className="p-3 bg-blue-50 border-t border-blue-100 space-y-2.5">
-      <div className="flex items-center gap-2">
+  const renderEditForm = (id: string) => {
+    const cat = categories.find(c => c.id === id)
+    const isParent = cat && !cat.parent_id
+    return (
+      <div className="p-3 bg-blue-50 border-t border-blue-100 space-y-2.5">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            autoFocus
+            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <div className="flex gap-1 flex-wrap max-w-[120px]">
+            {PRESET_COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setNewColor(c)}
+                style={{ backgroundColor: c }}
+                className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
+              />
+            ))}
+          </div>
+        </div>
+        {renderEmojiPicker()}
         <input
           type="text"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          autoFocus
-          className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+          value={newKeywords}
+          onChange={e => setNewKeywords(e.target.value)}
+          placeholder="AI hints: mta, subway, njtransit (comma-separated)"
+          className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-400"
         />
-        <div className="flex gap-1 flex-wrap max-w-[120px]">
-          {PRESET_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setNewColor(c)}
-              style={{ backgroundColor: c }}
-              className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
-            />
-          ))}
+        {isParent && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500">Type:</span>
+            <select
+              value={newIsTransfer ? 'transfer' : newIsIncome ? 'income' : 'expense'}
+              onChange={e => {
+                setNewIsTransfer(e.target.value === 'transfer')
+                setNewIsIncome(e.target.value === 'income')
+              }}
+              className="text-xs border border-gray-300 rounded px-1.5 py-1.5 bg-white"
+            >
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+              <option value="transfer">Transfer</option>
+            </select>
+            {newIsTransfer && (
+              <span className="text-[10px] text-amber-600">Transactions assigned here are excluded from income/expense totals</span>
+            )}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleEdit(id)}
+            disabled={saving || !newName.trim()}
+            className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 transition"
+          >Save</button>
+          <button onClick={() => setEditing(null)} className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+            Cancel
+          </button>
         </div>
       </div>
-      {renderEmojiPicker()}
-      <input
-        type="text"
-        value={newKeywords}
-        onChange={e => setNewKeywords(e.target.value)}
-        placeholder="AI hints: mta, subway, njtransit (comma-separated)"
-        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-400"
-      />
-      <div className="flex gap-2">
-        <button
-          onClick={() => handleEdit(id)}
-          disabled={saving || !newName.trim()}
-          className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 transition"
-        >Save</button>
-        <button onClick={() => setEditing(null)} className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderAddForm = (parentId: string | null) => (
     <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 space-y-2.5">

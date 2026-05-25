@@ -3,9 +3,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import PlaidLinkButton from '@/app/components/budget/PlaidLinkButton'
-import AccountsView from '@/app/components/budget/AccountsView'
 import AccountsPageClient, { type UnifiedAccount, type BalancePoint } from '@/app/components/budget/AccountsPageClient'
-import { type Account } from '@/lib/budget/account-utils'
 
 export default async function AccountsPage() {
   const supabase = await createServerSupabaseClient()
@@ -72,6 +70,7 @@ export default async function AccountsPage() {
       name: a.name,
       mask: null,
       type: manualType(a.type),
+      rawType: a.type,
       institution: a.institution ?? null,
       balance: a.current_balance ?? 0,
       owner: a.owner,
@@ -123,18 +122,8 @@ export default async function AccountsPage() {
         <AccountsPageClient
           accounts={unified}
           history={(freshHistory ?? []) as BalancePoint[]}
+          userId={user.id}
         />
-
-        {/* Manual accounts management */}
-        {(manualAccounts?.length ?? 0) > 0 || true ? (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <p className="text-sm font-semibold text-gray-900 mb-4">Manage Manual Accounts</p>
-            <AccountsView
-              userId={user.id}
-              initialAccounts={(manualAccounts || []) as Account[]}
-            />
-          </div>
-        ) : null}
       </div>
     </div>
   )

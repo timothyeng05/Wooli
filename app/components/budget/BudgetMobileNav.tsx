@@ -1,0 +1,129 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+const TABS = [
+  {
+    href: '/budget',
+    label: 'Overview',
+    match: (p: string) => p === '/budget',
+    icon: (filled: boolean) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" />
+        <path d="M9 21V12h6v9" strokeWidth={filled ? 0 : 1.8}
+          fill={filled ? 'white' : 'none'} stroke={filled ? 'white' : 'currentColor'} />
+      </svg>
+    ),
+  },
+  {
+    href: '/budget/accounts',
+    label: 'Accounts',
+    match: (p: string) => p.startsWith('/budget/accounts'),
+    icon: (filled: boolean) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        {filled ? (
+          <>
+            <rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" />
+            <path d="M3 9h18M9 21V9" stroke="white" strokeWidth="1.8" />
+          </>
+        ) : (
+          <>
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M3 9h18M9 21V9" />
+          </>
+        )}
+      </svg>
+    ),
+  },
+  {
+    href: '/budget/transactions',
+    label: 'Transactions',
+    match: (p: string) =>
+      p === '/budget/transactions' ||
+      (p.startsWith('/budget/') && !['accounts', 'categories', 'recurring', 'import', 'targets', 'networth'].some(s => p.startsWith(`/budget/${s}`))),
+    icon: (filled: boolean) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        {filled ? (
+          <>
+            <rect x="2" y="5" width="20" height="14" rx="2" fill="currentColor" />
+            <line x1="2" y1="10" x2="22" y2="10" stroke="white" strokeWidth="1.8" />
+          </>
+        ) : (
+          <>
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <line x1="2" y1="10" x2="22" y2="10" />
+          </>
+        )}
+      </svg>
+    ),
+  },
+  {
+    href: '/budget/targets',
+    label: 'Budget',
+    match: (p: string) => p.startsWith('/budget/targets'),
+    icon: (filled: boolean) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth={filled ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6" />
+        <line x1="8" y1="12" x2="21" y2="12" />
+        <line x1="8" y1="18" x2="21" y2="18" />
+        <circle cx="3.5" cy="6" r="1.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="3.5" cy="12" r="1.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="3.5" cy="18" r="1.5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
+  },
+  {
+    href: '/budget/categories',
+    label: 'Categories',
+    match: (p: string) => p.startsWith('/budget/categories') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import'),
+    icon: (filled: boolean) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        {filled ? (
+          <>
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" fill="currentColor" />
+            <circle cx="7" cy="7" r="1.5" fill="white" />
+          </>
+        ) : (
+          <>
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+            <line x1="7" y1="7" x2="7.01" y2="7" strokeWidth="2.5" />
+          </>
+        )}
+      </svg>
+    ),
+  },
+]
+
+export default function BudgetMobileNav() {
+  const pathname = usePathname()
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-inset-bottom">
+      <div className="flex">
+        {TABS.map(({ href, label, match, icon }) => {
+          const active = match(pathname)
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex-1 flex flex-col items-center justify-center py-2 pt-3 gap-0.5 transition-colors ${
+                active ? 'text-blue-600' : 'text-gray-400'
+              }`}
+            >
+              {icon(active)}
+              <span className={`text-[10px] font-medium ${active ? 'text-blue-600' : 'text-gray-400'}`}>
+                {label}
+              </span>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}

@@ -18,26 +18,30 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: '/budget/transactions',
-    label: 'Transactions',
-    match: (p: string) =>
-      p === '/budget/transactions' ||
-      (p.startsWith('/budget/') && !['networth','accounts','categories','recurring','import'].some(s => p.startsWith(`/budget/${s}`))),
+    href: '/budget/targets',
+    label: 'Budget',
+    match: (p: string) => p.startsWith('/budget/targets'),
     icon: (
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="5" width="20" height="14" rx="2"/>
-        <line x1="2" y1="10" x2="22" y2="10"/>
+        <line x1="8" y1="6" x2="21" y2="6"/>
+        <line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/>
+        <line x1="3" y1="12" x2="3.01" y2="12"/>
+        <line x1="3" y1="18" x2="3.01" y2="18"/>
       </svg>
     ),
   },
   {
-    href: '/budget/networth',
-    label: 'Net Worth',
-    match: (p: string) => p.startsWith('/budget/networth'),
+    href: '/budget/transactions',
+    label: 'Transactions',
+    match: (p: string) =>
+      p === '/budget/transactions' ||
+      (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets'].some(s => p.startsWith(`/budget/${s}`))),
     icon: (
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
-        <polyline points="16 7 22 7 22 13"/>
+        <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <line x1="2" y1="10" x2="22" y2="10"/>
       </svg>
     ),
   },
