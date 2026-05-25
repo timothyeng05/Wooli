@@ -41,12 +41,14 @@ export type SectionData = {
   lines: string[]
   timeOverride?: string
   duration?: string
+  pinned?: boolean
 }
 
 export type ParsedSection = {
   meta: SectionMeta
   lines: string[]
   timeOverride?: string
+  pinned?: boolean
 }
 
 export function findMeta(type: string): SectionMeta | undefined {
@@ -59,7 +61,7 @@ export function sectionDataToDisplay(data: SectionData): ParsedSection | null {
   if (!meta) return null
   const lines = [...data.lines]
   if (data.duration) lines.push(`~${data.duration}`)
-  return { meta, lines, timeOverride: data.timeOverride }
+  return { meta, lines, timeOverride: data.timeOverride, pinned: data.pinned }
 }
 
 // Parses notes from DB — handles both JSON (new format) and legacy text format

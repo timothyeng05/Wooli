@@ -7,15 +7,6 @@ import {
   SECTIONS, SectionMeta, SectionData, ParsedSection,
   findMeta, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData,
 } from '@/lib/trip-sections'
-import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext, verticalListSortingStrategy,
-  useSortable, arrayMove,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
 type DayData = { title: string | null; notes: string | null; date: string }
 type EditorSection = SectionData & { _id: string }
@@ -386,38 +377,52 @@ function GeneralEditor({ section, onChange }: { section: EditorSection; onChange
 const ACTIVITY_TYPES = new Set(['MORNING', 'AFTERNOON', 'NIGHT', 'ACTIVITY'])
 const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
 
-function SectionEditorCard({ section, onChange, onDelete }: {
+function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown }: {
   section: EditorSection
   onChange: (updates: Partial<SectionData>) => void
   onDelete: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
 }) {
   const meta = findMeta(section.type)
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section._id })
   if (!meta) return null
 
   const t = section.type.toUpperCase()
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}
-    >
+    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <button
-            {...attributes}
-            {...listeners}
-            className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none px-0.5"
-            title="Drag to reorder"
-          >
-            ⠿
-          </button>
+          <div className="flex flex-col gap-0.5">
+            <button
+              onClick={onMoveUp}
+              disabled={!onMoveUp}
+              className="text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-default transition leading-none text-xs px-0.5"
+              title="Move up"
+            >▲</button>
+            <button
+              onClick={onMoveDown}
+              disabled={!onMoveDown}
+              className="text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-default transition leading-none text-xs px-0.5"
+              title="Move down"
+            >▼</button>
+          </div>
           <span className={`flex items-center gap-1.5 text-sm font-semibold ${meta.text}`}>
             <span>{meta.icon}</span> {meta.label}
           </span>
         </div>
-        <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition text-xl leading-none px-1">×</button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Mark as must-do / appointment">
+            <input
+              type="checkbox"
+              checked={!!section.pinned}
+              onChange={e => onChange({ pinned: e.target.checked || undefined })}
+              className="w-4 h-4 rounded border-gray-300 accent-amber-500 cursor-pointer"
+            />
+            <span className="text-xs text-gray-400">⭐ Important</span>
+          </label>
+          <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition text-xl leading-none px-1">×</button>
+        </div>
       </div>
       {(meta.banner || meta.travel) && !meta.car
         ? <TravelEditor section={section} onChange={onChange} />
@@ -496,7 +501,6 @@ export default function TripDayPage() {
   const [confirmedSections, setConfirmedSections] = useState<string[]>([])
   const [insertAt, setInsertAt] = useState<number | null>(null)
   const [aiSummary, setAiSummary] = useState<string | null>(null)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   useEffect(() => {
     const load = async () => {
@@ -597,15 +601,14 @@ export default function TripDayPage() {
     } catch {}
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (over && active.id !== over.id) {
-      setSectionItems(items => {
-        const oldIndex = items.findIndex(i => i._id === active.id)
-        const newIndex = items.findIndex(i => i._id === over.id)
-        return arrayMove(items, oldIndex, newIndex)
-      })
-    }
+  const moveSection = (index: number, direction: -1 | 1) => {
+    setSectionItems(items => {
+      const next = [...items]
+      const target = index + direction
+      if (target < 0 || target >= next.length) return items
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
   }
 
   const addSection = (type: string, afterIndex?: number) => {
@@ -749,37 +752,35 @@ export default function TripDayPage() {
                 />
               </div>
 
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={sectionItems.map(i => i._id)} strategy={verticalListSortingStrategy}>
-                  {sectionItems.map((item, i) => (
-                    <div key={item._id}>
-                      <SectionEditorCard
-                        section={item}
-                        onChange={updates => updateSection(item._id, updates)}
-                        onDelete={() => removeSection(item._id)}
-                      />
-                      {i < sectionItems.length - 1 && (
-                        insertAt === i ? (
-                          <div className="my-2">
-                            <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 my-1">
-                            <div className="flex-1 h-px bg-gray-100" />
-                            <button
-                              onClick={() => setInsertAt(i)}
-                              className="text-xs text-gray-300 hover:text-blue-500 transition px-2 py-0.5 rounded-full hover:bg-blue-50"
-                            >
-                              + insert
-                            </button>
-                            <div className="flex-1 h-px bg-gray-100" />
-                          </div>
-                        )
-                      )}
-                    </div>
-                  ))}
-                </SortableContext>
-              </DndContext>
+              {sectionItems.map((item, i) => (
+                <div key={item._id}>
+                  <SectionEditorCard
+                    section={item}
+                    onChange={updates => updateSection(item._id, updates)}
+                    onDelete={() => removeSection(item._id)}
+                    onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
+                    onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
+                  />
+                  {i < sectionItems.length - 1 && (
+                    insertAt === i ? (
+                      <div className="my-2">
+                        <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 my-1">
+                        <div className="flex-1 h-px bg-gray-100" />
+                        <button
+                          onClick={() => setInsertAt(i)}
+                          className="text-xs text-gray-300 hover:text-blue-500 transition px-2 py-0.5 rounded-full hover:bg-blue-50"
+                        >
+                          + insert
+                        </button>
+                        <div className="flex-1 h-px bg-gray-100" />
+                      </div>
+                    )
+                  )}
+                </div>
+              ))}
 
               <AddSectionPicker onAdd={type => addSection(type)} />
             </div>
@@ -793,6 +794,7 @@ export default function TripDayPage() {
                   return (
                     <div key={i} className="flex gap-3">
                       <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
+                        {s.pinned && <span className="text-xs leading-none mb-0.5">⭐</span>}
                         <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride ?? s.meta.time}</span>
                       </div>
                       <div className="flex flex-col items-center flex-shrink-0">
