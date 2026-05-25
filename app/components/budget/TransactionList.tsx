@@ -22,6 +22,7 @@ interface Transaction {
   transacted_at: string
   plaid_transaction_id: string | null
   is_transfer: boolean | null
+  is_pending: boolean | null
   owner: string | null
   account_name: string | null
   categories: { id: string; name: string; color: string } | null
@@ -371,60 +372,71 @@ export default function TransactionList({
                       }`}
                       onClick={selectMode ? () => toggleSelect(t.id) : () => openReview(t)}
                     >
-                      {/* Checkbox or merchant icon */}
-                      {selectMode ? (
+                      {/* Checkbox (select mode) */}
+                      {selectMode && (
                         <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
                           onClick={e => e.stopPropagation()} className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-blue-600" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-500">
-                          {initial}
-                        </div>
                       )}
 
-                      {/* Merchant name */}
+                      {/* Merchant name + pending badge */}
                       <div className="w-0 flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
+                          {t.is_pending && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
+                              Pending
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Category */}
-                      <div className="hidden sm:flex items-center gap-1.5 w-40 flex-shrink-0">
+                      <div className="hidden sm:flex items-center gap-1.5 w-36 flex-shrink-0">
                         {editingCatId === t.id && !t.is_transfer ? (
                           <CategorySelect txId={t.id} currentCatId={t.categories?.id} />
                         ) : (
                           <button
                             onClick={e => { e.stopPropagation(); if (!selectMode && !t.is_transfer) setEditingCatId(t.id) }}
-                            className="flex items-center gap-1.5 group/cat"
+                            className="flex items-center gap-1.5 group/cat text-left"
                           >
-                            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0"
+                            <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0"
                               style={{ backgroundColor: t.is_transfer ? '#f3f4f6' : (t.categories?.color ? t.categories.color + '22' : '#f3f4f6') }}>
                               {catEmoji}
                             </span>
-                            <span className={`text-xs truncate max-w-[100px] ${
+                            <span className={`text-xs truncate max-w-[88px] ${
                               t.is_transfer ? 'text-gray-400' : t.categories ? 'text-gray-600 group-hover/cat:text-blue-600' : 'text-orange-400 group-hover/cat:text-orange-600'
                             }`}>{catName}</span>
                           </button>
                         )}
                       </div>
 
-                      {/* Account + owner */}
-                      <div className="hidden md:flex items-center gap-2 w-44 flex-shrink-0">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                      {/* Account */}
+                      <div className="hidden md:flex items-center gap-1.5 w-40 flex-shrink-0">
+                        <div className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0"
                           style={{ backgroundColor: acctColor }}>
                           {acctInitial}
                         </div>
-                        <span className="text-xs text-gray-500 truncate flex-1">{t.account_name ?? '—'}</span>
+                        <span className="text-xs text-gray-500 truncate">{t.account_name ?? '—'}</span>
+                      </div>
+
+                      {/* Owner */}
+                      <div className="hidden md:flex items-center w-14 flex-shrink-0">
                         {ownerInitial && (
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 ${
-                            t.owner === 'Timothy Eng' ? 'bg-blue-500' : t.owner === 'Jessica Li' ? 'bg-rose-400' : 'bg-gray-400'
-                          }`}>{ownerInitial}</div>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                            t.owner === 'Timothy Eng' ? 'bg-blue-100 text-blue-600'
+                            : t.owner === 'Jessica Li' ? 'bg-rose-100 text-rose-500'
+                            : 'bg-gray-100 text-gray-500'
+                          }`}>{ownerInitial === 'T' ? 'Tim' : ownerInitial === 'J' ? 'Jess' : 'Shared'}</span>
                         )}
                       </div>
 
                       {/* Amount */}
                       <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
-                        t.is_transfer ? 'text-gray-400' : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
+                        t.is_pending ? 'text-amber-600'
+                        : t.is_transfer ? 'text-gray-400'
+                        : t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
                       }`}>
-                        {t.amount >= 0 && !t.is_transfer ? '+' : ''}{t.is_transfer && t.amount > 0 ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
+                        {t.amount >= 0 && !t.is_transfer ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
                       </span>
 
                       {/* Chevron */}

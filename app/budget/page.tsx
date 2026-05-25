@@ -60,7 +60,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
     supabase
       .from('transactions')
       .select(`
-        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer, owner, account_name,
+        id, amount, description, merchant, transacted_at, plaid_transaction_id, is_transfer, is_pending, owner, account_name,
         categories ( id, name, color )
       `)
       .eq('user_id', user.id)
@@ -111,16 +111,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
   const expenses = nonTransfers.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
   const transfersOut = transferTxns.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
   const net = income - expenses
-
-  // Category breakdown for expenses
-  const catTotals = new Map<string, { name: string; color: string; total: number }>()
-  nonTransfers.filter((t: any) => t.amount < 0 && t.categories).forEach((t: any) => {
-    const key = t.categories.id
-    const existing = catTotals.get(key)
-    if (existing) { existing.total += Math.abs(Number(t.amount)) }
-    else catTotals.set(key, { name: t.categories.name, color: t.categories.color, total: Math.abs(Number(t.amount)) })
-  })
-  const sortedCats = Array.from(catTotals.values()).sort((a, b) => b.total - a.total)
 
   return (
     <div className="min-h-screen bg-white">
@@ -186,45 +176,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Category breakdown */}
-          {sortedCats.length > 0 && (
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <h2 className="font-semibold text-gray-900 mb-4">Spending by Category</h2>
-                <div className="space-y-3">
-                  {sortedCats.slice(0, 8).map(cat => (
-                    <div key={cat.name}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                          <span className="text-gray-700">{cat.name}</span>
-                        </div>
-                        <span className="font-medium text-gray-900">${cat.total.toFixed(0)}</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div
-                          className="h-1.5 rounded-full"
-                          style={{
-                            backgroundColor: cat.color,
-                            width: `${Math.min(100, (cat.total / expenses) * 100).toFixed(1)}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Transactions */}
-          <div className={sortedCats.length > 0 ? 'lg:col-span-2' : 'lg:col-span-3'}>
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">Transactions</h2>
-              <TransactionList transactions={transactions} categories={categories} />
-            </div>
-          </div>
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+          <TransactionList transactions={transactions} categories={categories} />
         </div>
       </div>
     </div>
