@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { plaidClient } from '@/lib/plaid-client'
-import { categorizeWithGroq, buildSelectableCategories, type FewShotExample } from '@/lib/groq-categorize'
+import { plaidClient } from '@/lib/budget/plaid-client'
+import { categorizeWithGroq, buildSelectableCategories, type FewShotExample } from '@/lib/budget/groq-categorize'
 
 export async function POST() {
   const supabase = await createServerSupabaseClient()

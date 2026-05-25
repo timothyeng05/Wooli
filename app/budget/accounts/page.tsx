@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import PlaidLinkButton from '@/app/components/budget/PlaidLinkButton'
 import AccountsView from '@/app/components/budget/AccountsView'
 import AccountsPageClient, { type UnifiedAccount, type BalancePoint } from '@/app/components/budget/AccountsPageClient'
-import { type Account } from '@/lib/account-utils'
+import { type Account } from '@/lib/budget/account-utils'
 
 export default async function AccountsPage() {
   const supabase = await createServerSupabaseClient()

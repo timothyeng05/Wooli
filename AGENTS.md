@@ -11,21 +11,30 @@
 
 ---
 
-## Token-efficient reading (read this first)
+## Module focus (context efficiency)
 
-The codebase has per-module docs in `docs/modules/` (MOOD, BUDGET, CARDS, CALENDAR). When working on a single module, **read the module doc first** — it has the schema, routes, and components in 50–100 lines. That's much cheaper than greppling source.
+Each major module has a **CLAUDE.md** in its route directory and a doc in `docs/modules/`. When working on one module, load only that module's context.
+
+**Module boundaries:**
+
+| Module | Routes | Components | Lib | Doc |
+|--------|--------|------------|-----|-----|
+| Budget | `app/budget/**` | `app/components/budget/**` | `lib/budget/**` | `docs/modules/BUDGET.md` |
+| Trips | `app/trips/**` | `app/components/trips/**` | `lib/trips/**` | `docs/modules/TRIPS.md` |
+| Mood | `app/mood/**` | `app/components/mood/**` | `lib/mood-utils.ts` | `docs/modules/MOOD.md` |
+| Cards | `app/cards/**` | `app/components/cards/**` | `lib/card-utils.ts` | `docs/modules/CARDS.md` |
 
 **Default reading order for any module work:**
-1. `docs/modules/{module}.md` (if it exists)
-2. The single page or component file you're modifying
-3. Only fan out from there if the doc and target file aren't enough
+1. `app/{module}/CLAUDE.md` — boundary rules and key conventions
+2. `docs/modules/{module}.md` — schema, routes, components in one place
+3. The single file you're modifying
+4. Only fan out if doc + target file aren't enough
 
 **Don't load:**
-- Other modules' source files unless you're integrating with them
-- `~/.claude/MEMORY.md`, `goals.md`, `projects.md` unless yesterday's log references them
-- Files that the user hasn't asked you to change
+- Other modules' source files unless explicitly integrating
+- Files the user hasn't asked you to change
 
-**Plans for new features should reference docs/modules paths**, not enumerate source files. The implementing agent can decide what to read.
+**Shared infrastructure** (`lib/supabase-client.ts`, `lib/supabase-server.ts`, `lib/groq.ts`, `middleware.ts`, `app/layout.tsx`, `app/components/Nav.tsx`) is read-only for module work — don't modify it unless the task specifically requires it.
 
 ## Quick Reminders (Lessons from Sessions 1-2)
 

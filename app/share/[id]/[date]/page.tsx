@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { parseSectionsFromNotes, ParsedSection, SectionMeta } from '@/lib/trip-sections'
+import { parseSectionsFromNotes, ParsedSection, SectionMeta } from '@/lib/trips/trip-sections'
 
 function serviceClient() {
   return createClient(

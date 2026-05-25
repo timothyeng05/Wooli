@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { plaidClient } from '@/lib/plaid-client'
-import { categorizeWithGroq, buildSelectableCategories, type FewShotExample } from '@/lib/groq-categorize'
+import { plaidClient } from '@/lib/budget/plaid-client'
+import { categorizeWithGroq, buildSelectableCategories, type FewShotExample } from '@/lib/budget/groq-categorize'
 
 export const maxDuration = 300 // 5 min — long enough for multi-user sync
 

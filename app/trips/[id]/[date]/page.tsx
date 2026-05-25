@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation'
 import {
   SECTIONS, SectionMeta, SectionData, ParsedSection,
   findMeta, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData,
-} from '@/lib/trip-sections'
+} from '@/lib/trips/trip-sections'
 
 type DayData = { title: string | null; notes: string | null; date: string }
 type EditorSection = SectionData & { _id: string }

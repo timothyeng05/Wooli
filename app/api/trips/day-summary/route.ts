@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getGroq, GROQ_MODEL } from '@/lib/groq'
-import { findMeta, type SectionData } from '@/lib/trip-sections'
+import { findMeta, type SectionData } from '@/lib/trips/trip-sections'
 
 const EXCLUDE = new Set(['MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'HOTEL'])
 

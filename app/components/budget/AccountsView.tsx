@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
-import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, OWNERS, type Account, type AccountType } from '@/lib/account-utils'
+import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, OWNERS, type Account, type AccountType } from '@/lib/budget/account-utils'
 
 const OWNER_BADGE: Record<string, string> = {
   'Timothy Eng': 'bg-blue-100 text-blue-600',
