@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import { parseSectionsFromNotes, ParsedSection, SectionMeta } from '@/lib/trip-sections'
 
 function serviceClient() {
   return createClient(
@@ -9,45 +10,8 @@ function serviceClient() {
   )
 }
 
-const SECTIONS = [
-  { key: ['FLIGHT'],                    time: 'Depart', icon: '✈️', label: 'Flight',            bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   dotColor: '#0d9488', travel: true },
-  { key: ['FAMILY FLIGHT'],             time: 'Arrive', icon: '✈️', label: 'Mom & Aunt Flight', bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-600',   dotColor: '#e11d48', travel: true },
-  { key: ['TRANSPORT','TRANSPORTATION'],time: 'Travel',  icon: '🚄', label: 'Transport',         bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   dotColor: '#0d9488', travel: true },
-  { key: ['RENTAL CAR'],                time: 'Car',    icon: '🚗', label: 'Rental Car',         bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', dotColor: '#ea580c', car: true },
-  { key: ['MORNING'],                   time: '8 AM',   icon: '☀️', label: 'Morning',    bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  dotColor: '#94a3b8' },
-  { key: ['AFTERNOON'],                 time: '2 PM',   icon: '🗺️', label: 'Afternoon',  bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  dotColor: '#94a3b8' },
-  { key: ['NIGHT'],                     time: '9 PM',   icon: '🌙', label: 'Night',      bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  dotColor: '#94a3b8' },
-  { key: ['LUNCH','LUNCH OPTIONS'],     time: '12 PM',  icon: '🍜', label: 'Lunch',      bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
-  { key: ['DINNER','DINNER OPTIONS'],   time: '7 PM',   icon: '🍽️', label: 'Dinner',    bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
-  { key: ['HOTEL'],                     time: 'Stay',   icon: '🏨', label: 'Hotel',      bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dotColor: '#7c3aed', mapCard: true },
-] as const
-
-type Meta = typeof SECTIONS[number]
-
-function matchSection(header: string) {
-  const h = header.trim().toUpperCase()
-  return SECTIONS.find(s => (s.key as readonly string[]).includes(h))
-}
-
-function parseSections(notes: string) {
-  const lines = notes.split('\n')
-  const sections: { meta: Meta; lines: string[] }[] = []
-  let current: { meta: Meta; lines: string[] } | null = null
-  for (const line of lines) {
-    const meta = matchSection(line)
-    if (meta) {
-      if (current) sections.push(current)
-      current = { meta, lines: [] }
-    } else if (current) {
-      current.lines.push(line)
-    }
-  }
-  if (current) sections.push(current)
-  return sections
-}
-
-function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections> }) {
-  const travel = sections.filter(s => 'travel' in s.meta && s.meta.travel)
+function TravelBanner({ sections }: { sections: ParsedSection[] }) {
+  const travel = sections.filter(s => s.meta.banner)
   if (!travel.length) return null
   return (
     <div className="space-y-2">
@@ -73,7 +37,7 @@ function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections>
   )
 }
 
-function LocationCard({ meta, lines }: { meta: Meta; lines: string[] }) {
+function LocationCard({ meta, lines }: { meta: SectionMeta; lines: string[] }) {
   const content = lines.map(l => l.trim()).filter(Boolean)
   const name = content[0]
   const location = content[1]
@@ -101,11 +65,11 @@ function LocationCard({ meta, lines }: { meta: Meta; lines: string[] }) {
   )
 }
 
-function SectionCard({ meta, lines }: { meta: Meta; lines: string[] }) {
+function SectionCard({ meta, lines }: { meta: SectionMeta; lines: string[] }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   let duration: string | null = null
   let content = allContent
-  if ('travel' in meta && meta.travel) {
+  if (meta.travel) {
     const dl = allContent.find(l => l.startsWith('~'))
     if (dl) { duration = dl.slice(1).trim(); content = allContent.filter(l => !l.startsWith('~')) }
   }
@@ -161,7 +125,7 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   })
 
-  const sections = dayData?.notes ? parseSections(dayData.notes) : []
+  const sections = parseSectionsFromNotes(dayData?.notes ?? null)
 
   return (
     <div className="min-h-screen bg-white">
@@ -205,8 +169,6 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
           <div>
             {sections.map((s, i) => {
               const isLast = i === sections.length - 1
-              const isMapCard = 'mapCard' in s.meta ? s.meta.mapCard : false
-              const isCar = 'car' in s.meta ? s.meta.car : false
               return (
                 <div key={i} className="flex gap-3">
                   <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
@@ -217,14 +179,14 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
                     {!isLast && (
                       <div className="flex-1 mt-1" style={{
                         width: '2px', minHeight: '24px',
-                        background: ('travel' in s.meta && s.meta.travel)
-                          ? 'repeating-linear-gradient(to bottom, #5eead4 0, #5eead4 5px, transparent 5px, transparent 10px)'
+                        background: s.meta.travel
+                          ? `repeating-linear-gradient(to bottom, ${s.meta.dotColor} 0, ${s.meta.dotColor} 5px, transparent 5px, transparent 10px)`
                           : '#e2e8f0',
                       }} />
                     )}
                   </div>
                   <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
-                    {(isMapCard || isCar)
+                    {(s.meta.hotel || s.meta.car)
                       ? <LocationCard meta={s.meta} lines={s.lines} />
                       : <SectionCard meta={s.meta} lines={s.lines} />
                     }

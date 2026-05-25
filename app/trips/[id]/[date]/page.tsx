@@ -3,57 +3,27 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import {
+  SECTIONS, SectionMeta, SectionData, ParsedSection,
+  findMeta, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData,
+} from '@/lib/trip-sections'
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, verticalListSortingStrategy,
+  useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 type DayData = { title: string | null; notes: string | null; date: string }
+type EditorSection = SectionData & { _id: string }
 
-const SECTIONS: {
-  key: string[]; icon: string; label: string
-  bg: string; border: string; text: string
-  dotColor: string; time: string; travel?: boolean; hotel?: boolean; car?: boolean; banner?: boolean; transit?: boolean; drive?: boolean
-}[] = [
-  { key: ['FLIGHT'],                        time: 'Depart', icon: '✈️', label: 'Flight',           bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700',   dotColor: '#db2777', travel: true, banner: true },
-  { key: ['FAMILY FLIGHT'],                 time: 'Arrive', icon: '✈️', label: 'Mom & Aunt Flight', bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700',   dotColor: '#db2777', travel: true, banner: true },
-  { key: ['TRANSPORT','TRANSPORTATION','TRAIN','RAIL'], time: 'Train', icon: '🚄', label: 'Train', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dotColor: '#2563eb', travel: true, banner: true },
-  { key: ['SUBWAY','METRO','TUBE'],         time: 'Transit',icon: '🚇', label: 'Subway',            bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true },
-  { key: ['DRIVE','DRIVING'],               time: 'Drive',  icon: '🚙', label: 'Drive',             bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', dotColor: '#ea580c', drive: true },
-  { key: ['RENTAL CAR','CAR RIDE','TAXI','UBER'], time: 'Car', icon: '🚗', label: 'Car',            bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true, car: true },
-  { key: ['MORNING'],                       time: '8 AM',   icon: '☀️', label: 'Morning',   bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
-  { key: ['AFTERNOON'],                     time: '2 PM',   icon: '🗺️', label: 'Afternoon', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
-  { key: ['NIGHT'],                         time: '9 PM',   icon: '🌙', label: 'Night',     bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', dotColor: '#94a3b8' },
-  { key: ['LUNCH','LUNCH OPTIONS'],         time: '12 PM',  icon: '🍜', label: 'Lunch',     bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dotColor: '#d97706' },
-  { key: ['DINNER','DINNER OPTIONS'],       time: '7 PM',   icon: '🍽️', label: 'Dinner',    bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
-  { key: ['HOTEL'],                         time: 'Stay',   icon: '🏨', label: 'Hotel',     bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dotColor: '#7c3aed', hotel: true },
-]
-
-function matchSection(header: string) {
-  const h = header.trim().toUpperCase()
-  return SECTIONS.find(s => s.key.includes(h))
-}
-
-function parseSections(notes: string) {
-  const lines = notes.split('\n')
-  const sections: { meta: typeof SECTIONS[0]; lines: string[]; timeOverride?: string }[] = []
-  let current: { meta: typeof SECTIONS[0]; lines: string[]; timeOverride?: string } | null = null
-
-  for (const line of lines) {
-    const meta = matchSection(line)
-    if (meta) {
-      if (current) sections.push(current)
-      current = { meta, lines: [] }
-    } else if (current) {
-      if (line.trim().startsWith('@')) {
-        current.timeOverride = line.trim().slice(1).trim()
-      } else {
-        current.lines.push(line)
-      }
-    }
-  }
-  if (current) sections.push(current)
-  return sections
-}
+// ─── Display components (view mode) ────────────────────────────────────────
 
 function SectionCard({ meta, lines, confirmed, onToggle }: {
-  meta: typeof SECTIONS[0]; lines: string[]
+  meta: SectionMeta; lines: string[]
   confirmed: boolean; onToggle: () => void
 }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
@@ -108,7 +78,7 @@ function SectionCard({ meta, lines, confirmed, onToggle }: {
 }
 
 function HotelCard({ meta, lines, confirmed, onToggle }: {
-  meta: typeof SECTIONS[0]; lines: string[]
+  meta: SectionMeta; lines: string[]
   confirmed: boolean; onToggle: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -167,7 +137,7 @@ function HotelCard({ meta, lines, confirmed, onToggle }: {
   )
 }
 
-function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections> }) {
+function TravelBanner({ sections }: { sections: ParsedSection[] }) {
   const travel = sections.filter(s => s.meta.banner)
   if (!travel.length) return null
   return (
@@ -198,12 +168,325 @@ function TravelBanner({ sections }: { sections: ReturnType<typeof parseSections>
   )
 }
 
+// ─── Editor components ──────────────────────────────────────────────────────
+
+const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
+const labelCls = 'block text-xs text-gray-500 mb-1'
+
+function TravelEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  const routeLine = section.lines.find(l => l.includes('→')) ?? ''
+  const detailLines = section.lines.filter(l => !l.includes('→')).join('\n')
+
+  const setRoute = (val: string) => {
+    const others = section.lines.filter(l => !l.includes('→'))
+    onChange({ lines: val ? [val, ...others] : others })
+  }
+  const setDetails = (val: string) => {
+    const rl = section.lines.find(l => l.includes('→'))
+    const newDetails = val.split('\n').filter(Boolean)
+    onChange({ lines: rl ? [rl, ...newDetails] : newDetails })
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className={labelCls}>Route</label>
+        <input className={inputCls} value={routeLine} onChange={e => setRoute(e.target.value)} placeholder="SFO → NRT" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={labelCls}>Departs</label>
+          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="2:00 AM" />
+        </div>
+        <div>
+          <label className={labelCls}>Duration</label>
+          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="14h 15m" />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Details (flight #, airline, etc.)</label>
+        <input className={inputCls} value={detailLines} onChange={e => setDetails(e.target.value)} placeholder="UA 7923, United Airlines" />
+      </div>
+    </div>
+  )
+}
+
+function HotelEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  const name = section.lines[0] ?? ''
+  const location = section.lines[1] ?? ''
+
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className={labelCls}>Name</label>
+        <input className={inputCls} value={name} onChange={e => onChange({ lines: [e.target.value, location].filter((v, i) => i === 0 || location) })} placeholder="Park Hyatt Tokyo" />
+      </div>
+      <div>
+        <label className={labelCls}>Location</label>
+        <input className={inputCls} value={location} onChange={e => onChange({ lines: name ? [name, e.target.value] : [e.target.value] })} placeholder="Shinjuku, Tokyo" />
+      </div>
+    </div>
+  )
+}
+
+function DriveEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  const routeLine = section.lines.find(l => !l.trim().startsWith('-')) ?? ''
+  const noteLines = section.lines.filter(l => l.trim().startsWith('-')).join('\n')
+
+  const setRoute = (val: string) => {
+    const bullets = section.lines.filter(l => l.trim().startsWith('-'))
+    onChange({ lines: val ? [val, ...bullets] : bullets })
+  }
+  const setNotes = (val: string) => {
+    const route = section.lines.find(l => !l.trim().startsWith('-'))
+    onChange({ lines: route ? [route, ...val.split('\n').filter(Boolean)] : val.split('\n').filter(Boolean) })
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className={labelCls}>Route / description</label>
+        <input className={inputCls} value={routeLine} onChange={e => setRoute(e.target.value)} placeholder="Kagoshima → Ebino Kogen" />
+      </div>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className={labelCls}>Start time</label>
+          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="9:00 AM" />
+        </div>
+        <div className="w-28 flex-shrink-0">
+          <label className={labelCls}>Duration</label>
+          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="45 min" />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Notes (optional)</label>
+        <textarea rows={2} className={`${inputCls} resize-none`} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Exit B2&#10;- Platform 3" />
+      </div>
+    </div>
+  )
+}
+
+function CarEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  const pickup = section.lines[0] ?? ''
+  const returnLoc = section.lines[1] ?? ''
+
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className={labelCls}>Pickup</label>
+        <input className={inputCls} value={pickup} onChange={e => onChange({ lines: [e.target.value, returnLoc].filter((v, i) => i === 0 || !!returnLoc) })} placeholder="Enterprise – Kagoshima Airport" />
+      </div>
+      <div>
+        <label className={labelCls}>Return</label>
+        <input className={inputCls} value={returnLoc} onChange={e => onChange({ lines: pickup ? [pickup, e.target.value] : [e.target.value] })} placeholder="Fukuoka Airport (or same location)" />
+      </div>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className={labelCls}>Pickup time</label>
+          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="10:00 AM" />
+        </div>
+        <div className="w-28 flex-shrink-0">
+          <label className={labelCls}>Duration</label>
+          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="9 days" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ActivityEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  const titleLine = section.lines.find(l => !l.trim().startsWith('-')) ?? ''
+  const noteLines = section.lines.filter(l => l.trim().startsWith('-')).join('\n')
+
+  const setTitle = (val: string) => {
+    const bullets = section.lines.filter(l => l.trim().startsWith('-'))
+    onChange({ lines: val ? [val, ...bullets] : bullets })
+  }
+  const setNotes = (val: string) => {
+    const t = section.lines.find(l => !l.trim().startsWith('-'))
+    onChange({ lines: t ? [t, ...val.split('\n').filter(Boolean)] : val.split('\n').filter(Boolean) })
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className={labelCls}>Activity</label>
+        <input className={inputCls} value={titleLine} onChange={e => setTitle(e.target.value)} placeholder="Sumo Tournament" />
+      </div>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className={labelCls}>Time</label>
+          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="11:00 AM" />
+        </div>
+        <div className="w-28 flex-shrink-0">
+          <label className={labelCls}>Duration</label>
+          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="3h" />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Notes (optional)</label>
+        <textarea rows={2} className={`${inputCls} resize-none`} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Bring camera&#10;- Book tickets in advance" />
+      </div>
+    </div>
+  )
+}
+
+function MealEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  const nameLine = section.lines.find(l => !l.trim().startsWith('-')) ?? ''
+  const optionLines = section.lines.filter(l => l.trim().startsWith('-')).join('\n')
+
+  const setName = (val: string) => {
+    const bullets = section.lines.filter(l => l.trim().startsWith('-'))
+    onChange({ lines: val ? [val, ...bullets] : bullets })
+  }
+  const setOptions = (val: string) => {
+    const n = section.lines.find(l => !l.trim().startsWith('-'))
+    onChange({ lines: n ? [n, ...val.split('\n').filter(Boolean)] : val.split('\n').filter(Boolean) })
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className={labelCls}>Restaurant / meal</label>
+        <input className={inputCls} value={nameLine} onChange={e => setName(e.target.value)} placeholder="Chanko Tomoegata" />
+      </div>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className={labelCls}>Time</label>
+          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="7:00 PM" />
+        </div>
+        <div className="w-28 flex-shrink-0">
+          <label className={labelCls}>Duration (optional)</label>
+          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="1h 30m" />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Options / notes</label>
+        <textarea rows={2} className={`${inputCls} resize-none`} value={optionLines} onChange={e => setOptions(e.target.value)} placeholder="- Option A&#10;- Option B" />
+      </div>
+    </div>
+  )
+}
+
+function GeneralEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
+  return (
+    <div>
+      <label className={labelCls}>Notes (one per line)</label>
+      <textarea
+        rows={4}
+        className={`${inputCls} resize-none font-mono`}
+        value={section.lines.join('\n')}
+        onChange={e => onChange({ lines: e.target.value.split('\n') })}
+        placeholder="- Item 1&#10;- Item 2"
+      />
+    </div>
+  )
+}
+
+const ACTIVITY_TYPES = new Set(['MORNING', 'AFTERNOON', 'NIGHT', 'ACTIVITY'])
+const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
+
+function SectionEditorCard({ section, onChange, onDelete }: {
+  section: EditorSection
+  onChange: (updates: Partial<SectionData>) => void
+  onDelete: () => void
+}) {
+  const meta = findMeta(section.type)
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section._id })
+  if (!meta) return null
+
+  const t = section.type.toUpperCase()
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <button
+            {...attributes}
+            {...listeners}
+            className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none px-0.5"
+            title="Drag to reorder"
+          >
+            ⠿
+          </button>
+          <span className={`flex items-center gap-1.5 text-sm font-semibold ${meta.text}`}>
+            <span>{meta.icon}</span> {meta.label}
+          </span>
+        </div>
+        <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition text-xl leading-none px-1">×</button>
+      </div>
+      {(meta.banner || meta.travel) && !meta.car
+        ? <TravelEditor section={section} onChange={onChange} />
+        : meta.hotel
+        ? <HotelEditor section={section} onChange={onChange} />
+        : meta.car
+        ? <CarEditor section={section} onChange={onChange} />
+        : (meta.drive || meta.transit)
+        ? <DriveEditor section={section} onChange={onChange} />
+        : ACTIVITY_TYPES.has(t)
+        ? <ActivityEditor section={section} onChange={onChange} />
+        : MEAL_TYPES.has(t)
+        ? <MealEditor section={section} onChange={onChange} />
+        : <GeneralEditor section={section} onChange={onChange} />
+      }
+    </div>
+  )
+}
+
+// Groups for the Add Section picker
+const ADD_SECTION_GROUPS = [
+  { label: 'Travel', types: ['FLIGHT', 'TRAIN', 'DRIVE', 'RENTAL CAR', 'SUBWAY'] },
+  { label: 'Plan',   types: ['ACTIVITY', 'MEAL'] },
+  { label: 'Stay',   types: ['HOTEL'] },
+]
+
+function AddSectionPicker({ onAdd, onCancel }: { onAdd: (type: string) => void; onCancel?: () => void }) {
+  return (
+    <div className="border border-dashed border-gray-300 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Add section</p>
+        {onCancel && <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600 transition">Cancel</button>}
+      </div>
+      {ADD_SECTION_GROUPS.map(group => (
+        <div key={group.label}>
+          <p className="text-xs text-gray-400 mb-1.5">{group.label}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {group.types.map(type => {
+              const meta = findMeta(type)
+              if (!meta) return null
+              return (
+                <button
+                  key={type}
+                  onClick={() => onAdd(type)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition hover:shadow-sm ${meta.bg} ${meta.border} ${meta.text}`}
+                >
+                  {meta.icon} {meta.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main page ──────────────────────────────────────────────────────────────
+
+let _idCounter = 0
+function newId() { return `s${++_idCounter}` }
+
 export default function TripDayPage() {
   const params = useParams<{ id: string; date: string }>()
   const [trip, setTrip] = useState<{ name: string; start_date: string; end_date: string } | null>(null)
   const [days, setDays] = useState<DayData[]>([])
   const [allDates, setAllDates] = useState<string[]>([])
-  const [form, setForm] = useState({ title: '', notes: '' })
+  const [title, setTitle] = useState('')
+  const [sectionItems, setSectionItems] = useState<EditorSection[]>([])
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -211,6 +494,9 @@ export default function TripDayPage() {
   const [saved, setSaved] = useState(false)
   const [editing, setEditing] = useState(false)
   const [confirmedSections, setConfirmedSections] = useState<string[]>([])
+  const [insertAt, setInsertAt] = useState<number | null>(null)
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   useEffect(() => {
     const load = async () => {
@@ -226,7 +512,6 @@ export default function TripDayPage() {
       setTrip(tripData)
       setDays(allDays ?? [])
 
-      // Generate every date in the trip range for sidebar + prev/next
       const generated: string[] = []
       if (tripData) {
         const cur = new Date(tripData.start_date + 'T00:00:00')
@@ -244,14 +529,22 @@ export default function TripDayPage() {
 
       const current = allDays?.find(d => d.date === params.date)
       if (current) {
-        setForm({ title: current.title ?? '', notes: current.notes ?? '' })
+        setTitle(current.title ?? '')
+        const sectionData = notesToSectionData(current.notes)
+        const items = sectionData.map(s => ({ ...s, _id: newId() }))
+        setSectionItems(items)
+
         if (current.confirmed_sections === null) {
-          const parsed = current.notes ? parseSections(current.notes) : []
-          const autoPlanned = parsed.filter(s => s.meta.hotel || s.meta.banner).map(s => s.meta.label)
+          const autoPlanned = sectionData
+            .map(s => findMeta(s.type))
+            .filter((m): m is NonNullable<typeof m> => !!(m?.hotel || m?.banner))
+            .map(m => m.label)
           setConfirmedSections(autoPlanned)
         } else {
           setConfirmedSections(current.confirmed_sections)
         }
+
+        fetchSummary(items)
       }
       setLoading(false)
     }
@@ -263,14 +556,18 @@ export default function TripDayPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    const notesJson = sectionItems.length > 0
+      ? JSON.stringify(sectionItems.map(({ _id, ...s }) => s))
+      : null
     await supabase.from('trip_days').upsert(
-      { trip_id: params.id, user_id: user.id, date: params.date, title: form.title || null, notes: form.notes || null },
+      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson },
       { onConflict: 'trip_id,date' }
     )
     setSaving(false)
     setSaved(true)
     setEditing(false)
     setTimeout(() => setSaved(false), 2000)
+    fetchSummary(sectionItems)
   }
 
   const toggleConfirmed = async (label: string) => {
@@ -287,6 +584,54 @@ export default function TripDayPage() {
     )
   }
 
+  const fetchSummary = async (sections: EditorSection[]) => {
+    if (!sections.length) return
+    try {
+      const res = await fetch('/api/trips/day-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: sections.map(({ _id, ...s }) => s) }),
+      })
+      const { summary } = await res.json()
+      setAiSummary(summary ?? null)
+    } catch {}
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      setSectionItems(items => {
+        const oldIndex = items.findIndex(i => i._id === active.id)
+        const newIndex = items.findIndex(i => i._id === over.id)
+        return arrayMove(items, oldIndex, newIndex)
+      })
+    }
+  }
+
+  const addSection = (type: string, afterIndex?: number) => {
+    setSectionItems(s => {
+      const newSection = { _id: newId(), type, lines: [] }
+      if (afterIndex === undefined) return [...s, newSection]
+      const next = [...s]
+      next.splice(afterIndex + 1, 0, newSection)
+      return next
+    })
+    setInsertAt(null)
+  }
+
+  const updateSection = (id: string, updates: Partial<SectionData>) => {
+    setSectionItems(s => s.map(item => item._id === id ? { ...item, ...updates } : item))
+  }
+
+  const removeSection = (id: string) => {
+    setSectionItems(s => s.filter(item => item._id !== id))
+  }
+
+  // Derive display format from editor state (for view mode)
+  const displaySections: ParsedSection[] = sectionItems
+    .map(item => sectionDataToDisplay(item))
+    .filter((x): x is ParsedSection => x !== null)
+
   const dayNumber = trip
     ? Math.round((new Date(params.date + 'T00:00:00').getTime() - new Date(trip.start_date + 'T00:00:00').getTime()) / 86400000) + 1
     : null
@@ -294,8 +639,6 @@ export default function TripDayPage() {
   const dateLabel = new Date(params.date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   })
-
-  const sections = form.notes ? parseSections(form.notes) : []
 
   if (loading) {
     return <div className="min-h-screen bg-white flex items-center justify-center text-gray-400 text-sm">Loading...</div>
@@ -306,7 +649,7 @@ export default function TripDayPage() {
   return (
     <div className="min-h-screen bg-white flex">
 
-      {/* Sidebar — fixed below the main nav bar */}
+      {/* Sidebar */}
       <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-[49px] left-0 h-[calc(100vh-49px)] z-20">
         <div className="px-5 py-4 border-b border-gray-200">
           <Link href={`/trips/${params.id}`} className="text-sm font-semibold text-gray-500 hover:text-blue-600 transition flex items-center gap-1">
@@ -318,22 +661,20 @@ export default function TripDayPage() {
           {allDates.map((date, i) => {
             const isActive = date === params.date
             const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-            const title = dayTitleMap.get(date) ?? null
+            const dayTitle = dayTitleMap.get(date) ?? null
             return (
               <Link
                 key={date}
                 href={`/trips/${params.id}/${date}`}
-                className={`flex items-center gap-3 px-5 py-3 transition ${
-                  isActive ? 'bg-blue-600' : 'hover:bg-gray-100'
-                }`}
+                className={`flex items-center gap-3 px-5 py-3 transition ${isActive ? 'bg-blue-600' : 'hover:bg-gray-100'}`}
               >
                 <span className={`text-xs font-bold flex-shrink-0 w-12 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>
                   Day {i + 1}
                 </span>
                 <div className="min-w-0">
                   <p className={`text-xs ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>{label}</p>
-                  <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : title ? 'text-gray-800' : 'text-gray-400'}`}>
-                    {title ?? '—'}
+                  <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : dayTitle ? 'text-gray-800' : 'text-gray-400'}`}>
+                    {dayTitle ?? '—'}
                   </p>
                 </div>
               </Link>
@@ -345,138 +686,159 @@ export default function TripDayPage() {
       {/* Main content */}
       <div className="flex-1 lg:ml-72">
 
-      {/* Compact sticky header */}
-      <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
-        <div className="px-6 py-4 flex items-center justify-between gap-4">
-          {/* Left: day info */}
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 whitespace-nowrap">
-              Day {dayNumber}
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
-                {form.title || 'Untitled day'}
-              </h1>
-              <p className="text-xs text-gray-400 truncate">{dateLabel}</p>
+        {/* Sticky header */}
+        <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
+          <div className="px-6 py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 whitespace-nowrap">
+                Day {dayNumber}
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
+                  {title || 'Untitled day'}
+                </h1>
+                <p className="text-xs text-gray-400 truncate">{dateLabel}</p>
+                {aiSummary && (
+                  <p className="text-xs text-blue-500 truncate mt-0.5 italic">{aiSummary}</p>
+                )}
+              </div>
             </div>
-          </div>
-          {/* Right: actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {prevDate && (
-              <Link
-                href={`/trips/${params.id}/${prevDate}`}
-                className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
-              >
-                ← Prev
-              </Link>
-            )}
-            {nextDate && (
-              <Link
-                href={`/trips/${params.id}/${nextDate}`}
-                className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
-              >
-                Next →
-              </Link>
-            )}
-            <button
-              onClick={() => setEditing(e => !e)}
-              className="border border-gray-200 text-gray-600 font-medium px-4 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
-            >
-              {editing ? 'View' : 'Edit'}
-            </button>
-            {editing && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {prevDate && (
+                <Link href={`/trips/${params.id}/${prevDate}`} className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm">
+                  ← Prev
+                </Link>
+              )}
+              {nextDate && (
+                <Link href={`/trips/${params.id}/${nextDate}`} className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm">
+                  Next →
+                </Link>
+              )}
               <button
-                onClick={save}
-                disabled={saving}
-                className="bg-blue-600 text-white font-medium px-4 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
+                onClick={() => setEditing(e => !e)}
+                className="border border-gray-200 text-gray-600 font-medium px-4 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm"
               >
-                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+                {editing ? 'View' : 'Edit'}
               </button>
-            )}
+              {editing && (
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="bg-blue-600 text-white font-medium px-4 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
+                >
+                  {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-        {sections.length > 0 && <TravelBanner sections={sections} />}
+        <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
-        {editing ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Day title</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. Arrival in Tokyo"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <textarea
-                rows={20}
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"
-              />
-            </div>
-          </div>
-        ) : sections.length > 0 ? (
-          <div>
-            {sections.map((s, i) => {
-              const isLast = i === sections.length - 1
-              return (
-                <div key={i} className="flex gap-3">
-                  {/* Time column */}
-                  <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
-                    <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride ?? s.meta.time}</span>
-                  </div>
+          {editing ? (
+            // ── Edit mode ────────────────────────────────────────────────
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Day title</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="e.g. Arrival in Tokyo"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-                  {/* Dot + vertical line */}
-                  <div className="flex flex-col items-center flex-shrink-0">
-                    <div
-                      className="w-3 h-3 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm"
-                      style={{ backgroundColor: s.meta.dotColor }}
-                    />
-                    {!isLast && (
-                      <div
-                        className="flex-1 mt-1"
-                        style={{
-                          width: '2px',
-                          minHeight: '24px',
-                          background: s.meta.travel
-                            ? `repeating-linear-gradient(to bottom, ${s.meta.dotColor} 0, ${s.meta.dotColor} 5px, transparent 5px, transparent 10px)`
-                            : s.meta.transit
-                            ? 'repeating-linear-gradient(to bottom, #818cf8 0, #818cf8 5px, transparent 5px, transparent 10px)'
-                            : s.meta.drive
-                            ? 'repeating-linear-gradient(to bottom, #fb923c 0, #fb923c 5px, transparent 5px, transparent 10px)'
-                            : '#e2e8f0',
-                        }}
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={sectionItems.map(i => i._id)} strategy={verticalListSortingStrategy}>
+                  {sectionItems.map((item, i) => (
+                    <div key={item._id}>
+                      <SectionEditorCard
+                        section={item}
+                        onChange={updates => updateSection(item._id, updates)}
+                        onDelete={() => removeSection(item._id)}
                       />
-                    )}
-                  </div>
+                      {i < sectionItems.length - 1 && (
+                        insertAt === i ? (
+                          <div className="my-2">
+                            <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 my-1">
+                            <div className="flex-1 h-px bg-gray-100" />
+                            <button
+                              onClick={() => setInsertAt(i)}
+                              className="text-xs text-gray-300 hover:text-blue-500 transition px-2 py-0.5 rounded-full hover:bg-blue-50"
+                            >
+                              + insert
+                            </button>
+                            <div className="flex-1 h-px bg-gray-100" />
+                          </div>
+                        )
+                      )}
+                    </div>
+                  ))}
+                </SortableContext>
+              </DndContext>
 
-                  {/* Card */}
-                  <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
-                    {(s.meta.hotel || s.meta.car)
-                      ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
-                      : <SectionCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
-                    }
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm">No plans yet for this day</p>
-            <button onClick={() => setEditing(true)} className="mt-4 text-sm text-blue-600 hover:underline">Add notes</button>
-          </div>
-        )}
+              <AddSectionPicker onAdd={type => addSection(type)} />
+            </div>
+          ) : displaySections.length > 0 ? (
+            // ── View mode ────────────────────────────────────────────────
+            <>
+              <TravelBanner sections={displaySections} />
+              <div>
+                {displaySections.map((s, i) => {
+                  const isLast = i === displaySections.length - 1
+                  return (
+                    <div key={i} className="flex gap-3">
+                      <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
+                        <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride ?? s.meta.time}</span>
+                      </div>
+                      <div className="flex flex-col items-center flex-shrink-0">
+                        <div
+                          className="w-3 h-3 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm"
+                          style={{ backgroundColor: s.meta.dotColor }}
+                        />
+                        {!isLast && (
+                          <div
+                            className="flex-1 mt-1"
+                            style={{
+                              width: '2px',
+                              minHeight: '24px',
+                              background: s.meta.travel
+                                ? `repeating-linear-gradient(to bottom, ${s.meta.dotColor} 0, ${s.meta.dotColor} 5px, transparent 5px, transparent 10px)`
+                                : s.meta.transit
+                                ? 'repeating-linear-gradient(to bottom, #818cf8 0, #818cf8 5px, transparent 5px, transparent 10px)'
+                                : s.meta.drive
+                                ? 'repeating-linear-gradient(to bottom, #fb923c 0, #fb923c 5px, transparent 5px, transparent 10px)'
+                                : '#e2e8f0',
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
+                        {(s.meta.hotel || s.meta.car)
+                          ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
+                          : <SectionCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(s.meta.label)} onToggle={() => toggleConfirmed(s.meta.label)} />
+                        }
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            // ── Empty state ──────────────────────────────────────────────
+            <div className="text-center py-12 text-gray-400">
+              <p className="text-4xl mb-3">📋</p>
+              <p className="text-sm">No plans yet for this day</p>
+              <button onClick={() => setEditing(true)} className="mt-4 text-sm text-blue-600 hover:underline">Add plans</button>
+            </div>
+          )}
+
+        </div>
       </div>
-      </div>{/* end main content */}
     </div>
   )
 }
