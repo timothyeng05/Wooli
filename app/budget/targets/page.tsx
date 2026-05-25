@@ -36,6 +36,7 @@ export default async function BudgetTargetsPage({
       .select('category_id, amount')
       .eq('user_id', user.id)
       .eq('is_transfer', false)
+      .eq('is_pending', false)
       .gte('transacted_at', monthStart)
       .lte('transacted_at', monthEnd)
       .not('category_id', 'is', null),
@@ -46,9 +47,14 @@ export default async function BudgetTargetsPage({
       .eq('month', `${month}-01`),
   ])
 
+  const transferCategoryIds = new Set(
+    (categoriesResult.data ?? []).filter(c => c.is_transfer).map(c => c.id)
+  )
+
   const actuals: Record<string, number> = {}
   for (const t of (txnResult.data ?? [])) {
     if (!t.category_id) continue
+    if (transferCategoryIds.has(t.category_id)) continue
     actuals[t.category_id] = (actuals[t.category_id] ?? 0) + Number(t.amount)
   }
 
