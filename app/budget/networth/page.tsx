@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import Breadcrumbs from '@/app/components/Breadcrumbs'
 import NetWorthChart from '@/app/components/budget/NetWorthChart'
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -163,14 +162,10 @@ export default async function NetWorthPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <Breadcrumbs items={[{ label: 'Budget', href: '/budget' }, { label: 'Net Worth' }]} />
-          <div className="mt-4">
-            <h1 className="text-4xl font-bold text-gray-900 mb-1">Net Worth</h1>
-            <p className="text-gray-500 text-sm">Updated today · {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-          </div>
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Net Worth</h1>
+          <p className="text-gray-500 text-sm">Updated today · {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
         </div>
       </div>
 

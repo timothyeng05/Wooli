@@ -1,7 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionForm from '@/app/components/budget/TransactionForm'
-import Breadcrumbs from '@/app/components/Breadcrumbs'
 
 export default async function EditTransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -35,16 +34,13 @@ export default async function EditTransactionPage({ params }: { params: Promise<
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <Breadcrumbs items={[
-            { label: 'Budget', href: '/budget' },
-            { label: 'Edit Transaction' },
-          ]} />
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Edit Transaction</h1>
         </div>
       </div>
 
       <div className="max-w-lg mx-auto px-6 py-12">
         <div className="bg-white rounded-lg shadow border border-gray-200 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Edit Transaction</h1>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Edit Transaction</h2>
           <TransactionForm
             userId={user.id}
             categories={catResult.data || []}

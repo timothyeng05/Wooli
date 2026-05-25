@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import Breadcrumbs from '@/app/components/Breadcrumbs'
 import PlaidLinkButton from '@/app/components/budget/PlaidLinkButton'
 import AccountsView from '@/app/components/budget/AccountsView'
 import AccountsPageClient, { type UnifiedAccount, type BalancePoint } from '@/app/components/budget/AccountsPageClient'
@@ -110,12 +109,11 @@ export default async function AccountsPage() {
     : { data: history }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5">
-          <Breadcrumbs items={[{ label: 'Budget', href: '/budget' }, { label: 'Accounts' }]} />
-          <div className="flex items-center justify-between mt-3">
-            <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
+    <div className="min-h-screen bg-white">
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Accounts</h1>
             <PlaidLinkButton />
           </div>
         </div>
