@@ -217,6 +217,154 @@ function BreakdownSection({
   )
 }
 
+// ── Owner breakdown ───────────────────────────────────────────────────────────
+const OWNER_DISPLAY: Record<string, string> = {
+  'Timothy Eng': 'Tim',
+  'Jessica Li': 'Jess',
+  'Shared': 'Shared',
+}
+const OWNER_COLORS: Record<string, string> = {
+  'Timothy Eng': '#3b82f6',
+  'Jessica Li': '#f43f5e',
+  'Shared': '#8b5cf6',
+}
+
+function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] }) {
+  const rows = useMemo(() => {
+    const map = new Map<string, { expenses: number; income: number }>()
+    for (const t of transactions) {
+      const key = t.owner ?? 'Unknown'
+      const entry = map.get(key) ?? { expenses: 0, income: 0 }
+      if (t.amount < 0) entry.expenses += Math.abs(t.amount)
+      else entry.income += t.amount
+      map.set(key, entry)
+    }
+    const order = ['Timothy Eng', 'Jessica Li', 'Shared']
+    return [...map.entries()]
+      .sort((a, b) => (order.indexOf(a[0]) ?? 99) - (order.indexOf(b[0]) ?? 99))
+      .filter(([, v]) => v.expenses > 0 || v.income > 0)
+  }, [transactions])
+
+  if (rows.length === 0) return null
+
+  const maxExpense = Math.max(...rows.map(([, v]) => v.expenses), 1)
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mt-2">
+      <p className="text-sm font-bold text-gray-900 mb-3">By Person</p>
+      <div className="space-y-3">
+        {rows.map(([owner, { expenses, income }]) => {
+          const label = OWNER_DISPLAY[owner] ?? owner
+          const color = OWNER_COLORS[owner] ?? '#6b7280'
+          return (
+            <div key={owner}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                  <span className="text-sm font-medium text-gray-700">{label}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs tabular-nums">
+                  {income > 0 && <span className="text-green-600">+${fmt(income)}</span>}
+                  <span className="text-gray-700 font-semibold">-${fmt(expenses)}</span>
+                </div>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${(expenses / maxExpense) * 100}%`, backgroundColor: color }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Category trends ───────────────────────────────────────────────────────────
+function CategoryTrends({
+  transactions,
+  months,
+  categories,
+}: {
+  transactions: CashFlowTransaction[]
+  months: { year: number; month: number }[]
+  categories: CashFlowCategory[]
+}) {
+  const catMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories])
+
+  const rows = useMemo(() => {
+    const map = new Map<string, { name: string; color: string; monthly: number[] }>()
+
+    for (let i = 0; i < months.length; i++) {
+      const { year, month } = months[i]
+      for (const t of transactions) {
+        if (t.is_transfer || t.category?.is_transfer) continue
+        if (t.amount >= 0) continue
+        const d = new Date(t.transacted_at)
+        if (d.getFullYear() !== year || d.getMonth() !== month) continue
+
+        const cat = t.category
+        const parent = cat?.parent_id ? catMap.get(cat.parent_id) : null
+        const effective = parent ?? cat
+        const key = effective?.id ?? 'uncategorized'
+        const name = effective?.name ?? 'Uncategorized'
+        const color = effective?.color ?? '#6b7280'
+
+        if (!map.has(key)) map.set(key, { name, color, monthly: new Array(months.length).fill(0) })
+        map.get(key)!.monthly[i] += Math.abs(t.amount)
+      }
+    }
+
+    return [...map.values()]
+      .filter(r => r.monthly.some(v => v > 0))
+      .sort((a, b) => b.monthly.reduce((s, v) => s + v, 0) - a.monthly.reduce((s, v) => s + v, 0))
+      .slice(0, 10)
+  }, [transactions, months, catMap])
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="mt-6">
+      <p className="text-base font-bold text-gray-900 mb-4">Spending Trends</p>
+      <div className="space-y-4">
+        {rows.map(row => {
+          const max = Math.max(...row.monthly, 1)
+          const avg = row.monthly.reduce((s, v) => s + v, 0) / months.length
+          return (
+            <div key={row.name}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
+                  <span className="text-sm font-medium text-gray-800">{row.name}</span>
+                </div>
+                <span className="text-xs text-gray-400">${fmt(avg)}/mo avg</span>
+              </div>
+              <div className="flex items-end gap-1">
+                {row.monthly.map((v, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                    <div className="w-full rounded-t-sm" style={{
+                      height: 28,
+                      background: v > 0
+                        ? `linear-gradient(to top, ${row.color}cc, ${row.color}66)`
+                        : '#f3f4f6',
+                      clipPath: v > 0
+                        ? `inset(${100 - Math.max((v / max) * 100, 6)}% 0 0 0)`
+                        : undefined,
+                    }} />
+                    <span className="text-[9px] text-gray-400">{MONTH_LABELS[months[i].month].toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CashFlowClient({
   transactions,
@@ -316,6 +464,9 @@ export default function CashFlowClient({
         </div>
       </div>
 
+      {/* Owner breakdown */}
+      <OwnerBreakdown transactions={selectedTxns} />
+
       {/* Breakdowns */}
       <BreakdownSection
         title="Income"
@@ -327,6 +478,13 @@ export default function CashFlowClient({
         title="Expenses"
         isIncome={false}
         transactions={expenseTxns}
+        categories={categories}
+      />
+
+      {/* Category trends across all 6 months */}
+      <CategoryTrends
+        transactions={transactions}
+        months={months}
         categories={categories}
       />
     </div>

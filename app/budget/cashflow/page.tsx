@@ -11,6 +11,7 @@ export interface CashFlowTransaction {
   merchant: string | null
   transacted_at: string
   is_transfer: boolean
+  owner: string | null
   category: {
     id: string
     name: string
@@ -58,7 +59,7 @@ export default async function CashFlowPage({
     const { data } = await supabase
       .from('transactions')
       .select(`
-        id, amount, merchant, transacted_at, is_transfer, is_pending,
+        id, amount, merchant, transacted_at, is_transfer, is_pending, owner,
         categories ( id, name, color, icon, is_income, is_transfer, parent_id )
       `)
       .eq('user_id', user.id)
@@ -84,6 +85,7 @@ export default async function CashFlowPage({
     merchant: t.merchant ?? null,
     transacted_at: t.transacted_at,
     is_transfer: t.is_transfer ?? false,
+    owner: t.owner ?? null,
     category: t.categories ?? null,
   }))
 
