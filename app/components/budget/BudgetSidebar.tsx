@@ -3,12 +3,6 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-interface NetWorthProps {
-  assets: number
-  liabilities: number
-  netWorth: number
-}
-
 const NAV_ITEMS = [
   {
     href: '/budget',
@@ -43,7 +37,7 @@ const NAV_ITEMS = [
     label: 'Transactions',
     match: (p: string) =>
       p === '/budget/transactions' ||
-      (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','cashflow','networth'].some(s => p.startsWith(`/budget/${s}`))),
+      (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','cashflow'].some(s => p.startsWith(`/budget/${s}`))),
     icon: (
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="5" width="20" height="14" rx="2"/>
@@ -113,13 +107,13 @@ const NAV_ITEMS = [
   },
 ]
 
-export default function BudgetSidebar({ netWorthData }: { netWorthData?: NetWorthProps }) {
+export default function BudgetSidebar() {
   const pathname = usePathname()
 
   return (
     <aside className="hidden md:block w-56 shrink-0 self-start sticky top-[53px]">
       <div className="h-[calc(100vh-53px)] overflow-y-auto border-r border-gray-200 bg-white">
-      <div className="px-3 pt-5 pb-6">
+        <div className="px-3 pt-5 pb-6">
           <p className="px-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
             Budget
           </p>
@@ -144,18 +138,6 @@ export default function BudgetSidebar({ netWorthData }: { netWorthData?: NetWort
               )
             })}
           </nav>
-          {netWorthData !== undefined && (
-            <div className="border-t border-gray-100 pt-4 mt-4 px-3">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Net Worth</p>
-              <p className={`text-xl font-bold ${netWorthData.netWorth >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                ${netWorthData.netWorth.toLocaleString()}
-              </p>
-              <div className="flex gap-3 mt-1 text-xs text-gray-500">
-                <span className="text-green-600">↑ ${netWorthData.assets.toLocaleString()} assets</span>
-                <span className="text-red-500">↓ ${netWorthData.liabilities.toLocaleString()} debt</span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </aside>

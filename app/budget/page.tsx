@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import DashboardSpendingChart from '@/app/components/budget/DashboardSpendingChart'
-import DashboardNetWorthChart from '@/app/components/budget/DashboardNetWorthChart'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
 import MonthNav from '@/app/components/budget/MonthNav'
 
@@ -52,7 +51,7 @@ export default async function BudgetDashboard({
   const lastStart  = new Date(lastYear, lastMonth, 1).toISOString()
   const lastEnd    = new Date(lastYear, lastMonth + 1, 0, 23, 59, 59).toISOString()
 
-  const [txnResult, lastTxnResult, historyResult] = await Promise.all([
+  const [txnResult, lastTxnResult] = await Promise.all([
     supabase
       .from('transactions')
       .select('id, amount, description, merchant, transacted_at, is_transfer, is_pending, owner, account_name, categories ( id, name, color, icon )')
@@ -66,16 +65,10 @@ export default async function BudgetDashboard({
       .eq('user_id', user.id)
       .gte('transacted_at', lastStart)
       .lte('transacted_at', lastEnd) as any,
-    supabase
-      .from('account_balance_history')
-      .select('account_id, date, balance')
-      .eq('user_id', user.id)
-      .order('date', { ascending: true }),
   ])
 
   const transactions: any[] = txnResult.data ?? []
   const lastTransactions: any[] = lastTxnResult.data ?? []
-  const history: { account_id: string; date: string; balance: number }[] = historyResult.data ?? []
 
   const nonTransfers = transactions.filter((t: any) => !t.is_transfer)
   const income   = nonTransfers.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
@@ -87,19 +80,6 @@ export default async function BudgetDashboard({
   const thisMonthSpend = buildCumulativeSpend(nonTransfers, year, resolvedMonth)
   const lastNonTransfers = lastTransactions.filter((t: any) => !t.is_transfer)
   const lastMonthSpend = buildCumulativeSpend(lastNonTransfers, lastYear, lastMonth)
-
-  // ── Net worth series ───────────────────────────────────────────────────────
-  // Group history by date, carry forward latest balance per account, sum to net worth
-  const allDates = [...new Set(history.map(h => h.date))].sort()
-  const latestBalance = new Map<string, number>()
-  const netWorthSeries: { date: string; value: number }[] = []
-
-  for (const date of allDates) {
-    const dayPoints = history.filter(h => h.date === date)
-    for (const p of dayPoints) latestBalance.set(p.account_id, Number(p.balance))
-    const total = Array.from(latestBalance.values()).reduce((s, v) => s + v, 0)
-    netWorthSeries.push({ date, value: total })
-  }
 
   // ── Category breakdown ────────────────────────────────────────────────────
   const expenseTransactions = nonTransfers.filter((t: any) => t.amount < 0)
@@ -124,7 +104,7 @@ export default async function BudgetDashboard({
   const recent = nonTransfers.slice(0, 8)
 
   const monthName = new Date(year, resolvedMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  const currentNetWorth = netWorthSeries.length > 0 ? netWorthSeries[netWorthSeries.length - 1].value : null
+  const savingsRate = income > 0 ? Math.round(((income - expenses) / income) * 100) : null
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -182,14 +162,16 @@ export default async function BudgetDashboard({
                       {income - expenses >= 0 ? '+' : '-'}${Math.abs(income - expenses).toLocaleString('en-US', { maximumFractionDigits: 0 })}
                     </p>
                   </div>
-                  {currentNetWorth !== null && (
-                    <div className="flex-1 bg-gray-50 rounded-lg p-3">
-                      <p className="text-[10px] text-gray-400 mb-0.5">Net Worth</p>
-                      <p className="text-sm font-bold text-gray-800">
-                        ${currentNetWorth.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-400 mb-0.5">Savings Rate</p>
+                    {savingsRate !== null ? (
+                      <p className={`text-sm font-bold ${savingsRate >= 20 ? 'text-green-600' : savingsRate >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                        {savingsRate}%
                       </p>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-sm font-bold text-gray-300">—</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -274,20 +256,6 @@ export default async function BudgetDashboard({
 
           {/* ── Right column ─────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
-
-            {/* Net worth chart */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="text-sm font-bold text-gray-900">Net Worth</h2>
-                <Link href="/budget/accounts" className="text-xs text-blue-600 hover:underline">Details</Link>
-              </div>
-              {currentNetWorth !== null && (
-                <p className="text-2xl font-bold text-gray-900 mb-3">
-                  ${currentNetWorth.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                </p>
-              )}
-              <DashboardNetWorthChart series={netWorthSeries} />
-            </div>
 
             {/* Spending chart */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">

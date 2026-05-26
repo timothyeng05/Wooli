@@ -44,7 +44,7 @@ const NAV_GROUPS = [
         href: '/budget/transactions',
         label: 'Transactions',
         match: (p: string) => p === '/budget/transactions' ||
-          (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','cashflow','networth'].some(s => p.startsWith(`/budget/${s}`))),
+          (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','cashflow'].some(s => p.startsWith(`/budget/${s}`))),
         icon: (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
