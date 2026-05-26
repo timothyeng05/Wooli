@@ -2,18 +2,21 @@
 
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { useToast, useConfirm } from '@/app/components/ui/ToastProvider'
 
 export default function JournalDeleteButton({ entryId }: { entryId: string }) {
   const router = useRouter()
+  const { toast } = useToast()
+  const confirm = useConfirm()
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!confirm('Delete this entry?')) return
+    if (!await confirm('Delete this entry?')) return
 
     const supabase = createClient()
     const { error } = await supabase.from('mood_entries').delete().eq('id', entryId)
-    if (error) { alert('Error deleting entry'); return }
+    if (error) { toast.error('Error deleting entry'); return }
     router.refresh()
   }
 

@@ -13,6 +13,14 @@ export default async function MoodNewPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('custom_activities')
+    .eq('id', user.id)
+    .single()
+
+  const customActivities: string[] | null = profile?.custom_activities as string[] | null
+
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
@@ -26,7 +34,7 @@ export default async function MoodNewPage({
       <div className="max-w-lg mx-auto px-6 py-12">
         <div className="bg-white rounded-lg shadow border border-gray-200 p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-6">Log Mood</h1>
-          <MoodFormClient userId={user.id} initialDate={date} />
+          <MoodFormClient userId={user.id} initialDate={date} customActivities={customActivities} />
         </div>
       </div>
     </div>

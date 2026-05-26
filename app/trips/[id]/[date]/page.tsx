@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -164,6 +164,30 @@ function TravelBanner({ sections }: { sections: ParsedSection[] }) {
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
 const labelCls = 'block text-xs text-gray-500 mb-1'
 
+function AutoTextarea({ value, onChange, className, placeholder }: {
+  value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  className?: string; placeholder?: string
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto'
+      ref.current.style.height = ref.current.scrollHeight + 'px'
+    }
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      rows={2}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={className}
+      style={{ overflow: 'hidden', resize: 'none' }}
+    />
+  )
+}
+
 function TravelEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
   const routeLine = section.lines.find(l => l.includes('→')) ?? ''
   const detailLines = section.lines.filter(l => !l.includes('→')).join('\n')
@@ -221,16 +245,16 @@ function HotelEditor({ section, onChange }: { section: EditorSection; onChange: 
 }
 
 function DriveEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const routeLine = section.lines.find(l => !l.trim().startsWith('-')) ?? ''
-  const noteLines = section.lines.filter(l => l.trim().startsWith('-')).join('\n')
+  const routeIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
+  const routeLine = routeIdx >= 0 ? section.lines[routeIdx] : ''
+  const noteLines = section.lines.slice(routeIdx + 1).join('\n')
 
   const setRoute = (val: string) => {
     const bullets = section.lines.filter(l => l.trim().startsWith('-'))
     onChange({ lines: val ? [val, ...bullets] : bullets })
   }
   const setNotes = (val: string) => {
-    const route = section.lines.find(l => !l.trim().startsWith('-'))
-    onChange({ lines: route ? [route, ...val.split('\n').filter(Boolean)] : val.split('\n').filter(Boolean) })
+    onChange({ lines: routeLine ? [routeLine, ...val.split('\n')] : val.split('\n') })
   }
 
   return (
@@ -251,7 +275,7 @@ function DriveEditor({ section, onChange }: { section: EditorSection; onChange: 
       </div>
       <div>
         <label className={labelCls}>Notes (optional)</label>
-        <textarea rows={2} className={`${inputCls} resize-none`} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Exit B2&#10;- Platform 3" />
+        <AutoTextarea className={inputCls} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Exit B2&#10;- Platform 3" />
       </div>
     </div>
   )
@@ -286,16 +310,16 @@ function CarEditor({ section, onChange }: { section: EditorSection; onChange: (u
 }
 
 function ActivityEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const titleLine = section.lines.find(l => !l.trim().startsWith('-')) ?? ''
-  const noteLines = section.lines.filter(l => l.trim().startsWith('-')).join('\n')
+  const titleIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
+  const titleLine = titleIdx >= 0 ? section.lines[titleIdx] : ''
+  const noteLines = section.lines.slice(titleIdx + 1).join('\n')
 
   const setTitle = (val: string) => {
     const bullets = section.lines.filter(l => l.trim().startsWith('-'))
     onChange({ lines: val ? [val, ...bullets] : bullets })
   }
   const setNotes = (val: string) => {
-    const t = section.lines.find(l => !l.trim().startsWith('-'))
-    onChange({ lines: t ? [t, ...val.split('\n').filter(Boolean)] : val.split('\n').filter(Boolean) })
+    onChange({ lines: titleLine ? [titleLine, ...val.split('\n')] : val.split('\n') })
   }
 
   return (
@@ -316,23 +340,23 @@ function ActivityEditor({ section, onChange }: { section: EditorSection; onChang
       </div>
       <div>
         <label className={labelCls}>Notes (optional)</label>
-        <textarea rows={2} className={`${inputCls} resize-none`} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Bring camera&#10;- Book tickets in advance" />
+        <AutoTextarea className={inputCls} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Bring camera&#10;- Book tickets in advance" />
       </div>
     </div>
   )
 }
 
 function MealEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const nameLine = section.lines.find(l => !l.trim().startsWith('-')) ?? ''
-  const optionLines = section.lines.filter(l => l.trim().startsWith('-')).join('\n')
+  const nameIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
+  const nameLine = nameIdx >= 0 ? section.lines[nameIdx] : ''
+  const optionLines = section.lines.slice(nameIdx + 1).join('\n')
 
   const setName = (val: string) => {
     const bullets = section.lines.filter(l => l.trim().startsWith('-'))
     onChange({ lines: val ? [val, ...bullets] : bullets })
   }
   const setOptions = (val: string) => {
-    const n = section.lines.find(l => !l.trim().startsWith('-'))
-    onChange({ lines: n ? [n, ...val.split('\n').filter(Boolean)] : val.split('\n').filter(Boolean) })
+    onChange({ lines: nameLine ? [nameLine, ...val.split('\n')] : val.split('\n') })
   }
 
   return (
@@ -353,7 +377,7 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
       </div>
       <div>
         <label className={labelCls}>Options / notes</label>
-        <textarea rows={2} className={`${inputCls} resize-none`} value={optionLines} onChange={e => setOptions(e.target.value)} placeholder="- Option A&#10;- Option B" />
+        <AutoTextarea className={inputCls} value={optionLines} onChange={e => setOptions(e.target.value)} placeholder="- Option A&#10;- Option B" />
       </div>
     </div>
   )
@@ -363,9 +387,8 @@ function GeneralEditor({ section, onChange }: { section: EditorSection; onChange
   return (
     <div>
       <label className={labelCls}>Notes (one per line)</label>
-      <textarea
-        rows={4}
-        className={`${inputCls} resize-none font-mono`}
+      <AutoTextarea
+        className={`${inputCls} font-mono`}
         value={section.lines.join('\n')}
         onChange={e => onChange({ lines: e.target.value.split('\n') })}
         placeholder="- Item 1&#10;- Item 2"

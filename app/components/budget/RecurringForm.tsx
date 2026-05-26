@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { useToast } from '@/app/components/ui/ToastProvider'
 
 interface Category { id: string; name: string }
 
@@ -46,6 +47,7 @@ export default function RecurringForm({
   }
 }) {
   const router = useRouter()
+  const { toast } = useToast()
   const isEdit = !!item
   const [saving, setSaving] = useState(false)
   const [isIncome, setIsIncome] = useState(isEdit ? item.amount > 0 : false)
@@ -88,7 +90,7 @@ export default function RecurringForm({
       router.push('/budget/recurring')
       router.refresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save')
+      toast.error(err instanceof Error ? err.message : 'Failed to save')
       setSaving(false)
     }
   }

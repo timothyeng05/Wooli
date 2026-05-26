@@ -11,6 +11,25 @@ export function annualizedValue(amount: number, period: string | null): number {
   return amount * periodMultiplier(period)
 }
 
+export function computeUsageProgress(
+  usageData: Record<string, boolean> | null,
+  periodType: string | null
+): { used: number; total: number } {
+  const data = usageData ?? {}
+  let keys: string[]
+  if (periodType === 'quarterly') {
+    keys = ['Q1', 'Q2', 'Q3', 'Q4']
+  } else if (periodType === 'monthly') {
+    keys = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  } else if (periodType === 'biannual') {
+    keys = ['H1 (Jan–Jun)', 'H2 (Jul–Dec)']
+  } else {
+    keys = ['used']
+  }
+  const used = keys.filter(k => data[k] === true).length
+  return { used, total: keys.length }
+}
+
 export function computeCardStats(
   annualFee: number | null,
   cardBenefits: Array<{

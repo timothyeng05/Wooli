@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-client'
-import { CATEGORY_ORDER, annualizedValue } from '@/lib/card-utils'
+import { CATEGORY_ORDER, annualizedValue, computeUsageProgress } from '@/lib/card-utils'
+import { useToast } from '@/app/components/ui/ToastProvider'
 
 interface CardBenefit {
   id: string
@@ -29,6 +30,7 @@ export default function CardBenefitsView({
   benefits: CardBenefit[]
   annualFee: number | null
 }) {
+  const { toast } = useToast()
   const [expanding, setExpanding] = useState<string | null>(null)
   const [usageData, setUsageData] = useState<Record<string, Record<string, boolean>>>(() => {
     const data: Record<string, Record<string, boolean>> = {}
@@ -55,7 +57,7 @@ export default function CardBenefitsView({
       if (error) throw error
       setExpanding(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save usage')
+      toast.error(err instanceof Error ? err.message : 'Failed to save usage')
     } finally {
       setSaving(false)
     }
@@ -234,6 +236,27 @@ export default function CardBenefitsView({
                             </div>
                           </div>
                         </button>
+
+                        {(() => {
+                          const progress = computeUsageProgress(
+                            usageData[benefit.id] ?? null,
+                            benefit.benefits?.period_type ?? null
+                          )
+                          const { used, total } = progress
+                          if (total === 1 && used === 0) return null
+                          const pct = total > 0 ? (used / total) * 100 : 0
+                          return (
+                            <div className="mt-2 flex items-center gap-2 px-3">
+                              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-blue-400 rounded-full transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-gray-400 flex-shrink-0">{used}/{total}</span>
+                            </div>
+                          )
+                        })()}
 
                         {isExpanded && (
                           <div className="px-4 pb-4 border-t border-blue-100">

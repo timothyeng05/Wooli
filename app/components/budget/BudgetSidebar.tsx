@@ -3,6 +3,12 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+interface NetWorthProps {
+  assets: number
+  liabilities: number
+  netWorth: number
+}
+
 const NAV_ITEMS = [
   {
     href: '/budget',
@@ -107,7 +113,7 @@ const NAV_ITEMS = [
   },
 ]
 
-export default function BudgetSidebar() {
+export default function BudgetSidebar({ netWorthData }: { netWorthData?: NetWorthProps }) {
   const pathname = usePathname()
 
   return (
@@ -138,6 +144,18 @@ export default function BudgetSidebar() {
               )
             })}
           </nav>
+          {netWorthData !== undefined && (
+            <div className="border-t border-gray-100 pt-4 mt-4 px-3">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Net Worth</p>
+              <p className={`text-xl font-bold ${netWorthData.netWorth >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                ${netWorthData.netWorth.toLocaleString()}
+              </p>
+              <div className="flex gap-3 mt-1 text-xs text-gray-500">
+                <span className="text-green-600">↑ ${netWorthData.assets.toLocaleString()} assets</span>
+                <span className="text-red-500">↓ ${netWorthData.liabilities.toLocaleString()} debt</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </aside>

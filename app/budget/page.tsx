@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import DashboardSpendingChart from '@/app/components/budget/DashboardSpendingChart'
 import DashboardNetWorthChart from '@/app/components/budget/DashboardNetWorthChart'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
+import MonthNav from '@/app/components/budget/MonthNav'
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
@@ -26,20 +27,28 @@ function buildCumulativeSpend(txns: { amount: number; transacted_at: string }[],
   return daily
 }
 
-export default async function BudgetDashboard() {
+export default async function BudgetDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>
+}) {
+  const params = await searchParams
+  const now = new Date()
+  const year = parseInt(params.year ?? '') || now.getFullYear()
+  const month = parseInt(params.month ?? '')  // 0-indexed
+  const resolvedMonth = isNaN(month) ? now.getMonth() : month
+  const isCurrentMonth = year === now.getFullYear() && resolvedMonth === now.getMonth()
+  const today = isCurrentMonth ? now.getDate() : new Date(year, resolvedMonth + 1, 0).getDate()
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-  const today = now.getDate()
-  const lastMonth = month === 0 ? 11 : month - 1
-  const lastYear  = month === 0 ? year - 1 : year
+  const lastMonth = resolvedMonth === 0 ? 11 : resolvedMonth - 1
+  const lastYear  = resolvedMonth === 0 ? year - 1 : year
 
-  const monthStart = new Date(year, month, 1).toISOString()
-  const monthEnd   = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
+  const monthStart = new Date(year, resolvedMonth, 1).toISOString()
+  const monthEnd   = new Date(year, resolvedMonth + 1, 0, 23, 59, 59).toISOString()
   const lastStart  = new Date(lastYear, lastMonth, 1).toISOString()
   const lastEnd    = new Date(lastYear, lastMonth + 1, 0, 23, 59, 59).toISOString()
 
@@ -72,10 +81,10 @@ export default async function BudgetDashboard() {
   const income   = nonTransfers.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
   const expenses = nonTransfers.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
 
-  const monthProgress = today / daysInMonth(year, month)
+  const monthProgress = today / daysInMonth(year, resolvedMonth)
 
   // ── Spending chart data ────────────────────────────────────────────────────
-  const thisMonthSpend = buildCumulativeSpend(nonTransfers, year, month)
+  const thisMonthSpend = buildCumulativeSpend(nonTransfers, year, resolvedMonth)
   const lastNonTransfers = lastTransactions.filter((t: any) => !t.is_transfer)
   const lastMonthSpend = buildCumulativeSpend(lastNonTransfers, lastYear, lastMonth)
 
@@ -92,15 +101,34 @@ export default async function BudgetDashboard() {
     netWorthSeries.push({ date, value: total })
   }
 
+  // ── Category breakdown ────────────────────────────────────────────────────
+  const expenseTransactions = nonTransfers.filter((t: any) => t.amount < 0)
+  const catTotals = new Map<string, { amount: number; color?: string }>()
+  for (const t of expenseTransactions) {
+    const name = t.categories?.name ?? 'Uncategorized'
+    const color = t.categories?.color ?? undefined
+    const prev = catTotals.get(name)
+    if (prev) {
+      prev.amount += Math.abs(Number(t.amount))
+    } else {
+      catTotals.set(name, { amount: Math.abs(Number(t.amount)), color })
+    }
+  }
+  const categoryBreakdown = Array.from(catTotals.entries())
+    .map(([name, { amount, color }]) => ({ name, amount, color }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5)
+  const maxCatAmount = categoryBreakdown.length > 0 ? categoryBreakdown[0].amount : 0
+
   // ── Recent transactions ────────────────────────────────────────────────────
   const recent = nonTransfers.slice(0, 8)
 
-  const monthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const monthName = new Date(year, resolvedMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   const currentNetWorth = netWorthSeries.length > 0 ? netWorthSeries[netWorthSeries.length - 1].value : null
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
           {/* ── Left column ──────────────────────────────────────────────── */}
@@ -109,8 +137,12 @@ export default async function BudgetDashboard() {
             {/* Budget widget */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold text-gray-900">{monthName}</h2>
-                <span className="text-xs text-gray-400">{Math.round(monthProgress * 100)}% through month</span>
+                <div className="flex items-center justify-between mb-1">
+                  <MonthNav year={year} month={resolvedMonth} />
+                </div>
+                {isCurrentMonth && (
+                  <span className="text-xs text-gray-400">{Math.round(monthProgress * 100)}% through month</span>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -161,6 +193,31 @@ export default async function BudgetDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Spending by category */}
+            {expenseTransactions.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Spending by Category</h2>
+                {categoryBreakdown.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No spending data for this period</p>
+                ) : (
+                  categoryBreakdown.map(cat => (
+                    <div key={cat.name} className="mb-2">
+                      <div className="flex justify-between text-xs text-gray-600 mb-1">
+                        <span>{cat.name}</span>
+                        <span>${cat.amount.toFixed(0)}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 rounded-full"
+                          style={{ width: `${(cat.amount / maxCatAmount) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             {/* Recent transactions */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">

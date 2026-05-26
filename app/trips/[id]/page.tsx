@@ -53,6 +53,36 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const legs = TRIP_LEGS[id] ?? []
   const groups = groupByLegs(allDays, legs)
 
+  // Countdown / status computation (server-side)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const startDate = new Date(trip.start_date + 'T00:00:00')
+  const endDate = new Date(trip.end_date + 'T00:00:00')
+  const msPerDay = 1000 * 60 * 60 * 24
+
+  type TripStatus = 'upcoming' | 'in-progress' | 'past'
+  let tripStatus: TripStatus
+  let countdownLabel: string
+  let progressPct: number | null
+
+  if (today < startDate) {
+    tripStatus = 'upcoming'
+    const daysUntil = Math.round((startDate.getTime() - today.getTime()) / msPerDay)
+    countdownLabel = `${daysUntil} day${daysUntil !== 1 ? 's' : ''} until departure`
+    progressPct = 0
+  } else if (today <= endDate) {
+    tripStatus = 'in-progress'
+    const dayOfTrip = Math.round((today.getTime() - startDate.getTime()) / msPerDay) + 1
+    const totalDays = allDays.length
+    countdownLabel = `In progress · Day ${dayOfTrip} of ${totalDays}`
+    progressPct = Math.min(100, Math.round(((today.getTime() - startDate.getTime()) / (endDate.getTime() - startDate.getTime())) * 100))
+  } else {
+    tripStatus = 'past'
+    const daysAgo = Math.round((today.getTime() - endDate.getTime()) / msPerDay)
+    countdownLabel = `Completed · ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`
+    progressPct = null
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
@@ -65,6 +95,23 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             <div className="flex items-start justify-between gap-4">
               <h1 className="text-4xl font-bold text-gray-900">{trip.name}</h1>
               <ShareButton url={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/share/${id}`} />
+            </div>
+            <div className="mt-2">
+              <span className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-full ${
+                tripStatus === 'upcoming'    ? 'bg-blue-50 text-blue-700' :
+                tripStatus === 'in-progress' ? 'bg-green-50 text-green-700' :
+                                               'bg-gray-100 text-gray-500'
+              }`}>
+                {countdownLabel}
+              </span>
+              {progressPct !== null && (
+                <div className="w-full h-1 bg-gray-100 rounded mt-2 overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 rounded transition-all"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              )}
             </div>
             {trip.destination && <p className="text-gray-500 mt-1">📍 {trip.destination}</p>}
             <p className="text-sm text-gray-400 mt-1">

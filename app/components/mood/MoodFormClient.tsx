@@ -3,8 +3,9 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { useToast } from '@/app/components/ui/ToastProvider'
 
-const ACTIVITIES = ['Exercised', 'Read', 'Good sleep', 'Meditated']
+const DEFAULT_ACTIVITIES = ['Exercised', 'Read', 'Good sleep', 'Meditated']
 
 const PROMPT_CACHE_KEY = 'wooli_journal_prompts'
 
@@ -29,13 +30,18 @@ function setCachedPrompts(prompts: string[]) {
   )
 }
 
-export default function MoodFormClient({ userId, entry, initialDate, onDelete }: {
+export default function MoodFormClient({ userId, entry, initialDate, onDelete, customActivities }: {
   userId: string
   entry?: { id: string; mood: number; note: string; logged_at: string; grateful_for?: string | null; activities?: string[] | null } | null
   initialDate?: string
   onDelete?: () => void
+  customActivities?: string[] | null
 }) {
+  const activities_list = customActivities && customActivities.length > 0
+    ? customActivities
+    : DEFAULT_ACTIVITIES
   const router = useRouter()
+  const { toast } = useToast()
   const formRef = useRef<HTMLFormElement>(null)
   const [mood, setMood] = useState(entry?.mood || 3)
   const [note, setNote] = useState(entry?.note || '')
@@ -101,7 +107,7 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete }:
 
       router.push('/mood')
     } catch (error) {
-      alert('Error saving entry')
+      toast.error('Error saving entry')
       console.error(error)
       setLoading(false)
     }
@@ -189,7 +195,7 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete }:
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-3">Activities</label>
         <div className="flex flex-wrap gap-2">
-          {ACTIVITIES.map(activity => (
+          {activities_list.map(activity => (
             <button
               key={activity}
               type="button"
@@ -204,6 +210,9 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete }:
             </button>
           ))}
         </div>
+        <a href="/settings" className="text-xs text-gray-400 hover:text-gray-600 transition mt-2 inline-block">
+          Customize activities →
+        </a>
       </div>
 
       <button

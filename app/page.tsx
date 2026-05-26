@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { logout } from '@/app/auth/actions'
 import LifeCalendar from '@/app/components/dashboard/LifeCalendar'
 import CalendarInsights from '@/app/components/dashboard/CalendarInsights'
 import WeeklySummary from '@/app/components/dashboard/WeeklySummary'
@@ -62,36 +61,127 @@ export default async function DashboardPage() {
   const income = transactions.filter((t: any) => t.amount > 0).reduce((s: number, t: any) => s + Number(t.amount), 0)
   const expenses = transactions.filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)
 
+  // Compute top 3 spending categories from current month transactions
+  const categoryTotals: Record<string, number> = {}
+  for (const tx of transactions ?? []) {
+    if (Number((tx as any).amount) >= 0) continue  // skip income
+    const cat = (tx as any).categories?.name ?? 'Uncategorized'
+    categoryTotals[cat] = (categoryTotals[cat] ?? 0) + Math.abs(Number((tx as any).amount))
+  }
+  const topCategories = Object.entries(categoryTotals)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([name, amount]) => ({ name, amount }))
+
+  // Cross-module insight: avg spend on low-mood days vs high-mood days
+  let moodSpendInsight: string | null = null
+  if ((moodEntries?.length ?? 0) >= 5 && (transactions?.length ?? 0) >= 5) {
+    // Build a map of date → mood score
+    const moodByDate: Record<string, number> = {}
+    for (const entry of moodEntries ?? []) {
+      const date = (entry.logged_at as string).split('T')[0]
+      moodByDate[date] = entry.mood as number
+    }
+    // Aggregate spend per day (transactions use transacted_at; expenses are negative amounts)
+    const spendByDate: Record<string, number> = {}
+    for (const tx of transactions ?? []) {
+      const amount = Number((tx as any).amount)
+      if (amount < 0) {
+        const date = ((tx as any).transacted_at as string).split('T')[0]
+        spendByDate[date] = (spendByDate[date] ?? 0) + Math.abs(amount)
+      }
+    }
+    // Group daily spend by mood tier
+    const lowMoodSpend: number[] = []   // mood 1-2
+    const highMoodSpend: number[] = []  // mood 4-5
+    for (const [date, spend] of Object.entries(spendByDate)) {
+      const mood = moodByDate[date]
+      if (!mood) continue
+      if (mood <= 2) lowMoodSpend.push(spend)
+      else if (mood >= 4) highMoodSpend.push(spend)
+    }
+    if (lowMoodSpend.length >= 2 && highMoodSpend.length >= 2) {
+      const avgLow = lowMoodSpend.reduce((a, b) => a + b, 0) / lowMoodSpend.length
+      const avgHigh = highMoodSpend.reduce((a, b) => a + b, 0) / highMoodSpend.length
+      const diff = Math.abs(avgLow - avgHigh)
+      if (diff >= 5) {
+        if (avgLow > avgHigh) {
+          moodSpendInsight = `You spend $${avgLow.toFixed(0)}/day on low-mood days vs $${avgHigh.toFixed(0)} on high-mood days`
+        } else {
+          moodSpendInsight = `You spend $${avgHigh.toFixed(0)}/day on high-mood days vs $${avgLow.toFixed(0)} on low-mood days`
+        }
+      }
+    }
+  }
+
   const monthLabel = now.toLocaleString('default', { month: 'long' })
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
   const hasTransactions = transactions.length > 0 && !transactionResult.error
 
+  const isEmpty = (transactions?.length ?? 0) === 0 &&
+    (moodEntries?.length ?? 0) === 0 &&
+    (activeLists?.length ?? 0) === 0
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 sm:py-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{greeting}</h1>
-            <p className="text-gray-500 mt-0.5 text-sm">{user.email}</p>
+            <p className="hidden sm:block text-gray-500 mt-0.5 text-sm">{user.email}</p>
           </div>
-          <form>
-            <button formAction={logout} className="text-sm text-gray-500 hover:text-gray-700 font-medium">
-              Sign out
-            </button>
-          </form>
         </div>
       </div>
 
+      {/* Mood × spending insight strip */}
+      {moodSpendInsight && (
+        <div className="border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+          <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
+            <span className="text-lg">💡</span>
+            <p className="text-sm text-gray-600">{moodSpendInsight}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Welcome panel — shown only when the account has no data yet */}
+      {isEmpty && (
+        <div className="max-w-2xl mx-auto px-6 py-16 text-center">
+          <div className="text-5xl mb-4">👋</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Wooli</h2>
+          <p className="text-gray-500 mb-8">Your personal dashboard for budget, trips, and more. Get started by adding your first entry.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <a href="/budget/transactions" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition group">
+              <svg className="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+              </svg>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Add a transaction</span>
+            </a>
+            <a href="/mood/new" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition group">
+              <svg className="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Log your mood</span>
+            </a>
+            <a href="/trips/new" className="flex flex-col items-center gap-2 p-5 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition group">
+              <svg className="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+              </svg>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Plan a trip</span>
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Main layout */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      {!isEmpty && <div className="max-w-7xl mx-auto px-6 py-8">
         <WeeklySummary />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Left column: Big calendar */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 order-2 lg:order-1">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -109,7 +199,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Right column */}
-          <div className="space-y-6">
+          <div className="space-y-6 order-1 lg:order-2">
 
             <GoogleCalendarWidget />
             <TripWidget userId={user.id} />
@@ -138,6 +228,17 @@ export default async function DashboardPage() {
                       <p className="font-bold text-red-700">-${expenses.toFixed(0)}</p>
                     </div>
                   </div>
+
+                  {topCategories.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {topCategories.map(({ name, amount }) => (
+                        <div key={name} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500 truncate">{name}</span>
+                          <span className="text-gray-700 font-medium ml-2 flex-shrink-0">${amount.toFixed(0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {transactions.length > 0 ? (
                     <div className="space-y-2">
@@ -205,7 +306,8 @@ export default async function DashboardPage() {
 
           </div>
         </div>
-      </div>
+      </div>}
+
     </div>
   )
 }

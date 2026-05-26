@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, OWNERS, type Account, type AccountType } from '@/lib/budget/account-utils'
+import { useToast } from '@/app/components/ui/ToastProvider'
 
 const OWNER_BADGE: Record<string, string> = {
   'Timothy Eng': 'bg-blue-100 text-blue-600',
@@ -34,6 +35,7 @@ export default function AccountsView({
   initialAccounts: Account[]
 }) {
   const router = useRouter()
+  const { toast } = useToast()
   const supabase = createClient()
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts)
   const [adding, setAdding] = useState(false)
@@ -59,7 +61,7 @@ export default function AccountsView({
       .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner')
       .single()
     if (error || !data) {
-      alert(error?.message || 'Failed to add account')
+      toast.error(error?.message || 'Failed to add account')
       return
     }
     setAccounts(prev => [...prev, data as Account])
@@ -73,7 +75,7 @@ export default function AccountsView({
     const { error } = await supabase.from('accounts').update(patch).eq('id', id)
     if (error) {
       setAccounts(prev)
-      alert('Failed to update')
+      toast.error('Failed to update')
     } else {
       router.refresh()
     }

@@ -45,6 +45,7 @@ export default function CardTemplateSelector({
   const [loading, setLoading] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [periodOverrides, setPeriodOverrides] = useState<Record<string, string>>({})
+  const [openedAt, setOpenedAt] = useState('')
 
   const filteredTemplates = templates.filter(t =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -84,7 +85,8 @@ export default function CardTemplateSelector({
           coreBenefits: Array.from(coreBenefits),
           removedBenefits: Array.from(removedBenefits),
           periodOverrides,
-          templateData: selectedTemplate
+          templateData: selectedTemplate,
+          openedAt: openedAt || null
         })
       })
 
@@ -176,6 +178,16 @@ export default function CardTemplateSelector({
                 ${coreValue - (selectedTemplate.annual_fee || 0)}
               </span>
             </div>
+          </div>
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <label className="text-sm text-gray-600 whitespace-nowrap">Date opened:</label>
+            <input
+              type="date"
+              value={openedAt}
+              onChange={e => setOpenedAt(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-xs text-gray-400">Used to track annual fee renewal</span>
           </div>
         </div>
 

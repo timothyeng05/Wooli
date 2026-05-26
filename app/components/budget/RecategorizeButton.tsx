@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import { useConfirm } from '@/app/components/ui/ToastProvider'
 
 export default function RecategorizeButton() {
+  const confirm = useConfirm()
   const [state, setState] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [count, setCount] = useState(0)
 
   const run = async () => {
-    if (!confirm('Re-run Groq categorization on ALL transactions? This will overwrite existing categories.')) return
+    if (!await confirm('Re-run AI categorization?', 'This will overwrite existing categories on ALL transactions.')) return
     setState('running')
     try {
       const res = await fetch('/api/budget/recategorize', { method: 'POST' })

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, isAssetType, OWNERS, type AccountType } from '@/lib/budget/account-utils'
+import { useToast } from '@/app/components/ui/ToastProvider'
 
 export interface UnifiedAccount {
   id: string
@@ -372,6 +373,7 @@ function AddAccountInlineForm({ groupKey, userId, onDone }: {
   onDone: () => void
 }) {
   const router = useRouter()
+  const { toast } = useToast()
   const supabase = createClient()
   const allowedTypes = GROUP_TYPES[groupKey]
   const [name, setName] = useState('')
@@ -399,7 +401,7 @@ function AddAccountInlineForm({ groupKey, userId, onDone }: {
       onDone()
       router.refresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add account')
+      toast.error(err instanceof Error ? err.message : 'Failed to add account')
     } finally {
       setSaving(false)
     }
@@ -562,13 +564,14 @@ export default function AccountsPageClient({
   userId: string
 }) {
   const router = useRouter()
+  const { toast } = useToast()
   const supabase = createClient()
   const [period, setPeriod] = useState(90)
   const [open, setOpen] = useState({ cash: true, investments: true, credit: true })
 
   const handleUpdate = async (id: string, patch: Record<string, unknown>) => {
     const { error } = await supabase.from('accounts').update(patch).eq('id', id)
-    if (error) { alert('Failed to update: ' + error.message); return }
+    if (error) { toast.error('Failed to update: ' + error.message); return }
     router.refresh()
   }
 

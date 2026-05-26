@@ -27,6 +27,8 @@ interface Props {
   budgets: Record<string, number>
   userId: string
   month: string
+  uncategorizedIncome: number
+  uncategorizedExpenses: number
 }
 
 function fmt(n: number) {
@@ -109,7 +111,7 @@ function BudgetLevelIcon({ level }: { level: 'parent' | 'sub' }) {
   )
 }
 
-export default function BudgetTargetsClient({ categories, actuals, budgets: initialBudgets, userId, month }: Props) {
+export default function BudgetTargetsClient({ categories, actuals, budgets: initialBudgets, userId, month, uncategorizedIncome, uncategorizedExpenses }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -487,6 +489,24 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
                 </div>
               </div>
             </div>
+
+            {(uncategorizedIncome > 0 || uncategorizedExpenses > 0) && (
+              <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-1.5">
+                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Uncategorized</p>
+                {uncategorizedIncome > 0 && (
+                  <div className="flex justify-between text-xs text-amber-700">
+                    <span>Income</span>
+                    <span className="tabular-nums font-medium">${fmt(uncategorizedIncome)}</span>
+                  </div>
+                )}
+                {uncategorizedExpenses > 0 && (
+                  <div className="flex justify-between text-xs text-amber-700">
+                    <span>Expenses</span>
+                    <span className="tabular-nums font-medium">${fmt(uncategorizedExpenses)}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <p className="text-[11px] text-gray-400 text-center px-1">
               Tap any planned amount to edit. Use the icon next to the category name to toggle between group and sub-category budgeting.

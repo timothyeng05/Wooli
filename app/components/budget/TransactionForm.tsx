@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { useToast } from '@/app/components/ui/ToastProvider'
 
 interface Category {
   id: string
@@ -47,6 +48,7 @@ export default function TransactionForm({
   transaction?: ExistingTransaction
 }) {
   const router = useRouter()
+  const { toast } = useToast()
   const isEdit = !!transaction
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<'expense' | 'income' | 'transfer'>(
@@ -102,7 +104,7 @@ export default function TransactionForm({
       router.push('/budget')
       router.refresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save transaction')
+      toast.error(err instanceof Error ? err.message : 'Failed to save transaction')
       setLoading(false)
     }
   }

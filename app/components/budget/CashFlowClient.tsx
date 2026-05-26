@@ -275,8 +275,6 @@ export default function CashFlowClient({
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-gray-900 mb-4">Cash Flow</h1>
-
       {/* Chart */}
       <div className="bg-gray-50 rounded-2xl p-4 mb-4">
         <CashFlowChart

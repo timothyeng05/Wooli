@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { useToast, useConfirm } from '@/app/components/ui/ToastProvider'
 
 export default function CardDetailView({
   card,
@@ -16,16 +17,19 @@ export default function CardDetailView({
     network: string | null
     annual_fee: number | null
     is_active: boolean
+    opened_at?: string | null
   }
   coreValue: number
   netValue: number
 }) {
   const router = useRouter()
+  const { toast } = useToast()
+  const confirm = useConfirm()
   const [loading, setLoading] = useState(false)
   const [isActive, setIsActive] = useState(card.is_active)
 
   const handleDeactivate = async () => {
-    if (!window.confirm('Are you sure you want to deactivate this card?')) return
+    if (!await confirm('Deactivate this card?')) return
     setLoading(true)
     try {
       const supabase = createClient()
@@ -33,7 +37,7 @@ export default function CardDetailView({
       if (error) throw error
       setIsActive(false)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to deactivate card')
+      toast.error(err instanceof Error ? err.message : 'Failed to deactivate card')
     } finally {
       setLoading(false)
     }
@@ -47,14 +51,14 @@ export default function CardDetailView({
       if (error) throw error
       setIsActive(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to activate card')
+      toast.error(err instanceof Error ? err.message : 'Failed to activate card')
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure? This will permanently delete the card and all associated data.')) return
+    if (!await confirm('Delete this card?', 'This will permanently delete the card and all associated data.')) return
     setLoading(true)
     try {
       const supabase = createClient()
@@ -62,7 +66,7 @@ export default function CardDetailView({
       if (error) throw error
       router.push('/cards')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete card')
+      toast.error(err instanceof Error ? err.message : 'Failed to delete card')
       setLoading(false)
     }
   }
@@ -98,6 +102,20 @@ export default function CardDetailView({
             {card.annual_fee !== null ? `$${card.annual_fee.toFixed(0)}` : 'None'}
           </p>
         </div>
+        {card.opened_at && (
+          <div>
+            <p className="text-sm text-gray-500">Next Renewal</p>
+            <p className="font-semibold text-gray-900 text-sm">
+              {(() => {
+                const today = new Date()
+                const opened = new Date(card.opened_at!)
+                const renewal = new Date(today.getFullYear(), opened.getMonth(), opened.getDate())
+                if (renewal < today) renewal.setFullYear(today.getFullYear() + 1)
+                return renewal.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              })()}
+            </p>
+          </div>
+        )}
         <div>
           <p className="text-sm text-gray-600">Benefits Value</p>
           <p className="font-semibold text-green-600">${coreValue.toFixed(0)}/yr</p>

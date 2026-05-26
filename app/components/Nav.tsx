@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/auth/actions'
@@ -14,7 +15,7 @@ const NAV_LINKS = [
     ),
   },
   {
-    href: '/lists', label: 'Lists', alsoMatches: [],
+    href: '/lists', label: 'Lists', alsoMatches: [] as string[],
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
@@ -23,7 +24,7 @@ const NAV_LINKS = [
     ),
   },
   {
-    href: '/budget', label: 'Budget', alsoMatches: [],
+    href: '/budget', label: 'Budget', alsoMatches: [] as string[],
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
@@ -31,7 +32,7 @@ const NAV_LINKS = [
     ),
   },
   {
-    href: '/trips', label: 'Trips', alsoMatches: [],
+    href: '/trips', label: 'Trips', alsoMatches: [] as string[],
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="3 11 22 2 13 21 11 13 3 11"/>
@@ -39,7 +40,7 @@ const NAV_LINKS = [
     ),
   },
   {
-    href: '/friends', label: 'Friends', alsoMatches: [],
+    href: '/friends', label: 'Friends', alsoMatches: [] as string[],
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -49,13 +50,20 @@ const NAV_LINKS = [
   },
 ] as const
 
+const MOBILE_MAIN_HREFS = ['/budget', '/trips']
+
 export default function Nav() {
+  const [moreOpen, setMoreOpen] = useState(false)
   const pathname = usePathname()
 
   const isActive = (href: string, alsoMatches: readonly string[] = []) => {
     const all = [href, ...alsoMatches]
     return all.some(p => pathname === p || pathname.startsWith(p + '/'))
   }
+
+  const mainTabs = NAV_LINKS.filter(l => MOBILE_MAIN_HREFS.includes(l.href))
+  const moreTabs = NAV_LINKS.filter(l => !MOBILE_MAIN_HREFS.includes(l.href))
+  const moreActive = moreTabs.some(({ href, alsoMatches }) => isActive(href, alsoMatches))
 
   return (
     <>
@@ -84,7 +92,7 @@ export default function Nav() {
             })}
           </div>
 
-          <form className="ml-auto md:ml-0">
+          <form className="hidden md:block ml-auto md:ml-0">
             <button formAction={logout} className="text-sm text-gray-400 hover:text-gray-600 transition whitespace-nowrap">
               Sign out
             </button>
@@ -92,10 +100,10 @@ export default function Nav() {
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar */}
+      {/* Mobile bottom tab bar — Budget, Trips, More */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-pb">
         <div className="flex">
-          {NAV_LINKS.map(({ href, label, icon, alsoMatches }) => {
+          {mainTabs.map(({ href, label, icon, alsoMatches }) => {
             const active = isActive(href, alsoMatches)
             return (
               <Link
@@ -110,8 +118,98 @@ export default function Nav() {
               </Link>
             )
           })}
+
+          <button
+            onClick={() => setMoreOpen(true)}
+            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition ${
+              moreActive ? 'text-blue-600' : 'text-gray-400'
+            }`}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
+            </svg>
+            <span className="text-[10px] font-medium">More</span>
+          </button>
         </div>
       </nav>
+
+      {/* More sheet */}
+      {moreOpen && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white rounded-t-2xl shadow-xl">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+              <p className="text-base font-semibold text-gray-900">More</p>
+              <button
+                onClick={() => setMoreOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="px-4 py-3 pb-8 space-y-1">
+              {moreTabs.map(({ href, label, icon, alsoMatches }) => {
+                const active = isActive(href, alsoMatches)
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMoreOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                      active
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    <span className={active ? 'text-blue-600' : 'text-gray-400'}>{icon}</span>
+                    {label}
+                  </Link>
+                )
+              })}
+              <Link
+                href="/settings"
+                onClick={() => setMoreOpen(false)}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  pathname === '/settings' || pathname.startsWith('/settings/')
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <span className={pathname.startsWith('/settings') ? 'text-blue-600' : 'text-gray-400'}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                  </svg>
+                </span>
+                Settings
+              </Link>
+              <form>
+                <button
+                  formAction={logout}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors text-left"
+                >
+                  <span className="text-gray-400">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                      <polyline points="16 17 21 12 16 7"/>
+                      <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                  </span>
+                  Sign out
+                </button>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
     </>
   )
 }

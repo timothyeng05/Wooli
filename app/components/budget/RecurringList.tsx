@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
+import { useConfirm } from '@/app/components/ui/ToastProvider'
 
 interface RecurringItem {
   id: string
@@ -37,6 +38,33 @@ function ordinal(n: number) {
   return ['th','st','nd','rd'][n % 10] ?? 'th'
 }
 
+function toMonthlyAmount(amount: number, frequency: string): number {
+  switch (frequency?.toLowerCase()) {
+    case 'weekly':    return amount * 52 / 12
+    case 'biweekly':  return amount * 26 / 12
+    case 'monthly':   return amount * 1
+    case 'quarterly': return amount / 3
+    case 'yearly':    return amount / 12
+    default:          return amount
+  }
+}
+
+function computeNextDue(item: RecurringItem, today: Date): Date | null {
+  const start = item.next_date ? new Date(item.next_date + 'T00:00:00') : null
+  if (!start) return null
+  const d = new Date(start)
+  const freq = item.frequency?.toLowerCase() ?? 'monthly'
+  while (d < today) {
+    if (freq === 'weekly')        d.setDate(d.getDate() + 7)
+    else if (freq === 'biweekly') d.setDate(d.getDate() + 14)
+    else if (freq === 'monthly')  d.setMonth(d.getMonth() + 1)
+    else if (freq === 'quarterly') d.setMonth(d.getMonth() + 3)
+    else if (freq === 'yearly')   d.setFullYear(d.getFullYear() + 1)
+    else break
+  }
+  return d
+}
+
 export default function RecurringList({
   userId,
   initialItems,
@@ -46,6 +74,7 @@ export default function RecurringList({
   initialItems: RecurringItem[]
   categories: Category[]
 }) {
+  const confirm = useConfirm()
   const [items, setItems] = useState(initialItems)
 
   const toggle = async (id: string, current: boolean) => {
@@ -55,7 +84,7 @@ export default function RecurringList({
   }
 
   const remove = async (id: string) => {
-    if (!confirm('Delete this recurring transaction?')) return
+    if (!await confirm('Delete this recurring transaction?')) return
     const supabase = createClient()
     await supabase.from('recurring_transactions').delete().eq('id', id)
     setItems(prev => prev.filter(i => i.id !== id))
@@ -88,6 +117,25 @@ export default function RecurringList({
       <span className={`text-sm font-semibold flex-shrink-0 ${item.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
         {item.amount >= 0 ? '+' : ''}${Math.abs(item.amount).toFixed(2)}
       </span>
+      {(() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const due = computeNextDue(item, today)
+        if (!due) return null
+        const daysUntil = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        const label = daysUntil === 0 ? 'Due today' :
+                      daysUntil < 0  ? `${Math.abs(daysUntil)}d overdue` :
+                      daysUntil <= 7 ? `Due in ${daysUntil}d` :
+                      due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        const cls = daysUntil <= 0  ? 'bg-red-50 text-red-600' :
+                    daysUntil <= 7  ? 'bg-amber-50 text-amber-700' :
+                                      'bg-gray-50 text-gray-500'
+        return (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${cls}`}>
+            {label}
+          </span>
+        )
+      })()}
       <div className="flex items-center gap-2 flex-shrink-0">
         <Link href={`/budget/recurring/${item.id}`} className="text-xs text-gray-400 hover:text-blue-600 transition">Edit</Link>
         <button onClick={() => toggle(item.id, item.is_active)} className="text-xs text-gray-400 hover:text-gray-700 transition">
@@ -98,19 +146,37 @@ export default function RecurringList({
     </div>
   )
 
+  const activeItems = items.filter(i => i.is_active)
+  const monthlyOut = activeItems
+    .filter(i => i.amount > 0)
+    .reduce((sum, i) => sum + toMonthlyAmount(i.amount, i.frequency), 0)
+  const monthlyIn = activeItems
+    .filter(i => i.amount < 0)
+    .reduce((sum, i) => sum + toMonthlyAmount(Math.abs(i.amount), i.frequency), 0)
+  const monthlyNet = monthlyIn - monthlyOut
+
   return (
-    <div className="space-y-6">
-      {active.length > 0 && (
-        <div className="space-y-2">
-          {active.map(renderItem)}
-        </div>
-      )}
-      {inactive.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Paused</p>
-          <div className="space-y-2">{inactive.map(renderItem)}</div>
-        </div>
-      )}
+    <div>
+      <div className="space-y-6">
+        {active.length > 0 && (
+          <div className="space-y-2">
+            {active.map(renderItem)}
+          </div>
+        )}
+        {inactive.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Paused</p>
+            <div className="space-y-2">{inactive.map(renderItem)}</div>
+          </div>
+        )}
+      </div>
+      <div className="sticky bottom-0 border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600 mt-4">
+        Monthly out: ${monthlyOut.toFixed(2)} · In: ${monthlyIn.toFixed(2)} ·{' '}
+        Net:{' '}
+        <span className={monthlyNet >= 0 ? 'text-green-600' : 'text-red-600'}>
+          ${Math.abs(monthlyNet).toFixed(2)}
+        </span>
+      </div>
     </div>
   )
 }

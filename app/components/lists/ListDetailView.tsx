@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import ListItemRow, { type ListItemData } from './ListItemRow'
 import ListSharePanel from './ListSharePanel'
+import { useToast, useConfirm } from '@/app/components/ui/ToastProvider'
 
 export type ListItem = ListItemData
 
@@ -60,6 +61,8 @@ export default function ListDetailView({
   shares?: Share[]
 }) {
   const router = useRouter()
+  const { toast } = useToast()
+  const confirm = useConfirm()
   const [items, setItems] = useState<ListItem[]>(initialItems)
   const [name, setName] = useState(list.name)
   const [editingName, setEditingName] = useState(false)
@@ -102,7 +105,7 @@ export default function ListDetailView({
       .single()
     setAdding(false)
     if (error || !data) {
-      alert('Failed to add item')
+      toast.error('Failed to add item')
       return
     }
     setItems(prev => [...prev, data as ListItem])
@@ -123,7 +126,7 @@ export default function ListDetailView({
     const { error } = await supabase.from('list_items').delete().eq('id', id)
     if (error) {
       setItems(prev)
-      alert('Failed to delete')
+      toast.error('Failed to delete')
     }
   }
 
@@ -133,7 +136,7 @@ export default function ListDetailView({
     const { error } = await supabase.from('list_items').update(patch).eq('id', id)
     if (error) {
       setItems(prev)
-      alert('Failed to update')
+      toast.error('Failed to update')
     }
   }
 
@@ -147,7 +150,7 @@ export default function ListDetailView({
     setEditingName(false)
     const { error } = await supabase.from('lists').update({ name: trimmed }).eq('id', list.id)
     if (error) {
-      alert('Failed to rename')
+      toast.error('Failed to rename')
       setName(list.name)
     } else {
       router.refresh()
@@ -160,17 +163,17 @@ export default function ListDetailView({
     const { error } = await supabase.from('lists').update({ is_archived: next }).eq('id', list.id)
     if (error) {
       setArchived(!next)
-      alert('Failed to update')
+      toast.error('Failed to update')
     } else {
       router.refresh()
     }
   }
 
   const deleteList = async () => {
-    if (!confirm(`Delete "${list.name}" and all its items?`)) return
+    if (!await confirm(`Delete "${list.name}" and all its items?`)) return
     const { error } = await supabase.from('lists').delete().eq('id', list.id)
     if (error) {
-      alert('Failed to delete list')
+      toast.error('Failed to delete list')
       return
     }
     router.push('/lists')
@@ -250,6 +253,27 @@ export default function ListDetailView({
           </button>
         </div>
       )}
+
+      {/* Progress summary */}
+      {items.length > 0 && (() => {
+        const total = items.length
+        const doneCount = done.length
+        const pct = Math.round((doneCount / total) * 100)
+        const isComplete = pct === 100
+        return (
+          <div className="space-y-1.5">
+            <p className="text-sm text-gray-500">
+              {doneCount} of {total} item{total === 1 ? '' : 's'} complete
+            </p>
+            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${isComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Active items */}
       {visible.length > 0 && (

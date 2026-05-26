@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
+import { useToast, useConfirm } from '@/app/components/ui/ToastProvider'
 
 const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
 
@@ -64,6 +65,8 @@ export default function TransactionList({
   transactions: Transaction[]
   categories?: Category[]
 }) {
+  const { toast } = useToast()
+  const confirm = useConfirm()
   const [items, setItems] = useState<Transaction[]>(transactions)
   const [search, setSearch] = useState('')
   const [ownerTab, setOwnerTab] = useState<OwnerTab>('All')
@@ -132,7 +135,7 @@ export default function TransactionList({
 
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this transaction?')) return
+    if (!await confirm('Delete this transaction?')) return
     const supabase = createClient()
     const { error } = await supabase.from('transactions').delete().eq('id', id)
     if (!error) setItems(prev => prev.filter(t => t.id !== id))
@@ -185,7 +188,7 @@ export default function TransactionList({
   }
 
   const bulkDelete = async () => {
-    if (!confirm(`Delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`)) return
+    if (!await confirm(`Delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`)) return
     setBulkLoading(true)
     const supabase = createClient()
     const ids = [...selectedIds]
@@ -231,15 +234,37 @@ export default function TransactionList({
 
   return (
     <div>
+      {/* Sticky search bar */}
+      <div className="sticky top-[calc(53px+44px)] md:top-0 z-20 bg-white border-b border-gray-100 -mx-6 px-6 py-2 mb-3">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Search transactions..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          )}
+        </div>
+        {search && (
+          <p className="text-xs text-gray-400 mt-1 px-1">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</p>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search..."
-          className="flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
         {uniqueAccounts.length > 0 && (
           <select
             value={accountFilter}

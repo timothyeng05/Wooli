@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import CashFlowClient from '@/app/components/budget/CashFlowClient'
+import MonthNav from '@/app/components/budget/MonthNav'
 
 export interface CashFlowTransaction {
   id: string
@@ -31,15 +32,24 @@ export interface CashFlowCategory {
   parent_id: string | null
 }
 
-export default async function CashFlowPage() {
+export default async function CashFlowPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>
+}) {
+  const params = await searchParams
+  const now = new Date()
+  const year = parseInt(params.year ?? '') || now.getFullYear()
+  const month = parseInt(params.month ?? '')  // 0-indexed
+  const resolvedMonth = isNaN(month) ? now.getMonth() : month
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const now = new Date()
-  // Last 6 months including current
-  const start = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString()
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+  // Last 6 months ending at the selected month
+  const start = new Date(year, resolvedMonth - 5, 1).toISOString()
+  const end = new Date(year, resolvedMonth + 1, 0, 23, 59, 59).toISOString()
 
   const [txnResult, catResult] = await Promise.all([
     supabase
@@ -72,11 +82,15 @@ export default async function CashFlowPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-gray-900">Cash Flow</h1>
+        <MonthNav year={year} month={resolvedMonth} />
+      </div>
       <CashFlowClient
         transactions={transactions}
         categories={categories}
-        currentYear={now.getFullYear()}
-        currentMonth={now.getMonth()}
+        currentYear={year}
+        currentMonth={resolvedMonth}
       />
     </div>
   )

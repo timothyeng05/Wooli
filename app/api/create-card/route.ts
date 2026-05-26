@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await userSupabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { templateId, coreBenefits, removedBenefits, periodOverrides, templateData } = await request.json()
+    const { templateId, coreBenefits, removedBenefits, periodOverrides, templateData, openedAt } = await request.json()
 
     // Use service role to bypass RLS for admin operations
     const supabase = createServerClient(
@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
         network: templateData.network || null,
         has_annual_fee: !!templateData.annual_fee,
         annual_fee: templateData.annual_fee || null,
-        is_active: true
+        is_active: true,
+        opened_at: openedAt || null
       })
       .select()
       .single()

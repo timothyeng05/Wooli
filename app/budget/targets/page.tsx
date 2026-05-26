@@ -3,27 +3,28 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import BudgetTargetsClient from '@/app/components/budget/BudgetTargetsClient'
+import MonthNav from '@/app/components/budget/MonthNav'
 
 export default async function BudgetTargetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>
+  searchParams: Promise<{ year?: string; month?: string }>
 }) {
   const params = await searchParams
+  const now = new Date()
+  const year = parseInt(params.year ?? '') || now.getFullYear()
+  const monthParam = parseInt(params.month ?? '')  // 0-indexed
+  const resolvedMonth = isNaN(monthParam) ? now.getMonth() : monthParam
+
+  // Build YYYY-MM string for budget table lookup (month is 1-indexed in the string)
+  const month = `${year}-${String(resolvedMonth + 1).padStart(2, '0')}`
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const now = new Date()
-  const raw = params?.month
-  const month = raw && /^\d{4}-\d{2}$/.test(raw)
-    ? raw
-    : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-  const [year, mon] = month.split('-').map(Number)
-  const lastDay = new Date(year, mon, 0).getDate()
-  const monthStart = `${month}-01T00:00:00`
-  const monthEnd   = `${month}-${String(lastDay).padStart(2, '0')}T23:59:59`
+  const monthStart = new Date(year, resolvedMonth, 1).toISOString()
+  const monthEnd   = new Date(year, resolvedMonth + 1, 0, 23, 59, 59).toISOString()
 
   const [categoriesResult, txnResult, budgetsResult] = await Promise.all([
     supabase
@@ -71,6 +72,10 @@ export default async function BudgetTargetsPage({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <div className="max-w-2xl mx-auto px-4 pt-6 pb-2 flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-900">Budget Targets</h1>
+        <MonthNav year={year} month={resolvedMonth} />
+      </div>
       <BudgetTargetsClient
         categories={(categoriesResult.data ?? []) as any}
         actuals={actuals}

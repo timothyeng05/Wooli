@@ -103,24 +103,36 @@ const NAV_GROUPS = [
   },
 ]
 
+function getCurrentLabel(pathname: string): string {
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      if (item.match(pathname)) return item.label
+    }
+  }
+  return 'Budget'
+}
+
 export default function BudgetMobileDrawer() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
   return (
     <>
-      {/* Hamburger trigger */}
-      <button
-        onClick={() => setOpen(true)}
-        className="md:hidden fixed top-3 left-4 z-40 w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition"
-        aria-label="Open menu"
-      >
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
+      {/* Sticky sub-header — sits below global nav in document flow */}
+      <div className="md:hidden sticky top-[53px] z-30 bg-white border-b border-gray-100 flex items-center gap-3 px-4 h-11">
+        <button
+          onClick={() => setOpen(true)}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition"
+          aria-label="Open budget menu"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <span className="text-sm font-semibold text-gray-800">{getCurrentLabel(pathname)}</span>
+      </div>
 
       {/* Backdrop */}
       {open && (
@@ -134,12 +146,12 @@ export default function BudgetMobileDrawer() {
       <div className={`md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-250 ease-in-out ${
         open ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-12 pb-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <p className="text-lg font-bold text-gray-900">Budget</p>
           <button
             onClick={() => setOpen(false)}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100"
+            aria-label="Close menu"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -147,7 +159,6 @@ export default function BudgetMobileDrawer() {
           </button>
         </div>
 
-        {/* Nav groups */}
         <div className="overflow-y-auto h-full pb-20 px-3 pt-3">
           {NAV_GROUPS.map(group => (
             <div key={group.label} className="mb-5">

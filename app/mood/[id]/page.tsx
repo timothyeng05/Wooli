@@ -10,14 +10,23 @@ export default async function MoodDetailPage({ params }: { params: Promise<{ id:
 
   if (!user) redirect('/login')
 
-  const { data: entry, error } = await supabase
-    .from('mood_entries')
-    .select('*')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .single()
+  const [{ data: entry, error }, { data: profile }] = await Promise.all([
+    supabase
+      .from('mood_entries')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single(),
+    supabase
+      .from('profiles')
+      .select('custom_activities')
+      .eq('id', user.id)
+      .single(),
+  ])
 
   if (error || !entry) redirect('/mood')
+
+  const customActivities: string[] | null = profile?.custom_activities as string[] | null
 
   return (
     <div className="min-h-screen bg-white">
@@ -31,7 +40,7 @@ export default async function MoodDetailPage({ params }: { params: Promise<{ id:
       </div>
       <div className="p-8 max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Edit Entry</h1>
-        <MoodDetailClient entry={entry} entryId={id} />
+        <MoodDetailClient entry={entry} entryId={id} customActivities={customActivities} />
       </div>
     </div>
   )

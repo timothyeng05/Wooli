@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-client'
+import { useToast, useConfirm } from '@/app/components/ui/ToastProvider'
 import {
   DndContext,
   DragEndEvent,
@@ -125,6 +126,8 @@ export default function CategoryManager({
   userId: string
   categories: Category[]
 }) {
+  const { toast } = useToast()
+  const confirm = useConfirm()
   const [categories, setCategories] = useState(initial)
   const [adding, setAdding] = useState<{ parentId: string | null } | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
@@ -199,7 +202,7 @@ export default function CategoryManager({
       setNewColor('#6366f1')
       setNewIcon('')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add category')
+      toast.error(err instanceof Error ? err.message : 'Failed to add category')
     } finally {
       setSaving(false)
     }
@@ -241,7 +244,7 @@ export default function CategoryManager({
       setCategories(updated)
       setEditing(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update')
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
     } finally {
       setSaving(false)
     }
@@ -249,7 +252,7 @@ export default function CategoryManager({
 
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this category? Transactions using it will become uncategorized.')) return
+    if (!await confirm('Delete this category?', 'Transactions using it will become uncategorized.')) return
     setDeletingId(id)
     try {
       const supabase = createClient()
@@ -257,7 +260,7 @@ export default function CategoryManager({
       if (error) throw error
       setCategories(prev => prev.filter(c => c.id !== id && c.parent_id !== id))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete')
+      toast.error(err instanceof Error ? err.message : 'Failed to delete')
     } finally {
       setDeletingId(null)
     }

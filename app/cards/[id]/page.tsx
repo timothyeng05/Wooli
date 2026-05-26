@@ -14,7 +14,7 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
 
   const { data: card } = await supabase
     .from('cards')
-    .select('id, name, issuer, network, annual_fee, is_active')
+    .select('id, name, issuer, network, annual_fee, is_active, opened_at')
     .eq('id', id)
     .eq('user_id', user.id)
     .single()
