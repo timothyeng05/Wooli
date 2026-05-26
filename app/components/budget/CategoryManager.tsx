@@ -61,14 +61,23 @@ function DragHandle(props: React.HTMLAttributes<HTMLButtonElement>) {
 }
 
 function CatIcon({ icon, color, size = 'sm' }: { icon: string | null; color: string; size?: 'sm' | 'md' }) {
-  if (icon) {
-    return <span className={size === 'md' ? 'text-base flex-shrink-0' : 'text-sm flex-shrink-0 w-4 text-center'}>{icon}</span>
+  if (size === 'md') {
+    return (
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: `${color}22` }}>
+        {icon
+          ? <span className="text-base leading-none">{icon}</span>
+          : <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />}
+      </div>
+    )
   }
   return (
-    <div
-      className={size === 'md' ? 'w-3 h-3 rounded-full flex-shrink-0' : 'w-2 h-2 rounded-full flex-shrink-0'}
-      style={{ backgroundColor: color }}
-    />
+    <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+      style={{ backgroundColor: `${color}22` }}>
+      {icon
+        ? <span className="text-xs leading-none">{icon}</span>
+        : <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />}
+    </div>
   )
 }
 
@@ -98,7 +107,7 @@ function SortableChildRow({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex items-center gap-2 px-3 py-2 pl-6 bg-gray-50">
+      <div className="flex items-center gap-2 px-4 py-2 pl-7 bg-gray-50/60">
         <DragHandle {...attributes} {...listeners} />
         <CatIcon icon={child.icon} color={child.color} size="sm" />
         <div className="flex-1 min-w-0">
@@ -430,7 +439,7 @@ export default function CategoryManager({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {[
           { label: 'Expense Categories', list: expenseParents, income: false, isTransfer: false },
           { label: 'Income Categories',  list: incomeParents,  income: true,  isTransfer: false },
@@ -439,9 +448,9 @@ export default function CategoryManager({
           <div key={label}>
             <div className="flex items-center justify-between mb-1">
               <div>
-                <h3 className="font-semibold text-gray-900">{label}</h3>
+                <h3 className="text-sm font-semibold text-gray-700">{label}</h3>
                 {isTransfer && (
-                  <p className="text-xs text-gray-400 mt-0.5">Assigning these auto-marks transactions as transfers</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Transactions assigned here are excluded from totals</p>
                 )}
               </div>
               <button
@@ -463,9 +472,9 @@ export default function CategoryManager({
               {list.map(parent => {
                 const subs = childrenOf(parent.id)
                 return (
-                  <div key={parent.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div key={parent.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     {/* Parent row */}
-                    <div className="flex items-center gap-3 px-4 py-3 bg-white">
+                    <div className="flex items-center gap-3 px-4 py-3">
                       <CatIcon icon={parent.icon} color={parent.color} size="md" />
                       <div className="flex-1 min-w-0">
                         <span className="font-medium text-gray-900">{parent.name}</span>
