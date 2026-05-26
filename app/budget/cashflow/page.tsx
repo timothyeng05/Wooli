@@ -51,8 +51,11 @@ export default async function CashFlowPage({
   const start = new Date(year, resolvedMonth - 5, 1).toISOString()
   const end = new Date(year, resolvedMonth + 1, 0, 23, 59, 59).toISOString()
 
-  const [txnResult, catResult] = await Promise.all([
-    supabase
+  // Supabase caps results at 1000 rows server-side; paginate to fetch all
+  const PAGE = 1000
+  let allTxns: any[] = []
+  for (let page = 0; ; page++) {
+    const { data } = await supabase
       .from('transactions')
       .select(`
         id, amount, merchant, transacted_at, is_transfer, is_pending,
@@ -62,14 +65,20 @@ export default async function CashFlowPage({
       .gte('transacted_at', start)
       .lte('transacted_at', end)
       .order('transacted_at', { ascending: false })
-      .limit(50000) as any,
+      .range(page * PAGE, (page + 1) * PAGE - 1) as any
+    if (!data || data.length === 0) break
+    allTxns = allTxns.concat(data)
+    if (data.length < PAGE) break
+  }
+
+  const [catResult] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, icon, is_income, is_transfer, parent_id')
       .eq('user_id', user.id) as any,
   ])
 
-  const transactions: CashFlowTransaction[] = (txnResult.data ?? []).map((t: any) => ({
+  const transactions: CashFlowTransaction[] = allTxns.map((t: any) => ({
     id: t.id,
     amount: Number(t.amount),
     merchant: t.merchant ?? null,
