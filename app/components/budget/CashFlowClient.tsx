@@ -241,39 +241,37 @@ function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] 
     }
     const order = ['Timothy Eng', 'Jessica Li', 'Shared']
     return [...map.entries()]
-      .sort((a, b) => (order.indexOf(a[0]) ?? 99) - (order.indexOf(b[0]) ?? 99))
+      .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
       .filter(([, v]) => v.expenses > 0 || v.income > 0)
   }, [transactions])
 
   if (rows.length === 0) return null
 
-  const maxExpense = Math.max(...rows.map(([, v]) => v.expenses), 1)
+  const totalExpenses = rows.reduce((s, [, v]) => s + v.expenses, 0)
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mt-2">
-      <p className="text-sm font-bold text-gray-900 mb-3">By Person</p>
-      <div className="space-y-3">
+      <p className="text-sm font-bold text-gray-900 mb-3">Spending by Person</p>
+      <div className="grid grid-cols-3 gap-3">
         {rows.map(([owner, { expenses, income }]) => {
           const label = OWNER_DISPLAY[owner] ?? owner
           const color = OWNER_COLORS[owner] ?? '#6b7280'
+          const pct = totalExpenses > 0 ? Math.round((expenses / totalExpenses) * 100) : 0
           return (
-            <div key={owner}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <span className="text-sm font-medium text-gray-700">{label}</span>
-                </div>
-                <div className="flex items-center gap-3 text-xs tabular-nums">
-                  {income > 0 && <span className="text-green-600">+${fmt(income)}</span>}
-                  <span className="text-gray-700 font-semibold">-${fmt(expenses)}</span>
-                </div>
+            <div key={owner} className="rounded-xl p-3" style={{ backgroundColor: `${color}10` }}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-xs font-semibold text-gray-700">{label}</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${(expenses / maxExpense) * 100}%`, backgroundColor: color }}
-                />
-              </div>
+              <p className="text-[10px] text-gray-400 mb-0.5">Spent</p>
+              <p className="text-base font-bold text-gray-900 tabular-nums">${fmt(expenses)}</p>
+              <p className="text-[10px] tabular-nums mt-0.5" style={{ color }}>{pct}% of total</p>
+              {income > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <p className="text-[10px] text-gray-400 mb-0.5">Earned</p>
+                  <p className="text-sm font-semibold text-green-600 tabular-nums">${fmt(income)}</p>
+                </div>
+              )}
             </div>
           )
         })}
