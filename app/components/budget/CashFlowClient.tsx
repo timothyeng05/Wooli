@@ -273,16 +273,8 @@ export default function CashFlowClient({
 
   const monthLabel = `${MONTH_LABELS[selected.month]} ${selected.year}`
 
-  const janTxns = transactions.filter(t => { const d = new Date(t.transacted_at); return d.getFullYear() === 2026 && d.getMonth() === 0 })
-
   return (
     <div>
-      <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-3 mb-4 text-xs font-mono space-y-1">
-        <p>Total txns: {transactions.length}</p>
-        <p>Jan txns: {janTxns.length}</p>
-        <p>First txn date: {transactions[transactions.length - 1]?.transacted_at ?? 'none'}</p>
-        <p>Last txn date: {transactions[0]?.transacted_at ?? 'none'}</p>
-      </div>
       {/* Chart */}
       <div className="bg-gray-50 rounded-2xl p-4 mb-4">
         <CashFlowChart
