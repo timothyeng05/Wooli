@@ -61,7 +61,7 @@ export default async function CashFlowPage({
       .eq('user_id', user.id)
       .gte('transacted_at', start)
       .lte('transacted_at', end)
-      .eq('is_pending', false)
+      .neq('is_pending', true)
       .order('transacted_at', { ascending: false }) as any,
     supabase
       .from('categories')

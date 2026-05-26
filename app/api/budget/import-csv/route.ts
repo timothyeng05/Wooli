@@ -69,6 +69,7 @@ export async function POST(request: Request) {
         transacted_at: r.date + 'T12:00:00',
         category_id: catId,
         is_transfer: isTransfer,
+        is_pending: false,
         notes: r.notes || null,
         owner,
         account_name: r.account || null,
