@@ -59,10 +59,11 @@ const NAV_LINKS = [
   },
 ] as const
 
-const MOBILE_MAIN_HREFS = ['/budget', '/mood', '/trips', '/settings']
+const MAIN_HREFS = ['/budget', '/trips']
 
 export default function Nav() {
   const [moreOpen, setMoreOpen] = useState(false)
+  const [desktopMoreOpen, setDesktopMoreOpen] = useState(false)
   const pathname = usePathname()
 
   const isActive = (href: string, alsoMatches: readonly string[] = []) => {
@@ -70,8 +71,8 @@ export default function Nav() {
     return all.some(p => pathname === p || pathname.startsWith(p + '/'))
   }
 
-  const mainTabs = NAV_LINKS.filter(l => MOBILE_MAIN_HREFS.includes(l.href))
-  const moreTabs = NAV_LINKS.filter(l => !MOBILE_MAIN_HREFS.includes(l.href))
+  const mainTabs = NAV_LINKS.filter(l => MAIN_HREFS.includes(l.href))
+  const moreTabs = NAV_LINKS.filter(l => !MAIN_HREFS.includes(l.href))
   const moreActive = moreTabs.some(({ href, alsoMatches }) => isActive(href, alsoMatches))
 
   return (
@@ -83,9 +84,9 @@ export default function Nav() {
             Wooli
           </Link>
 
-          {/* Desktop nav links */}
+          {/* Desktop nav: Budget, Trips, More */}
           <div className="hidden md:flex items-center gap-1 flex-1">
-            {NAV_LINKS.map(({ href, label, alsoMatches }) => {
+            {mainTabs.map(({ href, label, alsoMatches }) => {
               const active = isActive(href, alsoMatches)
               return (
                 <Link
@@ -99,13 +100,63 @@ export default function Nav() {
                 </Link>
               )
             })}
-          </div>
 
-          <form className="hidden md:block ml-auto md:ml-0">
-            <button formAction={logout} className="text-sm text-gray-400 hover:text-gray-600 transition whitespace-nowrap">
-              Sign out
-            </button>
-          </form>
+            {/* Desktop More dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setDesktopMoreOpen(v => !v)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${
+                  moreActive || desktopMoreOpen ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                More
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              {desktopMoreOpen && (
+                <>
+                  <div className="fixed inset-0 z-[40]" onClick={() => setDesktopMoreOpen(false)} />
+                  <div className="absolute top-full left-0 mt-1.5 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-[50] py-1.5 overflow-hidden">
+                    {moreTabs.map(({ href, label, icon, alsoMatches }) => {
+                      const active = isActive(href, alsoMatches)
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setDesktopMoreOpen(false)}
+                          className={`flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors ${
+                            active ? 'text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className={active ? 'text-blue-600' : 'text-gray-400'}>{icon}</span>
+                          {label}
+                        </Link>
+                      )
+                    })}
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <form>
+                        <button
+                          formAction={logout}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <span className="text-gray-400">
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                              <polyline points="16 17 21 12 16 7"/>
+                              <line x1="21" y1="12" x2="9" y2="12"/>
+                            </svg>
+                          </span>
+                          Sign out
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </nav>
 
@@ -144,7 +195,7 @@ export default function Nav() {
         </div>
       </nav>
 
-      {/* More sheet */}
+      {/* Mobile More sheet */}
       {moreOpen && (
         <>
           <div
