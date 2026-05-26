@@ -362,6 +362,21 @@ export default function TransactionList({
                           onClick={e => e.stopPropagation()} className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-blue-600" />
                       )}
 
+                      {/* Category icon */}
+                      {!selectMode && (
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
+                          style={{ backgroundColor: t.is_transfer ? '#f3f4f6' : t.categories?.color ? `${t.categories.color}22` : '#f3f4f6' }}
+                        >
+                          {t.is_transfer
+                            ? <span>↔️</span>
+                            : t.categories
+                            ? <span>{getCatEmoji(t.categories.name, t.categories.icon ?? null)}</span>
+                            : <span className="text-gray-400 text-xs font-bold">?</span>
+                          }
+                        </div>
+                      )}
+
                       {/* Merchant name + pending badge */}
                       <div className="w-0 flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">

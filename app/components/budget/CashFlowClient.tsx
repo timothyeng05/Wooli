@@ -268,8 +268,8 @@ export default function CashFlowClient({
     })
   }, [transactions, selected])
 
-  const incomeTxns = selectedTxns.filter(t => t.amount >= 0)
-  const expenseTxns = selectedTxns.filter(t => t.amount < 0)
+  const incomeTxns = selectedTxns.filter(t => t.category ? t.category.is_income : t.amount >= 0)
+  const expenseTxns = selectedTxns.filter(t => t.category ? !t.category.is_income : t.amount < 0)
 
   const monthLabel = `${MONTH_LABELS[selected.month]} ${selected.year}`
 
