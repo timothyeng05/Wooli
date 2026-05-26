@@ -273,26 +273,8 @@ export default function CashFlowClient({
 
   const monthLabel = `${MONTH_LABELS[selected.month]} ${selected.year}`
 
-  // ── DEBUG (remove after diagnosing) ──────────────────────────────────────────
-  const janTxns = transactions.filter(t => {
-    const d = new Date(t.transacted_at)
-    return d.getFullYear() === 2026 && d.getMonth() === 0
-  })
-  const janNonTransfer = janTxns.filter(t => !t.is_transfer && !t.category?.is_transfer)
-  // ─────────────────────────────────────────────────────────────────────────────
-
   return (
     <div>
-      {/* DEBUG panel */}
-      <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-3 mb-4 text-xs font-mono space-y-1">
-        <p>Total txns received: {transactions.length}</p>
-        <p>Jan txns (date filter): {janTxns.length}</p>
-        <p>Jan non-transfer: {janNonTransfer.length}</p>
-        <p>Jan sample transacted_at: {janTxns[0]?.transacted_at ?? 'none'}</p>
-        <p>Jan sample amount: {janTxns[0]?.amount ?? 'none'}</p>
-        <p>Jan sample is_transfer: {String(janTxns[0]?.is_transfer ?? 'none')}</p>
-        <p>monthlyTotals[Jan]: income={monthlyTotals.find(m => m.year===2026 && m.month===0)?.income ?? 'n/a'} expenses={monthlyTotals.find(m => m.year===2026 && m.month===0)?.expenses ?? 'n/a'}</p>
-      </div>
       {/* Chart */}
       <div className="bg-gray-50 rounded-2xl p-4 mb-4">
         <CashFlowChart

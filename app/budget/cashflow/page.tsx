@@ -61,7 +61,8 @@ export default async function CashFlowPage({
       .eq('user_id', user.id)
       .gte('transacted_at', start)
       .lte('transacted_at', end)
-      .order('transacted_at', { ascending: false }) as any,
+      .order('transacted_at', { ascending: false })
+      .limit(5000) as any,
     supabase
       .from('categories')
       .select('id, name, color, icon, is_income, is_transfer, parent_id')
