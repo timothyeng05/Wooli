@@ -118,7 +118,12 @@ function NetWorthChart({ series, period, onPeriod }: {
   }
 
   const vals = pts.map(p => p.value)
-  const minV = Math.min(...vals), maxV = Math.max(...vals), range = maxV - minV || 1
+  const dataMin = Math.min(...vals), dataMax = Math.max(...vals)
+  const dataRange = dataMax - dataMin || Math.abs(dataMax) * 0.05 || 1
+  // Pad 20% above and below so the line doesn't fill the full chart height
+  const yPad = dataRange * 0.20
+  const minV = dataMin - yPad, maxV = dataMax + yPad
+  const range = maxV - minV
   function xOf(i: number) { return PL + (i / (pts.length - 1)) * IW }
   function yOf(v: number) { return PT + IH - ((v - minV) / range) * IH }
 
