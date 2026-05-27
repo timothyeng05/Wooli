@@ -125,7 +125,7 @@ const CH = 240, PL = 60, PR = 20, PT = 16, PB = 32
 function ForecastChart({ points, retirementMarkers, goals }: {
   points: YearlyPoint[]
   retirementMarkers: { year: number; label: string; color: string }[]
-  goals: { target_date: string | null; target_amount: number; color: string }[]
+  goals: { target_date: string | null; target_amount: number; color: string; name: string }[]
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
@@ -183,20 +183,16 @@ function ForecastChart({ points, retirementMarkers, goals }: {
               r="6" fill={g.color} stroke="white" strokeWidth="2" />
           )
         })}
-        {/* Retirement dots on the line */}
-        {retirementMarkers.map(({ year, label, color }) => {
+        {/* Retirement triangles on the line */}
+        {retirementMarkers.map(({ year, color }) => {
           const idx = points.findIndex(p => p.year === year)
           if (idx < 0) return null
           const cx = xOf(idx)
           const cy = yOf(points[idx].netWorth)
           return (
-            <g key={`ret-${year}`}>
-              <circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r="7" fill={color} stroke="white" strokeWidth="2" />
-              <text x={(cx + 10).toFixed(1)} y={(cy - 4).toFixed(1)} textAnchor="start"
-                style={{ fontSize: 9, fill: color, fontWeight: 700 }}>
-                {label}
-              </text>
-            </g>
+            <polygon key={`ret-${year}`}
+              points={`${cx.toFixed(1)},${(cy - 11).toFixed(1)} ${(cx - 7).toFixed(1)},${(cy + 5).toFixed(1)} ${(cx + 7).toFixed(1)},${(cy + 5).toFixed(1)}`}
+              fill={color} stroke="white" strokeWidth="2" strokeLinejoin="round" />
           )
         })}
         {/* X year labels */}
@@ -219,22 +215,32 @@ function ForecastChart({ points, retirementMarkers, goals }: {
           </>
         )}
       </svg>
-      {hoverPt && hover !== null && (
-        <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1 min-w-[160px]">
-          <p className="font-bold text-gray-900 text-sm">{hoverPt.year}</p>
-          <p className="text-blue-600 font-semibold">Net worth: ${fmtK(hoverPt.netWorth)}</p>
-          {hover > 0 && <>
-            <div className="border-t border-gray-100 pt-1 space-y-0.5">
-              {hoverPt.income > 0 && <p className="text-gray-500">Income: +${fmtK(hoverPt.income)}</p>}
-              <p className="text-gray-500">Expenses: −${fmtK(hoverPt.expenses)}</p>
-              {hoverPt.goalDrawdowns > 0 && <p className="text-amber-600">Goals: −${fmtK(hoverPt.goalDrawdowns)}</p>}
-            </div>
-            <p className={`font-semibold border-t border-gray-100 pt-1 ${netChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              Net flow: {netChange >= 0 ? '+' : '−'}${fmtK(Math.abs(netChange))}
-            </p>
-          </>}
-        </div>
-      )}
+      {hoverPt && hover !== null && (() => {
+        const retEvents = retirementMarkers.filter(m => m.year === hoverPt.year)
+        const goalEvents = goals.filter(g => g.target_date && new Date(g.target_date + 'T12:00:00').getFullYear() === hoverPt.year)
+        return (
+          <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1 min-w-[160px]">
+            <p className="font-bold text-gray-900 text-sm">{hoverPt.year}</p>
+            <p className="text-blue-600 font-semibold">Net worth: ${fmtK(hoverPt.netWorth)}</p>
+            {retEvents.map(m => (
+              <p key={m.label} className="font-semibold" style={{ color: m.color }}>{m.label}</p>
+            ))}
+            {goalEvents.map((g, i) => (
+              <p key={i} className="font-semibold" style={{ color: g.color }}>{g.name} — ${fmtK(g.target_amount)}</p>
+            ))}
+            {hover > 0 && <>
+              <div className="border-t border-gray-100 pt-1 space-y-0.5">
+                {hoverPt.income > 0 && <p className="text-gray-500">Income: +${fmtK(hoverPt.income)}</p>}
+                <p className="text-gray-500">Expenses: −${fmtK(hoverPt.expenses)}</p>
+                {hoverPt.goalDrawdowns > 0 && <p className="text-amber-600">Goals: −${fmtK(hoverPt.goalDrawdowns)}</p>}
+              </div>
+              <p className={`font-semibold border-t border-gray-100 pt-1 ${netChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                Net flow: {netChange >= 0 ? '+' : '−'}${fmtK(Math.abs(netChange))}
+              </p>
+            </>}
+          </div>
+        )
+      })()}
     </div>
   )
 }
