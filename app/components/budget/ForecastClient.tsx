@@ -9,6 +9,7 @@ export interface IncomeStream {
   name: string
   owner: string | null
   monthly_amount: number
+  tax_rate: number
   growth_type: 'flat' | 'manual'
   growth_rate: number
   yearly_amounts: Record<string, number>
@@ -120,7 +121,7 @@ function computeProjection({
 
 // ── Monte Carlo ───────────────────────────────────────────────────────────────
 const MC_SIMS = 400
-const MC_VOLATILITY = 15 // % annual stddev (typical diversified portfolio)
+const MC_VOLATILITY = 12 // % annual stddev
 
 interface MCBands { bull: number[]; base: number[]; bear: number[] }
 
@@ -160,9 +161,9 @@ function runMonteCarlo(params: {
   const bull: number[] = [], base: number[] = [], bear: number[] = []
   for (const vals of yearlyNW) {
     const s = [...vals].sort((a, b) => a - b)
-    bear.push(s[Math.floor(s.length * 0.1)])
+    bear.push(s[Math.floor(s.length * 0.25)])
     base.push(s[Math.floor(s.length * 0.5)])
-    bull.push(s[Math.floor(s.length * 0.9)])
+    bull.push(s[Math.floor(s.length * 0.75)])
   }
   return { bull, base, bear }
 }
@@ -319,20 +320,26 @@ function StreamForm({
 }) {
   const [name, setName] = useState(initial.name ?? '')
   const [owner, setOwner] = useState(initial.owner ?? '')
-  // UI works in annual amounts; storage is monthly — convert at boundaries
-  const [annual, setAnnual] = useState(String(initial.monthly_amount ? Math.round(initial.monthly_amount * 12) : ''))
+  const [taxRate, setTaxRate] = useState(String(initial.tax_rate ?? 40))
   const [growthType, setGrowthType] = useState<'flat' | 'manual'>(initial.growth_type ?? 'flat')
   const [growthRate, setGrowthRate] = useState(String(initial.growth_rate ?? '3'))
+
+  // UI works in pre-tax annual; storage is after-tax monthly — convert at boundaries
+  const taxMult = () => 1 - (parseFloat(taxRate) || 40) / 100
+  const [annual, setAnnual] = useState(String(
+    initial.monthly_amount ? Math.round(initial.monthly_amount * 12 / ((1 - (initial.tax_rate ?? 40) / 100) || 1)) : ''
+  ))
   const [yearlyAmounts, setYearlyAmounts] = useState<Record<string, string>>(() => {
     const base: Record<string, string> = {}
+    const initTax = 1 - (initial.tax_rate ?? 40) / 100
     for (const y of forecastYears.slice(1)) {
       const existingMonthly = initial.yearly_amounts?.[String(y)]
       if (existingMonthly !== undefined) {
-        base[String(y)] = String(Math.round(existingMonthly * 12))
+        base[String(y)] = String(Math.round(existingMonthly * 12 / (initTax || 1)))
       } else if (initial.monthly_amount) {
         const rate = (initial.growth_rate ?? 3) / 100
         const i = y - THIS_YEAR
-        base[String(y)] = String(Math.round(initial.monthly_amount * 12 * Math.pow(1 + rate, i)))
+        base[String(y)] = String(Math.round(initial.monthly_amount * 12 / (initTax || 1) * Math.pow(1 + rate, i)))
       } else {
         base[String(y)] = ''
       }
@@ -345,25 +352,26 @@ function StreamForm({
     for (const y of forecastYears.slice(1)) {
       const i = y - THIS_YEAR
       const rate = (parseFloat(growthRate) || 3) / 100
-      const annualAmt = parseFloat(annual) || 0
-      base[String(y)] = String(Math.round(annualAmt * Math.pow(1 + rate, i)))
+      const preTaxAmt = parseFloat(annual) || 0
+      base[String(y)] = String(Math.round(preTaxAmt * Math.pow(1 + rate, i)))
     }
     setYearlyAmounts(base)
     setGrowthType('manual')
   }
 
   const submit = () => {
+    const tm = taxMult()
     const resolvedYearly: Record<string, number> = {}
     if (growthType === 'manual') {
       for (const y of forecastYears.slice(1)) {
-        // Store as monthly
-        resolvedYearly[String(y)] = (parseFloat(yearlyAmounts[String(y)] || '0') || 0) / 12
+        resolvedYearly[String(y)] = (parseFloat(yearlyAmounts[String(y)] || '0') || 0) * tm / 12
       }
     }
     onSave({
       name: name.trim(),
       owner: owner || null,
-      monthly_amount: (parseFloat(annual) || 0) / 12,
+      tax_rate: parseFloat(taxRate) || 40,
+      monthly_amount: (parseFloat(annual) || 0) * tm / 12,
       growth_type: growthType,
       growth_rate: parseFloat(growthRate) || 0,
       yearly_amounts: resolvedYearly,
@@ -391,14 +399,27 @@ function StreamForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="text-[11px] text-gray-500 mb-1 block">Annual income (after tax)</label>
+          <label className="text-[11px] text-gray-500 mb-1 block">Annual income (pre-tax)</label>
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
             <input type="number" step="1000" value={annual} onChange={e => setAnnual(e.target.value)}
-              placeholder="138000"
+              placeholder="231600"
               className="w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          {annual && (
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              After tax: ${fmtK(Math.round((parseFloat(annual) || 0) * taxMult()))}/yr
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="text-[11px] text-gray-500 mb-1 block">Tax rate</label>
+          <div className="relative">
+            <input type="number" step="1" min="0" max="60" value={taxRate} onChange={e => setTaxRate(e.target.value)}
+              className="w-full px-2.5 pr-7 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
           </div>
         </div>
         <div>
@@ -631,21 +652,21 @@ export default function ForecastClient({
             <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
             <p className="text-[11px] text-gray-400 mt-0.5">
               {MC_SIMS} simulations · each year's return = your {investmentGrowthRate}% avg ± {MC_VOLATILITY}% random volatility ·
-              bull = top 10% of outcomes, bear = bottom 10%
+              bull = 75th percentile, base = median, bear = 25th percentile
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0 ml-4">
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
-              Bull
+              Bull (75th%)
             </div>
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
-              Base
+              Base (50th%)
             </div>
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
-              Bear
+              Bear (25th%)
             </div>
             {goalYears.size > 0 && (
               <div className="flex items-center gap-1.5">
@@ -681,7 +702,7 @@ export default function ForecastClient({
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      ${fmtK(s.monthly_amount * 12)}/yr
+                      ${fmtK(s.monthly_amount * 12 / (1 - (s.tax_rate ?? 40) / 100))}/yr pre-tax
                       {s.growth_type === 'flat'
                         ? ` · +${s.growth_rate}%/yr`
                         : ' · custom by year'}

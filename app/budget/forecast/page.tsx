@@ -24,7 +24,7 @@ export default async function ForecastPage() {
   ] = await Promise.all([
     supabase
       .from('forecast_income_streams')
-      .select('id, name, owner, monthly_amount, growth_type, growth_rate, yearly_amounts, sort_order')
+      .select('id, name, owner, monthly_amount, tax_rate, growth_type, growth_rate, yearly_amounts, sort_order')
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }),
     supabase
