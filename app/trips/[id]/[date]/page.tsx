@@ -14,12 +14,12 @@ type EditorSection = SectionData & { _id: string }
 
 // ─── Display components (view mode) ────────────────────────────────────────
 
-function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type }: {
+function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, expanded, onToggleExpand }: {
   meta: SectionMeta; lines: string[]
   confirmed: boolean; onToggle: () => void; onEdit?: () => void
   title?: string; type?: string
+  expanded: boolean; onToggleExpand: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   const t = type?.toUpperCase() ?? ''
   const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
@@ -49,17 +49,25 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type }: 
   return (
     <div className={`rounded-xl border overflow-hidden ${meta.bg} ${meta.border}`}>
       <div
-        className="flex items-center gap-2.5 px-4 py-3 cursor-pointer select-none"
-        onClick={() => hasBody && setExpanded(e => !e)}
+        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
+        onClick={onToggleExpand}
       >
-        <span className="flex-shrink-0">{meta.icon}</span>
+        <span className="flex-shrink-0 text-base">{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-semibold leading-snug ${meta.text}`}>{headerText}</p>
           {duration && (
             <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>
           )}
         </div>
-        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
+        {onEdit && (
+          <button
+            onClick={e => { e.stopPropagation(); onEdit() }}
+            className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0"
+          >
+            Edit
+          </button>
+        )}
+        <label className="flex items-center cursor-pointer select-none flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={confirmed}
@@ -69,35 +77,23 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type }: 
           />
         </label>
         {hasBody && (
-          <span className={`text-gray-300 text-xs flex-shrink-0 ml-1 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
+          <span className={`text-gray-300 text-xs flex-shrink-0 ml-0.5 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
         )}
       </div>
-      {expanded && (
-        <div className={`px-4 pb-3 pt-2 border-t ${meta.border}`}>
-          {body.length > 0 && (
-            <ul className="space-y-1.5">
-              {body.map((line, i) => {
-                const isBullet = line.startsWith('-')
-                const text = isBullet ? line.slice(1).trim() : line
-                return (
-                  <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
-                    {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
-                    <span>{text}</span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {onEdit && (
-            <div className="mt-2.5 pt-2.5 border-t border-gray-200/60 flex justify-end">
-              <button
-                onClick={e => { e.stopPropagation(); onEdit() }}
-                className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition"
-              >
-                Edit
-              </button>
-            </div>
-          )}
+      {expanded && body.length > 0 && (
+        <div className={`px-3 pb-2.5 pt-2 border-t ${meta.border}`}>
+          <ul className="space-y-1">
+            {body.map((line, i) => {
+              const isBullet = line.startsWith('-')
+              const text = isBullet ? line.slice(1).trim() : line
+              return (
+                <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
+                  {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
+                  <span>{text}</span>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       )}
     </div>
@@ -119,15 +115,18 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
   return (
     <div className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden`}>
       <div
-        className="px-4 py-3 flex items-center gap-2.5 cursor-pointer select-none"
+        className="px-3 py-2.5 flex items-center gap-2 cursor-pointer select-none"
         onClick={() => setOpen(o => !o)}
       >
-        <span className="text-lg flex-shrink-0">{meta.icon}</span>
+        <span className="text-base flex-shrink-0">{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-semibold ${meta.text}`}>{name}</p>
           {location && <p className="text-xs text-gray-500">{location}</p>}
         </div>
-        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
+        {onEdit && (
+          <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0">Edit</button>
+        )}
+        <label className="flex items-center cursor-pointer select-none flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={confirmed}
@@ -136,7 +135,7 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
             className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
           />
         </label>
-        <span className={`text-gray-300 text-xs flex-shrink-0 ml-1 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+        <span className={`text-gray-300 text-xs flex-shrink-0 ml-0.5 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </div>
       {open && (
         <>
@@ -147,7 +146,7 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
           />
-          <div className={`px-4 py-2.5 border-t border-gray-100 flex items-center justify-between ${meta.bg}`}>
+          <div className={`px-3 py-2 border-t border-gray-100 ${meta.bg}`}>
             <a
               href={mapsUrl}
               target="_blank"
@@ -157,9 +156,6 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
             >
               Open in Google Maps →
             </a>
-            {onEdit && (
-              <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition">Edit</button>
-            )}
           </div>
         </>
       )}
@@ -358,7 +354,7 @@ function ActivityEditor({ section, onChange }: { section: EditorSection; onChang
   const noteLines = section.lines.filter(l => l.trim().startsWith('-') || l !== titleLine).join('\n')
 
   const setTitle = (val: string) => {
-    const rest = section.lines.filter(l => l.trim().startsWith('-'))
+    const rest = titleIdx >= 0 ? section.lines.filter((_, i) => i !== titleIdx) : section.lines
     onChange({ lines: val ? [val, ...rest] : rest })
   }
   const setNotes = (val: string) => {
@@ -399,8 +395,8 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
   const optionLines = section.lines.slice(nameIdx + 1).join('\n')
 
   const setName = (val: string) => {
-    const bullets = section.lines.filter(l => l.trim().startsWith('-'))
-    onChange({ lines: val ? [val, ...bullets] : bullets })
+    const rest = nameIdx >= 0 ? section.lines.filter((_, i) => i !== nameIdx) : section.lines
+    onChange({ lines: val ? [val, ...rest] : rest })
   }
   const setOptions = (val: string) => {
     onChange({ lines: nameLine ? [nameLine, ...val.split('\n')] : val.split('\n') })
@@ -452,13 +448,14 @@ const ACTIVITY_TYPES = new Set(['MORNING', 'AFTERNOON', 'NIGHT', 'ACTIVITY'])
 const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
 const HIDE_TITLE_TYPES = new Set(['ACTIVITY', 'MORNING', 'AFTERNOON', 'NIGHT', 'MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'HOTEL'])
 
-function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone }: {
+function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone, onCancel }: {
   section: EditorSection
   onChange: (updates: Partial<SectionData>) => void
   onDelete: () => void
   onMoveUp?: () => void
   onMoveDown?: () => void
   onDone?: () => void
+  onCancel?: () => void
 }) {
   const meta = findMeta(section.type)
   if (!meta) return null
@@ -527,9 +524,16 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
           <button onClick={onDelete} className="text-xs font-medium text-red-400 hover:text-red-600 transition">
             Delete
           </button>
-          <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
-            Done editing
-          </button>
+          <div className="flex items-center gap-3">
+            {onCancel && (
+              <button onClick={onCancel} className="text-xs font-medium text-gray-400 hover:text-gray-600 transition">
+                Cancel
+              </button>
+            )}
+            <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
+              Save
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -645,6 +649,8 @@ export default function TripDayPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editSnapshot, setEditSnapshot] = useState<EditorSection | null>(null)
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [confirmedSections, setConfirmedSections] = useState<string[]>([])
   const [insertAt, setInsertAt] = useState<number | null>(null)
   const [showAddPicker, setShowAddPicker] = useState(false)
@@ -760,6 +766,29 @@ export default function TripDayPage() {
     } catch {}
   }
 
+  const startEdit = (itemId: string) => {
+    const item = sectionItems.find(s => s._id === itemId)
+    if (item) setEditSnapshot({ ...item, lines: [...item.lines] })
+    setEditingId(itemId)
+  }
+
+  const cancelEdit = () => {
+    if (editSnapshot) {
+      setSectionItems(s => s.map(item => item._id === editSnapshot._id ? editSnapshot : item))
+      setEditSnapshot(null)
+    }
+    setEditingId(null)
+  }
+
+  const toggleSectionExpanded = (id: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const moveSection = (index: number, direction: -1 | 1) => {
     setSectionItems(items => {
       const next = [...items]
@@ -821,7 +850,7 @@ export default function TripDayPage() {
     : null
 
   const dateLabel = new Date(params.date + 'T00:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    weekday: 'short', month: 'short', day: 'numeric',
   })
 
   if (loading) {
@@ -872,29 +901,28 @@ export default function TripDayPage() {
 
         {/* Sticky header */}
         <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 whitespace-nowrap">
+          <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-2.5 py-1 whitespace-nowrap">
                 Day {dayNumber}
               </span>
               <div className="min-w-0">
-                <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
+                <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">
                   {title || 'Untitled day'}
                 </h1>
-                <p className="text-xs text-gray-400 truncate">{dateLabel}</p>
-                {aiSummary && (
-                  <p className="text-xs text-blue-500 truncate mt-0.5 italic">{aiSummary}</p>
-                )}
+                <p className="text-xs text-gray-400 truncate">
+                  {dateLabel}{aiSummary ? ` · ${aiSummary}` : ''}
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {prevDate && (
-                <Link href={`/trips/${params.id}/${prevDate}`} className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm">
+                <Link href={`/trips/${params.id}/${prevDate}`} className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs">
                   ← Prev
                 </Link>
               )}
               {nextDate && (
-                <Link href={`/trips/${params.id}/${nextDate}`} className="border border-gray-200 text-gray-500 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm">
+                <Link href={`/trips/${params.id}/${nextDate}`} className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs">
                   Next →
                 </Link>
               )}
@@ -904,17 +932,17 @@ export default function TripDayPage() {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
 
           {/* Always-visible title + location edit */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               onBlur={() => save()}
               placeholder="Day title, e.g. Arrival in Tokyo"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <div className="flex items-center gap-2">
               <span className="text-gray-400 text-sm">📍</span>
@@ -943,27 +971,27 @@ export default function TripDayPage() {
                   const isLast = i === sectionItems.length - 1
                   return (
                     <div key={item._id}>
-                      <div className="flex gap-3">
-                        <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
+                      <div className="flex gap-2">
+                        <div className="flex flex-col items-end flex-shrink-0 w-12 pt-3">
                           {s.pinned && <span className="text-xs leading-none mb-0.5">⭐</span>}
                           <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride ?? s.meta.time}</span>
                         </div>
                         <div className="flex flex-col items-center flex-shrink-0">
-                          <div className="w-3 h-3 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: s.meta.dotColor }} />
+                          <div className="w-2.5 h-2.5 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: s.meta.dotColor }} />
                           {!isLast && (
                             <div className="flex-1 mt-1" style={{
-                              width: '2px', minHeight: '24px',
+                              width: '2px', minHeight: '16px',
                               background: s.meta.travel
-                                ? `repeating-linear-gradient(to bottom, ${s.meta.dotColor} 0, ${s.meta.dotColor} 5px, transparent 5px, transparent 10px)`
+                                ? `repeating-linear-gradient(to bottom, ${s.meta.dotColor} 0, ${s.meta.dotColor} 4px, transparent 4px, transparent 8px)`
                                 : s.meta.transit
-                                ? 'repeating-linear-gradient(to bottom, #818cf8 0, #818cf8 5px, transparent 5px, transparent 10px)'
+                                ? 'repeating-linear-gradient(to bottom, #818cf8 0, #818cf8 4px, transparent 4px, transparent 8px)'
                                 : s.meta.drive
-                                ? 'repeating-linear-gradient(to bottom, #fb923c 0, #fb923c 5px, transparent 5px, transparent 10px)'
+                                ? 'repeating-linear-gradient(to bottom, #fb923c 0, #fb923c 4px, transparent 4px, transparent 8px)'
                                 : '#e2e8f0',
                             }} />
                           )}
                         </div>
-                        <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
+                        <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-2'}`}>
                           {editingId === item._id ? (
                             <SectionEditorCard
                               section={item}
@@ -971,28 +999,30 @@ export default function TripDayPage() {
                               onDelete={() => { removeSection(item._id); setEditingId(null) }}
                               onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
                               onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
+                              onCancel={cancelEdit}
                               onDone={async () => {
+                                setEditSnapshot(null)
                                 const withTitles = await generateMissingTitles(sectionItems)
                                 setSectionItems(withTitles)
                                 await save(withTitles)
                               }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
-                            ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
+                            ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => startEdit(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
                           }
                         </div>
                       </div>
                       {i < sectionItems.length - 1 && (
                         insertAt === i ? (
-                          <div className="my-2 ml-[4.25rem]">
+                          <div className="my-1.5 ml-16">
                             <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 my-1 ml-[4.25rem]">
+                          <div className="flex items-center gap-2 ml-16" style={{ height: '16px' }}>
                             <div className="flex-1 h-px bg-gray-100" />
-                            <button onClick={() => setInsertAt(i)} className="text-xs text-gray-300 hover:text-blue-500 transition px-2 py-0.5 rounded-full hover:bg-blue-50">
-                              + insert
+                            <button onClick={() => setInsertAt(i)} className="text-xs text-gray-300 hover:text-blue-500 transition px-1.5 rounded-full hover:bg-blue-50 leading-none">
+                              +
                             </button>
                             <div className="flex-1 h-px bg-gray-100" />
                           </div>
