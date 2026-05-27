@@ -116,8 +116,8 @@ export default async function AccountsPage() {
     : { data: history }
 
   // Also upsert today's net worth snapshot so the chart has a data point for every visit
-  const assets = allAccounts.filter(a => a.isAsset).reduce((s, a) => s + a.balance, 0)
-  const liabilities = allAccounts.filter(a => !a.isAsset).reduce((s, a) => s + Math.abs(a.balance), 0)
+  const assets = unified.filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + a.balance, 0)
+  const liabilities = unified.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + Math.abs(a.balance), 0)
   await supabase.from('net_worth_history').upsert(
     { user_id: user.id, recorded_on: today, assets, liabilities, net_worth: assets - liabilities },
     { onConflict: 'user_id,recorded_on' }

@@ -118,11 +118,61 @@ function computeProjection({
   return points
 }
 
+// ── Monte Carlo ───────────────────────────────────────────────────────────────
+const MC_SIMS = 400
+const MC_VOLATILITY = 15 // % annual stddev (typical diversified portfolio)
+
+interface MCBands { bull: number[]; base: number[]; bear: number[] }
+
+function runMonteCarlo(params: {
+  startingCash: number; startingInvestments: number; startingLiabilities: number
+  streams: IncomeStream[]; expenseMonthly: number; expenseGrowthRate: number
+  investmentGrowthRate: number; goals: { target_date: string | null; target_amount: number }[]
+  years: number[]; timRetirementYear: number | null; jessRetirementYear: number | null
+}): MCBands {
+  const { startingCash, startingInvestments, startingLiabilities, streams, expenseMonthly,
+    expenseGrowthRate, investmentGrowthRate, goals, years, timRetirementYear, jessRetirementYear } = params
+  const yearlyNW: number[][] = Array.from({ length: years.length }, () => [])
+
+  for (let sim = 0; sim < MC_SIMS; sim++) {
+    let cash = startingCash, investments = startingInvestments
+    yearlyNW[0].push(cash + investments - startingLiabilities)
+    for (let i = 1; i < years.length; i++) {
+      const year = years[i]
+      const income = streams.reduce((s, st) => {
+        if (st.owner === 'Timothy Eng' && timRetirementYear && year > timRetirementYear) return s
+        if (st.owner === 'Jessica Li' && jessRetirementYear && year > jessRetirementYear) return s
+        if (st.growth_type === 'manual') return s + (st.yearly_amounts[String(year)] ?? st.monthly_amount) * 12
+        return s + st.monthly_amount * Math.pow(1 + st.growth_rate / 100, i) * 12
+      }, 0)
+      const expenses = expenseMonthly * 12 * Math.pow(1 + expenseGrowthRate / 100, i)
+      const goalDrawdowns = goals.filter(g => g.target_date && new Date(g.target_date + 'T12:00:00').getFullYear() === year).reduce((s, g) => s + g.target_amount, 0)
+      const u1 = Math.max(Math.random(), 1e-10)
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * Math.random())
+      const annualReturn = (investmentGrowthRate + MC_VOLATILITY * z) / 100
+      const investmentReturn = (cash + investments - startingLiabilities) * annualReturn
+      cash = cash + income - expenses - goalDrawdowns
+      investments = investments + investmentReturn
+      yearlyNW[i].push(cash + investments - startingLiabilities)
+    }
+  }
+
+  const bull: number[] = [], base: number[] = [], bear: number[] = []
+  for (const vals of yearlyNW) {
+    const s = [...vals].sort((a, b) => a - b)
+    bear.push(s[Math.floor(s.length * 0.1)])
+    base.push(s[Math.floor(s.length * 0.5)])
+    bull.push(s[Math.floor(s.length * 0.9)])
+  }
+  return { bull, base, bear }
+}
+
 // ── Chart ─────────────────────────────────────────────────────────────────────
 const CH = 240, PL = 60, PR = 20, PT = 16, PB = 32
 
-function ForecastChart({ points, retirementMarkers }: {
+function ForecastChart({ points, mc, retirementMarkers }: {
   points: YearlyPoint[]
+  mc: MCBands
   retirementMarkers: { year: number; label: string }[]
 }) {
   const [hover, setHover] = useState<number | null>(null)
@@ -131,16 +181,23 @@ function ForecastChart({ points, retirementMarkers }: {
   const IW = CW - PL - PR
   const IH = CH - PT - PB
 
-  const vals = points.map(p => p.netWorth)
-  const minV = Math.min(...vals, 0)
-  const maxV = Math.max(...vals)
+  const allVals = [...mc.bull, ...mc.bear, 0]
+  const minV = Math.min(...allVals)
+  const maxV = Math.max(...allVals)
   const range = maxV - minV || 1
 
   function xOf(i: number) { return PL + (i / (points.length - 1)) * IW }
   function yOf(v: number) { return PT + IH - ((v - minV) / range) * IH }
+  function linePath(vals: number[]) {
+    return vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
+  }
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(p.netWorth).toFixed(1)}`).join(' ')
-  const areaPath = `${linePath} L${xOf(points.length - 1).toFixed(1)},${(PT + IH).toFixed(1)} L${PL},${(PT + IH).toFixed(1)} Z`
+  // Shaded band between bear and bull
+  const bandPath = [
+    ...mc.bear.map((v, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`),
+    ...[...mc.bull].reverse().map((v, i) => `L${xOf(mc.bull.length - 1 - i).toFixed(1)},${yOf(v).toFixed(1)}`),
+    'Z',
+  ].join(' ')
 
   const step = Math.ceil(((maxV - minV) / 4) / 50000) * 50000 || 50000
   const yLabels: { v: number; y: number }[] = []
@@ -161,28 +218,28 @@ function ForecastChart({ points, retirementMarkers }: {
           const px = (e.clientX - rect.left) / rect.width * CW
           setHover(Math.max(0, Math.min(points.length - 1, Math.round(((px - PL) / IW) * (points.length - 1)))))
         }}>
-        <defs>
-          <linearGradient id="fcGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.01" />
-          </linearGradient>
-        </defs>
         {yLabels.map(({ v, y }) => (
           <g key={v}>
             <line x1={PL} y1={y.toFixed(1)} x2={CW - PR} y2={y.toFixed(1)} stroke="#f1f5f9" strokeWidth="1" />
             <text x={PL - 6} y={y + 4} textAnchor="end" style={{ fontSize: 10, fill: '#94a3b8' }}>
-              {v < 0 ? '-' : ''}${Math.abs(v / 1000).toFixed(0)}k
+              {v < 0 ? '-' : ''}${fmtK(Math.abs(v))}
             </text>
           </g>
         ))}
-        <path d={areaPath} fill="url(#fcGrad)" />
-        <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* MC band */}
+        <path d={bandPath} fill="#3b82f6" fillOpacity="0.07" />
+        {/* Bear line */}
+        <path d={linePath(mc.bear)} fill="none" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" strokeLinecap="round" opacity="0.7" />
+        {/* Bull line */}
+        <path d={linePath(mc.bull)} fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" strokeLinecap="round" opacity="0.7" />
+        {/* Base line */}
+        <path d={linePath(mc.base)} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         {/* Goal drawdown markers */}
         {points.map((p, i) => p.goalDrawdowns > 0 && i > 0 && (
           <g key={`goal-${i}`}>
             <line x1={xOf(i).toFixed(1)} y1={PT} x2={xOf(i).toFixed(1)} y2={PT + IH}
               stroke="#f59e0b" strokeWidth="1" strokeDasharray="3,2" opacity="0.7" />
-            <circle cx={xOf(i).toFixed(1)} cy={yOf(p.netWorth).toFixed(1)} r="5"
+            <circle cx={xOf(i).toFixed(1)} cy={yOf(mc.base[i]).toFixed(1)} r="5"
               fill="#f59e0b" stroke="white" strokeWidth="1.5" />
           </g>
         ))}
@@ -202,11 +259,9 @@ function ForecastChart({ points, retirementMarkers }: {
             </g>
           )
         })}
-        {/* X year labels — every 5 years, always show first and last */}
+        {/* X year labels */}
         {points.map((p, i) => {
-          const isFirst = i === 0
-          const isLast = i === points.length - 1
-          const isHovered = i === hover
+          const isFirst = i === 0, isLast = i === points.length - 1, isHovered = i === hover
           if (!isFirst && !isLast && !isHovered && p.year % 5 !== 0) return null
           return (
             <text key={i} x={xOf(i).toFixed(1)} y={CH - 6} textAnchor="middle"
@@ -215,28 +270,31 @@ function ForecastChart({ points, retirementMarkers }: {
             </text>
           )
         })}
-        {hoverPt && hover !== null && (
+        {hover !== null && (
           <>
             <line x1={xOf(hover).toFixed(1)} y1={PT} x2={xOf(hover).toFixed(1)} y2={PT + IH}
               stroke="#3b82f6" strokeWidth="1" strokeDasharray="3,3" />
-            <circle cx={xOf(hover).toFixed(1)} cy={yOf(hoverPt.netWorth).toFixed(1)} r="4"
+            <circle cx={xOf(hover).toFixed(1)} cy={yOf(mc.base[hover]).toFixed(1)} r="4"
               fill="#3b82f6" stroke="white" strokeWidth="2" />
           </>
         )}
       </svg>
       {hoverPt && hover !== null && (
-        <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1 min-w-[170px]">
+        <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1 min-w-[180px]">
           <p className="font-bold text-gray-900 text-sm">{hoverPt.year}</p>
-          <p className="font-semibold text-gray-900">Net worth: ${fmtK(hoverPt.netWorth)}</p>
+          <div className="space-y-0.5">
+            <p className="text-green-600 font-medium">Bull: ${fmtK(mc.bull[hover])}</p>
+            <p className="text-blue-600 font-semibold">Base: ${fmtK(mc.base[hover])}</p>
+            <p className="text-red-500 font-medium">Bear: ${fmtK(mc.bear[hover])}</p>
+          </div>
           {hover > 0 && <>
             <div className="border-t border-gray-100 pt-1 space-y-0.5">
-              {hoverPt.income > 0 && <p className="text-green-600">Income: +${fmtK(hoverPt.income)}</p>}
-              <p className="text-red-500">Expenses: −${fmtK(hoverPt.expenses)}</p>
-              {hoverPt.investmentReturn > 0 && <p className="text-blue-500">Inv. return: +${fmtK(hoverPt.investmentReturn)}</p>}
+              {hoverPt.income > 0 && <p className="text-gray-500">Income: +${fmtK(hoverPt.income)}</p>}
+              <p className="text-gray-500">Expenses: −${fmtK(hoverPt.expenses)}</p>
               {hoverPt.goalDrawdowns > 0 && <p className="text-amber-600">Goals: −${fmtK(hoverPt.goalDrawdowns)}</p>}
             </div>
             <p className={`font-semibold border-t border-gray-100 pt-1 ${netChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              Net: {netChange >= 0 ? '+' : '−'}${fmtK(Math.abs(netChange))}
+              Net flow: {netChange >= 0 ? '+' : '−'}${fmtK(Math.abs(netChange))}
             </p>
           </>}
         </div>
@@ -451,7 +509,7 @@ export default function ForecastClient({
     jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires' } : null,
   ].filter(Boolean) as { year: number; label: string }[]
 
-  const projection = useMemo(() => computeProjection({
+  const mcParams = useMemo(() => ({
     startingCash,
     startingInvestments,
     startingLiabilities,
@@ -464,6 +522,9 @@ export default function ForecastClient({
     timRetirementYear,
     jessRetirementYear,
   }), [streams, expenseMonthly, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
+
+  const projection = useMemo(() => computeProjection(mcParams), [mcParams])
+  const monteCarlo = useMemo(() => runMonteCarlo(mcParams), [mcParams])
 
   const endNW = projection[projection.length - 1]?.netWorth ?? 0
   const currentNW = projection[0]?.netWorth ?? 0
@@ -565,14 +626,28 @@ export default function ForecastClient({
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
-          {goalYears.size > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <span className="w-3 h-px border-t-2 border-dashed border-amber-400 inline-block" />
-              Goal spending
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5">
+              <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
+              Bull (90th%)
             </div>
-          )}
+            <div className="flex items-center gap-1.5">
+              <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
+              Base (50th%)
+            </div>
+            <div className="flex items-center gap-1.5">
+              <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
+              Bear (10th%)
+            </div>
+            {goalYears.size > 0 && (
+              <div className="flex items-center gap-1.5">
+                <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="3,2" /></svg>
+                Goal spend
+              </div>
+            )}
+          </div>
         </div>
-        <ForecastChart points={projection} retirementMarkers={retirementMarkers} />
+        <ForecastChart points={projection} mc={monteCarlo} retirementMarkers={retirementMarkers} />
       </div>
 
       {/* Income streams + Settings side by side */}
