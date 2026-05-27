@@ -107,7 +107,7 @@ function computeProjection({
       .filter(g => g.target_date && new Date(g.target_date + 'T12:00:00').getFullYear() === year)
       .reduce((s, g) => s + g.target_amount, 0)
 
-    const investmentReturn = investments * (investmentGrowthRate / 100)
+    const investmentReturn = (cash + investments - startingLiabilities) * (investmentGrowthRate / 100)
 
     cash = cash + income - expenses - goalDrawdowns
     investments = investments + investmentReturn
