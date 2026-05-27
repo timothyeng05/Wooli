@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import DayLocationMap from '@/app/components/trips/DayLocationMapClient'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -51,7 +52,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit }: {
             <span className="text-xs text-gray-400">Planned</span>
           </label>
           {onEdit && (
-            <button onClick={onEdit} className="text-gray-300 hover:text-blue-500 transition text-sm px-1" title="Edit">✏</button>
+            <button onClick={onEdit} className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition">Edit</button>
           )}
         </div>
       </div>
@@ -105,7 +106,7 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
         </label>
         <span className="text-xs text-gray-400 flex-shrink-0">{open ? 'double-tap to close' : 'double-tap for map'}</span>
           {onEdit && (
-            <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-gray-300 hover:text-blue-500 transition text-sm px-1" title="Edit">✏</button>
+            <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition">Edit</button>
           )}
       </div>
       {open && (
@@ -449,7 +450,6 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
               className="w-4 h-4 rounded border-gray-300 accent-amber-500 cursor-pointer" />
             <span className="text-xs text-gray-400">⭐ Important</span>
           </label>
-          <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition text-xl leading-none px-1">×</button>
         </div>
       </div>
       {(meta.banner || meta.travel) && !meta.car
@@ -467,7 +467,10 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
         : <GeneralEditor section={section} onChange={onChange} />
       }
       {onDone && (
-        <div className="mt-3 pt-3 border-t border-gray-200/60">
+        <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center justify-between">
+          <button onClick={onDelete} className="text-xs font-medium text-red-400 hover:text-red-600 transition">
+            Delete
+          </button>
           <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
             Done editing
           </button>
@@ -512,6 +515,25 @@ function AddSectionPicker({ onAdd, onCancel }: { onAdd: (type: string) => void; 
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function DayMapCollapsible({ location }: { location: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-xl border border-gray-100 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition text-sm font-medium text-gray-600"
+      >
+        <span className="flex items-center gap-2">
+          <span>🗺</span>
+          <span>{location}</span>
+        </span>
+        <span className="text-gray-400 text-xs">{open ? '▲ Hide map' : '▼ Show map'}</span>
+      </button>
+      {open && <DayLocationMap location={location} />}
     </div>
   )
 }
@@ -668,10 +690,9 @@ export default function TripDayPage() {
     setSectionItems(s => s.filter(item => item._id !== id))
   }
 
-  // Derive display format from editor state (for view mode)
-  const displaySections: ParsedSection[] = sectionItems
-    .map(item => sectionDataToDisplay(item))
-    .filter((x): x is ParsedSection => x !== null)
+  // Indexed 1:1 with sectionItems (may contain nulls); TravelBanner uses the filtered version
+  const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
+  const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
 
   const dayNumber = trip
     ? Math.round((new Date(params.date + 'T00:00:00').getTime() - new Date(trip.start_date + 'T00:00:00').getTime()) / 86400000) + 1
@@ -789,18 +810,8 @@ export default function TripDayPage() {
             </div>
           </div>
 
-          {/* Map */}
-          {location && (
-            <div className="rounded-xl overflow-hidden border border-gray-100 shadow-sm">
-              <iframe
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(location)}&output=embed&z=12`}
-                className="w-full"
-                style={{ height: 240 }}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            </div>
-          )}
+          {/* Collapsible day map */}
+          {location && <DayMapCollapsible location={location} />}
 
           {/* Sections */}
           {displaySections.length > 0 ? (
@@ -808,7 +819,7 @@ export default function TripDayPage() {
               <TravelBanner sections={displaySections} />
               <div>
                 {sectionItems.map((item, i) => {
-                  const s = displaySections[i]
+                  const s = displaySectionsRaw[i]
                   if (!s) return null
                   const isLast = i === sectionItems.length - 1
                   return (
