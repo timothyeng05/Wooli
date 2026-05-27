@@ -319,19 +319,20 @@ function StreamForm({
 }) {
   const [name, setName] = useState(initial.name ?? '')
   const [owner, setOwner] = useState(initial.owner ?? '')
-  const [monthly, setMonthly] = useState(String(initial.monthly_amount ?? ''))
+  // UI works in annual amounts; storage is monthly — convert at boundaries
+  const [annual, setAnnual] = useState(String(initial.monthly_amount ? Math.round(initial.monthly_amount * 12) : ''))
   const [growthType, setGrowthType] = useState<'flat' | 'manual'>(initial.growth_type ?? 'flat')
   const [growthRate, setGrowthRate] = useState(String(initial.growth_rate ?? '3'))
   const [yearlyAmounts, setYearlyAmounts] = useState<Record<string, string>>(() => {
     const base: Record<string, string> = {}
     for (const y of forecastYears.slice(1)) {
-      const existing = initial.yearly_amounts?.[String(y)]
-      if (existing !== undefined) {
-        base[String(y)] = String(existing)
+      const existingMonthly = initial.yearly_amounts?.[String(y)]
+      if (existingMonthly !== undefined) {
+        base[String(y)] = String(Math.round(existingMonthly * 12))
       } else if (initial.monthly_amount) {
         const rate = (initial.growth_rate ?? 3) / 100
         const i = y - THIS_YEAR
-        base[String(y)] = String(Math.round(initial.monthly_amount * Math.pow(1 + rate, i)))
+        base[String(y)] = String(Math.round(initial.monthly_amount * 12 * Math.pow(1 + rate, i)))
       } else {
         base[String(y)] = ''
       }
@@ -344,8 +345,8 @@ function StreamForm({
     for (const y of forecastYears.slice(1)) {
       const i = y - THIS_YEAR
       const rate = (parseFloat(growthRate) || 3) / 100
-      const amt = parseFloat(monthly) || 0
-      base[String(y)] = String(Math.round(amt * Math.pow(1 + rate, i)))
+      const annualAmt = parseFloat(annual) || 0
+      base[String(y)] = String(Math.round(annualAmt * Math.pow(1 + rate, i)))
     }
     setYearlyAmounts(base)
     setGrowthType('manual')
@@ -355,13 +356,14 @@ function StreamForm({
     const resolvedYearly: Record<string, number> = {}
     if (growthType === 'manual') {
       for (const y of forecastYears.slice(1)) {
-        resolvedYearly[String(y)] = parseFloat(yearlyAmounts[String(y)] || '0') || 0
+        // Store as monthly
+        resolvedYearly[String(y)] = (parseFloat(yearlyAmounts[String(y)] || '0') || 0) / 12
       }
     }
     onSave({
       name: name.trim(),
       owner: owner || null,
-      monthly_amount: parseFloat(monthly) || 0,
+      monthly_amount: (parseFloat(annual) || 0) / 12,
       growth_type: growthType,
       growth_rate: parseFloat(growthRate) || 0,
       yearly_amounts: resolvedYearly,
@@ -391,11 +393,11 @@ function StreamForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[11px] text-gray-500 mb-1 block">Current monthly (after tax)</label>
+          <label className="text-[11px] text-gray-500 mb-1 block">Annual income (after tax)</label>
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-            <input type="number" step="100" value={monthly} onChange={e => setMonthly(e.target.value)}
-              placeholder="8500"
+            <input type="number" step="1000" value={annual} onChange={e => setAnnual(e.target.value)}
+              placeholder="138000"
               className="w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
           </div>
         </div>
@@ -427,7 +429,7 @@ function StreamForm({
         </div>
       ) : (
         <div>
-          <label className="text-[11px] text-gray-500 mb-2 block">Monthly income by year (after tax)</label>
+          <label className="text-[11px] text-gray-500 mb-2 block">Annual income by year (after tax)</label>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
             {forecastYears.slice(1).map(y => (
               <div key={y} className="flex items-center gap-2">
@@ -446,7 +448,7 @@ function StreamForm({
       )}
 
       <div className="flex gap-2 pt-1">
-        <button onClick={submit} disabled={saving || !name.trim() || !monthly}
+        <button onClick={submit} disabled={saving || !name.trim() || !annual}
           className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition">
           {saving ? 'Saving…' : 'Save'}
         </button>
@@ -482,7 +484,7 @@ export default function ForecastClient({
   const supabase = createClient()
 
   const [streams, setStreams] = useState(initial)
-  const [expenseMonthly, setExpenseMonthly] = useState(String(Math.round(initialSettings.expense_monthly)))
+  const [expenseAnnual, setExpenseAnnual] = useState(String(Math.round(initialSettings.expense_monthly * 12)))
   const [expenseGrowthRate, setExpenseGrowthRate] = useState(String(initialSettings.expense_growth_rate))
   const [investmentGrowthRate, setInvestmentGrowthRate] = useState(String(initialSettings.investment_growth_rate))
   const [timAge, setTimAge] = useState(String(initialSettings.tim_age ?? ''))
@@ -514,14 +516,14 @@ export default function ForecastClient({
     startingInvestments,
     startingLiabilities,
     streams,
-    expenseMonthly: parseFloat(expenseMonthly) || 0,
+    expenseMonthly: (parseFloat(expenseAnnual) || 0) / 12,
     expenseGrowthRate: parseFloat(expenseGrowthRate) || 0,
     investmentGrowthRate: parseFloat(investmentGrowthRate) || 0,
     goals,
     years: forecastYears,
     timRetirementYear,
     jessRetirementYear,
-  }), [streams, expenseMonthly, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
+  }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
 
   const projection = useMemo(() => computeProjection(mcParams), [mcParams])
   const monteCarlo = useMemo(() => runMonteCarlo(mcParams), [mcParams])
@@ -577,7 +579,7 @@ export default function ForecastClient({
     try {
       const patch = {
         user_id: userId,
-        expense_monthly: parseFloat(expenseMonthly) || 0,
+        expense_monthly: (parseFloat(expenseAnnual) || 0) / 12,
         expense_growth_rate: parseFloat(expenseGrowthRate) || 0,
         investment_growth_rate: parseFloat(investmentGrowthRate) || 0,
         tim_age: parseInt(timAge) || null,
@@ -679,7 +681,7 @@ export default function ForecastClient({
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      ${fmt(s.monthly_amount)}/mo
+                      ${fmtK(s.monthly_amount * 12)}/yr
                       {s.growth_type === 'flat'
                         ? ` · +${s.growth_rate}%/yr`
                         : ' · custom by year'}
@@ -709,13 +711,13 @@ export default function ForecastClient({
         {/* Expenses + Investment */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-5">
           <div>
-            <p className="text-sm font-semibold text-gray-900 mb-3">Monthly Expenses</p>
+            <p className="text-sm font-semibold text-gray-900 mb-3">Annual Expenses</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] text-gray-500 mb-1 block">Current monthly spend</label>
+                <label className="text-[11px] text-gray-500 mb-1 block">Annual spend</label>
                 <div className="relative">
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                  <input type="number" step="100" value={expenseMonthly} onChange={e => setExpenseMonthly(e.target.value)}
+                  <input type="number" step="1000" value={expenseAnnual} onChange={e => setExpenseAnnual(e.target.value)}
                     className="w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 </div>
               </div>
