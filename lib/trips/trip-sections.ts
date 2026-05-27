@@ -42,7 +42,7 @@ export type SectionData = {
   timeOverride?: string
   duration?: string
   pinned?: boolean
-  address?: string
+  coords?: string
 }
 
 export type ParsedSection = {

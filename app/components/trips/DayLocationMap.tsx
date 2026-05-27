@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-export type LocationPoint = { label: string; query: string; color: string }
+export type LocationPoint = { label: string; query: string; color: string; coords?: { lat: number; lng: number } }
 type GeoResult = { label: string; lat: number; lng: number; color: string }
 
 function FitBounds({ points }: { points: GeoResult[] }) {
@@ -42,8 +42,12 @@ export default function DayLocationMap({ locations }: { locations: LocationPoint
     setLoading(true)
     const fetched: GeoResult[] = []
     Promise.all(
-      locations.map(loc =>
-        fetch(
+      locations.map(loc => {
+        if (loc.coords) {
+          fetched.push({ label: loc.label, lat: loc.coords.lat, lng: loc.coords.lng, color: loc.color })
+          return Promise.resolve()
+        }
+        return fetch(
           `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(loc.query)}&format=json&limit=1`,
           { headers: { 'Accept-Language': 'en' } }
         )
@@ -52,7 +56,7 @@ export default function DayLocationMap({ locations }: { locations: LocationPoint
             if (data[0]) fetched.push({ label: loc.label, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), color: loc.color })
           })
           .catch(() => {})
-      )
+      })
     ).then(() => { setPoints(fetched); setLoading(false) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locKey])

@@ -248,8 +248,8 @@ function HotelEditor({ section, onChange }: { section: EditorSection; onChange: 
         <input className={inputCls} value={location} onChange={e => onChange({ lines: name ? [name, e.target.value] : [e.target.value] })} placeholder="Shinjuku, Tokyo" />
       </div>
       <div>
-        <label className={labelCls}>Address <span className="text-gray-400 font-normal">(optional — improves map pin)</span></label>
-        <input className={inputCls} value={section.address ?? ''} onChange={e => onChange({ address: e.target.value || undefined })} placeholder="3-7-1-2 Nishishinjuku, Shinjuku City" />
+        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
+        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
       </div>
     </div>
   )
@@ -350,8 +350,8 @@ function ActivityEditor({ section, onChange }: { section: EditorSection; onChang
         </div>
       </div>
       <div>
-        <label className={labelCls}>Address <span className="text-gray-400 font-normal">(optional — improves map pin)</span></label>
-        <input className={inputCls} value={section.address ?? ''} onChange={e => onChange({ address: e.target.value || undefined })} placeholder="1-1-1 Yokoami, Sumida City" />
+        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
+        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
       </div>
       <div>
         <label className={labelCls}>Notes (optional)</label>
@@ -391,8 +391,8 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
         </div>
       </div>
       <div>
-        <label className={labelCls}>Address <span className="text-gray-400 font-normal">(optional — improves map pin)</span></label>
-        <input className={inputCls} value={section.address ?? ''} onChange={e => onChange({ address: e.target.value || undefined })} placeholder="2-1-1 Oshiage, Sumida City" />
+        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
+        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
       </div>
       <div>
         <label className={labelCls}>Options / notes</label>
@@ -553,6 +553,13 @@ function DayMapCollapsible({ locations }: { locations: LocationPoint[] }) {
 }
 
 // ─── Main page ──────────────────────────────────────────────────────────────
+
+function parseCoords(raw: string | undefined): { lat: number; lng: number } | null {
+  if (!raw) return null
+  const parts = raw.split(',').map(s => parseFloat(s.trim()))
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return { lat: parts[0], lng: parts[1] }
+  return null
+}
 
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
@@ -718,15 +725,14 @@ export default function TripDayPage() {
       if (!meta) continue
       const t = item.type.toUpperCase()
       const lines = item.lines.map(l => l.trim()).filter(Boolean)
+      const parsedCoords = parseCoords(item.coords)
       if (meta.hotel && lines[0]) {
-        const q = item.address ?? (lines[1] ? `${lines[0]}, ${lines[1]}` : location ? `${lines[0]}, ${location}` : lines[0])
-        locs.push({ label: lines[0], query: q, color: '#8b5cf6' })
+        const q = lines[1] ? `${lines[0]}, ${lines[1]}` : location ? `${lines[0]}, ${location}` : lines[0]
+        locs.push({ label: lines[0], query: q, color: '#8b5cf6', coords: parsedCoords ?? undefined })
       } else if (ACTIVITY_TYPES.has(t) && lines[0]) {
-        const q = item.address ?? (location ? `${lines[0]}, ${location}` : lines[0])
-        locs.push({ label: lines[0], query: q, color: '#3b82f6' })
+        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#3b82f6', coords: parsedCoords ?? undefined })
       } else if (MEAL_TYPES.has(t) && lines[0]) {
-        const q = item.address ?? (location ? `${lines[0]}, ${location}` : lines[0])
-        locs.push({ label: lines[0], query: q, color: '#f59e0b' })
+        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#f59e0b', coords: parsedCoords ?? undefined })
       }
     }
     return locs
