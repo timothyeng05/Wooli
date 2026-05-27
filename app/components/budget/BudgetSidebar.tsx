@@ -37,11 +37,34 @@ const NAV_ITEMS = [
     label: 'Transactions',
     match: (p: string) =>
       p === '/budget/transactions' ||
-      (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','cashflow'].some(s => p.startsWith(`/budget/${s}`))),
+      (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','cashflow','goals','forecast'].some(s => p.startsWith(`/budget/${s}`))),
     icon: (
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="5" width="20" height="14" rx="2"/>
         <line x1="2" y1="10" x2="22" y2="10"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/budget/forecast',
+    label: 'Forecast',
+    match: (p: string) => p.startsWith('/budget/forecast'),
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+        <polyline points="16 7 22 7 22 13"/>
+      </svg>
+    ),
+  },
+  {
+    href: '/budget/goals',
+    label: 'Goals',
+    match: (p: string) => p.startsWith('/budget/goals'),
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="6"/>
+        <circle cx="12" cy="12" r="2"/>
       </svg>
     ),
   },

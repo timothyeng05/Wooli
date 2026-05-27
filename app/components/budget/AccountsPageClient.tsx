@@ -15,6 +15,7 @@ export interface UnifiedAccount {
   institution: string | null
   balance: number
   owner: string | null
+  updatedAt?: string | null
   source: 'plaid' | 'manual'
 }
 
@@ -228,6 +229,11 @@ function PlaidAccountRow({ account, sparkValues }: { account: UnifiedAccount; sp
         {account.institution && (
           <p className="text-xs text-gray-400 mt-0.5">{account.institution}</p>
         )}
+        {account.updatedAt && (
+          <p className="text-[10px] text-gray-300 mt-0.5">
+            Updated {new Date(account.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        )}
       </div>
       <Sparkline values={sparkValues} isAsset={isAsset} />
       <p className={`text-sm font-semibold tabular-nums flex-shrink-0 w-28 text-right ${
@@ -247,12 +253,15 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
   onArchive: (id: string) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
+  const [editingBalance, setEditingBalance] = useState(false)
   const [name, setName] = useState(account.name)
   const [institution, setInstitution] = useState(account.institution || '')
   const [balance, setBalance] = useState(String(Math.abs(account.balance)))
+  const [quickBal, setQuickBal] = useState(String(Math.abs(account.balance)))
   const [type, setType] = useState<AccountType>((account.rawType as AccountType) ?? 'checking')
   const [owner, setOwner] = useState(account.owner || '')
   const [saving, setSaving] = useState(false)
+  const [savingBalance, setSavingBalance] = useState(false)
 
   const isAsset = account.type !== 'credit' && account.type !== 'loan'
 
@@ -267,10 +276,21 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
         type,
         is_asset: newIsAsset,
         owner: owner || null,
+        updated_at: new Date().toISOString(),
       })
       setEditing(false)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveQuickBalance = async () => {
+    setSavingBalance(true)
+    try {
+      await onUpdate(account.id, { current_balance: parseFloat(quickBal) || 0, updated_at: new Date().toISOString() })
+      setEditingBalance(false)
+    } finally {
+      setSavingBalance(false)
     }
   }
 
@@ -331,9 +351,9 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
   }
 
   return (
-    <button
-      onClick={() => setEditing(true)}
-      className="w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition cursor-pointer text-left"
+    <div
+      onClick={() => !editingBalance && setEditing(true)}
+      className="group w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition cursor-pointer"
       title="Click to edit"
     >
       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
@@ -355,14 +375,60 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
           )}
         </div>
         {account.institution && <p className="text-xs text-gray-400 mt-0.5">{account.institution}</p>}
+        {account.updatedAt && (
+          <p className="text-[10px] text-gray-300 mt-0.5">
+            Updated {new Date(account.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        )}
       </div>
-      <Sparkline values={sparkValues} isAsset={isAsset} />
-      <p className={`text-sm font-semibold tabular-nums flex-shrink-0 w-28 text-right ${
-        isAsset ? 'text-gray-900' : 'text-red-600'
-      }`}>
-        {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
-      </p>
-    </button>
+      {editingBalance ? (
+        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+          <input
+            type="number"
+            step="0.01"
+            value={quickBal}
+            onChange={e => setQuickBal(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') saveQuickBalance()
+              if (e.key === 'Escape') setEditingBalance(false)
+            }}
+            autoFocus
+            className="w-28 px-2 py-1 border border-blue-400 rounded text-sm text-right bg-white"
+          />
+          <button onClick={saveQuickBalance} disabled={savingBalance}
+            className="text-green-600 hover:text-green-700 p-1 disabled:opacity-50" title="Save">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </button>
+          <button onClick={() => setEditingBalance(false)}
+            className="text-gray-400 hover:text-gray-600 p-1" title="Cancel">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+          <Sparkline values={sparkValues} isAsset={isAsset} />
+          <p className={`text-sm font-semibold tabular-nums w-28 text-right ${
+            isAsset ? 'text-gray-900' : 'text-red-600'
+          }`}>
+            {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
+          </p>
+          <button
+            onClick={() => { setQuickBal(String(Math.abs(account.balance))); setEditingBalance(true) }}
+            className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-gray-500 transition-opacity"
+            title="Update balance"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

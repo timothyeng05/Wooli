@@ -83,6 +83,7 @@ function CatIcon({ icon, color, size = 'sm' }: { icon: string | null; color: str
 
 function SortableChildRow({
   child,
+  parentColor,
   editing,
   deletingId,
   onEdit,
@@ -90,6 +91,7 @@ function SortableChildRow({
   editForm,
 }: {
   child: Category
+  parentColor: string
   editing: string | null
   deletingId: string | null
   onEdit: (cat: Category) => void
@@ -109,7 +111,7 @@ function SortableChildRow({
     <div ref={setNodeRef} style={style}>
       <div className="flex items-center gap-2 px-4 py-2 pl-7 bg-gray-50/60">
         <DragHandle {...attributes} {...listeners} />
-        <CatIcon icon={child.icon} color={child.color} size="sm" />
+        <CatIcon icon={child.icon} color={parentColor} size="sm" />
         <div className="flex-1 min-w-0">
           <span className="text-sm text-gray-700">{child.name}</span>
           {child.keywords && (
@@ -195,7 +197,7 @@ export default function CategoryManager({
         .insert({
           user_id: userId,
           name: newName.trim(),
-          color: newColor,
+          color: parent ? parent.color : newColor,
           icon: newIcon.trim() || null,
           is_income: parent ? parent.is_income : newIsIncome,
           is_transfer: parent ? parent.is_transfer : newIsTransfer,
@@ -227,8 +229,9 @@ export default function CategoryManager({
       const icon = newIcon.trim() || null
       const cat = categories.find(c => c.id === id)!
       const isParent = !cat.parent_id
+      const parentColor = cat.parent_id ? categories.find(c => c.id === cat.parent_id)?.color : undefined
 
-      const update: Record<string, unknown> = { name: newName.trim(), color: newColor, icon, keywords }
+      const update: Record<string, unknown> = { name: newName.trim(), color: isParent ? newColor : (parentColor ?? newColor), icon, keywords }
       if (isParent) {
         update.is_income = newIsIncome
         update.is_transfer = newIsTransfer
@@ -239,14 +242,16 @@ export default function CategoryManager({
 
       let updated = categories.map(c => c.id === id ? { ...c, ...update } as Category : c)
 
-      // Cascade type change to children
-      if (isParent && (cat.is_income !== newIsIncome || cat.is_transfer !== newIsTransfer)) {
-        await supabase
-          .from('categories')
-          .update({ is_income: newIsIncome, is_transfer: newIsTransfer })
-          .eq('parent_id', id)
+      // Cascade type + color changes to children
+      if (isParent) {
+        const childUpdate: Record<string, unknown> = { color: newColor }
+        if (cat.is_income !== newIsIncome || cat.is_transfer !== newIsTransfer) {
+          childUpdate.is_income = newIsIncome
+          childUpdate.is_transfer = newIsTransfer
+        }
+        await supabase.from('categories').update(childUpdate).eq('parent_id', id)
         updated = updated.map(c =>
-          c.parent_id === id ? { ...c, is_income: newIsIncome, is_transfer: newIsTransfer } : c
+          c.parent_id === id ? { ...c, ...childUpdate } as Category : c
         )
       }
 
@@ -320,6 +325,7 @@ export default function CategoryManager({
   const renderEditForm = (id: string) => {
     const cat = categories.find(c => c.id === id)
     const isParent = cat && !cat.parent_id
+    const parentCat = cat?.parent_id ? categories.find(c => c.id === cat.parent_id) : null
     return (
       <div className="p-3 bg-blue-50 border-t border-blue-100 space-y-2.5">
         <div className="flex items-center gap-2">
@@ -330,17 +336,24 @@ export default function CategoryManager({
             autoFocus
             className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-          <div className="flex gap-1 flex-wrap max-w-[120px]">
-            {PRESET_COLORS.map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setNewColor(c)}
-                style={{ backgroundColor: c }}
-                className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
-              />
-            ))}
-          </div>
+          {isParent ? (
+            <div className="flex gap-1 flex-wrap max-w-[120px]">
+              {PRESET_COLORS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewColor(c)}
+                  style={{ backgroundColor: c }}
+                  className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
+                />
+              ))}
+            </div>
+          ) : parentCat && (
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: parentCat.color }} />
+              inherits color
+            </div>
+          )}
         </div>
         {renderEmojiPicker()}
         <input
@@ -384,7 +397,9 @@ export default function CategoryManager({
     )
   }
 
-  const renderAddForm = (parentId: string | null) => (
+  const renderAddForm = (parentId: string | null) => {
+    const parentCat = parentId ? categories.find(c => c.id === parentId) : null
+    return (
     <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 space-y-2.5">
       <div className="flex items-center gap-2">
         <input
@@ -396,17 +411,25 @@ export default function CategoryManager({
           autoFocus
           className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
-        <div className="flex gap-1 flex-wrap max-w-[120px]">
-          {PRESET_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setNewColor(c)}
-              style={{ backgroundColor: c }}
-              className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
-            />
-          ))}
-        </div>
+        {!parentId && (
+          <div className="flex gap-1 flex-wrap max-w-[120px]">
+            {PRESET_COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setNewColor(c)}
+                style={{ backgroundColor: c }}
+                className={`w-4 h-4 rounded-full transition ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
+              />
+            ))}
+          </div>
+        )}
+        {parentCat && (
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: parentCat.color }} />
+            inherits color
+          </div>
+        )}
         {!parentId && !newIsTransfer && (
           <select
             value={newIsIncome ? 'income' : 'expense'}
@@ -432,6 +455,7 @@ export default function CategoryManager({
       </div>
     </div>
   )
+  }
 
   const expenseParents = parents.filter(c => !c.is_income && !c.is_transfer)
   const incomeParents  = parents.filter(c =>  c.is_income && !c.is_transfer)
@@ -504,6 +528,7 @@ export default function CategoryManager({
                             <SortableChildRow
                               key={child.id}
                               child={child}
+                              parentColor={parent.color}
                               editing={editing}
                               deletingId={deletingId}
                               onEdit={startEdit}

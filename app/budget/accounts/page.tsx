@@ -20,7 +20,7 @@ export default async function AccountsPage() {
   ] = await Promise.all([
     supabase
       .from('plaid_accounts')
-      .select('account_id, name, mask, type, subtype, current_balance, owner, item_id')
+      .select('account_id, name, mask, type, subtype, current_balance, owner, item_id, updated_at')
       .eq('user_id', user.id),
     supabase
       .from('plaid_items')
@@ -28,7 +28,7 @@ export default async function AccountsPage() {
       .eq('user_id', user.id),
     supabase
       .from('accounts')
-      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner')
+      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner, updated_at')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
@@ -63,6 +63,7 @@ export default async function AccountsPage() {
       institution: institutionMap.get(a.item_id) ?? null,
       balance: a.current_balance ?? 0,
       owner: a.owner,
+      updatedAt: a.updated_at ?? null,
       source: 'plaid' as const,
     })),
     ...(manualAccounts ?? []).map(a => ({
@@ -74,6 +75,7 @@ export default async function AccountsPage() {
       institution: a.institution ?? null,
       balance: a.current_balance ?? 0,
       owner: a.owner,
+      updatedAt: a.updated_at ?? null,
       source: 'manual' as const,
     })),
   ]
@@ -108,17 +110,12 @@ export default async function AccountsPage() {
     : { data: history }
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Accounts</h1>
-            <PlaidLinkButton />
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-16">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold text-gray-900">Accounts</h1>
+          <PlaidLinkButton />
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <AccountsPageClient
           accounts={unified}
           history={(freshHistory ?? []) as BalancePoint[]}
