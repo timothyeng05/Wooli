@@ -550,8 +550,8 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
   if (accounts.length === 0 && !adding) {
     return (
       <div className="mb-1">
-        <button onClick={onToggle}
-          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 rounded-lg transition">
+        <div onClick={onToggle}
+          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 rounded-lg transition cursor-pointer">
           <div className="flex items-center gap-2">
             <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`}
               viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -566,7 +566,7 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
           >
             + Add
           </button>
-        </button>
+        </div>
         {adding && (
           <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} />
         )}
@@ -579,8 +579,8 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
 
   return (
     <div className="mb-1">
-      <button onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 rounded-lg transition">
+      <div onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 rounded-lg transition cursor-pointer">
         <div className="flex items-center gap-2">
           <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -600,7 +600,7 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
             {isAsset ? '' : '-'}${fmt(Math.abs(total))}
           </span>
         </div>
-      </button>
+      </div>
       {open && (
         <div className="ml-2 mt-0.5">
           {accounts.map(a =>
