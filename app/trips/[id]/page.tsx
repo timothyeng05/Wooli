@@ -86,14 +86,14 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <Breadcrumbs items={[
             { label: 'Trips', href: '/trips' },
             { label: trip.name },
           ]} />
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-4xl font-bold text-gray-900">{trip.name}</h1>
+              <h1 className="text-2xl sm:text-4xl font-bold text-gray-900">{trip.name}</h1>
               <ShareButton url={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/share/${id}`} />
             </div>
             <div className="mt-2">
@@ -126,7 +126,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {groups.map((group, gi) => {
           const colors = LEG_COLORS[gi % LEG_COLORS.length]
           const { leg, days: legDays } = group
@@ -165,7 +165,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                           {dayNum}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">
+                          <p className="text-base font-semibold text-gray-900 truncate">
                             {dayData?.title || dateLabel}
                           </p>
                           {dayData?.title && (

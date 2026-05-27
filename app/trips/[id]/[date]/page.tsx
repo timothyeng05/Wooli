@@ -14,12 +14,15 @@ type EditorSection = SectionData & { _id: string }
 
 // ─── Display components (view mode) ────────────────────────────────────────
 
-function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
+function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type }: {
   meta: SectionMeta; lines: string[]
   confirmed: boolean; onToggle: () => void; onEdit?: () => void
-  title?: string
+  title?: string; type?: string
 }) {
+  const [expanded, setExpanded] = useState(false)
   const allContent = lines.map(l => l.trim()).filter(Boolean)
+  const t = type?.toUpperCase() ?? ''
+  const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
 
   let duration: string | null = null
   let content = allContent
@@ -29,47 +32,74 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
     content = allContent.filter(l => !l.startsWith('~'))
   }
 
+  let displayName: string | null = null
+  let body = content
+  if (isActivityOrMeal) {
+    const nameIdx = content.findIndex(l => !l.startsWith('-'))
+    if (nameIdx >= 0) {
+      displayName = content[nameIdx]
+      body = content.filter((_, i) => i !== nameIdx)
+    }
+  }
+
   if (!content.length && !duration && !title) return null
-  const body = content
+  const headerText = displayName || title || meta.label
+  const hasBody = body.length > 0
+
   return (
-    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className={`flex items-center gap-2 font-semibold text-sm ${meta.text}`}>
-          <span>{meta.icon}</span>
-          <span>{title || meta.label}</span>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className={`rounded-xl border overflow-hidden ${meta.bg} ${meta.border}`}>
+      <div
+        className="flex items-center gap-2.5 px-4 py-3 cursor-pointer select-none"
+        onClick={() => hasBody && setExpanded(e => !e)}
+      >
+        <span className="flex-shrink-0">{meta.icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold leading-snug ${meta.text}`}>{headerText}</p>
           {duration && (
-            <span className="text-xs font-semibold bg-teal-100 text-teal-700 rounded-full px-2.5 py-1 flex items-center gap-1">
-              <span>⏱</span> {duration}
-            </span>
-          )}
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={onToggle}
-              className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
-            />
-            <span className="text-xs text-gray-400">Planned</span>
-          </label>
-          {onEdit && (
-            <button onClick={onEdit} className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition">Edit</button>
+            <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>
           )}
         </div>
+        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={onToggle}
+            aria-label="Planned"
+            className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
+          />
+        </label>
+        {hasBody && (
+          <span className={`text-gray-300 text-xs flex-shrink-0 ml-1 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
+        )}
       </div>
-      {body.length > 0 && <ul className="space-y-1.5">
-        {body.map((line, i) => {
-          const isBullet = line.startsWith('-')
-          const text = isBullet ? line.slice(1).trim() : line
-          return (
-            <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
-              {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
-              <span>{text}</span>
-            </li>
-          )
-        })}
-      </ul>}
+      {expanded && (
+        <div className={`px-4 pb-3 pt-2 border-t ${meta.border}`}>
+          {body.length > 0 && (
+            <ul className="space-y-1.5">
+              {body.map((line, i) => {
+                const isBullet = line.startsWith('-')
+                const text = isBullet ? line.slice(1).trim() : line
+                return (
+                  <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
+                    {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
+                    <span>{text}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          {onEdit && (
+            <div className="mt-2.5 pt-2.5 border-t border-gray-200/60 flex justify-end">
+              <button
+                onClick={e => { e.stopPropagation(); onEdit() }}
+                className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition"
+              >
+                Edit
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -87,29 +117,26 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
   const embedUrl = `https://maps.google.com/maps?q=${query}&output=embed&z=15`
   return (
-    <div
-      className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden select-none`}
-      onDoubleClick={() => setOpen(o => !o)}
-    >
-      <div className="px-4 py-3 flex items-center gap-3">
-        <span className="text-lg">{meta.icon}</span>
+    <div className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden`}>
+      <div
+        className="px-4 py-3 flex items-center gap-2.5 cursor-pointer select-none"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="text-lg flex-shrink-0">{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-semibold ${meta.text}`}>{name}</p>
           {location && <p className="text-xs text-gray-500">{location}</p>}
         </div>
-        <label className="flex items-center gap-1.5 cursor-pointer select-none" onClick={e => e.stopPropagation()}>
+        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={confirmed}
             onChange={onToggle}
+            aria-label="Planned"
             className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
           />
-          <span className="text-xs text-gray-400">Planned</span>
         </label>
-        <span className="text-xs text-gray-400 flex-shrink-0">{open ? 'double-tap to close' : 'double-tap for map'}</span>
-          {onEdit && (
-            <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition">Edit</button>
-          )}
+        <span className={`text-gray-300 text-xs flex-shrink-0 ml-1 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </div>
       {open && (
         <>
@@ -120,7 +147,7 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
           />
-          <div className={`px-4 py-2.5 border-t border-gray-100 ${meta.bg}`}>
+          <div className={`px-4 py-2.5 border-t border-gray-100 flex items-center justify-between ${meta.bg}`}>
             <a
               href={mapsUrl}
               target="_blank"
@@ -130,6 +157,9 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
             >
               Open in Google Maps →
             </a>
+            {onEdit && (
+              <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs font-medium text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-md px-2 py-0.5 transition">Edit</button>
+            )}
           </div>
         </>
       )}
@@ -325,11 +355,11 @@ function CarEditor({ section, onChange }: { section: EditorSection; onChange: (u
 function ActivityEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
   const titleIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
   const titleLine = titleIdx >= 0 ? section.lines[titleIdx] : ''
-  const noteLines = section.lines.slice(titleIdx + 1).join('\n')
+  const noteLines = section.lines.filter(l => l.trim().startsWith('-') || l !== titleLine).join('\n')
 
   const setTitle = (val: string) => {
-    const bullets = section.lines.filter(l => l.trim().startsWith('-'))
-    onChange({ lines: val ? [val, ...bullets] : bullets })
+    const rest = section.lines.filter(l => l.trim().startsWith('-'))
+    onChange({ lines: val ? [val, ...rest] : rest })
   }
   const setNotes = (val: string) => {
     onChange({ lines: titleLine ? [titleLine, ...val.split('\n')] : val.split('\n') })
@@ -420,6 +450,7 @@ function GeneralEditor({ section, onChange }: { section: EditorSection; onChange
 
 const ACTIVITY_TYPES = new Set(['MORNING', 'AFTERNOON', 'NIGHT', 'ACTIVITY'])
 const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
+const HIDE_TITLE_TYPES = new Set(['ACTIVITY', 'MORNING', 'AFTERNOON', 'NIGHT', 'MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'HOTEL'])
 
 function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone }: {
   section: EditorSection
@@ -466,15 +497,17 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
           </label>
         </div>
       </div>
-      <div className="mb-3">
-        <input
-          type="text"
-          value={section.title ?? ''}
-          onChange={e => onChange({ title: e.target.value || undefined })}
-          placeholder={`Title (auto-generated if blank)`}
-          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-        />
-      </div>
+      {!HIDE_TITLE_TYPES.has(t) && (
+        <div className="mb-3">
+          <input
+            type="text"
+            value={section.title ?? ''}
+            onChange={e => onChange({ title: e.target.value || undefined })}
+            placeholder="Title (auto-generated if blank)"
+            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          />
+        </div>
+      )}
       {(meta.banner || meta.travel) && !meta.car
         ? <TravelEditor section={section} onChange={onChange} />
         : meta.hotel
@@ -576,7 +609,10 @@ let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
 
 async function generateMissingTitles(items: EditorSection[]): Promise<EditorSection[]> {
-  const candidates = items.filter(s => !s.title && s.lines.filter(Boolean).some(l => l.trim()))
+  const candidates = items.filter(s => {
+    const t = s.type.toUpperCase()
+    return !HIDE_TITLE_TYPES.has(t) && !s.title && s.lines.filter(Boolean).some(l => l.trim())
+  })
   if (!candidates.length) return items
   try {
     const res = await fetch('/api/trips/section-title', {
@@ -836,7 +872,7 @@ export default function TripDayPage() {
 
         {/* Sticky header */}
         <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
-          <div className="px-6 py-4 flex items-center justify-between gap-4">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 whitespace-nowrap">
                 Day {dayNumber}
@@ -868,7 +904,7 @@ export default function TripDayPage() {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 sm:space-y-6">
 
           {/* Always-visible title + location edit */}
           <div className="space-y-2">
@@ -936,15 +972,14 @@ export default function TripDayPage() {
                               onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
                               onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
                               onDone={async () => {
-                                const cleared = sectionItems.map(s => s._id === item._id ? { ...s, title: undefined } : s)
-                                const withTitles = await generateMissingTitles(cleared)
+                                const withTitles = await generateMissingTitles(sectionItems)
                                 setSectionItems(withTitles)
                                 await save(withTitles)
                               }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
                           }
                         </div>
                       </div>
