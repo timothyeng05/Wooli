@@ -590,12 +590,12 @@ export default function ForecastClient({
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
               Projection
             </div>
-            {retirementMarkers.map(m => (
-              <div key={m.label} className="flex items-center gap-1.5">
-                <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill={m.color} stroke="white" strokeWidth="1.5" /></svg>
-                {m.label}
+            {retirementMarkers.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <svg width="12" height="12"><polygon points="6,1 1,11 11,11" fill="#10b981" stroke="white" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+                Retirement
               </div>
-            ))}
+            )}
             {goals.some(g => g.target_date) && (
               <div className="flex items-center gap-1.5">
                 <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#6366f1" stroke="white" strokeWidth="1.5" /></svg>
