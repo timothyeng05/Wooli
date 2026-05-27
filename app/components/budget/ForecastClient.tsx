@@ -469,8 +469,8 @@ export default function ForecastClient({
   const jessRetirementYear = jessAgeN && jessRetirementAgeN ? THIS_YEAR + (jessRetirementAgeN - jessAgeN) : null
 
   const retirementMarkers = [
-    timRetirementYear ? { year: timRetirementYear, label: 'Tim retires', color: '#3b82f6' } : null,
-    jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires', color: '#f43f5e' } : null,
+    timRetirementYear ? { year: timRetirementYear, label: 'Tim retires', color: '#10b981' } : null,
+    jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires', color: '#10b981' } : null,
   ].filter(Boolean) as { year: number; label: string; color: string }[]
 
   const projection = useMemo(() => computeProjection({
