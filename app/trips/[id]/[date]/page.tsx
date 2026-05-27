@@ -29,7 +29,8 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
     content = allContent.filter(l => !l.startsWith('~'))
   }
 
-  if (!content.length && !duration) return null
+  if (!content.length && !duration && !title) return null
+  const body = title ? content.slice(1) : content
   return (
     <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
       <div className="flex items-center justify-between mb-2">
@@ -57,8 +58,8 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
           )}
         </div>
       </div>
-      <ul className="space-y-1.5">
-        {content.map((line, i) => {
+      {body.length > 0 && <ul className="space-y-1.5">
+        {body.map((line, i) => {
           const isBullet = line.startsWith('-')
           const text = isBullet ? line.slice(1).trim() : line
           return (
@@ -68,7 +69,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
             </li>
           )
         })}
-      </ul>
+      </ul>}
     </div>
   )
 }
@@ -734,14 +735,17 @@ export default function TripDayPage() {
   }
 
   const addSection = (type: string, afterIndex?: number) => {
+    const id = newId()
+    const newSection: EditorSection = { _id: id, type, lines: [] }
     setSectionItems(s => {
-      const newSection = { _id: newId(), type, lines: [] }
       if (afterIndex === undefined) return [...s, newSection]
       const next = [...s]
       next.splice(afterIndex + 1, 0, newSection)
       return next
     })
     setInsertAt(null)
+    setShowAddPicker(false)
+    setEditingId(id)
   }
 
   const updateSection = (id: string, updates: Partial<SectionData>) => {
@@ -932,13 +936,10 @@ export default function TripDayPage() {
                               onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
                               onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
                               onDone={async () => {
-                                if (!item.title) {
-                                  const withTitles = await generateMissingTitles(sectionItems)
-                                  setSectionItems(withTitles)
-                                  await save(withTitles)
-                                } else {
-                                  await save()
-                                }
+                                const cleared = sectionItems.map(s => s._id === item._id ? { ...s, title: undefined } : s)
+                                const withTitles = await generateMissingTitles(cleared)
+                                setSectionItems(withTitles)
+                                await save(withTitles)
                               }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
