@@ -43,7 +43,7 @@ export default async function ForecastPage() {
       .eq('is_active', true),
     supabase
       .from('budget_goals')
-      .select('target_date, target_amount, name')
+      .select('target_date, target_amount, name, color')
       .eq('user_id', user.id)
       .eq('is_active', true),
     supabase
@@ -93,7 +93,7 @@ export default async function ForecastPage() {
         <ForecastClient
           streams={(streams ?? []) as IncomeStream[]}
           settings={settings}
-          goals={(goals ?? []) as Pick<Goal, 'name' | 'target_date' | 'target_amount'>[]}
+          goals={(goals ?? []) as Pick<Goal, 'name' | 'target_date' | 'target_amount' | 'color'>[]}
           startingCash={cash}
           startingInvestments={investments}
           startingLiabilities={liabilities}

@@ -171,10 +171,11 @@ function runMonteCarlo(params: {
 // ── Chart ─────────────────────────────────────────────────────────────────────
 const CH = 240, PL = 60, PR = 20, PT = 16, PB = 32
 
-function ForecastChart({ points, mc, retirementMarkers }: {
+function ForecastChart({ points, mc, retirementMarkers, goals }: {
   points: YearlyPoint[]
   mc: MCBands
-  retirementMarkers: { year: number; label: string }[]
+  retirementMarkers: { year: number; label: string; color: string }[]
+  goals: { target_date: string | null; target_amount: number; color: string }[]
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
@@ -235,26 +236,35 @@ function ForecastChart({ points, mc, retirementMarkers }: {
         <path d={linePath(mc.bull)} fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" strokeLinecap="round" opacity="0.7" />
         {/* Base line */}
         <path d={linePath(mc.base)} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Goal drawdown markers */}
-        {points.map((p, i) => p.goalDrawdowns > 0 && i > 0 && (
-          <g key={`goal-${i}`}>
-            <line x1={xOf(i).toFixed(1)} y1={PT} x2={xOf(i).toFixed(1)} y2={PT + IH}
-              stroke="#f59e0b" strokeWidth="1" strokeDasharray="3,2" opacity="0.7" />
-            <circle cx={xOf(i).toFixed(1)} cy={yOf(mc.base[i]).toFixed(1)} r="5"
-              fill="#f59e0b" stroke="white" strokeWidth="1.5" />
-          </g>
-        ))}
+        {/* Goal drawdown markers — one dot per goal, using each goal's color */}
+        {goals.filter(g => g.target_date).map((g, gi) => {
+          const year = new Date(g.target_date! + 'T12:00:00').getFullYear()
+          const idx = points.findIndex(p => p.year === year)
+          if (idx <= 0) return null
+          const cx = xOf(idx)
+          const cy = yOf(mc.base[idx])
+          const offset = gi * 12
+          return (
+            <g key={`goal-${gi}`}>
+              <line x1={cx.toFixed(1)} y1={PT} x2={cx.toFixed(1)} y2={PT + IH}
+                stroke={g.color} strokeWidth="1" strokeDasharray="3,2" opacity="0.6" />
+              <circle cx={cx.toFixed(1)} cy={(cy - offset).toFixed(1)} r="5"
+                fill={g.color} stroke="white" strokeWidth="1.5" />
+            </g>
+          )
+        })}
         {/* Retirement markers */}
-        {retirementMarkers.map(({ year, label }) => {
+        {retirementMarkers.map(({ year, label, color }, markerIdx) => {
           const idx = points.findIndex(p => p.year === year)
           if (idx < 0) return null
           const x = xOf(idx)
+          const labelY = PT + 10 + markerIdx * 14
           return (
             <g key={`ret-${year}`}>
               <line x1={x.toFixed(1)} y1={PT} x2={x.toFixed(1)} y2={PT + IH}
-                stroke="#10b981" strokeWidth="1.5" strokeDasharray="4,3" opacity="0.8" />
-              <text x={x.toFixed(1)} y={PT + 10} textAnchor="middle"
-                style={{ fontSize: 9, fill: '#10b981', fontWeight: 600 }}>
+                stroke={color} strokeWidth="1.5" strokeDasharray="4,3" opacity="0.85" />
+              <text x={(x + 3).toFixed(1)} y={labelY} textAnchor="start"
+                style={{ fontSize: 9, fill: color, fontWeight: 700 }}>
                 {label}
               </text>
             </g>
@@ -494,7 +504,7 @@ export default function ForecastClient({
 }: {
   streams: IncomeStream[]
   settings: ForecastSettings
-  goals: { target_date: string | null; target_amount: number; name: string }[]
+  goals: { target_date: string | null; target_amount: number; name: string; color: string }[]
   startingCash: number
   startingInvestments: number
   startingLiabilities: number
@@ -528,9 +538,9 @@ export default function ForecastClient({
   const jessRetirementYear = jessAgeN && jessRetirementAgeN ? THIS_YEAR + (jessRetirementAgeN - jessAgeN) : null
 
   const retirementMarkers = [
-    timRetirementYear ? { year: timRetirementYear, label: 'Tim retires' } : null,
-    jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires' } : null,
-  ].filter(Boolean) as { year: number; label: string }[]
+    timRetirementYear ? { year: timRetirementYear, label: 'Tim retires', color: '#3b82f6' } : null,
+    jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires', color: '#f43f5e' } : null,
+  ].filter(Boolean) as { year: number; label: string; color: string }[]
 
   const mcParams = useMemo(() => ({
     startingCash,
@@ -621,8 +631,6 @@ export default function ForecastClient({
     }
   }
 
-  const goalYears = new Set(goals.filter(g => g.target_date).map(g => new Date(g.target_date! + 'T12:00:00').getFullYear()))
-
   return (
     <div className="space-y-5">
       {/* Summary */}
@@ -668,16 +676,16 @@ export default function ForecastClient({
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
               Bear (25th%)
             </div>
-            {goalYears.size > 0 && (
+            {goals.some(g => g.target_date) && (
               <div className="flex items-center gap-1.5">
-                <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="3,2" /></svg>
+                <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#6366f1" stroke="white" strokeWidth="1.5" /></svg>
                 Goals
               </div>
             )}
           </div>
         </div>
         <div className="mb-3" />
-        <ForecastChart points={projection} mc={monteCarlo} retirementMarkers={retirementMarkers} />
+        <ForecastChart points={projection} mc={monteCarlo} retirementMarkers={retirementMarkers} goals={goals} />
       </div>
 
       {/* Income streams + Settings side by side */}
