@@ -45,6 +45,12 @@ export default async function AccountsPage() {
       .order('recorded_on', { ascending: true }),
   ])
 
+  // ── Last synced timestamp (max updated_at across Plaid accounts) ──────────
+  const lastSynced = (plaidAccounts ?? []).reduce<string | null>((max, a) => {
+    if (!a.updated_at) return max
+    return max === null || a.updated_at > max ? a.updated_at : max
+  }, null)
+
   // ── Build unified account list ──────────────────────────────────────────────
   const institutionMap = new Map((plaidItems ?? []).map(i => [i.item_id, i.institution_name]))
 
@@ -142,6 +148,7 @@ export default async function AccountsPage() {
           history={(freshHistory ?? []) as BalancePoint[]}
           netWorthHistory={(freshNetWorthHistory ?? []) as { recorded_on: string; net_worth: number }[]}
           userId={user.id}
+          lastSynced={lastSynced}
         />
       </div>
     </div>

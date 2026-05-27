@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, isAssetType, OWNERS, type AccountType } from '@/lib/budget/account-utils'
+import { fmtSyncTime } from '@/lib/budget/format-utils'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
 export interface UnifiedAccount {
@@ -153,8 +154,8 @@ function NetWorthChart({ series, period, onPeriod }: {
             }`}>{p.label}</button>
         ))}
       </div>
-      <div className="relative">
-        <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: CH }}
+      <div className="relative w-full" style={{ aspectRatio: `${CW} / ${CH}` }}>
+        <svg viewBox={`0 0 ${CW} ${CH}`} className="absolute inset-0 w-full h-full"
           onMouseLeave={() => setHover(null)}
           onMouseMove={e => {
             const rect = e.currentTarget.getBoundingClientRect()
@@ -625,17 +626,41 @@ export default function AccountsPageClient({
   history,
   netWorthHistory,
   userId,
+  lastSynced,
 }: {
   accounts: UnifiedAccount[]
   history: BalancePoint[]
   netWorthHistory: { recorded_on: string; net_worth: number }[]
   userId: string
+  lastSynced?: string | null
 }) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
   const [period, setPeriod] = useState(90)
   const [open, setOpen] = useState({ cash: true, investments: true, credit: true })
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const [txnRes, balRes] = await Promise.all([
+        fetch('/api/plaid/sync-transactions', { method: 'POST' }),
+        fetch('/api/plaid/refresh-balances', { method: 'POST' }),
+      ])
+      const txnData = await txnRes.json()
+      if (!txnRes.ok || !balRes.ok) {
+        toast.error(txnData.error ?? 'Sync failed')
+      } else {
+        toast.success(`Synced — ${txnData.added ?? 0} new transactions`)
+        router.refresh()
+      }
+    } catch {
+      toast.error('Sync failed — check your connection')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const handleUpdate = async (id: string, patch: Record<string, unknown>) => {
     const { error } = await supabase.from('accounts').update(patch).eq('id', id)
@@ -686,7 +711,21 @@ export default function AccountsPageClient({
     <div className="space-y-6">
       {/* Net worth header + chart */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Net Worth</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Net Worth</p>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            title="Sync now"
+            className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 transition disabled:opacity-50 group"
+          >
+            <svg className={`w-3 h-3 transition-transform ${syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-300'}`}
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            {syncing ? 'Syncing…' : lastSynced ? fmtSyncTime(lastSynced) : 'Sync now'}
+          </button>
+        </div>
         <div className="flex items-baseline gap-3 mb-4">
           <p className="text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>
           {changePct && (
