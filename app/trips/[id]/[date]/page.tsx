@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import DayLocationMap from '@/app/components/trips/DayLocationMapClient'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import DayLocationMap, { type LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -519,8 +519,10 @@ function AddSectionPicker({ onAdd, onCancel }: { onAdd: (type: string) => void; 
   )
 }
 
-function DayMapCollapsible({ location }: { location: string }) {
+function DayMapCollapsible({ locations }: { locations: LocationPoint[] }) {
   const [open, setOpen] = useState(false)
+  if (!locations.length) return null
+  const label = locations.length === 1 ? locations[0].label : `${locations.length} locations today`
   return (
     <div className="rounded-xl border border-gray-100 overflow-hidden">
       <button
@@ -529,11 +531,11 @@ function DayMapCollapsible({ location }: { location: string }) {
       >
         <span className="flex items-center gap-2">
           <span>🗺</span>
-          <span>{location}</span>
+          <span>{label}</span>
         </span>
         <span className="text-gray-400 text-xs">{open ? '▲ Hide map' : '▼ Show map'}</span>
       </button>
-      {open && <DayLocationMap location={location} />}
+      {open && <DayLocationMap locations={locations} />}
     </div>
   )
 }
@@ -559,6 +561,7 @@ export default function TripDayPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmedSections, setConfirmedSections] = useState<string[]>([])
   const [insertAt, setInsertAt] = useState<number | null>(null)
+  const [showAddPicker, setShowAddPicker] = useState(false)
   const [aiSummary, setAiSummary] = useState<string | null>(null)
 
   useEffect(() => {
@@ -616,6 +619,7 @@ export default function TripDayPage() {
   }, [params.id, params.date])
 
   const save = async () => {
+    if (saving) return
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -693,6 +697,26 @@ export default function TripDayPage() {
   // Indexed 1:1 with sectionItems (may contain nulls); TravelBanner uses the filtered version
   const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
   const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
+
+  const dayLocations = useMemo((): LocationPoint[] => {
+    const locs: LocationPoint[] = []
+    if (location.trim()) locs.push({ label: location, query: location, color: '#6b7280' })
+    for (const item of sectionItems) {
+      const meta = findMeta(item.type)
+      if (!meta) continue
+      const t = item.type.toUpperCase()
+      const lines = item.lines.map(l => l.trim()).filter(Boolean)
+      if (meta.hotel && lines[0]) {
+        const q = lines[1] ? `${lines[0]}, ${lines[1]}` : location ? `${lines[0]}, ${location}` : lines[0]
+        locs.push({ label: lines[0], query: q, color: '#8b5cf6' })
+      } else if (ACTIVITY_TYPES.has(t) && lines[0]) {
+        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#3b82f6' })
+      } else if (MEAL_TYPES.has(t) && lines[0]) {
+        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#f59e0b' })
+      }
+    }
+    return locs
+  }, [sectionItems, location])
 
   const dayNumber = trip
     ? Math.round((new Date(params.date + 'T00:00:00').getTime() - new Date(trip.start_date + 'T00:00:00').getTime()) / 86400000) + 1
@@ -776,13 +800,8 @@ export default function TripDayPage() {
                   Next →
                 </Link>
               )}
-              <button
-                onClick={save}
-                disabled={saving}
-                className="bg-blue-600 text-white font-medium px-4 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
-              >
-                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
-              </button>
+              {saving && <span className="text-xs text-gray-400">Saving…</span>}
+              {saved && !saving && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
             </div>
           </div>
         </div>
@@ -795,6 +814,7 @@ export default function TripDayPage() {
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
+              onBlur={save}
               placeholder="Day title, e.g. Arrival in Tokyo"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
@@ -804,6 +824,7 @@ export default function TripDayPage() {
                 type="text"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
+                onBlur={save}
                 placeholder="Day location (e.g. Tokyo, Japan)"
                 className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
@@ -811,7 +832,7 @@ export default function TripDayPage() {
           </div>
 
           {/* Collapsible day map */}
-          {location && <DayMapCollapsible location={location} />}
+          {dayLocations.length > 0 && <DayMapCollapsible locations={dayLocations} />}
 
           {/* Sections */}
           {displaySections.length > 0 ? (
@@ -852,7 +873,7 @@ export default function TripDayPage() {
                               onDelete={() => { removeSection(item._id); setEditingId(null) }}
                               onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
                               onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
-                              onDone={() => setEditingId(null)}
+                              onDone={() => { setEditingId(null); save() }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
@@ -882,8 +903,16 @@ export default function TripDayPage() {
             </>
           ) : null}
 
-          {/* Add section — always visible */}
-          <AddSectionPicker onAdd={type => addSection(type)} />
+          {/* Add section */}
+          {showAddPicker
+            ? <AddSectionPicker onAdd={type => { addSection(type); setShowAddPicker(false) }} onCancel={() => setShowAddPicker(false)} />
+            : <button
+                onClick={() => setShowAddPicker(true)}
+                className="w-full border border-dashed border-gray-200 rounded-xl py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition"
+              >
+                + Add section
+              </button>
+          }
 
         </div>
       </div>
