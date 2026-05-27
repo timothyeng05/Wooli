@@ -932,7 +932,7 @@ export default function TripDayPage() {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
+        <div className="max-w-2xl mx-auto px-5 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
 
           {/* Always-visible title + location edit */}
           <div className="space-y-1.5">
@@ -972,9 +972,9 @@ export default function TripDayPage() {
                   return (
                     <div key={item._id}>
                       <div className="flex gap-2">
-                        <div className="flex flex-col items-end flex-shrink-0 w-12 pt-3">
+                        <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3">
                           {s.pinned && <span className="text-xs leading-none mb-0.5">⭐</span>}
-                          <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride ?? s.meta.time}</span>
+                          <span className="text-[11px] font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
                         </div>
                         <div className="flex flex-col items-center flex-shrink-0">
                           <div className="w-2.5 h-2.5 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: s.meta.dotColor }} />
