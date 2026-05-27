@@ -487,9 +487,10 @@ export default function ForecastClient({
     jessRetirementYear,
   }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
 
-  const endNW = projection[projection.length - 1]?.netWorth ?? 0
   const currentNW = projection[0]?.netWorth ?? 0
-  const gain = endNW - currentNW
+  const tenYearPt = projection.find(p => p.year === THIS_YEAR + 10)
+  const tenYearNW = tenYearPt?.netWorth ?? projection[projection.length - 1]?.netWorth ?? 0
+  const gain = tenYearNW - currentNW
 
   const handleAddStream = async (data: Omit<IncomeStream, 'id' | 'sort_order'>) => {
     setSavingStream(true)
@@ -570,7 +571,7 @@ export default function ForecastClient({
         <div className="text-gray-200 hidden sm:block">→</div>
         <div>
           <p className="text-xs text-gray-400 mb-0.5">In 10 years ({THIS_YEAR + 10})</p>
-          <p className="text-2xl font-bold text-gray-900">${fmtK(endNW)}</p>
+          <p className="text-2xl font-bold text-gray-900">${fmtK(tenYearNW)}</p>
         </div>
         <div className="text-gray-200 hidden sm:block">|</div>
         <div>
