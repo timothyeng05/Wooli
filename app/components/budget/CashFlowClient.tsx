@@ -222,6 +222,7 @@ const OWNER_DISPLAY: Record<string, string> = {
   'Timothy Eng': 'Tim',
   'Jessica Li': 'Jess',
   'Shared': 'Shared',
+  'Unknown': 'Unassigned',
 }
 const OWNER_COLORS: Record<string, string> = {
   'Timothy Eng': '#3b82f6',
@@ -239,9 +240,15 @@ function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] 
       else entry.income += t.amount
       map.set(key, entry)
     }
-    const order = ['Timothy Eng', 'Jessica Li', 'Shared']
+    const order = ['Timothy Eng', 'Jessica Li', 'Shared', 'Unknown']
     return [...map.entries()]
-      .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+      .sort((a, b) => {
+        const ai = order.indexOf(a[0]), bi = order.indexOf(b[0])
+        // Push Unknown to the end
+        if (a[0] === 'Unknown') return 1
+        if (b[0] === 'Unknown') return -1
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+      })
       .filter(([, v]) => v.expenses > 0 || v.income > 0)
   }, [transactions])
 
@@ -255,17 +262,22 @@ function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] 
       <div className="grid grid-cols-3 gap-3">
         {rows.map(([owner, { expenses, income }]) => {
           const label = OWNER_DISPLAY[owner] ?? owner
-          const color = OWNER_COLORS[owner] ?? '#6b7280'
+          const isUnknown = owner === 'Unknown'
+          const color = isUnknown ? '#9ca3af' : (OWNER_COLORS[owner] ?? '#6b7280')
           const pct = totalExpenses > 0 ? Math.round((expenses / totalExpenses) * 100) : 0
           return (
-            <div key={owner} className="rounded-xl p-3" style={{ backgroundColor: `${color}10` }}>
+            <div
+              key={owner}
+              className={`rounded-xl p-3 ${isUnknown ? 'border border-dashed border-gray-300 bg-gray-50' : ''}`}
+              style={isUnknown ? undefined : { backgroundColor: `${color}10` }}
+            >
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-xs font-semibold text-gray-700">{label}</span>
+                <span className={`text-xs font-semibold ${isUnknown ? 'text-gray-400' : 'text-gray-700'}`}>{label}</span>
               </div>
               <p className="text-[10px] text-gray-400 mb-0.5">Spent</p>
-              <p className="text-base font-bold text-gray-900 tabular-nums">${fmt(expenses)}</p>
-              <p className="text-[10px] tabular-nums mt-0.5" style={{ color }}>{pct}% of total</p>
+              <p className={`text-base font-bold tabular-nums ${isUnknown ? 'text-gray-400' : 'text-gray-900'}`}>${fmt(expenses)}</p>
+              <p className="text-[10px] tabular-nums mt-0.5 text-gray-400">{pct}% of total</p>
               {income > 0 && (
                 <div className="mt-2 pt-2 border-t border-gray-200">
                   <p className="text-[10px] text-gray-400 mb-0.5">Earned</p>
