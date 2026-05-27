@@ -119,61 +119,11 @@ function computeProjection({
   return points
 }
 
-// ── Monte Carlo ───────────────────────────────────────────────────────────────
-const MC_SIMS = 400
-const MC_VOLATILITY = 12 // % annual stddev
-
-interface MCBands { bull: number[]; base: number[]; bear: number[] }
-
-function runMonteCarlo(params: {
-  startingCash: number; startingInvestments: number; startingLiabilities: number
-  streams: IncomeStream[]; expenseMonthly: number; expenseGrowthRate: number
-  investmentGrowthRate: number; goals: { target_date: string | null; target_amount: number }[]
-  years: number[]; timRetirementYear: number | null; jessRetirementYear: number | null
-}): MCBands {
-  const { startingCash, startingInvestments, startingLiabilities, streams, expenseMonthly,
-    expenseGrowthRate, investmentGrowthRate, goals, years, timRetirementYear, jessRetirementYear } = params
-  const yearlyNW: number[][] = Array.from({ length: years.length }, () => [])
-
-  for (let sim = 0; sim < MC_SIMS; sim++) {
-    let cash = startingCash, investments = startingInvestments
-    yearlyNW[0].push(cash + investments - startingLiabilities)
-    for (let i = 1; i < years.length; i++) {
-      const year = years[i]
-      const income = streams.reduce((s, st) => {
-        if (st.owner === 'Timothy Eng' && timRetirementYear && year > timRetirementYear) return s
-        if (st.owner === 'Jessica Li' && jessRetirementYear && year > jessRetirementYear) return s
-        if (st.growth_type === 'manual') return s + (st.yearly_amounts[String(year)] ?? st.monthly_amount) * 12
-        return s + st.monthly_amount * Math.pow(1 + st.growth_rate / 100, i) * 12
-      }, 0)
-      const expenses = expenseMonthly * 12 * Math.pow(1 + expenseGrowthRate / 100, i)
-      const goalDrawdowns = goals.filter(g => g.target_date && new Date(g.target_date + 'T12:00:00').getFullYear() === year).reduce((s, g) => s + g.target_amount, 0)
-      const u1 = Math.max(Math.random(), 1e-10)
-      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * Math.random())
-      const annualReturn = (investmentGrowthRate + MC_VOLATILITY * z) / 100
-      const investmentReturn = (cash + investments - startingLiabilities) * annualReturn
-      cash = cash + income - expenses - goalDrawdowns
-      investments = investments + investmentReturn
-      yearlyNW[i].push(cash + investments - startingLiabilities)
-    }
-  }
-
-  const bull: number[] = [], base: number[] = [], bear: number[] = []
-  for (const vals of yearlyNW) {
-    const s = [...vals].sort((a, b) => a - b)
-    bear.push(s[Math.floor(s.length * 0.25)])
-    base.push(s[Math.floor(s.length * 0.5)])
-    bull.push(s[Math.floor(s.length * 0.75)])
-  }
-  return { bull, base, bear }
-}
-
 // ── Chart ─────────────────────────────────────────────────────────────────────
 const CH = 240, PL = 60, PR = 20, PT = 16, PB = 32
 
-function ForecastChart({ points, mc, retirementMarkers, goals }: {
+function ForecastChart({ points, retirementMarkers, goals }: {
   points: YearlyPoint[]
-  mc: MCBands
   retirementMarkers: { year: number; label: string; color: string }[]
   goals: { target_date: string | null; target_amount: number; color: string }[]
 }) {
@@ -183,23 +133,15 @@ function ForecastChart({ points, mc, retirementMarkers, goals }: {
   const IW = CW - PL - PR
   const IH = CH - PT - PB
 
-  const allVals = [...mc.bull, ...mc.bear, 0]
+  const allVals = [...points.map(p => p.netWorth), 0]
   const minV = Math.min(...allVals)
   const maxV = Math.max(...allVals)
   const range = maxV - minV || 1
 
   function xOf(i: number) { return PL + (i / (points.length - 1)) * IW }
   function yOf(v: number) { return PT + IH - ((v - minV) / range) * IH }
-  function linePath(vals: number[]) {
-    return vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
-  }
 
-  // Shaded band between bear and bull
-  const bandPath = [
-    ...mc.bear.map((v, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`),
-    ...[...mc.bull].reverse().map((v, i) => `L${xOf(mc.bull.length - 1 - i).toFixed(1)},${yOf(v).toFixed(1)}`),
-    'Z',
-  ].join(' ')
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(p.netWorth).toFixed(1)}`).join(' ')
 
   const step = Math.ceil(((maxV - minV) / 4) / 50000) * 50000 || 50000
   const yLabels: { v: number; y: number }[] = []
@@ -228,42 +170,29 @@ function ForecastChart({ points, mc, retirementMarkers, goals }: {
             </text>
           </g>
         ))}
-        {/* MC band */}
-        <path d={bandPath} fill="#3b82f6" fillOpacity="0.07" />
-        {/* Bear line */}
-        <path d={linePath(mc.bear)} fill="none" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" strokeLinecap="round" opacity="0.7" />
-        {/* Bull line */}
-        <path d={linePath(mc.bull)} fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" strokeLinecap="round" opacity="0.7" />
-        {/* Base line */}
-        <path d={linePath(mc.base)} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Goal drawdown markers — one dot per goal, using each goal's color */}
+        {/* Projection line */}
+        <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Goal dots on the line */}
         {goals.filter(g => g.target_date).map((g, gi) => {
           const year = new Date(g.target_date! + 'T12:00:00').getFullYear()
           const idx = points.findIndex(p => p.year === year)
           if (idx <= 0) return null
-          const cx = xOf(idx)
-          const cy = yOf(mc.base[idx])
-          const offset = gi * 12
           return (
-            <g key={`goal-${gi}`}>
-              <line x1={cx.toFixed(1)} y1={PT} x2={cx.toFixed(1)} y2={PT + IH}
-                stroke={g.color} strokeWidth="1" strokeDasharray="3,2" opacity="0.6" />
-              <circle cx={cx.toFixed(1)} cy={(cy - offset).toFixed(1)} r="5"
-                fill={g.color} stroke="white" strokeWidth="1.5" />
-            </g>
+            <circle key={`goal-${gi}`}
+              cx={xOf(idx).toFixed(1)} cy={yOf(points[idx].netWorth).toFixed(1)}
+              r="6" fill={g.color} stroke="white" strokeWidth="2" />
           )
         })}
-        {/* Retirement markers */}
-        {retirementMarkers.map(({ year, label, color }, markerIdx) => {
+        {/* Retirement dots on the line */}
+        {retirementMarkers.map(({ year, label, color }) => {
           const idx = points.findIndex(p => p.year === year)
           if (idx < 0) return null
-          const x = xOf(idx)
-          const labelY = PT + 10 + markerIdx * 14
+          const cx = xOf(idx)
+          const cy = yOf(points[idx].netWorth)
           return (
             <g key={`ret-${year}`}>
-              <line x1={x.toFixed(1)} y1={PT} x2={x.toFixed(1)} y2={PT + IH}
-                stroke={color} strokeWidth="1.5" strokeDasharray="4,3" opacity="0.85" />
-              <text x={(x + 3).toFixed(1)} y={labelY} textAnchor="start"
+              <circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r="7" fill={color} stroke="white" strokeWidth="2" />
+              <text x={(cx + 10).toFixed(1)} y={(cy - 4).toFixed(1)} textAnchor="start"
                 style={{ fontSize: 9, fill: color, fontWeight: 700 }}>
                 {label}
               </text>
@@ -285,19 +214,15 @@ function ForecastChart({ points, mc, retirementMarkers, goals }: {
           <>
             <line x1={xOf(hover).toFixed(1)} y1={PT} x2={xOf(hover).toFixed(1)} y2={PT + IH}
               stroke="#3b82f6" strokeWidth="1" strokeDasharray="3,3" />
-            <circle cx={xOf(hover).toFixed(1)} cy={yOf(mc.base[hover]).toFixed(1)} r="4"
+            <circle cx={xOf(hover).toFixed(1)} cy={yOf(points[hover].netWorth).toFixed(1)} r="4"
               fill="#3b82f6" stroke="white" strokeWidth="2" />
           </>
         )}
       </svg>
       {hoverPt && hover !== null && (
-        <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1 min-w-[180px]">
+        <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1 min-w-[160px]">
           <p className="font-bold text-gray-900 text-sm">{hoverPt.year}</p>
-          <div className="space-y-0.5">
-            <p className="text-green-600 font-medium">Bull: ${fmtK(mc.bull[hover])}</p>
-            <p className="text-blue-600 font-semibold">Base: ${fmtK(mc.base[hover])}</p>
-            <p className="text-red-500 font-medium">Bear: ${fmtK(mc.bear[hover])}</p>
-          </div>
+          <p className="text-blue-600 font-semibold">Net worth: ${fmtK(hoverPt.netWorth)}</p>
           {hover > 0 && <>
             <div className="border-t border-gray-100 pt-1 space-y-0.5">
               {hoverPt.income > 0 && <p className="text-gray-500">Income: +${fmtK(hoverPt.income)}</p>}
@@ -542,7 +467,7 @@ export default function ForecastClient({
     jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires', color: '#f43f5e' } : null,
   ].filter(Boolean) as { year: number; label: string; color: string }[]
 
-  const mcParams = useMemo(() => ({
+  const projection = useMemo(() => computeProjection({
     startingCash,
     startingInvestments,
     startingLiabilities,
@@ -555,9 +480,6 @@ export default function ForecastClient({
     timRetirementYear,
     jessRetirementYear,
   }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
-
-  const projection = useMemo(() => computeProjection(mcParams), [mcParams])
-  const monteCarlo = useMemo(() => runMonteCarlo(mcParams), [mcParams])
 
   const endNW = projection[projection.length - 1]?.netWorth ?? 0
   const currentNW = projection[0]?.netWorth ?? 0
@@ -655,27 +577,19 @@ export default function ForecastClient({
 
       {/* Chart */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-start justify-between mb-1">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              {MC_SIMS} simulations · each year's return = your {investmentGrowthRate}% avg ± {MC_VOLATILITY}% random volatility ·
-              bull = 75th percentile, base = median, bear = 25th percentile
-            </p>
-          </div>
+        <div className="flex items-start justify-between mb-4">
+          <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
           <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0 ml-4">
             <div className="flex items-center gap-1.5">
-              <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
-              Bull (75th%)
-            </div>
-            <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
-              Base (50th%)
+              Projection
             </div>
-            <div className="flex items-center gap-1.5">
-              <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
-              Bear (25th%)
-            </div>
+            {retirementMarkers.map(m => (
+              <div key={m.label} className="flex items-center gap-1.5">
+                <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill={m.color} stroke="white" strokeWidth="1.5" /></svg>
+                {m.label}
+              </div>
+            ))}
             {goals.some(g => g.target_date) && (
               <div className="flex items-center gap-1.5">
                 <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#6366f1" stroke="white" strokeWidth="1.5" /></svg>
@@ -684,8 +598,7 @@ export default function ForecastClient({
             )}
           </div>
         </div>
-        <div className="mb-3" />
-        <ForecastChart points={projection} mc={monteCarlo} retirementMarkers={retirementMarkers} goals={goals} />
+        <ForecastChart points={projection} retirementMarkers={retirementMarkers} goals={goals} />
       </div>
 
       {/* Income streams + Settings side by side */}
