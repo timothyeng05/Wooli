@@ -59,6 +59,9 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
             <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>
           )}
         </div>
+        {hasBody && (
+          <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
+        )}
         {onEdit && (
           <button
             onClick={e => { e.stopPropagation(); onEdit() }}
@@ -67,7 +70,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
             Edit
           </button>
         )}
-        <label className="flex items-center cursor-pointer select-none flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={confirmed}
@@ -76,9 +79,6 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
             className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
           />
         </label>
-        {hasBody && (
-          <span className={`text-gray-300 text-xs flex-shrink-0 ml-0.5 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
-        )}
       </div>
       {expanded && body.length > 0 && (
         <div className={`px-3 pb-2.5 pt-2 border-t ${meta.border}`}>
@@ -123,10 +123,11 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
           <p className={`text-sm font-semibold ${meta.text}`}>{name}</p>
           {location && <p className="text-xs text-gray-500">{location}</p>}
         </div>
+        <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
         {onEdit && (
           <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0">Edit</button>
         )}
-        <label className="flex items-center cursor-pointer select-none flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={confirmed}
@@ -135,7 +136,6 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
             className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
           />
         </label>
-        <span className={`text-gray-300 text-xs flex-shrink-0 ml-0.5 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </div>
       {open && (
         <>
