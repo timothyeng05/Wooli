@@ -122,10 +122,24 @@ function computeProjection({
 // ── Chart ─────────────────────────────────────────────────────────────────────
 const CH = 240, PL = 60, PR = 20, PT = 16, PB = 32
 
-function ForecastChart({ points, retirementMarkers, goals }: {
+interface ExplorerParams {
+  startingCash: number
+  startingInvestments: number
+  startingLiabilities: number
+  streams: IncomeStream[]
+  expenseMonthly: number
+  expenseGrowthRate: number
+  investmentGrowthRate: number
+  goals: { target_date: string | null; target_amount: number }[]
+  years: number[]
+}
+
+function ForecastChart({ points, retirementMarkers, goals, explorerMode, explorerParams }: {
   points: YearlyPoint[]
   retirementMarkers: { year: number; label: string; color: string }[]
   goals: { target_date: string | null; target_amount: number; color: string; name: string }[]
+  explorerMode: boolean
+  explorerParams: ExplorerParams
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
@@ -143,6 +157,16 @@ function ForecastChart({ points, retirementMarkers, goals }: {
 
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(p.netWorth).toFixed(1)}`).join(' ')
 
+  // Explorer projection — recomputed on every hover in explorer mode
+  const explorerProjection = explorerMode && hover !== null
+    ? computeProjection({ ...explorerParams, timRetirementYear: points[hover].year, jessRetirementYear: points[hover].year })
+    : null
+  const explorerEndNW = explorerProjection?.[explorerProjection.length - 1]?.netWorth ?? 0
+  const explorerGoesNegative = explorerProjection?.some(p => p.netWorth < 0) ?? false
+  const explorerLinePath = explorerProjection
+    ? explorerProjection.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(p.netWorth).toFixed(1)}`).join(' ')
+    : null
+
   const step = Math.ceil(((maxV - minV) / 4) / 50000) * 50000 || 50000
   const yLabels: { v: number; y: number }[] = []
   for (let v = Math.floor(minV / step) * step; v <= Math.ceil(maxV / step) * step; v += step) {
@@ -155,7 +179,7 @@ function ForecastChart({ points, retirementMarkers, goals }: {
 
   return (
     <div className="relative">
-      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: 'auto' }}
+      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: 'auto', cursor: explorerMode ? 'crosshair' : 'default' }}
         onMouseLeave={() => setHover(null)}
         onMouseMove={e => {
           const rect = e.currentTarget.getBoundingClientRect()
@@ -170,10 +194,17 @@ function ForecastChart({ points, retirementMarkers, goals }: {
             </text>
           </g>
         ))}
-        {/* Projection line */}
-        <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Base projection line — dimmed in explorer mode */}
+        <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          opacity={explorerMode ? 0.2 : 1} />
+        {/* Explorer projection line */}
+        {explorerLinePath && (
+          <path d={explorerLinePath} fill="none"
+            stroke={explorerGoesNegative ? '#ef4444' : '#f97316'}
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        )}
         {/* Goal dots on the line */}
-        {goals.filter(g => g.target_date).map((g, gi) => {
+        {!explorerMode && goals.filter(g => g.target_date).map((g, gi) => {
           const year = new Date(g.target_date! + 'T12:00:00').getFullYear()
           const idx = points.findIndex(p => p.year === year)
           if (idx <= 0) return null
@@ -183,7 +214,7 @@ function ForecastChart({ points, retirementMarkers, goals }: {
               r="6" fill={g.color} stroke="white" strokeWidth="2" />
           )
         })}
-        {/* Retirement triangles on the line */}
+        {/* Retirement triangles — dimmed in explorer mode */}
         {retirementMarkers.map(({ year, color }) => {
           const idx = points.findIndex(p => p.year === year)
           if (idx < 0) return null
@@ -192,21 +223,33 @@ function ForecastChart({ points, retirementMarkers, goals }: {
           return (
             <polygon key={`ret-${year}`}
               points={`${cx.toFixed(1)},${(cy - 11).toFixed(1)} ${(cx - 7).toFixed(1)},${(cy + 5).toFixed(1)} ${(cx + 7).toFixed(1)},${(cy + 5).toFixed(1)}`}
-              fill={color} stroke="white" strokeWidth="2" strokeLinejoin="round" />
+              fill={color} stroke="white" strokeWidth="2" strokeLinejoin="round"
+              opacity={explorerMode ? 0.2 : 1} />
           )
         })}
+        {/* Explorer retirement triangle at hovered year */}
+        {explorerMode && hover !== null && (() => {
+          const cx = xOf(hover)
+          const explorerNW = explorerProjection?.[hover]?.netWorth ?? points[hover].netWorth
+          const cy = yOf(explorerNW)
+          return (
+            <polygon
+              points={`${cx.toFixed(1)},${(cy - 11).toFixed(1)} ${(cx - 7).toFixed(1)},${(cy + 5).toFixed(1)} ${(cx + 7).toFixed(1)},${(cy + 5).toFixed(1)}`}
+              fill={explorerGoesNegative ? '#ef4444' : '#f97316'} stroke="white" strokeWidth="2" strokeLinejoin="round" />
+          )
+        })()}
         {/* X year labels */}
         {points.map((p, i) => {
           const isFirst = i === 0, isLast = i === points.length - 1, isHovered = i === hover
           if (!isFirst && !isLast && !isHovered && p.year % 5 !== 0) return null
           return (
             <text key={i} x={xOf(i).toFixed(1)} y={CH - 6} textAnchor="middle"
-              style={{ fontSize: 10, fill: isHovered ? '#3b82f6' : '#94a3b8', fontWeight: isHovered ? 600 : 400 }}>
+              style={{ fontSize: 10, fill: isHovered ? (explorerMode ? '#f97316' : '#3b82f6') : '#94a3b8', fontWeight: isHovered ? 600 : 400 }}>
               {p.year}
             </text>
           )
         })}
-        {hover !== null && (
+        {!explorerMode && hover !== null && (
           <>
             <line x1={xOf(hover).toFixed(1)} y1={PT} x2={xOf(hover).toFixed(1)} y2={PT + IH}
               stroke="#3b82f6" strokeWidth="1" strokeDasharray="3,3" />
@@ -216,6 +259,19 @@ function ForecastChart({ points, retirementMarkers, goals }: {
         )}
       </svg>
       {hoverPt && hover !== null && (() => {
+        if (explorerMode) {
+          const retireYear = hoverPt.year
+          const safe = !explorerGoesNegative
+          return (
+            <div className="absolute top-2 left-16 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm pointer-events-none text-xs space-y-1.5 min-w-[200px]">
+              <p className="font-bold text-gray-900 text-sm">Retire in {retireYear}</p>
+              <p className="text-gray-500">End net worth: <span className={`font-semibold ${safe ? 'text-gray-900' : 'text-red-500'}`}>${fmtK(explorerEndNW)}</span></p>
+              <p className={`font-semibold flex items-center gap-1 ${safe ? 'text-green-600' : 'text-red-500'}`}>
+                {safe ? '✓ Looks sustainable' : '✗ Net worth goes negative'}
+              </p>
+            </div>
+          )
+        }
         const retEvents = retirementMarkers.filter(m => m.year === hoverPt.year)
         const goalEvents = goals.filter(g => g.target_date && new Date(g.target_date + 'T12:00:00').getFullYear() === hoverPt.year)
         return (
@@ -457,6 +513,7 @@ export default function ForecastClient({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [savingStream, setSavingStream] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
+  const [explorerMode, setExplorerMode] = useState(false)
 
   const timAgeN = parseInt(timAge) || null
   const jessAgeN = parseInt(jessAge) || null
@@ -486,6 +543,18 @@ export default function ForecastClient({
     timRetirementYear,
     jessRetirementYear,
   }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
+
+  const explorerParams: ExplorerParams = useMemo(() => ({
+    startingCash,
+    startingInvestments,
+    startingLiabilities,
+    streams,
+    expenseMonthly: (parseFloat(expenseAnnual) || 0) / 12,
+    expenseGrowthRate: parseFloat(expenseGrowthRate) || 0,
+    investmentGrowthRate: parseFloat(investmentGrowthRate) || 0,
+    goals,
+    years: forecastYears,
+  }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears])
 
   const currentNW = projection[0]?.netWorth ?? 0
   const tenYearPt = projection.find(p => p.year === THIS_YEAR + 10)
@@ -585,27 +654,44 @@ export default function ForecastClient({
       {/* Chart */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-start justify-between mb-4">
-          <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
-          <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0 ml-4">
-            <div className="flex items-center gap-1.5">
-              <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
-              Projection
-            </div>
-            {retirementMarkers.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <svg width="12" height="12"><polygon points="6,1 1,11 11,11" fill="#10b981" stroke="white" strokeWidth="1.5" strokeLinejoin="round" /></svg>
-                Retirement
-              </div>
-            )}
-            {goals.some(g => g.target_date) && (
-              <div className="flex items-center gap-1.5">
-                <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#6366f1" stroke="white" strokeWidth="1.5" /></svg>
-                Goals
-              </div>
-            )}
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
+            <button
+              onClick={() => setExplorerMode(m => !m)}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium transition ${
+                explorerMode
+                  ? 'bg-orange-50 text-orange-600 border-orange-300'
+                  : 'text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-600'
+              }`}
+            >
+              {explorerMode ? '✕ Exit explorer' : 'Retire explorer'}
+            </button>
           </div>
+          {!explorerMode && (
+            <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0 ml-4">
+              <div className="flex items-center gap-1.5">
+                <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
+                Projection
+              </div>
+              {retirementMarkers.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="12" height="12"><polygon points="6,1 1,11 11,11" fill="#10b981" stroke="white" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+                  Retirement
+                </div>
+              )}
+              {goals.some(g => g.target_date) && (
+                <div className="flex items-center gap-1.5">
+                  <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#6366f1" stroke="white" strokeWidth="1.5" /></svg>
+                  Goals
+                </div>
+              )}
+            </div>
+          )}
+          {explorerMode && (
+            <p className="text-xs text-orange-500 flex-shrink-0 ml-4">Hover to see retirement scenarios → orange = safe, red = goes negative</p>
+          )}
         </div>
-        <ForecastChart points={projection} retirementMarkers={retirementMarkers} goals={goals} />
+        <ForecastChart points={projection} retirementMarkers={retirementMarkers} goals={goals} explorerMode={explorerMode} explorerParams={explorerParams} />
       </div>
 
       {/* Income streams + Settings side by side */}
