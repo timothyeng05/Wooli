@@ -287,6 +287,7 @@ function ForecastChart({ points, retirementMarkers, goals, explorerMode, explore
             {hover > 0 && <>
               <div className="border-t border-gray-100 pt-1 space-y-0.5">
                 {hoverPt.income > 0 && <p className="text-gray-500">Income: +${fmtK(hoverPt.income)}</p>}
+                {hoverPt.investmentReturn !== 0 && <p className="text-gray-500">Investment: +${fmtK(hoverPt.investmentReturn)}</p>}
                 <p className="text-gray-500">Expenses: −${fmtK(hoverPt.expenses)}</p>
                 {hoverPt.goalDrawdowns > 0 && <p className="text-amber-600">Goals: −${fmtK(hoverPt.goalDrawdowns)}</p>}
               </div>
