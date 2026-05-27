@@ -624,29 +624,36 @@ export default function ForecastClient({
 
       {/* Chart */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Net Worth Projection</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              {MC_SIMS} simulations · each year's return = your {investmentGrowthRate}% avg ± {MC_VOLATILITY}% random volatility ·
+              bull = top 10% of outcomes, bear = bottom 10%
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0 ml-4">
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
-              Bull (90th%)
+              Bull
             </div>
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#3b82f6" strokeWidth="2.5" /></svg>
-              Base (50th%)
+              Base
             </div>
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" /></svg>
-              Bear (10th%)
+              Bear
             </div>
             {goalYears.size > 0 && (
               <div className="flex items-center gap-1.5">
                 <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="3,2" /></svg>
-                Goal spend
+                Goals
               </div>
             )}
           </div>
         </div>
+        <div className="mb-3" />
         <ForecastChart points={projection} mc={monteCarlo} retirementMarkers={retirementMarkers} />
       </div>
 
