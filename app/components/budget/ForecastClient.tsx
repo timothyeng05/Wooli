@@ -119,14 +119,17 @@ function computeProjection({
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
-const CW = 600, CH = 200, PL = 60, PR = 16, PT = 12, PB = 30
-const IW = CW - PL - PR, IH = CH - PT - PB
+const CH = 240, PL = 60, PR = 20, PT = 16, PB = 32
 
 function ForecastChart({ points, retirementMarkers }: {
   points: YearlyPoint[]
   retirementMarkers: { year: number; label: string }[]
 }) {
   const [hover, setHover] = useState<number | null>(null)
+
+  const CW = Math.max(800, points.length * 16)
+  const IW = CW - PL - PR
+  const IH = CH - PT - PB
 
   const vals = points.map(p => p.netWorth)
   const minV = Math.min(...vals, 0)
@@ -151,7 +154,7 @@ function ForecastChart({ points, retirementMarkers }: {
 
   return (
     <div className="relative">
-      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: CH }}
+      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: 'auto' }}
         onMouseLeave={() => setHover(null)}
         onMouseMove={e => {
           const rect = e.currentTarget.getBoundingClientRect()
@@ -199,13 +202,19 @@ function ForecastChart({ points, retirementMarkers }: {
             </g>
           )
         })}
-        {/* X year labels */}
-        {points.map((p, i) => (
-          <text key={i} x={xOf(i).toFixed(1)} y={CH - 4} textAnchor="middle"
-            style={{ fontSize: 10, fill: i === hover ? '#3b82f6' : '#94a3b8', fontWeight: i === hover ? 600 : 400 }}>
-            {p.year}
-          </text>
-        ))}
+        {/* X year labels — every 5 years, always show first and last */}
+        {points.map((p, i) => {
+          const isFirst = i === 0
+          const isLast = i === points.length - 1
+          const isHovered = i === hover
+          if (!isFirst && !isLast && !isHovered && p.year % 5 !== 0) return null
+          return (
+            <text key={i} x={xOf(i).toFixed(1)} y={CH - 6} textAnchor="middle"
+              style={{ fontSize: 10, fill: isHovered ? '#3b82f6' : '#94a3b8', fontWeight: isHovered ? 600 : 400 }}>
+              {p.year}
+            </text>
+          )
+        })}
         {hoverPt && hover !== null && (
           <>
             <line x1={xOf(hover).toFixed(1)} y1={PT} x2={xOf(hover).toFixed(1)} y2={PT + IH}
