@@ -14,9 +14,10 @@ type EditorSection = SectionData & { _id: string }
 
 // ─── Display components (view mode) ────────────────────────────────────────
 
-function SectionCard({ meta, lines, confirmed, onToggle, onEdit }: {
+function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
   meta: SectionMeta; lines: string[]
   confirmed: boolean; onToggle: () => void; onEdit?: () => void
+  title?: string
 }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
 
@@ -34,7 +35,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit }: {
       <div className="flex items-center justify-between mb-2">
         <div className={`flex items-center gap-2 font-semibold text-sm ${meta.text}`}>
           <span>{meta.icon}</span>
-          <span>{meta.label}</span>
+          <span>{title || meta.label}</span>
         </div>
         <div className="flex items-center gap-2">
           {duration && (
@@ -431,6 +432,22 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
   if (!meta) return null
 
   const t = section.type.toUpperCase()
+  const [generating, setGenerating] = useState(false)
+
+  const generateTitle = async () => {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/trips/section-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: section.type, lines: section.lines, timeOverride: section.timeOverride, duration: section.duration }),
+      })
+      const { title } = await res.json()
+      if (title) onChange({ title })
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   return (
     <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
@@ -463,6 +480,23 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
             <span className="text-xs text-gray-400">⭐ Important</span>
           </label>
         </div>
+      </div>
+      <div className="flex items-center gap-2 mb-3">
+        <input
+          type="text"
+          value={section.title ?? ''}
+          onChange={e => onChange({ title: e.target.value || undefined })}
+          placeholder={meta.label}
+          className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+        />
+        <button
+          onClick={generateTitle}
+          disabled={generating}
+          className="flex-shrink-0 text-xs font-medium text-purple-600 hover:text-purple-700 border border-purple-200 hover:border-purple-300 rounded-lg px-2.5 py-1.5 transition disabled:opacity-50"
+          title="Generate title with AI"
+        >
+          {generating ? '…' : '✨ AI'}
+        </button>
       </div>
       {(meta.banner || meta.travel) && !meta.car
         ? <TravelEditor section={section} onChange={onChange} />
@@ -896,7 +930,7 @@ export default function TripDayPage() {
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
                           }
                         </div>
                       </div>

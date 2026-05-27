@@ -43,6 +43,7 @@ export type SectionData = {
   duration?: string
   pinned?: boolean
   coords?: string
+  title?: string
 }
 
 export type ParsedSection = {
