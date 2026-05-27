@@ -432,22 +432,6 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
   if (!meta) return null
 
   const t = section.type.toUpperCase()
-  const [generating, setGenerating] = useState(false)
-
-  const generateTitle = async () => {
-    setGenerating(true)
-    try {
-      const res = await fetch('/api/trips/section-title', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: section.type, lines: section.lines, timeOverride: section.timeOverride, duration: section.duration }),
-      })
-      const { title } = await res.json()
-      if (title) onChange({ title })
-    } finally {
-      setGenerating(false)
-    }
-  }
 
   return (
     <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
@@ -481,22 +465,14 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
           </label>
         </div>
       </div>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="mb-3">
         <input
           type="text"
           value={section.title ?? ''}
           onChange={e => onChange({ title: e.target.value || undefined })}
-          placeholder={meta.label}
-          className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          placeholder={`Title (auto-generated if blank)`}
+          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
         />
-        <button
-          onClick={generateTitle}
-          disabled={generating}
-          className="flex-shrink-0 text-xs font-medium text-purple-600 hover:text-purple-700 border border-purple-200 hover:border-purple-300 rounded-lg px-2.5 py-1.5 transition disabled:opacity-50"
-          title="Generate title with AI"
-        >
-          {generating ? '…' : '✨ AI'}
-        </button>
       </div>
       {(meta.banner || meta.travel) && !meta.car
         ? <TravelEditor section={section} onChange={onChange} />
@@ -598,6 +574,26 @@ function parseCoords(raw: string | undefined): { lat: number; lng: number } | nu
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
 
+async function generateMissingTitles(items: EditorSection[]): Promise<EditorSection[]> {
+  const candidates = items.filter(s => !s.title && s.lines.filter(Boolean).some(l => l.trim()))
+  if (!candidates.length) return items
+  try {
+    const res = await fetch('/api/trips/section-title', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(candidates.map(s => ({ type: s.type, lines: s.lines, timeOverride: s.timeOverride, duration: s.duration }))),
+    })
+    const { titles }: { titles: string[] } = await res.json()
+    if (!Array.isArray(titles)) return items
+    let idx = 0
+    return items.map(item =>
+      !item.title && item.lines.filter(Boolean).some(l => l.trim())
+        ? { ...item, title: titles[idx++] || undefined }
+        : item
+    )
+  } catch { return items }
+}
+
 export default function TripDayPage() {
   const params = useParams<{ id: string; date: string }>()
   const [trip, setTrip] = useState<{ name: string; start_date: string; end_date: string } | null>(null)
@@ -652,7 +648,8 @@ export default function TripDayPage() {
         setLocation((current as any).location ?? '')
         const sectionData = notesToSectionData(current.notes)
         const items = sectionData.map(s => ({ ...s, _id: newId() }))
-        setSectionItems(items)
+        const itemsWithTitles = await generateMissingTitles(items)
+        setSectionItems(itemsWithTitles)
 
         if (current.confirmed_sections === null) {
           const autoPlanned = sectionData
@@ -664,22 +661,30 @@ export default function TripDayPage() {
           setConfirmedSections(current.confirmed_sections)
         }
 
-        fetchSummary(items)
+        if (itemsWithTitles !== items) {
+          const notesJson = JSON.stringify(itemsWithTitles.map(({ _id, ...s }) => s))
+          await supabase.from('trip_days').upsert(
+            { trip_id: params.id, user_id: user.id, date: params.date,
+              title: current.title || null, notes: notesJson, location: (current as any).location || null },
+            { onConflict: 'trip_id,date' }
+          )
+        }
+
+        fetchSummary(itemsWithTitles)
       }
       setLoading(false)
     }
     load()
   }, [params.id, params.date])
 
-  const save = async () => {
+  const save = async (overrideItems?: EditorSection[]) => {
     if (saving) return
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const notesJson = sectionItems.length > 0
-      ? JSON.stringify(sectionItems.map(({ _id, ...s }) => s))
-      : null
+    if (!user) { setSaving(false); return }
+    const items = overrideItems ?? sectionItems
+    const notesJson = items.length > 0 ? JSON.stringify(items.map(({ _id, ...s }) => s)) : null
     await supabase.from('trip_days').upsert(
       { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson, location: location || null },
       { onConflict: 'trip_id,date' }
@@ -688,7 +693,7 @@ export default function TripDayPage() {
     setSaved(true)
     setEditingId(null)
     setTimeout(() => setSaved(false), 2000)
-    fetchSummary(sectionItems)
+    fetchSummary(items)
   }
 
   const toggleConfirmed = async (label: string) => {
@@ -867,7 +872,7 @@ export default function TripDayPage() {
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              onBlur={save}
+              onBlur={() => save()}
               placeholder="Day title, e.g. Arrival in Tokyo"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
@@ -877,7 +882,7 @@ export default function TripDayPage() {
                 type="text"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
-                onBlur={save}
+                onBlur={() => save()}
                 placeholder="Day location (e.g. Tokyo, Japan)"
                 className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
@@ -926,7 +931,15 @@ export default function TripDayPage() {
                               onDelete={() => { removeSection(item._id); setEditingId(null) }}
                               onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
                               onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
-                              onDone={() => { setEditingId(null); save() }}
+                              onDone={async () => {
+                                if (!item.title) {
+                                  const withTitles = await generateMissingTitles(sectionItems)
+                                  setSectionItems(withTitles)
+                                  await save(withTitles)
+                                } else {
+                                  await save()
+                                }
+                              }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => setEditingId(item._id)} />
