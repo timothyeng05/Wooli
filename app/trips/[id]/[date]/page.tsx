@@ -30,7 +30,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title }: {
   }
 
   if (!content.length && !duration && !title) return null
-  const body = title ? content.slice(1) : content
+  const body = (title && content.length > 1) ? content.slice(1) : content
   return (
     <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
       <div className="flex items-center justify-between mb-2">
