@@ -719,20 +719,19 @@ export default function TripDayPage() {
 
   const dayLocations = useMemo((): LocationPoint[] => {
     const locs: LocationPoint[] = []
-    if (location.trim()) locs.push({ label: location, query: location, color: '#6b7280' })
     for (const item of sectionItems) {
       const meta = findMeta(item.type)
       if (!meta) continue
       const t = item.type.toUpperCase()
       const lines = item.lines.map(l => l.trim()).filter(Boolean)
       const parsedCoords = parseCoords(item.coords)
+      if (!parsedCoords) continue
       if (meta.hotel && lines[0]) {
-        const q = lines[1] ? `${lines[0]}, ${lines[1]}` : location ? `${lines[0]}, ${location}` : lines[0]
-        locs.push({ label: lines[0], query: q, color: '#8b5cf6', coords: parsedCoords ?? undefined })
+        locs.push({ label: lines[0], query: '', color: '#8b5cf6', coords: parsedCoords })
       } else if (ACTIVITY_TYPES.has(t) && lines[0]) {
-        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#3b82f6', coords: parsedCoords ?? undefined })
+        locs.push({ label: lines[0], query: '', color: '#3b82f6', coords: parsedCoords })
       } else if (MEAL_TYPES.has(t) && lines[0]) {
-        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#f59e0b', coords: parsedCoords ?? undefined })
+        locs.push({ label: lines[0], query: '', color: '#f59e0b', coords: parsedCoords })
       }
     }
     return locs
