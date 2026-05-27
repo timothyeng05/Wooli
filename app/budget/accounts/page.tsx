@@ -17,6 +17,7 @@ export default async function AccountsPage() {
     { data: plaidItems },
     { data: manualAccounts },
     { data: history },
+    { data: netWorthHistory },
   ] = await Promise.all([
     supabase
       .from('plaid_accounts')
@@ -37,6 +38,11 @@ export default async function AccountsPage() {
       .select('account_id, date, balance')
       .eq('user_id', user.id)
       .order('date', { ascending: true }),
+    supabase
+      .from('net_worth_history')
+      .select('recorded_on, net_worth')
+      .eq('user_id', user.id)
+      .order('recorded_on', { ascending: true }),
   ])
 
   // ── Build unified account list ──────────────────────────────────────────────
@@ -109,6 +115,21 @@ export default async function AccountsPage() {
         .order('date', { ascending: true })
     : { data: history }
 
+  // Also upsert today's net worth snapshot so the chart has a data point for every visit
+  const assets = allAccounts.filter(a => a.isAsset).reduce((s, a) => s + a.balance, 0)
+  const liabilities = allAccounts.filter(a => !a.isAsset).reduce((s, a) => s + Math.abs(a.balance), 0)
+  await supabase.from('net_worth_history').upsert(
+    { user_id: user.id, recorded_on: today, assets, liabilities, net_worth: assets - liabilities },
+    { onConflict: 'user_id,recorded_on' }
+  )
+
+  // Re-read net_worth_history to include today
+  const { data: freshNetWorthHistory } = await supabase
+    .from('net_worth_history')
+    .select('recorded_on, net_worth')
+    .eq('user_id', user.id)
+    .order('recorded_on', { ascending: true })
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-16">
@@ -119,6 +140,7 @@ export default async function AccountsPage() {
         <AccountsPageClient
           accounts={unified}
           history={(freshHistory ?? []) as BalancePoint[]}
+          netWorthHistory={(freshNetWorthHistory ?? []) as { recorded_on: string; net_worth: number }[]}
           userId={user.id}
         />
       </div>

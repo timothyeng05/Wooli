@@ -623,10 +623,12 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
 export default function AccountsPageClient({
   accounts,
   history,
+  netWorthHistory,
   userId,
 }: {
   accounts: UnifiedAccount[]
   history: BalancePoint[]
+  netWorthHistory: { recorded_on: string; net_worth: number }[]
   userId: string
 }) {
   const router = useRouter()
@@ -659,18 +661,8 @@ export default function AccountsPageClient({
       sparkMap.set(a.id, pts)
     }
 
-    const dateMap = new Map<string, Map<string, number>>()
-    for (const h of history) {
-      if (!dateMap.has(h.date)) dateMap.set(h.date, new Map())
-      dateMap.get(h.date)!.set(h.account_id, h.balance)
-    }
-    const lastKnown = new Map<string, number>()
-    const netWorthSeries = [...dateMap.keys()].sort().map(date => {
-      const dayMap = dateMap.get(date)!
-      for (const [id, bal] of dayMap) lastKnown.set(id, bal)
-      const value = [...lastKnown.values()].reduce((s, v) => s + v, 0)
-      return { date, value }
-    })
+    // Net worth series from the dedicated net_worth_history table (assets - liabilities already computed)
+    const netWorthSeries = netWorthHistory.map(r => ({ date: r.recorded_on, value: Number(r.net_worth) }))
 
     const assets = accounts.filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + a.balance, 0)
     const liabilities = accounts.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + Math.abs(a.balance), 0)
@@ -684,7 +676,7 @@ export default function AccountsPageClient({
 
     return { cash, investments, credit, netWorthSeries, sparkMap, currentNW, monthChange,
       summary: { assets, liabilities, investTotal, cashTotal, creditTotal: liabilities } }
-  }, [accounts, history])
+  }, [accounts, history, netWorthHistory])
 
   const changePct = monthChange !== 0 && (currentNW - monthChange) !== 0
     ? Math.abs(monthChange / Math.abs(currentNW - monthChange) * 100).toFixed(1)

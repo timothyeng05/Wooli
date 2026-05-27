@@ -545,18 +545,18 @@ export default function ForecastClient({
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex flex-wrap items-center gap-6">
         <div>
           <p className="text-xs text-gray-400 mb-0.5">Current net worth</p>
-          <p className="text-2xl font-bold text-gray-900">${fmt(currentNW)}</p>
+          <p className="text-2xl font-bold text-gray-900">${fmtK(currentNW)}</p>
         </div>
         <div className="text-gray-200 hidden sm:block">→</div>
         <div>
           <p className="text-xs text-gray-400 mb-0.5">In 10 years ({THIS_YEAR + 10})</p>
-          <p className="text-2xl font-bold text-gray-900">${fmt(endNW)}</p>
+          <p className="text-2xl font-bold text-gray-900">${fmtK(endNW)}</p>
         </div>
         <div className="text-gray-200 hidden sm:block">|</div>
         <div>
           <p className="text-xs text-gray-400 mb-0.5">Projected gain</p>
           <p className={`text-2xl font-bold ${gain >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {gain >= 0 ? '+' : '−'}${fmt(Math.abs(gain))}
+            {gain >= 0 ? '+' : '−'}${fmtK(Math.abs(gain))}
           </p>
         </div>
       </div>
