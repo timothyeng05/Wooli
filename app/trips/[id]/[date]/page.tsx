@@ -54,7 +54,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
       >
         <span className="flex-shrink-0 text-base">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold leading-snug ${meta.text}`}>{headerText}</p>
+          <p className={`text-base font-semibold leading-snug ${meta.text}`}>{headerText}</p>
           {duration && (
             <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>
           )}
@@ -87,7 +87,7 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
               const isBullet = line.startsWith('-')
               const text = isBullet ? line.slice(1).trim() : line
               return (
-                <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
+                <li key={i} className={`text-base text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
                   {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
                   <span>{text}</span>
                 </li>
@@ -120,8 +120,8 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
       >
         <span className="text-base flex-shrink-0">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold ${meta.text}`}>{name}</p>
-          {location && <p className="text-xs text-gray-500">{location}</p>}
+          <p className={`text-base font-semibold ${meta.text}`}>{name}</p>
+          {location && <p className="text-sm text-gray-500">{location}</p>}
         </div>
         <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
         {onEdit && (
@@ -907,7 +907,7 @@ export default function TripDayPage() {
                 Day {dayNumber}
               </span>
               <div className="min-w-0">
-                <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">
+                <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
                   {title || 'Untitled day'}
                 </h1>
                 <p className="text-xs text-gray-400 truncate">
@@ -942,7 +942,7 @@ export default function TripDayPage() {
               onChange={e => setTitle(e.target.value)}
               onBlur={() => save()}
               placeholder="Day title, e.g. Arrival in Tokyo"
-              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <div className="flex items-center gap-2">
               <span className="text-gray-400 text-sm">📍</span>
@@ -952,7 +952,7 @@ export default function TripDayPage() {
                 onChange={e => setLocation(e.target.value)}
                 onBlur={() => save()}
                 placeholder="Day location (e.g. Tokyo, Japan)"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
           </div>
