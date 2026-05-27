@@ -247,6 +247,10 @@ function HotelEditor({ section, onChange }: { section: EditorSection; onChange: 
         <label className={labelCls}>Location</label>
         <input className={inputCls} value={location} onChange={e => onChange({ lines: name ? [name, e.target.value] : [e.target.value] })} placeholder="Shinjuku, Tokyo" />
       </div>
+      <div>
+        <label className={labelCls}>Address <span className="text-gray-400 font-normal">(optional — improves map pin)</span></label>
+        <input className={inputCls} value={section.address ?? ''} onChange={e => onChange({ address: e.target.value || undefined })} placeholder="3-7-1-2 Nishishinjuku, Shinjuku City" />
+      </div>
     </div>
   )
 }
@@ -346,6 +350,10 @@ function ActivityEditor({ section, onChange }: { section: EditorSection; onChang
         </div>
       </div>
       <div>
+        <label className={labelCls}>Address <span className="text-gray-400 font-normal">(optional — improves map pin)</span></label>
+        <input className={inputCls} value={section.address ?? ''} onChange={e => onChange({ address: e.target.value || undefined })} placeholder="1-1-1 Yokoami, Sumida City" />
+      </div>
+      <div>
         <label className={labelCls}>Notes (optional)</label>
         <AutoTextarea className={inputCls} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Bring camera&#10;- Book tickets in advance" />
       </div>
@@ -381,6 +389,10 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
           <label className={labelCls}>Duration (optional)</label>
           <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="1h 30m" />
         </div>
+      </div>
+      <div>
+        <label className={labelCls}>Address <span className="text-gray-400 font-normal">(optional — improves map pin)</span></label>
+        <input className={inputCls} value={section.address ?? ''} onChange={e => onChange({ address: e.target.value || undefined })} placeholder="2-1-1 Oshiage, Sumida City" />
       </div>
       <div>
         <label className={labelCls}>Options / notes</label>
@@ -707,12 +719,14 @@ export default function TripDayPage() {
       const t = item.type.toUpperCase()
       const lines = item.lines.map(l => l.trim()).filter(Boolean)
       if (meta.hotel && lines[0]) {
-        const q = lines[1] ? `${lines[0]}, ${lines[1]}` : location ? `${lines[0]}, ${location}` : lines[0]
+        const q = item.address ?? (lines[1] ? `${lines[0]}, ${lines[1]}` : location ? `${lines[0]}, ${location}` : lines[0])
         locs.push({ label: lines[0], query: q, color: '#8b5cf6' })
       } else if (ACTIVITY_TYPES.has(t) && lines[0]) {
-        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#3b82f6' })
+        const q = item.address ?? (location ? `${lines[0]}, ${location}` : lines[0])
+        locs.push({ label: lines[0], query: q, color: '#3b82f6' })
       } else if (MEAL_TYPES.has(t) && lines[0]) {
-        locs.push({ label: lines[0], query: location ? `${lines[0]}, ${location}` : lines[0], color: '#f59e0b' })
+        const q = item.address ?? (location ? `${lines[0]}, ${location}` : lines[0])
+        locs.push({ label: lines[0], query: q, color: '#f59e0b' })
       }
     }
     return locs
