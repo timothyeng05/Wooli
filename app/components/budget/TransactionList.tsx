@@ -48,7 +48,7 @@ function groupByDate(txns: Transaction[], asc = false) {
 
 // ── Owner avatar ───────────────────────────────────────────────────────────────
 function OwnerAvatar({ owner }: { owner: string | null }) {
-  if (!owner) return <div className="w-7 h-7 flex-shrink-0" />
+  if (!owner) return null
   const initial = owner === 'Timothy Eng' ? 'T' : owner === 'Jessica Li' ? 'J' : 'S'
   const cls = owner === 'Timothy Eng'
     ? 'bg-blue-500' : owner === 'Jessica Li' ? 'bg-rose-400' : 'bg-gray-400'
