@@ -32,9 +32,9 @@ export default function SyncTransactionsButton({ lastSynced }: { lastSynced?: st
 
   return (
     <div className="flex items-center gap-2">
-      {lastSynced && state === 'idle' && (
-        <span className="text-[11px] text-gray-400 hidden sm:block">
-          {fmtSyncTime(lastSynced)}
+      {state === 'idle' && (
+        <span className="text-[11px] text-gray-400">
+          {lastSynced ? fmtSyncTime(lastSynced) : 'Never synced'}
         </span>
       )}
       <button
