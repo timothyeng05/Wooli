@@ -90,9 +90,16 @@ function CashFlowChart({
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ values, isIncome }: { values: number[]; isIncome: boolean }) {
-  const nonZero = values.filter(v => v > 0)
-  if (nonZero.length < 2) return <div className="w-12 h-3.5 flex-shrink-0" />
   const W = 48, H = 14
+  const nonZero = values.filter(v => v > 0)
+  if (nonZero.length < 2) {
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="flex-shrink-0">
+        <line x1={0} y1={H / 2} x2={W} y2={H / 2}
+          stroke="#d1d5db" strokeWidth="1" strokeDasharray="2 2" />
+      </svg>
+    )
+  }
   const max = Math.max(...values, 1)
   const pts = values.map((v, i) => {
     const x = ((i / (values.length - 1)) * W).toFixed(1)
@@ -133,7 +140,7 @@ function BreakdownRow({
           <span className="text-sm font-medium text-gray-900 truncate">{name}</span>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          {sparkVals && <Sparkline values={sparkVals} isIncome={isIncome} />}
+          {sparkVals !== undefined && <Sparkline values={sparkVals} isIncome={isIncome} />}
           <span className="text-sm font-semibold text-gray-700 tabular-nums">
             ${fmt(amount)} <span className="text-xs font-normal text-gray-400">({Math.round(pct)}%)</span>
           </span>
@@ -258,9 +265,11 @@ function BreakdownSection({
       </div>
       <div>
         {rows.map(r => {
-          const sparkVals = tab === 'Category'
-            ? (r.catId ? sparklines?.byId.get(r.catId) : undefined)
-            : sparklines?.byMerchant.get(r.name)
+          const sparkVals = sparklines
+            ? (tab === 'Category'
+              ? (r.catId ? (sparklines.byId.get(r.catId) ?? []) : [])
+              : (sparklines.byMerchant.get(r.name) ?? []))
+            : undefined
           return (
             <div key={r.name}>
               <BreakdownRow
@@ -272,7 +281,7 @@ function BreakdownSection({
               {tab === 'Category' && r.subs.length > 0 && (
                 <div className="ml-3 mb-1.5 space-y-px">
                   {r.subs.map(sub => {
-                    const subSpark = sparklines?.byId.get(sub.id)
+                    const subSpark = sparklines ? (sparklines.byId.get(sub.id) ?? []) : undefined
                     return (
                       <Link key={sub.id} href={`/budget/categories/${sub.id}`}
                         className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 transition group">
@@ -281,7 +290,7 @@ function BreakdownSection({
                           <span className="text-sm text-gray-600 truncate">{sub.name}</span>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          {subSpark && <Sparkline values={subSpark} isIncome={isIncome} />}
+                          {subSpark !== undefined && <Sparkline values={subSpark} isIncome={isIncome} />}
                           <span className="text-sm font-medium text-gray-500 tabular-nums">${fmt(sub.amount)}</span>
                           <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 transition"
                             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -726,9 +735,9 @@ export default function CashFlowClient({
 
       {/* Breakdowns */}
       <BreakdownSection title="Income"   isIncome={true}  transactions={incomeTxns}  categories={categories}
-        allTransactions={activeTxns} periods={activePeriods} periodicMode={view} />
+        allTransactions={transactions} periods={monthlyPeriods} periodicMode="monthly" />
       <BreakdownSection title="Expenses" isIncome={false} transactions={expenseTxns} categories={categories}
-        allTransactions={activeTxns} periods={activePeriods} periodicMode={view} />
+        allTransactions={transactions} periods={monthlyPeriods} periodicMode="monthly" />
     </div>
   )
 }
