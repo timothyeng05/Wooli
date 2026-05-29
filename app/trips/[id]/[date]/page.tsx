@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
 import DayLocationMap, { type LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
@@ -204,7 +204,7 @@ function AutoTextarea({ value, onChange, className, placeholder }: {
   className?: string; placeholder?: string
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (ref.current) {
       ref.current.style.height = 'auto'
       ref.current.style.height = ref.current.scrollHeight + 'px'
