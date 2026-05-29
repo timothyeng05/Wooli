@@ -18,6 +18,13 @@ interface Category {
   parent_id: string | null
 }
 
+interface Trip {
+  id: string
+  name: string
+  start_date?: string
+  end_date?: string
+}
+
 interface Transaction {
   id: string
   amount: number
@@ -29,7 +36,9 @@ interface Transaction {
   is_pending: boolean | null
   owner: string | null
   account_name: string | null
+  trip_id: string | null
   categories: { id: string; name: string; color: string; icon?: string | null } | null
+  trips: { id: string; name: string } | null
 }
 
 type SortOrder = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
@@ -206,7 +215,7 @@ function CategoryPicker({
 }
 
 // ── Filter panel ───────────────────────────────────────────────────────────────
-type FilterScreen = 'main' | 'sort' | 'accounts' | 'categories' | 'owners'
+type FilterScreen = 'main' | 'sort' | 'accounts' | 'categories' | 'owners' | 'trips'
 
 const SORTS: { value: SortOrder; label: string }[] = [
   { value: 'date-desc',   label: 'Date (new to old)' },
@@ -222,6 +231,7 @@ function FilterPanel({
   accounts, selectedAccounts, onAccountsChange,
   categories, selectedCatIds, onCatsChange,
   selectedOwners, onOwnersChange,
+  trips, selectedTripIds, onTripsChange,
   onClear,
 }: {
   onClose: () => void
@@ -235,6 +245,9 @@ function FilterPanel({
   onCatsChange: (s: Set<string>) => void
   selectedOwners: Set<string>
   onOwnersChange: (s: Set<string>) => void
+  trips: Trip[]
+  selectedTripIds: Set<string>
+  onTripsChange: (s: Set<string>) => void
   onClear: () => void
 }) {
   const [screen, setScreen] = useState<FilterScreen>('main')
@@ -248,12 +261,15 @@ function FilterPanel({
   const toggleOwner = (o: string) => {
     const next = new Set(selectedOwners); next.has(o) ? next.delete(o) : next.add(o); onOwnersChange(next)
   }
+  const toggleTrip = (id: string) => {
+    const next = new Set(selectedTripIds); next.has(id) ? next.delete(id) : next.add(id); onTripsChange(next)
+  }
 
   const topCats = categories.filter(c => !c.parent_id)
 
   const SCREEN_TITLE: Record<FilterScreen, string> = {
     main: 'Filters', sort: 'Sort By',
-    accounts: 'Accounts', categories: 'Categories', owners: 'Owners',
+    accounts: 'Accounts', categories: 'Categories', owners: 'Owners', trips: 'Trips',
   }
 
   // Rows shown on the main screen
@@ -261,6 +277,7 @@ function FilterPanel({
     { key: 'accounts',   label: 'Accounts',   count: selectedAccounts.size, hidden: accounts.length === 0 },
     { key: 'categories', label: 'Categories', count: selectedCatIds.size },
     { key: 'owners',     label: 'Owners',     count: selectedOwners.size },
+    { key: 'trips',      label: 'Trips',      count: selectedTripIds.size, hidden: trips.length === 0 },
   ]
 
   return (
@@ -368,18 +385,36 @@ function FilterPanel({
           ))}
 
           {/* Categories sub-screen */}
-          {screen === 'categories' && topCats.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => toggleCat(cat.id)}
-              className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-            >
-              <Checkbox checked={selectedCatIds.has(cat.id)} />
-              <span className="text-sm text-gray-800">
-                {getCatEmoji(cat.name, cat.icon)} {cat.name}
-              </span>
-            </button>
-          ))}
+          {screen === 'categories' && topCats.map(cat => {
+            const subs = categories.filter(c => c.parent_id === cat.id)
+            if (subs.length === 0) {
+              // No children — show as a plain selectable row
+              return (
+                <button key={cat.id} onClick={() => toggleCat(cat.id)}
+                  className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition">
+                  <Checkbox checked={selectedCatIds.has(cat.id)} />
+                  <span className="text-sm text-gray-800">{getCatEmoji(cat.name, cat.icon)} {cat.name}</span>
+                </button>
+              )
+            }
+            // Has children — section header + sub-category rows
+            return (
+              <div key={cat.id}>
+                <div className="px-5 py-2 bg-gray-50 border-b border-gray-100">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    {getCatEmoji(cat.name, cat.icon)} {cat.name}
+                  </span>
+                </div>
+                {subs.map(sub => (
+                  <button key={sub.id} onClick={() => toggleCat(sub.id)}
+                    className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition">
+                    <Checkbox checked={selectedCatIds.has(sub.id)} />
+                    <span className="text-sm text-gray-800">{getCatEmoji(sub.name, sub.icon)} {sub.name}</span>
+                  </button>
+                ))}
+              </div>
+            )
+          })}
 
           {/* Owners sub-screen */}
           {screen === 'owners' && OWNERS.map(o => {
@@ -395,6 +430,18 @@ function FilterPanel({
               </button>
             )
           })}
+
+          {/* Trips sub-screen */}
+          {screen === 'trips' && trips.map(tp => (
+            <button
+              key={tp.id}
+              onClick={() => toggleTrip(tp.id)}
+              className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
+            >
+              <Checkbox checked={selectedTripIds.has(tp.id)} />
+              <span className="text-sm text-gray-800">✈ {tp.name}</span>
+            </button>
+          ))}
 
         </div>
 
@@ -422,9 +469,11 @@ function FilterPanel({
 export default function TransactionList({
   transactions,
   categories = [],
+  trips = [],
 }: {
   transactions: Transaction[]
   categories?: Category[]
+  trips?: Trip[]
 }) {
   const confirm = useConfirm()
   const [items, setItems] = useState<Transaction[]>(transactions)
@@ -436,6 +485,7 @@ export default function TransactionList({
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
   const [selectedCatIds, setSelectedCatIds] = useState<Set<string>>(new Set())
   const [selectedOwners, setSelectedOwners] = useState<Set<string>>(new Set())
+  const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set())
 
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
@@ -450,6 +500,7 @@ export default function TransactionList({
   const [reviewIsTransfer, setReviewIsTransfer] = useState(false)
   const [reviewCatId, setReviewCatId] = useState('')
   const [reviewOwner, setReviewOwner] = useState('')
+  const [reviewTripId, setReviewTripId] = useState('')
   const [reviewSaving, setReviewSaving] = useState(false)
 
   const openReview = (t: Transaction) => {
@@ -457,6 +508,7 @@ export default function TransactionList({
     setReviewIsTransfer(!!t.is_transfer)
     setReviewCatId(t.categories?.id ?? '')
     setReviewOwner(t.owner ?? '')
+    setReviewTripId(t.trip_id ?? '')
   }
 
   const saveReview = async () => {
@@ -464,15 +516,18 @@ export default function TransactionList({
     setReviewSaving(true)
     const supabase = createClient()
     const catId = reviewIsTransfer ? null : (reviewCatId || null)
+    const tripId = reviewTripId || null
     await supabase.from('transactions').update({
       is_transfer: reviewIsTransfer,
       category_id: catId,
       owner: reviewOwner || null,
+      trip_id: tripId,
     }).eq('id', reviewTxn.id)
     const found = catId ? (categories.find(c => c.id === catId) ?? null) : null
+    const foundTrip = tripId ? (trips.find(tp => tp.id === tripId) ?? null) : null
     setItems(prev => prev.map(t =>
       t.id === reviewTxn.id
-        ? { ...t, is_transfer: reviewIsTransfer, categories: found ? { id: found.id, name: found.name, color: found.color } : null, owner: reviewOwner || null }
+        ? { ...t, is_transfer: reviewIsTransfer, categories: found ? { id: found.id, name: found.name, color: found.color } : null, owner: reviewOwner || null, trip_id: tripId, trips: foundTrip ? { id: foundTrip.id, name: foundTrip.name } : null }
         : t
     ))
     setReviewSaving(false)
@@ -490,11 +545,11 @@ export default function TransactionList({
     const makeTransfer = found?.is_transfer ?? false
     const updates: Record<string, unknown> = makeTransfer
       ? { category_id: null, is_transfer: true }
-      : { category_id: newCatId }
+      : { category_id: newCatId, is_transfer: false }
     await supabase.from('transactions').update(updates).eq('id', txId)
     setItems(prev => prev.map(t =>
       t.id === txId
-        ? { ...t, is_transfer: makeTransfer ? true : t.is_transfer, categories: found && !makeTransfer ? { id: found.id, name: found.name, color: found.color, icon: found.icon } : null }
+        ? { ...t, is_transfer: makeTransfer, categories: found && !makeTransfer ? { id: found.id, name: found.name, color: found.color, icon: found.icon } : null }
         : t
     ))
   }
@@ -558,18 +613,40 @@ export default function TransactionList({
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
 
+  const bulkTagTrip = async (tripId: string) => {
+    setBulkLoading(true)
+    const supabase = createClient()
+    const ids = [...selectedIds]
+    const newTripId = tripId === '__none__' ? null : tripId
+    await supabase.from('transactions').update({ trip_id: newTripId }).in('id', ids)
+    const foundTrip = newTripId ? (trips.find(tp => tp.id === newTripId) ?? null) : null
+    setItems(prev => prev.map(t =>
+      ids.includes(t.id)
+        ? { ...t, trip_id: newTripId, trips: foundTrip ? { id: foundTrip.id, name: foundTrip.name } : null }
+        : t
+    ))
+    setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
+  }
+
   // ── Derived ───────────────────────────────────────────────────────────────
   const uniqueAccounts = useMemo(
     () => [...new Set(items.map(t => t.account_name).filter(Boolean) as string[])].sort(),
     [items]
   )
-  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size
+  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size
 
   const filtered = useMemo(() => {
     const result = items.filter(t => {
       if (selectedAccounts.size > 0 && !selectedAccounts.has(t.account_name ?? '')) return false
-      if (selectedCatIds.size > 0 && !selectedCatIds.has(t.categories?.id ?? '')) return false
+      if (selectedCatIds.size > 0) {
+        const txCatId = t.categories?.id ?? ''
+        const txCat = categories.find(c => c.id === txCatId)
+        const txParentId = txCat?.parent_id ?? ''
+        // Match exact sub-category, OR its parent if parent is selected (catches leaf categories with no sub-categories selected)
+        if (!selectedCatIds.has(txCatId) && !selectedCatIds.has(txParentId)) return false
+      }
       if (selectedOwners.size > 0 && !selectedOwners.has(t.owner ?? '')) return false
+      if (selectedTripIds.size > 0 && !selectedTripIds.has(t.trip_id ?? '')) return false
       if (!search) return true
       const q = search.toLowerCase()
       return (
@@ -582,7 +659,7 @@ export default function TransactionList({
     if (sortOrder === 'amount-desc') return [...result].sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
     if (sortOrder === 'amount-asc')  return [...result].sort((a, b) => Math.abs(Number(a.amount)) - Math.abs(Number(b.amount)))
     return result
-  }, [items, search, selectedAccounts, selectedCatIds, selectedOwners, sortOrder])
+  }, [items, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, sortOrder])
 
   const grouped = useMemo(
     () => groupByDate(filtered, sortOrder === 'date-asc'),
@@ -593,6 +670,7 @@ export default function TransactionList({
     setSelectedAccounts(new Set())
     setSelectedCatIds(new Set())
     setSelectedOwners(new Set())
+    setSelectedTripIds(new Set())
   }
 
   const removeAccountFilter = (a: string) => {
@@ -603,6 +681,9 @@ export default function TransactionList({
   }
   const removeOwnerFilter = (o: string) => {
     const n = new Set(selectedOwners); n.delete(o); setSelectedOwners(n)
+  }
+  const removeTripFilter = (id: string) => {
+    const n = new Set(selectedTripIds); n.delete(id); setSelectedTripIds(n)
   }
 
   if (items.length === 0) {
@@ -700,16 +781,42 @@ export default function TransactionList({
               <button onClick={() => removeOwnerFilter(o)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
             </span>
           ))}
+          {[...selectedTripIds].map(id => {
+            const tp = trips.find(t => t.id === id)
+            return tp ? (
+              <span key={id} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
+                ✈ {tp.name}
+                <button onClick={() => removeTripFilter(id)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
+              </span>
+            ) : null
+          })}
           {activeFilterCount > 0 && (
             <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600 px-1 transition">
               Clear all
             </button>
           )}
-          {search && (
-            <span className="text-xs text-gray-400 ml-1">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
-          )}
         </div>
       )}
+
+      {/* ── Filter summary bar ─────────────────────────────────────────────── */}
+      {(activeFilterCount > 0 || search) && filtered.length > 0 && (() => {
+        const nonTransfer = filtered.filter(t => !t.is_transfer)
+        const spent  = nonTransfer.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
+        const income = nonTransfer.filter(t => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0)
+        return (
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 pb-2 text-xs text-gray-500">
+            <span className="font-semibold text-gray-700">
+              {filtered.length.toLocaleString()} transaction{filtered.length !== 1 ? 's' : ''}
+            </span>
+            {spent > 0 && (
+              <span>· <span className="text-gray-600">${spent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} spent</span></span>
+            )}
+            {income > 0 && (
+              <span>· <span className="text-green-600">${income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} income</span></span>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Select-all row ─────────────────────────────────────────────────── */}
       {selectMode && (
@@ -803,12 +910,19 @@ export default function TransactionList({
                             </span>
                           )}
                         </div>
-                        {catName && !t.is_transfer && (
-                          <p className="text-xs text-gray-400 truncate mt-0.5">{catName}</p>
-                        )}
-                        {t.is_transfer && (
-                          <p className="text-xs text-gray-400 mt-0.5">Transfer</p>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {catName && !t.is_transfer && (
+                            <p className="text-xs text-gray-400 truncate">{catName}</p>
+                          )}
+                          {t.is_transfer && (
+                            <p className="text-xs text-gray-400">Transfer</p>
+                          )}
+                          {t.trips && (
+                            <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              ✈ {t.trips.name}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Amount */}
@@ -857,6 +971,9 @@ export default function TransactionList({
           onCatsChange={setSelectedCatIds}
           selectedOwners={selectedOwners}
           onOwnersChange={setSelectedOwners}
+          trips={trips}
+          selectedTripIds={selectedTripIds}
+          onTripsChange={setSelectedTripIds}
           onClear={clearFilters}
         />
       )}
@@ -914,6 +1031,20 @@ export default function TransactionList({
                       </optgroup>
                     )
                   })}
+                </select>
+              </div>
+            )}
+
+            {/* Trip */}
+            {trips.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Trip</p>
+                <select value={reviewTripId} onChange={e => setReviewTripId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">None</option>
+                  {trips.map(tp => (
+                    <option key={tp.id} value={tp.id}>{tp.name}</option>
+                  ))}
                 </select>
               </div>
             )}
@@ -981,6 +1112,20 @@ export default function TransactionList({
               className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition">
               Mark Transfer
             </button>
+            {trips.length > 0 && (
+              <select
+                value=""
+                onChange={e => { if (e.target.value) { bulkTagTrip(e.target.value) } }}
+                disabled={bulkLoading}
+                className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <option value="" disabled>Tag trip…</option>
+                {trips.map(tp => (
+                  <option key={tp.id} value={tp.id}>✈ {tp.name}</option>
+                ))}
+                <option value="__none__">Remove trip tag</option>
+              </select>
+            )}
             <button onClick={bulkDelete} disabled={bulkLoading}
               className="px-3 py-1.5 text-sm border border-red-200 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition">
               Delete

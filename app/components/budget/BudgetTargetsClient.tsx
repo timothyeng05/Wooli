@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
 
@@ -234,7 +235,9 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
           )}
 
           <span className="text-lg flex-shrink-0">{getCatEmoji(parent.name, parent.icon)}</span>
-          <span className="flex-1 text-sm font-semibold text-gray-900 truncate">{parent.name}</span>
+          <Link href={`/budget/categories/${parent.id}`} className="flex-1 text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors">
+            {parent.name}
+          </Link>
 
           {hasChildren && (
             <button
@@ -294,7 +297,9 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
                 <div key={child.id} className="bg-gray-50/50">
                   <div className="flex items-center gap-2 px-3 py-2.5 pl-8">
                     <span className="text-base flex-shrink-0">{getCatEmoji(child.name, child.icon)}</span>
-                    <span className="flex-1 text-sm text-gray-700 truncate">{child.name}</span>
+                    <Link href={`/budget/categories/${child.id}`} className="flex-1 text-sm text-gray-700 truncate hover:text-blue-600 transition-colors">
+                      {child.name}
+                    </Link>
 
                     <div className="flex-shrink-0">
                       {level === 'sub' ? (

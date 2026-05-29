@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface ParsedRow {
@@ -86,6 +86,10 @@ export default function CsvImportClient() {
   const [status, setStatus] = useState<'idle' | 'importing' | 'done' | 'error'>('idle')
   const [result, setResult] = useState<{ imported: number } | null>(null)
   const [error, setError] = useState('')
+  const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
+  const [forceOwner, setForceOwner] = useState<string>('')
+
+  const EXCLUDED_KEY = 'csv-import-excluded-accounts'
 
   const handleFile = (file: File) => {
     setFileName(file.name)
@@ -95,9 +99,22 @@ export default function CsvImportClient() {
       setRows(parsed)
       setStatus('idle')
       setResult(null)
+      // Restore saved exclusions — accounts previously unchecked stay unchecked
+      const savedExcluded: string[] = JSON.parse(localStorage.getItem(EXCLUDED_KEY) || '[]')
+      const excluded = new Set(savedExcluded)
+      const allAccounts = [...new Set(parsed.map(r => r.account).filter(Boolean))]
+      setSelectedAccounts(new Set(allAccounts.filter(a => !excluded.has(a))))
     }
     reader.readAsText(file)
   }
+
+  // Persist exclusions whenever the selection changes
+  useEffect(() => {
+    if (rows.length === 0) return
+    const allAccounts = [...new Set(rows.map(r => r.account).filter(Boolean))]
+    const excluded = allAccounts.filter(a => !selectedAccounts.has(a))
+    localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excluded))
+  }, [selectedAccounts, rows])
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -114,13 +131,17 @@ export default function CsvImportClient() {
     setStatus('importing')
     setError('')
     try {
-      // Ensure all CSV categories exist before importing
       await fetch('/api/budget/sync-categories', { method: 'POST' })
+
+      const accountNames = [...selectedAccounts]
+      const filtered = rows
+        .filter(r => selectedAccounts.size === 0 || selectedAccounts.has(r.account))
+        .map(r => forceOwner ? { ...r, owner: forceOwner } : r)
 
       const res = await fetch('/api/budget/import-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, replace }),
+        body: JSON.stringify({ rows: filtered, replace, accountNames }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -229,7 +250,69 @@ export default function CsvImportClient() {
           </div>
 
           {/* Import options */}
-          <div className="bg-gray-50 rounded-xl border border-gray-200 p-5 space-y-4">
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-5 space-y-5">
+
+            {/* Account filter */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-gray-800">Accounts to import</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSelectedAccounts(new Set(uniqueAccounts))}
+                    className="text-xs text-blue-600 hover:text-blue-700 transition"
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setSelectedAccounts(new Set())}
+                    className="text-xs text-gray-400 hover:text-gray-600 transition"
+                  >
+                    None
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">Uncheck accounts already synced via Plaid to avoid duplicates. Your selection is remembered.</p>
+              <div className="space-y-2">
+                {uniqueAccounts.map(acct => {
+                  const count = rows.filter(r => r.account === acct).length
+                  const checked = selectedAccounts.has(acct)
+                  return (
+                    <label key={acct} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = new Set(selectedAccounts)
+                          checked ? next.delete(acct) : next.add(acct)
+                          setSelectedAccounts(next)
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                      />
+                      <span className="text-sm text-gray-800 flex-1">{acct}</span>
+                      <span className="text-xs text-gray-400">{count} transactions</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Force owner */}
+            <div>
+              <p className="text-sm font-semibold text-gray-800 mb-2">Override owner</p>
+              <p className="text-xs text-gray-500 mb-2">Force all imported transactions to a specific owner (overrides the Owner column).</p>
+              <select
+                value={forceOwner}
+                onChange={e => setForceOwner(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Use Owner column from CSV</option>
+                <option value="Timothy Eng">Tim</option>
+                <option value="Jessica Li">Jess</option>
+                <option value="Shared">Shared</option>
+              </select>
+            </div>
+
+            {/* Replace toggle */}
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -238,9 +321,9 @@ export default function CsvImportClient() {
                 className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600"
               />
               <div>
-                <p className="text-sm font-medium text-gray-900">Replace all existing transactions</p>
+                <p className="text-sm font-medium text-gray-900">Replace existing transactions for selected accounts</p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Deletes all current transactions before importing. Recommended when importing a full history export.
+                  Deletes existing transactions only for the checked accounts above, then imports fresh. Plaid-synced accounts are untouched.
                 </p>
               </div>
             </label>
@@ -258,12 +341,15 @@ export default function CsvImportClient() {
             ) : (
               <button
                 onClick={doImport}
-                disabled={status === 'importing'}
+                disabled={status === 'importing' || selectedAccounts.size === 0}
                 className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
               >
-                {status === 'importing'
-                  ? `Importing ${rows.length.toLocaleString()} transactions…`
-                  : `Import ${rows.length.toLocaleString()} transactions`}
+                {(() => {
+                  const count = rows.filter(r => selectedAccounts.has(r.account)).length
+                  return status === 'importing'
+                    ? `Importing ${count.toLocaleString()} transactions…`
+                    : `Import ${count.toLocaleString()} of ${rows.length.toLocaleString()} transactions`
+                })()}
               </button>
             )}
           </div>

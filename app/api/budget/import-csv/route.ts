@@ -18,10 +18,18 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { rows, replace }: { rows: CsvRow[]; replace: boolean } = await request.json()
+  const { rows, replace, accountNames }: { rows: CsvRow[]; replace: boolean; accountNames?: string[] } = await request.json()
 
   if (replace) {
-    await supabase.from('transactions').delete().eq('user_id', user.id)
+    // Only delete transactions from the accounts being imported, not everything
+    const accounts = accountNames && accountNames.length > 0
+      ? accountNames
+      : [...new Set(rows.map(r => r.account).filter(Boolean))]
+    if (accounts.length > 0) {
+      await supabase.from('transactions').delete()
+        .eq('user_id', user.id)
+        .in('account_name', accounts)
+    }
   }
 
   // Build category name → id map (case-insensitive)

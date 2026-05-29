@@ -13,7 +13,7 @@ export default async function NewTransactionPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: categories }, { data: accounts }] = await Promise.all([
+  const [{ data: categories }, { data: accounts }, { data: txnAccounts }, { data: plaidAccountRows }] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, is_income, parent_id, sort_order')
@@ -25,7 +25,29 @@ export default async function NewTransactionPage({
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('name') as any,
+    supabase
+      .from('transactions')
+      .select('account_name')
+      .eq('user_id', user.id)
+      .not('account_name', 'is', null) as any,
+    supabase
+      .from('plaid_accounts')
+      .select('account_id, name, mask, type')
+      .eq('user_id', user.id)
+      .order('name') as any,
   ])
+
+  // Plaid accounts formatted for the dropdown — prefixed so the form can distinguish them
+  const plaidForDropdown = (plaidAccountRows ?? []).map((a: { account_id: string; name: string; mask: string | null; type: string }) => ({
+    id: `plaid:${a.account_id}`,
+    name: a.mask ? `${a.name} ···${a.mask}` : a.name,
+    type: a.type ?? 'checking',
+  }))
+
+  // Text datalist: fallback when no structured accounts exist
+  const accountNames: string[] = [...new Set(
+    (txnAccounts ?? []).map((r: { account_name: string }) => r.account_name).filter(Boolean)
+  )].sort()
 
   return (
     <div className="min-h-screen bg-white">
@@ -51,6 +73,8 @@ export default async function NewTransactionPage({
             userId={user.id}
             categories={categories || []}
             accounts={accounts || []}
+            plaidAccounts={plaidForDropdown}
+            accountNames={accountNames}
             defaultDate={date}
           />
         </div>

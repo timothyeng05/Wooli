@@ -26,6 +26,7 @@ interface ExistingTransaction {
   merchant: string | null
   category_id: string | null
   account_id: string | null
+  account_name: string | null
   transacted_at: string
   is_transfer: boolean | null
   owner: string | null
@@ -38,12 +39,16 @@ export default function TransactionForm({
   userId,
   categories,
   accounts = [],
+  plaidAccounts = [],
+  accountNames = [],
   defaultDate,
   transaction,
 }: {
   userId: string
   categories: Category[]
   accounts?: Account[]
+  plaidAccounts?: Account[]
+  accountNames?: string[]
   defaultDate?: string
   transaction?: ExistingTransaction
 }) {
@@ -61,6 +66,7 @@ export default function TransactionForm({
   const [merchant, setMerchant] = useState(isEdit ? (transaction.merchant || '') : '')
   const [categoryId, setCategoryId] = useState(isEdit ? (transaction.category_id || '') : '')
   const [accountId, setAccountId] = useState(isEdit ? (transaction.account_id || '') : '')
+  const [accountName, setAccountName] = useState(isEdit ? (transaction.account_name || '') : '')
   const [date, setDate] = useState(
     isEdit
       ? transaction.transacted_at.split('T')[0]
@@ -69,9 +75,8 @@ export default function TransactionForm({
   const [owner, setOwner] = useState(isEdit ? (transaction.owner || '') : 'Timothy Eng')
   const [notes, setNotes] = useState(isEdit ? (transaction.notes || '') : '')
 
-  const filteredCategories = categories.filter(c => c.is_income === isIncome)
-  const parents = filteredCategories.filter(c => !c.parent_id)
-  const children = filteredCategories.filter(c => !!c.parent_id)
+  const parents = categories.filter(c => !c.parent_id)
+  const children = categories.filter(c => !!c.parent_id)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,12 +86,20 @@ export default function TransactionForm({
     try {
       const supabase = createClient()
       const signedAmount = isIncome ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount))
+      const isPlaidAccount = accountId.startsWith('plaid:')
+      const resolvedAccountId = isPlaidAccount ? null : (accountId || null)
+      const resolvedPlaidAccountId = isPlaidAccount ? accountId.replace('plaid:', '') : null
+      const resolvedAccountName = isPlaidAccount
+        ? ([...plaidAccounts, ...accounts].find(a => a.id === accountId)?.name ?? null)
+        : (accountName || null)
       const payload = {
         amount: signedAmount,
         description: description || null,
         merchant: merchant || null,
         category_id: isTransfer ? null : (categoryId || null),
-        account_id: accountId || null,
+        account_id: resolvedAccountId,
+        plaid_account_id: resolvedPlaidAccountId,
+        account_name: resolvedAccountName,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
         is_transfer: isTransfer,
         owner: owner || null,
@@ -101,7 +114,7 @@ export default function TransactionForm({
         if (error) throw error
       }
 
-      router.push('/budget')
+      router.push('/budget/transactions')
       router.refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save transaction')
@@ -210,21 +223,57 @@ export default function TransactionForm({
       </div>}
 
       {/* Account */}
-      {accounts.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1.5">Account <span className="text-gray-400 font-normal">(optional)</span></label>
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-1.5">Account <span className="text-gray-400 font-normal">(optional)</span></label>
+        {(accounts.length > 0 || plaidAccounts.length > 0) ? (
           <select
             value={accountId}
             onChange={e => setAccountId(e.target.value)}
             className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">No account</option>
-            {accounts.map(a => (
-              <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
-            ))}
+            {plaidAccounts.length > 0 && accounts.length > 0 ? (
+              <>
+                <optgroup label="Connected (Plaid)">
+                  {plaidAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Manual">
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
+                  ))}
+                </optgroup>
+              </>
+            ) : (
+              <>
+                {plaidAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+                {accounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
+                ))}
+              </>
+            )}
           </select>
-        </div>
-      )}
+        ) : (
+          <>
+            <input
+              type="text"
+              list="acct-names"
+              value={accountName}
+              onChange={e => setAccountName(e.target.value)}
+              placeholder="e.g. Chase Checking (...1234)"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {accountNames.length > 0 && (
+              <datalist id="acct-names">
+                {accountNames.map(n => <option key={n} value={n} />)}
+              </datalist>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Date */}
       <div>
