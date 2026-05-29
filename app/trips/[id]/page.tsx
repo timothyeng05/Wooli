@@ -4,6 +4,7 @@ import { redirect, notFound } from 'next/navigation'
 import Breadcrumbs from '@/app/components/Breadcrumbs'
 import ShareButton from '@/app/components/ShareButton'
 import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
+import CurrencyConverter from '@/app/components/trips/CurrencyConverter'
 
 function generateDays(startDate: string, endDate: string): string[] {
   const days: string[] = []
@@ -127,6 +128,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        <CurrencyConverter />
         {groups.map((group, gi) => {
           const colors = LEG_COLORS[gi % LEG_COLORS.length]
           const { leg, days: legDays } = group
