@@ -45,7 +45,7 @@ export default async function NewTransactionPage({
   }))
 
   // Text datalist: fallback when no structured accounts exist
-  const accountNames: string[] = [...new Set(
+  const accountNames: string[] = [...new Set<string>(
     (txnAccounts ?? []).map((r: { account_name: string }) => r.account_name).filter(Boolean)
   )].sort()
 
