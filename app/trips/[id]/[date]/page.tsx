@@ -693,6 +693,9 @@ export default function TripDayPage() {
         const items = sectionData.map(s => ({ ...s, _id: newId() }))
         const itemsWithTitles = await generateMissingTitles(items)
         setSectionItems(itemsWithTitles)
+        if (window.innerWidth >= 1024) {
+          setExpandedSections(new Set(itemsWithTitles.map(s => s._id)))
+        }
 
         if (current.confirmed_sections === null) {
           const autoPlanned = sectionData
@@ -787,6 +790,11 @@ export default function TripDayPage() {
       else next.add(id)
       return next
     })
+  }
+
+  const allExpanded = sectionItems.length > 0 && sectionItems.every(s => expandedSections.has(s._id))
+  const toggleAllExpanded = () => {
+    setExpandedSections(allExpanded ? new Set() : new Set(sectionItems.map(s => s._id)))
   }
 
   const moveSection = (index: number, direction: -1 | 1) => {
@@ -916,6 +924,14 @@ export default function TripDayPage() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              {sectionItems.length > 0 && (
+                <button
+                  onClick={toggleAllExpanded}
+                  className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs"
+                >
+                  {allExpanded ? 'Collapse all' : 'Expand all'}
+                </button>
+              )}
               {prevDate && (
                 <Link href={`/trips/${params.id}/${prevDate}`} className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs">
                   ← Prev
