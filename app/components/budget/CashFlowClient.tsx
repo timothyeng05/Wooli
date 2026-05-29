@@ -52,6 +52,8 @@ function CashFlowChart({
 
         return (
           <g key={i} onClick={() => onSelect(i)} style={{ cursor: 'pointer' }}>
+            {/* Full-column invisible tap target for mobile */}
+            <rect x={x} y={0} width={barW} height={H} fill="transparent" />
             {/* Income bar (up) */}
             <rect x={x} y={centerY - iH} width={barW} height={iH} rx={r} ry={r}
               fill={selected ? '#16a34a' : '#bbf7d0'} />
@@ -258,7 +260,7 @@ function BreakdownSection({
       <div className="flex gap-2 mb-3">
         {(['Category', 'Merchant'] as BreakdownTab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors touch-manipulation ${
               tab === t ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'
             }`}>{t}</button>
         ))}
@@ -490,6 +492,8 @@ function CategoryTrends({
 
             return (
               <g key={i} onClick={() => onSelect(i)} style={{ cursor: 'pointer' }}>
+                {/* Full-column invisible tap target for mobile */}
+                <rect x={barX} y={0} width={barW} height={H} fill="transparent" />
                 {segs.map(({ cat, segH, segY, show }, ci) => {
                   if (!show) return null
                   const pct = total > 0 ? (cat.monthly[i] / total) * 100 : 0
@@ -689,7 +693,7 @@ export default function CashFlowClient({
         <div className="flex bg-gray-100 rounded-xl p-0.5">
           <button
             onClick={() => setView('monthly')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition ${
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition touch-manipulation ${
               view === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -697,7 +701,7 @@ export default function CashFlowClient({
           </button>
           <button
             onClick={handleSwitchToYearly}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition ${
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition touch-manipulation ${
               view === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >

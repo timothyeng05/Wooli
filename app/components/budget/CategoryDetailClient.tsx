@@ -223,13 +223,13 @@ export default function CategoryDetailClient({
             <div className="flex bg-gray-100 rounded-lg p-0.5">
               <button
                 onClick={() => handleSetView('monthly')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                className={`px-3 py-2 text-xs font-semibold rounded-md transition touch-manipulation ${
                   view === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >Monthly</button>
               <button
                 onClick={() => handleSetView('yearly')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                className={`px-3 py-2 text-xs font-semibold rounded-md transition touch-manipulation ${
                   view === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >Yearly</button>
