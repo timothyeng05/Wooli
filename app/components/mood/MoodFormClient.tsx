@@ -72,6 +72,13 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete, c
       .catch(() => {})
   }, [entry])
 
+  useEffect(() => {
+    if (noteRef.current) {
+      noteRef.current.style.height = 'auto'
+      noteRef.current.style.height = noteRef.current.scrollHeight + 'px'
+    }
+  }, [note])
+
   const insertPrompt = (p: string) => {
     setNote(prev => (prev ? `${prev}\n\n${p} ` : `${p} `))
     setTimeout(() => {
@@ -188,7 +195,7 @@ export default function MoodFormClient({ userId, entry, initialDate, onDelete, c
           onChange={(e) => setNote(e.target.value)}
           placeholder="What happened today?"
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 overflow-hidden resize-none"
         />
       </div>
 

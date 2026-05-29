@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Breadcrumbs from '@/app/components/Breadcrumbs'
+import ShoppingStoreList from '@/app/components/trips/ShoppingStoreList'
 
 type Trip = {
   id: string
@@ -88,11 +89,10 @@ export default async function TripsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: trips } = await supabase
-    .from('trips')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('start_date', { ascending: true })
+  const [{ data: trips }, { data: stores }] = await Promise.all([
+    supabase.from('trips').select('*').eq('user_id', user.id).order('start_date', { ascending: true }),
+    supabase.from('shopping_stores').select('id, name').eq('user_id', user.id).order('created_at', { ascending: true }),
+  ])
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -138,9 +138,11 @@ export default async function TripsPage() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-10">
+        <ShoppingStoreList initialStores={stores ?? []} />
+
         {totalTrips === 0 ? (
-          <div className="text-center py-16">
+          <div className="text-center py-10">
             <p className="text-5xl mb-4">✈️</p>
             <p className="text-gray-600 mb-6">No trips yet</p>
             <Link href="/trips/new" className="inline-block bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition">
