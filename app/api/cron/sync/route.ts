@@ -112,6 +112,7 @@ export async function GET(request: Request) {
               transacted_at: t.date + 'T00:00:00',
               category_id: isTransfer ? null : (categoryMap.get(t.transaction_id) ?? null),
               is_transfer: isTransfer,
+              owner: 'Timothy Eng',
             }
           })
           await supabase.from('transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })

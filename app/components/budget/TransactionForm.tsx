@@ -66,7 +66,7 @@ export default function TransactionForm({
       ? transaction.transacted_at.split('T')[0]
       : defaultDate || new Date().toISOString().split('T')[0]
   )
-  const [owner, setOwner] = useState(isEdit ? (transaction.owner || '') : '')
+  const [owner, setOwner] = useState(isEdit ? (transaction.owner || '') : 'Timothy Eng')
   const [notes, setNotes] = useState(isEdit ? (transaction.notes || '') : '')
 
   const filteredCategories = categories.filter(c => c.is_income === isIncome)
