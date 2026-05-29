@@ -470,10 +470,14 @@ export default function TransactionList({
   transactions,
   categories = [],
   trips = [],
+  initialOwner,
+  initialType,
 }: {
   transactions: Transaction[]
   categories?: Category[]
   trips?: Trip[]
+  initialOwner?: string
+  initialType?: 'income' | 'expense'
 }) {
   const confirm = useConfirm()
   const [items, setItems] = useState<Transaction[]>(transactions)
@@ -484,8 +488,9 @@ export default function TransactionList({
   const [sortOrder, setSortOrder] = useState<SortOrder>('date-desc')
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
   const [selectedCatIds, setSelectedCatIds] = useState<Set<string>>(new Set())
-  const [selectedOwners, setSelectedOwners] = useState<Set<string>>(new Set())
+  const [selectedOwners, setSelectedOwners] = useState<Set<string>>(initialOwner ? new Set([initialOwner]) : new Set())
   const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set())
+  const [typeFilter, setTypeFilter] = useState<'income' | 'expense' | null>(initialType ?? null)
 
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
@@ -633,7 +638,7 @@ export default function TransactionList({
     () => [...new Set(items.map(t => t.account_name).filter(Boolean) as string[])].sort(),
     [items]
   )
-  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size
+  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size + (typeFilter ? 1 : 0)
 
   const filtered = useMemo(() => {
     const result = items.filter(t => {
@@ -647,6 +652,8 @@ export default function TransactionList({
       }
       if (selectedOwners.size > 0 && !selectedOwners.has(t.owner ?? '')) return false
       if (selectedTripIds.size > 0 && !selectedTripIds.has(t.trip_id ?? '')) return false
+      if (typeFilter === 'income' && t.amount < 0) return false
+      if (typeFilter === 'expense' && t.amount >= 0) return false
       if (!search) return true
       const q = search.toLowerCase()
       return (
@@ -671,6 +678,7 @@ export default function TransactionList({
     setSelectedCatIds(new Set())
     setSelectedOwners(new Set())
     setSelectedTripIds(new Set())
+    setTypeFilter(null)
   }
 
   const removeAccountFilter = (a: string) => {
@@ -760,6 +768,12 @@ export default function TransactionList({
       {/* ── Active filter chips ────────────────────────────────────────────── */}
       {(activeFilterCount > 0 || search) && (
         <div className="flex flex-wrap items-center gap-1.5 pb-2">
+          {typeFilter && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
+              {typeFilter === 'income' ? 'Income only' : 'Expenses only'}
+              <button onClick={() => setTypeFilter(null)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
+            </span>
+          )}
           {[...selectedAccounts].map(a => (
             <span key={a} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
               {a}

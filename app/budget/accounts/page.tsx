@@ -21,7 +21,7 @@ export default async function AccountsPage() {
   ] = await Promise.all([
     supabase
       .from('plaid_accounts')
-      .select('account_id, name, mask, type, subtype, current_balance, owner, item_id, updated_at')
+      .select('account_id, name, mask, type, subtype, current_balance, owner, item_id, updated_at, is_hidden, exclude_from_net_worth, nickname')
       .eq('user_id', user.id),
     supabase
       .from('plaid_items')
@@ -29,7 +29,7 @@ export default async function AccountsPage() {
       .eq('user_id', user.id),
     supabase
       .from('accounts')
-      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner, updated_at')
+      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner, updated_at, exclude_from_net_worth')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
@@ -77,6 +77,9 @@ export default async function AccountsPage() {
       owner: a.owner,
       updatedAt: a.updated_at ?? null,
       source: 'plaid' as const,
+      is_hidden: a.is_hidden ?? false,
+      exclude_from_net_worth: a.exclude_from_net_worth ?? false,
+      nickname: a.nickname ?? null,
     })),
     ...(manualAccounts ?? []).map(a => ({
       id: a.id,
@@ -89,6 +92,7 @@ export default async function AccountsPage() {
       owner: a.owner,
       updatedAt: a.updated_at ?? null,
       source: 'manual' as const,
+      exclude_from_net_worth: (a as any).exclude_from_net_worth ?? false,
     })),
   ]
 
@@ -122,8 +126,10 @@ export default async function AccountsPage() {
     : { data: history }
 
   // Also upsert today's net worth snapshot so the chart has a data point for every visit
-  const assets = unified.filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + a.balance, 0)
-  const liabilities = unified.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + Math.abs(a.balance), 0)
+  // Hidden accounts still count toward net worth; only exclude_from_net_worth removes them
+  const countedUnified = unified.filter(a => !a.exclude_from_net_worth)
+  const assets = countedUnified.filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + a.balance, 0)
+  const liabilities = countedUnified.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + Math.abs(a.balance), 0)
   await supabase.from('net_worth_history').upsert(
     { user_id: user.id, recorded_on: today, assets, liabilities, net_worth: assets - liabilities },
     { onConflict: 'user_id,recorded_on' }

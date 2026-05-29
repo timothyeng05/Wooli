@@ -4,29 +4,22 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
-import MonthNav from '@/app/components/budget/MonthNav'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
-
-function monthRange(year: number, month: number) {
-  const start = new Date(year, month, 1).toISOString()
-  const end   = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
-  return { start, end }
-}
 
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; month?: string }>
+  searchParams: Promise<{ owner?: string; type?: string }>
 }) {
+  const params = await searchParams
+  const initialOwner = params.owner
+  const rawType = params.type
+  const initialType: 'income' | 'expense' | undefined =
+    rawType === 'income' ? 'income' : rawType === 'expense' ? 'expense' : undefined
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  const { year: yearStr, month: monthStr } = await searchParams
-  const now   = new Date()
-  const year  = yearStr  ? parseInt(yearStr)  : now.getFullYear()
-  const month = monthStr ? parseInt(monthStr) : now.getMonth()
-  const { start, end } = monthRange(year, month)
 
   // Auto-generate any due recurring transactions
   const today = new Date().toISOString().split('T')[0]
@@ -69,37 +62,47 @@ export default async function TransactionsPage({
     return max === null || a.updated_at > max ? a.updated_at : max
   }, null)
 
-  const [txnResult, catResult] = await Promise.all([
-    supabase
+  // Paginate through all transactions — Supabase caps each request at 1000 rows
+  const PAGE = 1000
+  let transactions: any[] = []
+  for (let page = 0; ; page++) {
+    const { data } = await supabase
       .from('transactions')
       .select(`
         id, amount, description, merchant, transacted_at, plaid_transaction_id,
-        is_transfer, is_pending, owner, account_name,
-        categories ( id, name, color, icon )
+        is_transfer, is_pending, owner, account_name, trip_id,
+        categories ( id, name, color, icon ),
+        trips ( id, name )
       `)
       .eq('user_id', user.id)
-      .gte('transacted_at', start)
-      .lte('transacted_at', end)
-      .order('transacted_at', { ascending: false }) as any,
+      .order('transacted_at', { ascending: false })
+      .range(page * PAGE, (page + 1) * PAGE - 1) as any
+    if (!data || data.length === 0) break
+    transactions = transactions.concat(data)
+    if (data.length < PAGE) break
+  }
+
+  const [catResult, tripResult] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, is_income, is_transfer, parent_id, icon')
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }) as any,
+    supabase
+      .from('trips')
+      .select('id, name, start_date, end_date')
+      .eq('user_id', user.id)
+      .order('start_date', { ascending: false }) as any,
   ])
 
-  const transactions = txnResult.data || []
   const categories   = catResult.data || []
+  const trips        = tripResult.data || []
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Sticky page header */}
       <div className="sticky top-[53px] z-30 bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 gap-3">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
-            <MonthNav year={year} month={month} />
-          </div>
+          <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
           <div className="flex items-center gap-2">
             <SyncTransactionsButton lastSynced={lastSynced} />
             <Link
@@ -114,7 +117,13 @@ export default async function TransactionsPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-20">
-        <TransactionList transactions={transactions} categories={categories} />
+        <TransactionList
+          transactions={transactions}
+          categories={categories}
+          trips={trips}
+          initialOwner={initialOwner}
+          initialType={initialType}
+        />
       </div>
     </div>
   )
