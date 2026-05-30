@@ -20,28 +20,29 @@ export default function SettingsActivitiesClient({ savedActivities, userId }: Pr
 
   const supabase = createClient()
 
-  const addActivity = () => {
-    const trimmed = newActivity.trim()
-    if (!trimmed || activities.includes(trimmed)) return
-    setActivities(prev => [...prev, trimmed])
-    setNewActivity('')
-    setSaved(false)
-  }
-
-  const removeActivity = (name: string) => {
-    setActivities(prev => prev.filter(a => a !== name))
-    setSaved(false)
-  }
-
-  const save = async () => {
+  const persist = async (list: string[]) => {
     setSaving(true)
-    await supabase
-      .from('profiles')
-      .update({ custom_activities: activities })
-      .eq('id', userId)
+    await supabase.from('profiles').update({ custom_activities: list }).eq('id', userId)
     setSaving(false)
     setSaved(true)
   }
+
+  const addActivity = () => {
+    const trimmed = newActivity.trim()
+    if (!trimmed || activities.includes(trimmed)) return
+    const next = [...activities, trimmed]
+    setActivities(next)
+    setNewActivity('')
+    persist(next)
+  }
+
+  const removeActivity = (name: string) => {
+    const next = activities.filter(a => a !== name)
+    setActivities(next)
+    persist(next)
+  }
+
+  const save = async () => persist(activities)
 
   const reset = () => {
     setActivities(DEFAULT_ACTIVITIES)
