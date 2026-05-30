@@ -1012,7 +1012,7 @@ export default function TripDayPage() {
                             <SectionEditorCard
                               section={item}
                               onChange={updates => updateSection(item._id, updates)}
-                              onDelete={() => { removeSection(item._id); setEditingId(null) }}
+                              onDelete={async () => { const next = sectionItems.filter(s => s._id !== item._id); setSectionItems(next); setEditingId(null); await save(next) }}
                               onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
                               onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
                               onCancel={cancelEdit}
