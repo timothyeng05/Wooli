@@ -124,7 +124,7 @@ export default function LifeCalendar({
           const ring = isToday
             ? 'ring-2 ring-blue-500 ring-offset-1'
             : predicted
-              ? 'border-2 border-dashed border-pink-400'
+              ? 'border-2 border-dashed border-blue-400'
               : ''
 
           const cursor = isFuture ? 'cursor-default' : 'cursor-pointer'
@@ -244,7 +244,7 @@ export default function LifeCalendar({
             <span className="text-gray-500">Logged</span>
           </span>
           <span className="text-xs flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm border border-dashed border-pink-400" />
+            <span className="inline-block w-3 h-3 rounded-sm border border-dashed border-blue-400" />
             <span className="text-gray-500">Predicted</span>
           </span>
         </div>

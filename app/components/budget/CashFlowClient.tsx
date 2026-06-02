@@ -53,7 +53,7 @@ function SetupChecklist() {
           <div key={item.key} className="flex items-start gap-3 rounded-xl border border-gray-100 px-3 py-3">
             <span className="text-2xl flex-shrink-0 mt-0.5">{item.icon}</span>
             <div className="flex-1 min-w-0">
-              <a href={item.href} className="text-sm font-semibold text-gray-800 hover:text-pink-600 transition">
+              <a href={item.href} className="text-sm font-semibold text-gray-800 hover:text-blue-700 transition">
                 {item.title} →
               </a>
               <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>

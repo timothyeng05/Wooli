@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/auth/actions'
+import WooliLogo from '@/app/components/WooliLogo'
 
 const NAV_LINKS = [
   {
@@ -52,7 +53,7 @@ const NAV_LINKS = [
 
 const MAIN_HREFS = ['/budget', '/trips']
 
-export default function Nav({ fullAccess = true }: { fullAccess?: boolean }) {
+export default function Nav({ fullAccess = true, isLoggedIn = true, tripsEnabled = true }: { fullAccess?: boolean; isLoggedIn?: boolean; tripsEnabled?: boolean }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [desktopMoreOpen, setDesktopMoreOpen] = useState(false)
   const pathname = usePathname()
@@ -63,17 +64,39 @@ export default function Nav({ fullAccess = true }: { fullAccess?: boolean }) {
   }
 
   const allMainTabs = NAV_LINKS.filter(l => MAIN_HREFS.includes(l.href))
-  const mainTabs = fullAccess ? allMainTabs : allMainTabs.filter(l => l.href === '/budget')
+  const mainTabs = fullAccess
+    ? allMainTabs
+    : allMainTabs.filter(l => l.href === '/budget' || (l.href === '/trips' && tripsEnabled))
   const moreTabs = NAV_LINKS.filter(l => !MAIN_HREFS.includes(l.href))
   const moreActive = moreTabs.some(({ href, alsoMatches }) => isActive(href, alsoMatches))
+
+  if (!isLoggedIn) {
+    return (
+      <nav className="border-b border-gray-200 bg-white sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <WooliLogo size={28} />
+            <span className="font-bold text-lg text-blue-600 tracking-tight">Wooli</span>
+          </Link>
+          <Link
+            href="/login"
+            className="px-4 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+          >
+            Log in
+          </Link>
+        </div>
+      </nav>
+    )
+  }
 
   return (
     <>
       {/* Top bar */}
       <nav className="border-b border-gray-200 bg-white sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-8">
-          <Link href="/" className="font-bold text-lg text-blue-600 tracking-tight">
-            Wooli
+          <Link href="/" className="flex items-center gap-2">
+            <WooliLogo size={28} />
+            <span className="font-bold text-lg text-blue-600 tracking-tight">Wooli</span>
           </Link>
 
           {/* Desktop nav: Budget, Trips, More */}
@@ -169,10 +192,10 @@ export default function Nav({ fullAccess = true }: { fullAccess?: boolean }) {
                       <div className="absolute top-full left-0 mt-1.5 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-[50] py-1.5 overflow-hidden">
                         <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Coming soon</p>
                         {[
-                          { label: 'Trips', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> },
+                          !tripsEnabled && { label: 'Trips', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> },
                           { label: 'Journal', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg> },
                           { label: 'Friends', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> },
-                        ].map(({ label, icon }) => (
+                        ].filter(Boolean).map(({ label, icon }: any) => (
                           <div key={label} className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-300 cursor-not-allowed select-none">
                             <span className="text-gray-300">{icon}</span>
                             {label}

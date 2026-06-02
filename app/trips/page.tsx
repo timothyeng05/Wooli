@@ -142,12 +142,30 @@ export default async function TripsPage() {
         <ShoppingStoreList initialStores={stores ?? []} />
 
         {totalTrips === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-5xl mb-4">✈️</p>
-            <p className="text-gray-600 mb-6">No trips yet</p>
-            <Link href="/trips/new" className="inline-block bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition">
-              Plan your first trip
-            </Link>
+          <div>
+            <div className="text-center py-6 mb-8">
+              <p className="text-5xl mb-4">✈️</p>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Plan and document your travels</h2>
+              <p className="text-gray-500 text-sm max-w-md mx-auto mb-8">
+                Keep all your trip details in one place — itineraries, daily logs, meals, activities, and notes. Great for planning ahead or capturing memories as you go.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-lg mx-auto mb-8 text-left">
+                {[
+                  { icon: '🗓️', title: 'Day-by-day itinerary', desc: 'Organise activities and plans for each day of your trip' },
+                  { icon: '🍽️', title: 'Meals & ratings', desc: 'Log restaurants and rate them as you travel' },
+                  { icon: '📝', title: 'Daily summaries', desc: 'AI-assisted summaries to capture your trip story' },
+                ].map(f => (
+                  <div key={f.title} className="rounded-xl border border-gray-200 p-4">
+                    <p className="text-xl mb-1.5">{f.icon}</p>
+                    <p className="text-sm font-semibold text-gray-800 mb-0.5">{f.title}</p>
+                    <p className="text-xs text-gray-500">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+              <Link href="/trips/new" className="inline-block bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                Plan your first trip
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="space-y-10">

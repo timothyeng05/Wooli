@@ -14,7 +14,7 @@ const FLOW_LABELS: Record<FlowLevel, string> = {
 }
 
 const FLOW_BG: Record<FlowLevel, string> = {
-  light: 'bg-pink-300',
+  light: 'bg-blue-300',
   medium: 'bg-red-500',
   heavy: 'bg-red-800',
 }
@@ -134,7 +134,7 @@ export default function PeriodForm({
               onClick={() => toggleSymptom(s)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition capitalize ${
                 symptoms.includes(s)
-                  ? 'bg-pink-500 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -160,7 +160,7 @@ export default function PeriodForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 bg-pink-600 text-white rounded-lg font-medium hover:bg-pink-700 disabled:opacity-50 transition"
+        className="w-full py-3 bg-blue-700 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
       >
         {loading ? 'Saving...' : entry ? 'Update' : 'Save'}
       </button>

@@ -21,7 +21,7 @@ export default async function PeriodDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="bg-gradient-to-br from-pink-50 to-pink-100 border-b border-pink-200">
+      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-b border-blue-200">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <Breadcrumbs items={[
             { label: 'Journal', href: '/mood' },

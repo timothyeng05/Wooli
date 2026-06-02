@@ -33,7 +33,7 @@ export default async function PeriodPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="bg-gradient-to-br from-pink-50 to-pink-100 border-b border-pink-200">
+      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-b border-blue-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <Breadcrumbs items={[
             { label: 'Journal', href: '/mood' },
@@ -47,7 +47,7 @@ export default async function PeriodPage() {
             </div>
             <Link
               href="/period/new"
-              className="bg-pink-600 text-white font-medium px-5 py-2.5 rounded-lg hover:bg-pink-700 transition"
+              className="bg-blue-700 text-white font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition"
             >
               + Log Period
             </Link>
@@ -61,7 +61,7 @@ export default async function PeriodPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
               <p className="text-sm text-gray-500 mb-1">Cycle day</p>
-              <p className="text-2xl font-bold text-pink-600">{cycleDay ?? '—'}</p>
+              <p className="text-2xl font-bold text-blue-700">{cycleDay ?? '—'}</p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
               <p className="text-sm text-gray-500 mb-1">Avg cycle</p>
@@ -81,15 +81,15 @@ export default async function PeriodPage() {
           <div className="space-y-3">
             {list.map(entry => (
               <Link key={entry.id} href={`/period/${entry.id}`}>
-                <div className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 bg-white hover:border-pink-300 hover:shadow-sm transition">
-                  <span className="w-2 h-12 rounded-full bg-pink-500 flex-shrink-0" />
+                <div className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm transition">
+                  <span className="w-2 h-12 rounded-full bg-blue-600 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-gray-900">
                         {formatRange(entry.start_date, entry.end_date)}
                       </span>
                       {entry.flow_level && (
-                        <span className="text-xs uppercase tracking-wide text-pink-700 font-medium">
+                        <span className="text-xs uppercase tracking-wide text-blue-700 font-medium">
                           {entry.flow_level}
                         </span>
                       )}
@@ -110,7 +110,7 @@ export default async function PeriodPage() {
             <p className="text-gray-600 mb-6">No period entries yet</p>
             <Link
               href="/period/new"
-              className="inline-block bg-pink-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-pink-700 transition"
+              className="inline-block bg-blue-700 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition"
             >
               Log your first period
             </Link>

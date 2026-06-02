@@ -22,16 +22,20 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  const pathname = request.nextUrl.pathname
+
   // If not logged in and trying to access protected route → redirect to login
-  if (!user && !request.nextUrl.pathname.startsWith('/login') &&
-      !request.nextUrl.pathname.startsWith('/signup')) {
+  // Allow '/' for unauthenticated users (landing page)
+  if (!user && pathname !== '/' &&
+      !pathname.startsWith('/login') &&
+      !pathname.startsWith('/signup')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Non-owner users can only access /budget
+  // Non-owner users can only access /budget and /trips
   const isOwner = user?.email === 'woolitravel@gmail.com'
   const path = request.nextUrl.pathname
-  if (user && !isOwner && path !== '/' && !path.startsWith('/budget')) {
+  if (user && !isOwner && path !== '/' && !path.startsWith('/budget') && !path.startsWith('/trips')) {
     return NextResponse.redirect(new URL('/budget', request.url))
   }
 
@@ -42,6 +46,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/mood/:path*', '/budget/:path*',
+  matcher: ['/', '/mood/:path*', '/budget/:path*', '/trips/:path*',
             '/calendar/:path*']
 }

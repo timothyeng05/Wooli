@@ -95,7 +95,7 @@ function StylePanel({ icon, color, onIcon, onColor, showColor = true }: {
                   <button
                     key={em}
                     onClick={() => onIcon(em)}
-                    className={`w-8 h-8 flex items-center justify-center rounded text-base hover:bg-gray-100 transition ${icon === em ? 'bg-pink-50 ring-2 ring-pink-400' : ''}`}
+                    className={`w-8 h-8 flex items-center justify-center rounded text-base hover:bg-gray-100 transition ${icon === em ? 'bg-blue-50 ring-2 ring-blue-400' : ''}`}
                   >
                     {em}
                   </button>
@@ -367,12 +367,12 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
           }}
           placeholder="Name…"
           autoFocus
-          className="flex-1 text-sm text-gray-700 bg-transparent outline-none border-b border-gray-300 focus:border-pink-400"
+          className="flex-1 text-sm text-gray-700 bg-transparent outline-none border-b border-gray-300 focus:border-blue-400"
         />
         <button
           onClick={handleConfirmAdd}
           disabled={addingLoading || !adding?.name.trim()}
-          className="text-pink-500 text-xs font-semibold disabled:opacity-40"
+          className="text-blue-600 text-xs font-semibold disabled:opacity-40"
         >
           {addingLoading ? '…' : 'Add'}
         </button>
@@ -403,7 +403,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
               <div className="flex items-center gap-2.5 px-3 py-2.5 bg-gray-50">
                 <button
                   onClick={() => setOpenStyleId(openStyleId === parent.id ? null : parent.id)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 hover:ring-2 hover:ring-pink-300 transition"
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 hover:ring-2 hover:ring-blue-300 transition"
                   style={{ backgroundColor: parent.color + '33' }}
                   title="Edit icon & colour"
                 >
@@ -430,7 +430,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                   <div className={`flex items-center gap-2.5 px-3 py-2 pl-10 ${i < arr.length - 1 || adding?.parentId === parent.id ? 'border-b border-gray-100' : ''}`}>
                     <button
                       onClick={() => setOpenStyleId(openStyleId === child.id ? null : child.id)}
-                      className="w-6 h-6 rounded flex items-center justify-center text-sm flex-shrink-0 hover:ring-2 hover:ring-pink-300 transition"
+                      className="w-6 h-6 rounded flex items-center justify-center text-sm flex-shrink-0 hover:ring-2 hover:ring-blue-300 transition"
                       style={{ backgroundColor: parent.color + '22' }}
                       title="Edit icon"
                     >
@@ -479,7 +479,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
 
           {/* New parent row */}
           {adding?.parentId === null && adding?.section === section && (
-            <div className="rounded-xl border border-dashed border-pink-300 overflow-hidden">
+            <div className="rounded-xl border border-dashed border-blue-300 overflow-hidden">
               <div className="flex items-center gap-2.5 px-3 py-2.5 bg-gray-50">
                 <button
                   onClick={() => setOpenStyleId(openStyleId === '__new__' ? null : '__new__')}
@@ -502,7 +502,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 <button
                   onClick={handleConfirmAdd}
                   disabled={addingLoading || !adding.name.trim()}
-                  className="text-pink-500 text-xs font-semibold disabled:opacity-40"
+                  className="text-blue-600 text-xs font-semibold disabled:opacity-40"
                 >
                   {addingLoading ? '…' : 'Add'}
                 </button>
@@ -562,7 +562,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 <div key={s} className="flex items-center gap-1.5">
                   {i > 0 && <span className="text-gray-300 text-xs">›</span>}
                   <span className={`text-xs font-semibold transition-colors ${
-                    step === s ? 'text-pink-500' :
+                    step === s ? 'text-blue-600' :
                     step > s  ? 'text-gray-500' :
                                 'text-gray-300'
                   }`}>
@@ -575,7 +575,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
 
           <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-pink-500 rounded-full transition-all duration-300"
+              className="h-full bg-blue-600 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -607,7 +607,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 </ul>
                 <button
                   onClick={() => setStep(2)}
-                  className="w-full rounded-lg bg-pink-500 px-4 py-3 text-sm font-medium text-white hover:bg-pink-600 transition"
+                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition"
                 >
                   Get started
                 </button>
@@ -676,7 +676,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 <button
                   onClick={handleAddMembers}
                   disabled={loading || !members.some(m => m.name.trim())}
-                  className="w-full rounded-lg bg-pink-500 px-4 py-3 text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50 transition"
+                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition"
                 >
                   {loading ? 'Setting up…' : 'Continue'}
                 </button>
@@ -705,7 +705,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 <button
                   onClick={handleSaveCategories}
                   disabled={savingCats || loadingCats}
-                  className="mt-4 w-full rounded-lg bg-pink-500 px-4 py-3 text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50 transition"
+                  className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition"
                 >
                   {savingCats ? 'Saving…' : 'Looks good →'}
                 </button>
@@ -826,7 +826,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                     <button
                       onClick={handleSaveBudgets}
                       disabled={savingBudgets}
-                      className="w-full rounded-lg bg-pink-500 px-4 py-3 text-sm font-medium text-white hover:bg-pink-600 disabled:opacity-50 transition mb-3"
+                      className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition mb-3"
                     >
                       {savingBudgets ? 'Saving…' : 'Continue'}
                     </button>
@@ -845,7 +845,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
             {step >= 4 && (
               <div className={step === 5 ? 'mb-3' : 'hidden'}>
                 <PlaidLinkButton
-                  className="w-full rounded-lg bg-pink-500 px-4 py-3 text-sm font-medium text-white hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onComplete={async () => {
                     await markComplete()
                     router.push('/budget')
@@ -899,7 +899,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 </p>
                 <button
                   onClick={async () => { await markComplete(); router.push('/budget') }}
-                  className="w-full rounded-lg bg-pink-500 px-4 py-3 text-sm font-medium text-white hover:bg-pink-600 transition"
+                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition"
                 >
                   Go to budget overview
                 </button>

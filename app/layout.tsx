@@ -36,6 +36,18 @@ export default async function RootLayout({
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   const fullAccess = !user || user.email === OWNER_EMAIL
+  const isLoggedIn = !!user
+
+  // Trips unlocks for non-owners after budget onboarding is complete
+  let tripsEnabled = fullAccess
+  if (user && !fullAccess) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('onboarding_completed_at')
+      .eq('id', user.id)
+      .single()
+    tripsEnabled = !!profile?.onboarding_completed_at
+  }
 
   return (
     <html
@@ -43,7 +55,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Nav fullAccess={fullAccess} />
+        <Nav fullAccess={fullAccess} isLoggedIn={isLoggedIn} tripsEnabled={tripsEnabled} />
         <main className="flex-1 flex flex-col pb-16 md:pb-0">
           <ToastProvider>
             {children}
