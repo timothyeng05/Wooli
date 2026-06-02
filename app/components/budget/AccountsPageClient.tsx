@@ -707,11 +707,12 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
 }
 
 // ── Hidden accounts section ───────────────────────────────────────────────────
-function HiddenAccountsSection({ accounts, sparkMap, onUpdate, onUnhide }: {
+function HiddenAccountsSection({ accounts, sparkMap, onUpdate, onUnhide, members }: {
   accounts: UnifiedAccount[]
   sparkMap: Map<string, number[]>
   onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
   onUnhide: (id: string) => Promise<void>
+  members: HouseholdMember[]
 }) {
   const [open, setOpen] = useState(false)
   const total = accounts.reduce((s, a) => s + a.balance, 0)
@@ -735,7 +736,7 @@ function HiddenAccountsSection({ accounts, sparkMap, onUpdate, onUnhide }: {
       {open && (
         <div className="ml-2 mt-0.5">
           {accounts.map(a => (
-            <PlaidAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdate} onHide={onUnhide} />
+            <PlaidAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdate} onHide={onUnhide} members={members} />
           ))}
         </div>
       )}
@@ -915,6 +916,7 @@ export default function AccountsPageClient({
               sparkMap={sparkMap}
               onUpdate={handleUpdatePlaid}
               onUnhide={handleUnhidePlaid}
+              members={members}
             />
           )}
         </div>

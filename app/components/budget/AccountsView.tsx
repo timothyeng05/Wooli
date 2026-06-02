@@ -120,7 +120,7 @@ export default function AccountsView({
       {/* Active accounts */}
       <div className="space-y-2">
         {active.map(a => (
-          <AccountRow key={a.id} account={a} onUpdate={updateAccount} onArchive={() => archiveAccount(a.id, true)} />
+          <AccountRow key={a.id} account={a} onUpdate={updateAccount} onArchive={() => archiveAccount(a.id, true)} members={members} />
         ))}
         {active.length === 0 && !adding && (
           <p className="text-center text-gray-500 py-8">No accounts yet</p>
@@ -133,7 +133,7 @@ export default function AccountsView({
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Archived</h2>
           <div className="space-y-2">
             {archived.map(a => (
-              <AccountRow key={a.id} account={a} onUpdate={updateAccount} onArchive={() => archiveAccount(a.id, false)} />
+              <AccountRow key={a.id} account={a} onUpdate={updateAccount} onArchive={() => archiveAccount(a.id, false)} members={members} />
             ))}
           </div>
         </div>
@@ -146,10 +146,12 @@ function AccountRow({
   account,
   onUpdate,
   onArchive,
+  members = [],
 }: {
   account: Account
   onUpdate: (id: string, patch: Partial<Account>) => void
   onArchive: () => void
+  members?: HouseholdMember[]
 }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(account.name)
