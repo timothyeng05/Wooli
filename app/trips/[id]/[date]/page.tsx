@@ -410,21 +410,31 @@ function ActivityEditor({ section, onChange }: { section: EditorSection; onChang
 function MealEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
   const nameIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
   const nameLine = nameIdx >= 0 ? section.lines[nameIdx] : ''
-  const optionLines = section.lines.slice(nameIdx + 1).join('\n')
+  const bulletLines = nameIdx >= 0 ? section.lines.slice(nameIdx + 1) : section.lines
+
+  // Strip '- ' prefix for display so users type items plainly
+  const foodDisplay = bulletLines
+    .map(l => l.trim().startsWith('- ') ? l.trim().slice(2) : l.trim())
+    .join('\n')
 
   const setName = (val: string) => {
     const rest = nameIdx >= 0 ? section.lines.filter((_, i) => i !== nameIdx) : section.lines
     onChange({ lines: val ? [val, ...rest] : rest })
   }
-  const setOptions = (val: string) => {
-    onChange({ lines: nameLine ? [nameLine, ...val.split('\n')] : val.split('\n') })
+  const setFood = (val: string) => {
+    const items = val.split('\n').map(l => l.trim() ? `- ${l.trim()}` : '')
+    onChange({ lines: nameLine ? [nameLine, ...items] : items })
   }
 
   return (
     <div className="space-y-2.5">
       <div>
-        <label className={labelCls}>Restaurant / meal</label>
+        <label className={labelCls}>Restaurant / place</label>
         <input className={inputCls} value={nameLine} onChange={e => setName(e.target.value)} placeholder="Chanko Tomoegata" />
+      </div>
+      <div>
+        <label className={labelCls}>Food items <span className="text-gray-400 font-normal">(one per line)</span></label>
+        <AutoTextarea className={inputCls} value={foodDisplay} onChange={e => setFood(e.target.value)} placeholder="Chanko nabe&#10;Sake" />
       </div>
       <div className="flex gap-2">
         <div className="flex-1">
@@ -439,10 +449,6 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
       <div>
         <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
         <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
-      </div>
-      <div>
-        <label className={labelCls}>Options / notes</label>
-        <AutoTextarea className={inputCls} value={optionLines} onChange={e => setOptions(e.target.value)} placeholder="- Option A&#10;- Option B" />
       </div>
     </div>
   )
@@ -699,7 +705,6 @@ export default function TripDayPage() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [insertAt, setInsertAt] = useState<number | null>(null)
   const [showAddPicker, setShowAddPicker] = useState(false)
-  const [aiSummary, setAiSummary] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -754,7 +759,6 @@ export default function TripDayPage() {
           )
         }
 
-        fetchSummary(itemsWithTitles)
       }
       setLoading(false)
     }
@@ -777,23 +781,6 @@ export default function TripDayPage() {
     setSaved(true)
     setEditingId(null)
     setTimeout(() => setSaved(false), 2000)
-    fetchSummary(items)
-  }
-
-  const fetchSummary = async (sections: EditorSection[]) => {
-    if (!sections.length) return
-    const today = new Date(); today.setHours(0,0,0,0)
-    const dayDate = new Date(params.date + 'T00:00:00')
-    const isPast = dayDate < today
-    try {
-      const res = await fetch('/api/trips/day-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections: sections.map(({ _id, ...s }) => s), isPast }),
-      })
-      const { summary } = await res.json()
-      setAiSummary(summary ?? null)
-    } catch {}
   }
 
   const startEdit = (itemId: string) => {
@@ -1002,7 +989,7 @@ export default function TripDayPage() {
                   {title || 'Untitled day'}
                 </h1>
                 <p className="text-xs text-gray-400 truncate">
-                  {dateLabel}{aiSummary ? ` · ${aiSummary}` : ''}
+                  {dateLabel}
                 </p>
               </div>
             </div>
