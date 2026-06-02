@@ -181,6 +181,42 @@ function TravelBanner({ sections }: { sections: ParsedSection[] }) {
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
 const labelCls = 'block text-xs text-gray-500 mb-1'
 
+function parseDuration(raw: string): { hours: number; minutes: number } {
+  const h = raw.match(/(\d+)\s*h/i)
+  const m = raw.match(/(\d+)\s*m(?:in)?/i)
+  const col = !h && !m ? raw.match(/^(\d+):(\d{2})$/) : null
+  let hours = h ? parseInt(h[1]) : col ? parseInt(col[1]) : 0
+  let minutes = m ? parseInt(m[1]) : col ? parseInt(col[2]) : 0
+  if (minutes >= 60) { hours += Math.floor(minutes / 60); minutes %= 60 }
+  return { hours, minutes }
+}
+
+function formatDuration(h: number, m: number): string {
+  if (!h && !m) return ''
+  if (!h) return `${m}m`
+  if (!m) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+function DurationInput({ value, onChange }: { value?: string; onChange: (val: string | undefined) => void }) {
+  const init = value ? parseDuration(value) : { hours: 0, minutes: 0 }
+  const [h, setH] = useState(init.hours)
+  const [m, setM] = useState(init.minutes)
+  const emit = (nh: number, nm: number) => { const s = formatDuration(nh, nm); onChange(s || undefined) }
+  return (
+    <div className="flex items-center gap-1.5">
+      <input type="number" min={0} max={99} value={h || ''} placeholder="0"
+        onChange={e => { const v = Math.max(0, parseInt(e.target.value) || 0); setH(v); emit(v, m) }}
+        className="w-14 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
+      <span className="text-xs text-gray-400 font-medium">h</span>
+      <input type="number" min={0} max={59} value={m || ''} placeholder="0"
+        onChange={e => { const v = Math.max(0, Math.min(59, parseInt(e.target.value) || 0)); setM(v); emit(h, v) }}
+        className="w-14 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
+      <span className="text-xs text-gray-400 font-medium">m</span>
+    </div>
+  )
+}
+
 function AutoTextarea({ value, onChange, className, placeholder }: {
   value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   className?: string; placeholder?: string
@@ -232,7 +268,7 @@ function TravelEditor({ section, onChange }: { section: EditorSection; onChange:
         </div>
         <div>
           <label className={labelCls}>Duration</label>
-          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="14h 15m" />
+          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
         </div>
       </div>
       <div>
@@ -289,9 +325,9 @@ function DriveEditor({ section, onChange }: { section: EditorSection; onChange: 
           <label className={labelCls}>Start time</label>
           <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="9:00 AM" />
         </div>
-        <div className="w-28 flex-shrink-0">
+        <div className="flex-shrink-0">
           <label className={labelCls}>Duration</label>
-          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="45 min" />
+          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
         </div>
       </div>
       <div>
@@ -354,9 +390,9 @@ function ActivityEditor({ section, onChange }: { section: EditorSection; onChang
           <label className={labelCls}>Time</label>
           <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="11:00 AM" />
         </div>
-        <div className="w-28 flex-shrink-0">
+        <div className="flex-shrink-0">
           <label className={labelCls}>Duration</label>
-          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="3h" />
+          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
         </div>
       </div>
       <div>
@@ -395,9 +431,9 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
           <label className={labelCls}>Time</label>
           <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="7:00 PM" />
         </div>
-        <div className="w-28 flex-shrink-0">
+        <div className="flex-shrink-0">
           <label className={labelCls}>Duration (optional)</label>
-          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="1h 30m" />
+          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
         </div>
       </div>
       <div>
