@@ -684,7 +684,10 @@ export default function TripDayPage() {
         const cur = new Date(tripData.start_date + 'T00:00:00')
         const end = new Date(tripData.end_date + 'T00:00:00')
         while (cur <= end) {
-          generated.push(cur.toISOString().split('T')[0])
+          const y = cur.getFullYear()
+          const m = String(cur.getMonth() + 1).padStart(2, '0')
+          const d = String(cur.getDate()).padStart(2, '0')
+          generated.push(`${y}-${m}-${d}`)
           cur.setDate(cur.getDate() + 1)
         }
       }
@@ -897,6 +900,14 @@ export default function TripDayPage() {
 
   const dayTitleMap = new Map(days.map(d => [d.date, d.title]))
 
+  const todayLocal = (() => {
+    const t = new Date()
+    const y = t.getFullYear()
+    const m = String(t.getMonth() + 1).padStart(2, '0')
+    const d = String(t.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  })()
+
   return (
     <div className="min-h-screen bg-white flex">
 
@@ -911,19 +922,22 @@ export default function TripDayPage() {
         <nav className="flex-1 overflow-y-auto py-1">
           {allDates.map((date, i) => {
             const isActive = date === params.date
+            const isToday = date === todayLocal
             const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
             const dayTitle = dayTitleMap.get(date) ?? null
             return (
               <Link
                 key={date}
                 href={`/trips/${params.id}/${date}`}
-                className={`flex items-center gap-3 px-5 py-3 transition ${isActive ? 'bg-blue-600' : 'hover:bg-gray-100'}`}
+                className={`flex items-center gap-3 px-5 py-3 transition ${isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
               >
-                <span className={`text-xs font-bold flex-shrink-0 w-12 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>
+                <span className={`text-xs font-bold flex-shrink-0 w-12 ${isActive ? 'text-blue-200' : isToday ? 'text-blue-500' : 'text-gray-400'}`}>
                   Day {i + 1}
                 </span>
-                <div className="min-w-0">
-                  <p className={`text-xs ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>{label}</p>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-xs ${isActive ? 'text-blue-200' : isToday ? 'text-blue-400' : 'text-gray-400'}`}>
+                    {label}{isToday && !isActive ? ' · today' : ''}
+                  </p>
                   <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : dayTitle ? 'text-gray-800' : 'text-gray-400'}`}>
                     {dayTitle ?? '—'}
                   </p>
