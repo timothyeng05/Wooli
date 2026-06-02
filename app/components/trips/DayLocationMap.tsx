@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Tooltip, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css'
 export type LocationPoint = { label: string; query: string; color: string; coords?: { lat: number; lng: number } }
 type GeoResult = { label: string; lat: number; lng: number; color: string }
 
-const GAP_KM = 160 // ~100 miles — splits into separate city groups
+const GAP_KM = 160
 
 function haversineKm(a: GeoResult, b: GeoResult): number {
   const R = 6371
@@ -30,6 +30,19 @@ function groupPoints(points: GeoResult[]): GeoResult[][] {
   return groups
 }
 
+function bearingDeg(from: [number, number], to: [number, number]): number {
+  const dLon = (to[1] - from[1]) * Math.PI / 180
+  const lat1 = from[0] * Math.PI / 180
+  const lat2 = to[0] * Math.PI / 180
+  const y = Math.sin(dLon) * Math.cos(lat2)
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
+}
+
+function midpoint(from: [number, number], to: [number, number]): [number, number] {
+  return [(from[0] * 0.45 + to[0] * 0.55), (from[1] * 0.45 + to[1] * 0.55)]
+}
+
 function FitBounds({ points }: { points: GeoResult[] }) {
   const map = useMap()
   useEffect(() => {
@@ -43,12 +56,25 @@ function FitBounds({ points }: { points: GeoResult[] }) {
   return null
 }
 
-function makeIcon(color: string) {
+// Numbered circle pin
+function makeNumberIcon(num: number, color: string) {
   return L.divIcon({
     className: '',
-    html: `<div style="background:${color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);width:16px;height:16px;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);"></div>`,
+    html: `<div style="background:${color};color:#fff;border-radius:50%;width:24px;height:24px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);text-align:center;line-height:19px;font-size:11px;font-weight:800;">${num}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  })
+}
+
+// SVG arrowhead pointing up (North), rotated by bearing
+function makeArrowIcon(angle: number, color: string) {
+  // Arrow path points upward; rotate to match travel direction
+  const svg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${angle}deg);transform-origin:center;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));"><path d="M8 1 L15 15 L8 11 L1 15 Z" fill="${color}"/></svg>`
+  return L.divIcon({
+    className: '',
+    html: svg,
     iconSize: [16, 16],
-    iconAnchor: [8, 16],
+    iconAnchor: [8, 8],
   })
 }
 
@@ -94,7 +120,6 @@ export default function DayLocationMap({ locations }: { locations: LocationPoint
 
   const groups = groupPoints(points)
   const activePoints = groups[activeGroup] ?? []
-  const polyline = activePoints.map(p => [p.lat, p.lng] as [number, number])
 
   return (
     <div>
@@ -127,15 +152,29 @@ export default function DayLocationMap({ locations }: { locations: LocationPoint
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds points={activePoints} />
-          {polyline.length > 1 && (
-            <Polyline
-              positions={polyline}
-              pathOptions={{ color: '#94a3b8', weight: 2, dashArray: '5, 7', opacity: 0.8 }}
-            />
-          )}
+
+          {/* Per-segment colored lines with arrowheads */}
+          {activePoints.map((p, i) => {
+            if (i === activePoints.length - 1) return null
+            const from: [number, number] = [p.lat, p.lng]
+            const to: [number, number] = [activePoints[i + 1].lat, activePoints[i + 1].lng]
+            const angle = bearingDeg(from, to)
+            const mid = midpoint(from, to)
+            return (
+              <React.Fragment key={i}>
+                <Polyline
+                  positions={[from, to]}
+                  pathOptions={{ color: p.color, weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
+                />
+                <Marker position={mid} icon={makeArrowIcon(angle, p.color)} />
+              </React.Fragment>
+            )
+          })}
+
+          {/* Numbered pins */}
           {activePoints.map((p, i) => (
-            <Marker key={i} position={[p.lat, p.lng]} icon={makeIcon(p.color)}>
-              <Tooltip direction="top" offset={[0, -16]} opacity={0.95}>
+            <Marker key={i} position={[p.lat, p.lng]} icon={makeNumberIcon(i + 1, p.color)} zIndexOffset={100}>
+              <Tooltip direction="top" offset={[0, -12]} opacity={0.95}>
                 <span style={{ fontSize: 12, fontWeight: 500 }}>{p.label}</span>
               </Tooltip>
             </Marker>
