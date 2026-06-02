@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { sections } = await request.json() as { sections: SectionData[] }
+  const { sections, isPast } = await request.json() as { sections: SectionData[]; isPast?: boolean }
 
   const relevant = sections.filter(s => !EXCLUDE.has(s.type.toUpperCase()))
   if (!relevant.length) return NextResponse.json({ summary: null })
@@ -26,18 +26,19 @@ export async function POST(request: NextRequest) {
     return content ? `${label}: ${content}` : label
   }).join('\n')
 
+  const systemPrompt = isPast
+    ? 'Write a vivid 2–3 sentence recap of what the traveler did that day, written in past tense as if looking back on the experience. Be specific and evocative — mention places, activities, and highlights. Skip meals and accommodation. Return only the prose, no quotes, no bullet points.'
+    : 'Write a single-line preview of the day\'s activities in 15 words or fewer. Focus on what the traveler is doing — skip meals and accommodation. Return only the phrase, no quotes, no trailing punctuation.'
+
   const groq = getGroq()
   const completion = await groq.chat.completions.create({
     model: GROQ_MODEL,
     messages: [
-      {
-        role: 'system',
-        content: 'Write a single-line summary of the day\'s activities in 15 words or fewer. Focus on what the traveler is doing — skip meals and accommodation. Return only the phrase, no quotes, no trailing punctuation.',
-      },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: activityLines },
     ],
-    max_tokens: 40,
-    temperature: 0.3,
+    max_tokens: isPast ? 120 : 40,
+    temperature: 0.4,
   })
 
   const summary = completion.choices[0]?.message?.content?.trim() ?? null

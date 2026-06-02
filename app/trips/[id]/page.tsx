@@ -5,6 +5,7 @@ import Breadcrumbs from '@/app/components/Breadcrumbs'
 import ShareButton from '@/app/components/ShareButton'
 import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
 import CurrencyConverter from '@/app/components/trips/CurrencyConverter'
+import { notesToSectionData } from '@/lib/trips/trip-sections'
 
 function generateDays(startDate: string, endDate: string): string[] {
   const days: string[] = []
@@ -84,6 +85,24 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     progressPct = null
   }
 
+  // Collect meals from past days
+  const MEAL_TYPES = new Set(['MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'BREAKFAST OPTIONS', 'LUNCH OPTIONS', 'DINNER OPTIONS'])
+  const mealsEaten: { dayNum: number; date: string; dateLabel: string; name: string }[] = []
+  for (const date of allDays) {
+    const dayDate = new Date(date + 'T00:00:00')
+    if (dayDate >= today) break
+    const dayData = dayDataByDate.get(date)
+    if (!dayData?.notes) continue
+    const dayNum = allDays.indexOf(date) + 1
+    const dateLabel = dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    const sections = notesToSectionData(dayData.notes)
+    for (const s of sections) {
+      if (!MEAL_TYPES.has(s.type.toUpperCase())) continue
+      const name = s.lines.find(l => l.trim() && !l.trim().startsWith('-'))?.trim()
+      if (name) mealsEaten.push({ dayNum, date, dateLabel, name })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
@@ -129,6 +148,23 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <CurrencyConverter />
+        {mealsEaten.length > 0 && (
+          <details className="rounded-xl border border-amber-100 overflow-hidden">
+            <summary className="flex items-center justify-between px-4 py-3 bg-amber-50 cursor-pointer select-none list-none hover:bg-amber-100 transition">
+              <span className="text-sm font-semibold text-amber-800">🍴 What we ate — {mealsEaten.length} place{mealsEaten.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-amber-400">▼</span>
+            </summary>
+            <div className="divide-y divide-amber-50">
+              {mealsEaten.map((m, i) => (
+                <Link key={i} href={`/trips/${id}/${m.date}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-amber-50 transition group">
+                  <span className="text-sm text-gray-800 font-medium">{m.name}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">Day {m.dayNum} · {m.dateLabel}</span>
+                </Link>
+              ))}
+            </div>
+          </details>
+        )}
+
         {groups.map((group, gi) => {
           const colors = LEG_COLORS[gi % LEG_COLORS.length]
           const { leg, days: legDays } = group

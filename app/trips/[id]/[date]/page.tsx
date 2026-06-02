@@ -782,11 +782,14 @@ export default function TripDayPage() {
 
   const fetchSummary = async (sections: EditorSection[]) => {
     if (!sections.length) return
+    const today = new Date(); today.setHours(0,0,0,0)
+    const dayDate = new Date(params.date + 'T00:00:00')
+    const isPast = dayDate < today
     try {
       const res = await fetch('/api/trips/day-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections: sections.map(({ _id, ...s }) => s) }),
+        body: JSON.stringify({ sections: sections.map(({ _id, ...s }) => s), isPast }),
       })
       const { summary } = await res.json()
       setAiSummary(summary ?? null)
