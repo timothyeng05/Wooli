@@ -15,15 +15,6 @@ const NAV_LINKS = [
     ),
   },
   {
-    href: '/lists', label: 'Lists', alsoMatches: [] as string[],
-    icon: (
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-      </svg>
-    ),
-  },
-  {
     href: '/budget', label: 'Budget', alsoMatches: [] as string[],
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -61,7 +52,7 @@ const NAV_LINKS = [
 
 const MAIN_HREFS = ['/budget', '/trips']
 
-export default function Nav() {
+export default function Nav({ fullAccess = true }: { fullAccess?: boolean }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [desktopMoreOpen, setDesktopMoreOpen] = useState(false)
   const pathname = usePathname()
@@ -71,7 +62,8 @@ export default function Nav() {
     return all.some(p => pathname === p || pathname.startsWith(p + '/'))
   }
 
-  const mainTabs = NAV_LINKS.filter(l => MAIN_HREFS.includes(l.href))
+  const allMainTabs = NAV_LINKS.filter(l => MAIN_HREFS.includes(l.href))
+  const mainTabs = fullAccess ? allMainTabs : allMainTabs.filter(l => l.href === '/budget')
   const moreTabs = NAV_LINKS.filter(l => !MAIN_HREFS.includes(l.href))
   const moreActive = moreTabs.some(({ href, alsoMatches }) => isActive(href, alsoMatches))
 
@@ -101,7 +93,8 @@ export default function Nav() {
               )
             })}
 
-            {/* Desktop More dropdown */}
+            {/* Desktop More dropdown — owner only */}
+            {fullAccess ? (
             <div className="relative">
               <button
                 onClick={() => setDesktopMoreOpen(v => !v)}
@@ -156,6 +149,54 @@ export default function Nav() {
                 </>
               )}
             </div>
+            ) : (
+              <div className="flex items-center gap-1 ml-auto">
+                <div className="relative">
+                  <button
+                    onClick={() => setDesktopMoreOpen(v => !v)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${
+                      desktopMoreOpen ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    More
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                  {desktopMoreOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[40]" onClick={() => setDesktopMoreOpen(false)} />
+                      <div className="absolute top-full left-0 mt-1.5 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-[50] py-1.5 overflow-hidden">
+                        <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Coming soon</p>
+                        {[
+                          { label: 'Trips', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> },
+                          { label: 'Journal', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg> },
+                          { label: 'Friends', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> },
+                        ].map(({ label, icon }) => (
+                          <div key={label} className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-300 cursor-not-allowed select-none">
+                            <span className="text-gray-300">{icon}</span>
+                            {label}
+                            <span className="ml-auto text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
+                          </div>
+                        ))}
+                        <div className="border-t border-gray-100 mt-1 pt-1">
+                          <form>
+                            <button formAction={logout} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                              <span className="text-gray-400">
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                                </svg>
+                              </span>
+                              Sign out
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </nav>
@@ -195,8 +236,45 @@ export default function Nav() {
         </div>
       </nav>
 
-      {/* Mobile More sheet */}
-      {moreOpen && (
+      {/* Mobile More sheet — restricted users */}
+      {!fullAccess && moreOpen && (
+        <>
+          <div className="md:hidden fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm" onClick={() => setMoreOpen(false)} />
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white rounded-t-2xl shadow-xl">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+              <p className="text-base font-semibold text-gray-900">More</p>
+              <button onClick={() => setMoreOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="px-4 py-3 pb-8 space-y-1">
+              <p className="px-1 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Coming soon</p>
+              {[
+                { label: 'Trips', icon: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> },
+                { label: 'Journal', icon: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg> },
+                { label: 'Friends', icon: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> },
+              ].map(({ label, icon }) => (
+                <div key={label} className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-300 cursor-not-allowed select-none">
+                  <span className="text-gray-300">{icon}</span>
+                  {label}
+                  <span className="ml-auto text-[10px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Coming soon</span>
+                </div>
+              ))}
+              <div className="pt-2">
+                <form>
+                  <button formAction={logout} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 text-left">
+                    <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Mobile More sheet — owner only */}
+      {fullAccess && moreOpen && (
         <>
           <div
             className="md:hidden fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm"

@@ -3,13 +3,70 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 const DEFAULT_CATEGORIES = [
   // Expenses
-  { name: 'Food & Dining', color: '#f59e0b', is_income: false, children: ['Restaurants', 'Groceries', 'Coffee', 'Takeout'] },
-  { name: 'Home', color: '#8b5cf6', is_income: false, children: ['Rent', 'Utilities', 'Internet', 'Home Improvement'] },
-  { name: 'Travel', color: '#06b6d4', is_income: false, children: ['Transit', 'Rideshare', 'Flights', 'Hotels', 'Car'] },
-  { name: 'Personal', color: '#ec4899', is_income: false, children: ['Medical', 'Shopping', 'Entertainment', 'Personal Care'] },
-  { name: 'Other', color: '#64748b', is_income: false, children: ['Taxes', 'Subscriptions', 'Miscellaneous'] },
+  {
+    name: 'Food & Dining', color: '#f59e0b', icon: '🍽️', is_income: false, is_transfer: false,
+    children: [
+      { name: 'Restaurants', icon: '🍽️' },
+      { name: 'Groceries', icon: '🛒' },
+      { name: 'Coffee', icon: '☕' },
+      { name: 'Takeout', icon: '🥡' },
+    ],
+  },
+  {
+    name: 'Home', color: '#8b5cf6', icon: '🏠', is_income: false, is_transfer: false,
+    children: [
+      { name: 'Rent', icon: '🏠' },
+      { name: 'Utilities', icon: '💡' },
+      { name: 'Internet', icon: '📶' },
+      { name: 'Home Improvement', icon: '🔨' },
+    ],
+  },
+  {
+    name: 'Travel', color: '#06b6d4', icon: '✈️', is_income: false, is_transfer: false,
+    children: [
+      { name: 'Transit', icon: '🚇' },
+      { name: 'Rideshare', icon: '🚗' },
+      { name: 'Flights', icon: '✈️' },
+      { name: 'Hotels', icon: '🏨' },
+      { name: 'Car', icon: '🚘' },
+    ],
+  },
+  {
+    name: 'Personal', color: '#ec4899', icon: '🧴', is_income: false, is_transfer: false,
+    children: [
+      { name: 'Medical', icon: '🏥' },
+      { name: 'Shopping', icon: '🛍️' },
+      { name: 'Entertainment', icon: '🎬' },
+      { name: 'Personal Care', icon: '💅' },
+    ],
+  },
+  {
+    name: 'Other', color: '#64748b', icon: '📁', is_income: false, is_transfer: false,
+    children: [
+      { name: 'Taxes', icon: '📋' },
+      { name: 'Subscriptions', icon: '📱' },
+      { name: 'Miscellaneous', icon: '📌' },
+    ],
+  },
   // Income
-  { name: 'Income', color: '#22c55e', is_income: true, children: ['Salary', 'Freelance', 'Rent Income', 'Other Income'] },
+  {
+    name: 'Income', color: '#22c55e', icon: '💵', is_income: true, is_transfer: false,
+    children: [
+      { name: 'Salary', icon: '💵' },
+      { name: 'Freelance', icon: '💻' },
+      { name: 'Rent Income', icon: '💰' },
+      { name: 'Other Income', icon: '💰' },
+    ],
+  },
+  // Transfers
+  {
+    name: 'Transfer', color: '#8b5cf6', icon: '↔️', is_income: false, is_transfer: true,
+    children: [
+      { name: 'Balance Adjustments', icon: '⚖️' },
+      { name: 'Transfer', icon: '↔️' },
+      { name: 'Credit Card Payment', icon: '💳' },
+    ],
+  },
 ]
 
 export async function POST() {
@@ -28,30 +85,44 @@ export async function POST() {
     return NextResponse.json({ message: 'Categories already set up' })
   }
 
-  let created = 0
-  for (const cat of DEFAULT_CATEGORIES) {
-    const { data: parent, error: parentError } = await supabase
-      .from('categories')
-      .insert({ user_id: user.id, name: cat.name, color: cat.color, is_income: cat.is_income, sort_order: created })
-      .select()
-      .single()
-
-    if (parentError) return NextResponse.json({ error: parentError.message, code: parentError.code }, { status: 500 })
-    if (!parent) continue
-    created++
-
-    for (const childName of cat.children) {
-      await supabase.from('categories').insert({
+  // Batch-insert all parents in one round-trip
+  const { data: parents, error: parentError } = await supabase
+    .from('categories')
+    .insert(
+      DEFAULT_CATEGORIES.map((cat, i) => ({
         user_id: user.id,
-        name: childName,
+        name: cat.name,
         color: cat.color,
+        icon: cat.icon,
         is_income: cat.is_income,
-        parent_id: parent.id,
-        sort_order: created
-      })
-      created++
-    }
-  }
+        is_transfer: cat.is_transfer,
+        sort_order: i,
+      }))
+    )
+    .select()
 
-  return NextResponse.json({ message: `Created ${created} categories` })
+  if (parentError) return NextResponse.json({ error: parentError.message }, { status: 500 })
+  if (!parents) return NextResponse.json({ error: 'No parents returned' }, { status: 500 })
+
+  // Build name → id map
+  const parentMap = new Map(parents.map(p => [p.name, p.id]))
+
+  // Batch-insert all children in one round-trip
+  const children = DEFAULT_CATEGORIES.flatMap((cat, pi) =>
+    cat.children.map((child, ci) => ({
+      user_id: user.id,
+      name: child.name,
+      icon: child.icon,
+      color: cat.color,
+      is_income: cat.is_income,
+      is_transfer: cat.is_transfer,
+      parent_id: parentMap.get(cat.name),
+      sort_order: DEFAULT_CATEGORIES.length + pi * 10 + ci,
+    }))
+  )
+
+  const { error: childError } = await supabase.from('categories').insert(children)
+  if (childError) return NextResponse.json({ error: childError.message }, { status: 500 })
+
+  return NextResponse.json({ message: `Created ${parents.length + children.length} categories` })
 }

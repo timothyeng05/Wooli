@@ -8,6 +8,70 @@ import { createClient } from '@/lib/supabase-client'
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// ── Setup checklist CTA ───────────────────────────────────────────────────────
+const CTA_ITEMS = [
+  {
+    key: 'goals',
+    icon: '🎯',
+    title: 'Set a savings goal',
+    description: 'Define what you\'re saving for — vacation, emergency fund, a big purchase — and track progress.',
+    href: '/budget/goals',
+  },
+  {
+    key: 'forecast',
+    icon: '📈',
+    title: 'Explore your forecast',
+    description: 'See projected cash flow based on your spending patterns and recurring transactions.',
+    href: '/budget/forecast',
+  },
+]
+
+function SetupChecklist() {
+  const [dismissed, setDismissed] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('wooli_setup_dismissed') || '{}')
+      setDismissed(stored)
+    } catch {}
+  }, [])
+
+  const dismiss = (key: string) => {
+    const next = { ...dismissed, [key]: true }
+    setDismissed(next)
+    localStorage.setItem('wooli_setup_dismissed', JSON.stringify(next))
+  }
+
+  const visible = CTA_ITEMS.filter(item => !dismissed[item.key])
+  if (visible.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mb-6">
+      <p className="text-sm font-bold text-gray-900 mb-3">Next steps</p>
+      <div className="space-y-2">
+        {visible.map(item => (
+          <div key={item.key} className="flex items-start gap-3 rounded-xl border border-gray-100 px-3 py-3">
+            <span className="text-2xl flex-shrink-0 mt-0.5">{item.icon}</span>
+            <div className="flex-1 min-w-0">
+              <a href={item.href} className="text-sm font-semibold text-gray-800 hover:text-pink-600 transition">
+                {item.title} →
+              </a>
+              <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
+            </div>
+            <button
+              onClick={() => dismiss(item.key)}
+              title="Dismiss"
+              className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:bg-green-50 hover:text-green-500 transition mt-0.5"
+            >
+              ✓
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function fmt(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
@@ -220,30 +284,43 @@ function BreakdownSection({
     type RowEntry = { icon: string | null; name: string; amount: number; catId: string | null; subMap: Map<string, SubEntry> }
     const totals = new Map<string, RowEntry>()
     let grandTotal = 0
-    for (const t of transactions) {
-      const amt = Math.abs(t.amount)
-      grandTotal += amt
-      if (tab === 'Category') {
-        const cat = t.category
-        let key = 'Uncategorized', icon: string | null = null, name = 'Uncategorized', catId: string | null = null
-        if (cat) {
-          const parent = cat.parent_id ? catMap.get(cat.parent_id) : null
-          const effective = parent ?? cat
-          key = effective.id; icon = effective.icon; name = effective.name; catId = effective.id
+
+    if (transactions.length > 0) {
+      for (const t of transactions) {
+        const amt = Math.abs(t.amount)
+        grandTotal += amt
+        if (tab === 'Category') {
+          const cat = t.category
+          let key = 'Uncategorized', icon: string | null = null, name = 'Uncategorized', catId: string | null = null
+          if (cat) {
+            const parent = cat.parent_id ? catMap.get(cat.parent_id) : null
+            const effective = parent ?? cat
+            key = effective.id; icon = effective.icon; name = effective.name; catId = effective.id
+          }
+          if (!totals.has(key)) totals.set(key, { icon, name, amount: 0, catId, subMap: new Map() })
+          const row = totals.get(key)!
+          row.amount += amt
+          if (cat && cat.parent_id) {
+            if (!row.subMap.has(cat.id)) row.subMap.set(cat.id, { id: cat.id, name: cat.name, icon: cat.icon, amount: 0 })
+            row.subMap.get(cat.id)!.amount += amt
+          }
+        } else {
+          const key = t.merchant?.trim() || 'Unknown'
+          if (!totals.has(key)) totals.set(key, { icon: null, name: key, amount: 0, catId: null, subMap: new Map() })
+          totals.get(key)!.amount += amt
         }
-        if (!totals.has(key)) totals.set(key, { icon, name, amount: 0, catId, subMap: new Map() })
-        const row = totals.get(key)!
-        row.amount += amt
-        if (cat && cat.parent_id) {
-          if (!row.subMap.has(cat.id)) row.subMap.set(cat.id, { id: cat.id, name: cat.name, icon: cat.icon, amount: 0 })
-          row.subMap.get(cat.id)!.amount += amt
+      }
+    } else if (tab === 'Category') {
+      // No transactions — fall back to showing all categories at $0
+      for (const cat of categories.filter(c => !c.parent_id && (isIncome ? c.is_income : !c.is_income && !c.is_transfer))) {
+        const subMap = new Map<string, SubEntry>()
+        for (const sub of categories.filter(c => c.parent_id === cat.id)) {
+          subMap.set(sub.id, { id: sub.id, name: sub.name, icon: sub.icon, amount: 0 })
         }
-      } else {
-        const key = t.merchant?.trim() || 'Unknown'
-        if (!totals.has(key)) totals.set(key, { icon: null, name: key, amount: 0, catId: null, subMap: new Map() })
-        totals.get(key)!.amount += amt
+        totals.set(cat.id, { icon: cat.icon, name: cat.name, amount: 0, catId: cat.id, subMap })
       }
     }
+
     return [...totals.values()]
       .sort((a, b) => b.amount - a.amount)
       .map(r => ({
@@ -251,9 +328,7 @@ function BreakdownSection({
         pct: grandTotal > 0 ? (r.amount / grandTotal) * 100 : 0,
         subs: [...r.subMap.values()].sort((a, b) => b.amount - a.amount),
       }))
-  }, [transactions, tab, catMap])
-
-  if (transactions.length === 0) return null
+  }, [transactions, tab, catMap, categories, isIncome])
 
   return (
     <div className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
@@ -335,15 +410,19 @@ function OwnerBreakdown({ transactions, members }: { transactions: CashFlowTrans
       .filter(([, v]) => v.expenses > 0 || v.income > 0)
   }, [transactions, members])
 
-  if (rows.length === 0) return null
+  if (rows.length === 0 && members.length === 0) return null
 
-  const totalExpenses = rows.reduce((s, [, v]) => s + v.expenses, 0)
+  const displayRows: [string, { expenses: number; income: number }][] = rows.length > 0
+    ? rows
+    : members.map(m => [m.full_name, { expenses: 0, income: 0 }])
+
+  const totalExpenses = displayRows.reduce((s, [, v]) => s + v.expenses, 0)
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mt-6">
       <p className="text-sm font-bold text-gray-900 mb-3">Spending by Person</p>
       <div className="grid grid-cols-3 gap-3">
-        {rows.map(([owner, { expenses, income }]) => {
+        {displayRows.map(([owner, { expenses, income }]) => {
           const member = members.find(m => m.full_name === owner)
           const isUnknown = owner === 'Unknown'
           const label = isUnknown ? 'Unassigned' : (member?.display_name ?? owner)
@@ -438,8 +517,6 @@ function CategoryTrends({
       .map(r => ({ ...r, amount: r.monthly[selectedIdx], pct: total > 0 ? (r.monthly[selectedIdx] / total) * 100 : 0 }))
   }, [data, selectedIdx, monthlyTotals])
 
-  if (data.length === 0) return null
-
   const W = 320
   const H = 160
   const pad = { top: 20, bottom: 24, left: 8, right: 8 }
@@ -513,6 +590,9 @@ function CategoryTrends({
 
       {/* Category breakdown for selected month */}
       <div className="px-5 pt-3 pb-4 space-y-0.5">
+        {data.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-4">No expense data yet</p>
+        )}
         {selectedBreakdown.map(r => (
           <Link
             key={r.catId || r.name}
@@ -695,6 +775,9 @@ export default function CashFlowClient({
           </button>
         </div>
       </div>
+
+      {/* Setup checklist */}
+      <SetupChecklist />
 
       {/* Income vs Expenses */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6 overflow-hidden">

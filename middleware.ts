@@ -28,10 +28,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // Non-owner users can only access /budget
+  const isOwner = user?.email === 'woolitravel@gmail.com'
+  const path = request.nextUrl.pathname
+  if (user && !isOwner && path !== '/' && !path.startsWith('/budget')) {
+    return NextResponse.redirect(new URL('/budget', request.url))
+  }
+
+  // Pass pathname to server components via header
+  supabaseResponse.headers.set('x-pathname', request.nextUrl.pathname)
+
   return supabaseResponse
 }
 
 export const config = {
   matcher: ['/', '/mood/:path*', '/budget/:path*',
-            '/cards/:path*', '/calendar/:path*']
+            '/calendar/:path*']
 }
