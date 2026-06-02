@@ -44,6 +44,7 @@ export type SectionData = {
   pinned?: boolean
   coords?: string
   title?: string
+  rating?: number
 }
 
 export type ParsedSection = {

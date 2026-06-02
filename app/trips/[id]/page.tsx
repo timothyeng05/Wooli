@@ -87,7 +87,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
   // Collect meals from past days
   const MEAL_TYPES = new Set(['MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'BREAKFAST OPTIONS', 'LUNCH OPTIONS', 'DINNER OPTIONS'])
-  const mealsEaten: { dayNum: number; date: string; dateLabel: string; name: string }[] = []
+  const mealsEaten: { dayNum: number; date: string; dateLabel: string; name: string; rating?: number }[] = []
   for (const date of allDays) {
     const dayDate = new Date(date + 'T00:00:00')
     if (dayDate >= today) break
@@ -99,7 +99,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     for (const s of sections) {
       if (!MEAL_TYPES.has(s.type.toUpperCase())) continue
       const name = s.lines.find(l => l.trim() && !l.trim().startsWith('-'))?.trim()
-      if (name) mealsEaten.push({ dayNum, date, dateLabel, name })
+      if (name) mealsEaten.push({ dayNum, date, dateLabel, name, rating: s.rating })
     }
   }
 
@@ -155,12 +155,18 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               <span className="text-xs text-amber-400">▼</span>
             </summary>
             <div className="divide-y divide-amber-50">
-              {mealsEaten.map((m, i) => (
-                <Link key={i} href={`/trips/${id}/${m.date}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-amber-50 transition group">
-                  <span className="text-sm text-gray-800 font-medium">{m.name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">Day {m.dayNum} · {m.dateLabel}</span>
-                </Link>
-              ))}
+              {mealsEaten.map((m, i) => {
+                const ratingColor = m.rating == null ? '' : m.rating >= 8 ? 'bg-green-500 text-white' : m.rating >= 5 ? 'bg-amber-400 text-white' : 'bg-red-400 text-white'
+                return (
+                  <Link key={i} href={`/trips/${id}/${m.date}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 transition group">
+                    <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 truncate">{m.name}</span>
+                    {m.rating != null && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingColor}`}>{m.rating}/10</span>
+                    )}
+                    <span className="text-xs text-gray-400 flex-shrink-0">Day {m.dayNum} · {m.dateLabel}</span>
+                  </Link>
+                )
+              })}
             </div>
           </details>
         )}

@@ -14,11 +14,18 @@ type EditorSection = SectionData & { _id: string }
 
 // ─── Display components (view mode) ────────────────────────────────────────
 
-function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpand }: {
+function ratingStyle(r: number): string {
+  if (r >= 8) return 'bg-green-500 text-white'
+  if (r >= 5) return 'bg-amber-400 text-white'
+  return 'bg-red-400 text-white'
+}
+
+function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpand, rating }: {
   meta: SectionMeta; lines: string[]
   onEdit?: () => void
   title?: string; type?: string
   expanded: boolean; onToggleExpand: () => void
+  rating?: number
 }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   const t = type?.toUpperCase() ?? ''
@@ -61,6 +68,11 @@ function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpan
         </div>
         {hasBody && (
           <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
+        )}
+        {rating != null && (
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>
+            {rating}/10
+          </span>
         )}
         {onEdit && (
           <button
@@ -444,6 +456,25 @@ function MealEditor({ section, onChange }: { section: EditorSection; onChange: (
         <div className="flex-shrink-0">
           <label className={labelCls}>Duration (optional)</label>
           <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Rating <span className="text-gray-400 font-normal">(optional)</span></label>
+        <div className="flex gap-1 flex-wrap">
+          {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
+            const active = section.rating === n
+            const style = active ? ratingStyle(n) : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => onChange({ rating: active ? undefined : n })}
+                className={`w-8 h-8 rounded-lg text-xs font-bold transition ${style}`}
+              >
+                {n}
+              </button>
+            )
+          })}
         </div>
       </div>
       <div>
@@ -1103,7 +1134,7 @@ export default function TripDayPage() {
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} rating={item.rating} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
                           }
                         </div>
                       </div>
