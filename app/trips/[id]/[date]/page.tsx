@@ -448,7 +448,7 @@ const ACTIVITY_TYPES = new Set(['MORNING', 'AFTERNOON', 'NIGHT', 'ACTIVITY'])
 const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
 const HIDE_TITLE_TYPES = new Set(['ACTIVITY', 'MORNING', 'AFTERNOON', 'NIGHT', 'MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'HOTEL'])
 
-function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone, onCancel }: {
+function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone, onCancel, dayOptions, currentDate, onMoveToDay }: {
   section: EditorSection
   onChange: (updates: Partial<SectionData>) => void
   onDelete: () => void
@@ -456,7 +456,11 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
   onMoveDown?: () => void
   onDone?: () => void
   onCancel?: () => void
+  dayOptions?: { date: string; label: string }[]
+  currentDate?: string
+  onMoveToDay?: (targetDate: string) => void
 }) {
+  const [moveDayTarget, setMoveDayTarget] = useState(currentDate ?? '')
   const meta = findMeta(section.type)
   if (!meta) return null
 
@@ -520,19 +524,43 @@ function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, 
         : <GeneralEditor section={section} onChange={onChange} />
       }
       {onDone && (
-        <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center justify-between">
-          <button onClick={onDelete} className="text-xs font-medium text-red-400 hover:text-red-600 transition">
-            Delete
-          </button>
-          <div className="flex items-center gap-3">
-            {onCancel && (
-              <button onClick={onCancel} className="text-xs font-medium text-gray-400 hover:text-gray-600 transition">
-                Cancel
-              </button>
-            )}
-            <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
-              Save
+        <div className="mt-3 pt-3 border-t border-gray-200/60 space-y-2">
+          {dayOptions && dayOptions.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 whitespace-nowrap">Move to:</span>
+              <select
+                value={moveDayTarget}
+                onChange={e => setMoveDayTarget(e.target.value)}
+                className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
+              >
+                {dayOptions.map(opt => (
+                  <option key={opt.date} value={opt.date}>{opt.label}</option>
+                ))}
+              </select>
+              {moveDayTarget !== currentDate && onMoveToDay && (
+                <button
+                  onClick={() => onMoveToDay(moveDayTarget)}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition whitespace-nowrap"
+                >
+                  Move →
+                </button>
+              )}
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <button onClick={onDelete} className="text-xs font-medium text-red-400 hover:text-red-600 transition">
+              Delete
             </button>
+            <div className="flex items-center gap-3">
+              {onCancel && (
+                <button onClick={onCancel} className="text-xs font-medium text-gray-400 hover:text-gray-600 transition">
+                  Cancel
+                </button>
+              )}
+              <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -829,6 +857,51 @@ export default function TripDayPage() {
     setSectionItems(s => s.filter(item => item._id !== id))
   }
 
+  const handleMoveToDay = async (sectionId: string, targetDate: string, currentItems: EditorSection[]) => {
+    const section = currentItems.find(s => s._id === sectionId)
+    if (!section) return
+    setSaving(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
+
+    // Save current day without this section
+    const newItems = currentItems.filter(s => s._id !== sectionId)
+    const notesJson = newItems.length > 0 ? JSON.stringify(newItems.map(({ _id, ...s }) => s)) : null
+    await supabase.from('trip_days').upsert(
+      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson, location: location || null },
+      { onConflict: 'trip_id,date' }
+    )
+    setSectionItems(newItems)
+    setEditingId(null)
+    setEditSnapshot(null)
+
+    // Append section to target day
+    const { data: targetDay } = await supabase.from('trip_days')
+      .select('notes, title, location')
+      .eq('trip_id', params.id)
+      .eq('date', targetDate)
+      .maybeSingle()
+    const targetSections = targetDay ? notesToSectionData(targetDay.notes) : []
+    const { _id, ...sectionData } = section
+    const newTargetNotes = JSON.stringify([...targetSections, sectionData])
+    await supabase.from('trip_days').upsert(
+      { trip_id: params.id, user_id: user.id, date: targetDate,
+        title: (targetDay as any)?.title || null, notes: newTargetNotes, location: (targetDay as any)?.location || null },
+      { onConflict: 'trip_id,date' }
+    )
+
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const dayOptions = allDates.map((date, i) => {
+    const title = days.find(d => d.date === date)?.title
+    const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    return { date, label: `Day ${i + 1} — ${dateLabel}${title ? ` · ${title}` : ''}` }
+  })
+
   // Indexed 1:1 with sectionItems (may contain nulls); TravelBanner uses the filtered version
   const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
   const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
@@ -1021,6 +1094,14 @@ export default function TripDayPage() {
                                 const withTitles = await generateMissingTitles(sectionItems)
                                 setSectionItems(withTitles)
                                 await save(withTitles)
+                              }}
+                              dayOptions={dayOptions}
+                              currentDate={params.date}
+                              onMoveToDay={async (targetDate) => {
+                                setEditSnapshot(null)
+                                const withTitles = await generateMissingTitles(sectionItems)
+                                setSectionItems(withTitles)
+                                await handleMoveToDay(item._id, targetDate, withTitles)
                               }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
