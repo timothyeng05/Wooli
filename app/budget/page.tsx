@@ -42,6 +42,12 @@ export default async function BudgetDashboard() {
     .select('id, name, color, icon, is_income, is_transfer, parent_id')
     .eq('user_id', user.id) as any
 
+  const memberResult = await supabase
+    .from('household_members')
+    .select('id, full_name, display_name, color, sort_order, is_shared')
+    .eq('user_id', user.id)
+    .order('sort_order', { ascending: true })
+
   const transactions: CashFlowTransaction[] = allTxns.map((t: any) => ({
     id: t.id,
     amount: Number(t.amount),
@@ -59,6 +65,7 @@ export default async function BudgetDashboard() {
       <CashFlowClient
         transactions={transactions}
         categories={categories}
+        members={memberResult.data ?? []}
         currentYear={year}
         currentMonth={month}
       />

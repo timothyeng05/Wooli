@@ -10,18 +10,21 @@ export async function POST() {
 
   const { data: items } = await supabase
     .from('plaid_items')
-    .select('item_id, access_token, cursor')
+    .select('item_id, access_token, cursor, default_owner')
     .eq('user_id', user.id)
 
   if (!items?.length) return NextResponse.json({ added: 0, modified: 0, removed: 0 })
 
-  // Build account_id → display name map for enriching transactions
+  // Build account_id → display name and owner maps
   const { data: plaidAccounts } = await supabase
     .from('plaid_accounts')
-    .select('account_id, name, mask')
+    .select('account_id, name, mask, owner')
     .eq('user_id', user.id)
   const accountNameMap = new Map(
     (plaidAccounts ?? []).map(a => [a.account_id, a.mask ? `${a.name} ···${a.mask}` : a.name])
+  )
+  const accountOwnerMap = new Map(
+    (plaidAccounts ?? []).map(a => [a.account_id, a.owner ?? null])
   )
 
   const { data: allCategories } = await supabase
@@ -93,7 +96,7 @@ export async function POST() {
             transacted_at: t.date + 'T00:00:00',
             category_id: isTransfer ? null : (categoryMap.get(t.transaction_id) ?? null),
             is_transfer: isTransfer,
-            owner: 'Timothy Eng',
+            owner: accountOwnerMap.get(t.account_id) ?? null,
           }
         })
         await supabase.from('transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })

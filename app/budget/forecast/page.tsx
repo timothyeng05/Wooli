@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import ForecastClient, { type IncomeStream, type ForecastSettings } from '@/app/components/budget/ForecastClient'
+import ForecastClient, { type IncomeStream, type ForecastSettings, type ForecastMemberSetting } from '@/app/components/budget/ForecastClient'
 import type { Goal } from '@/app/components/budget/GoalsPageClient'
 
 export default async function ForecastPage() {
@@ -21,6 +21,8 @@ export default async function ForecastPage() {
     { data: manualAccounts },
     { data: goals },
     { data: recentTxns },
+    { data: members },
+    { data: memberSettingsRows },
   ] = await Promise.all([
     supabase
       .from('forecast_income_streams')
@@ -52,6 +54,15 @@ export default async function ForecastPage() {
       .eq('user_id', user.id)
       .gte('transacted_at', threeMonthsAgo)
       .lte('transacted_at', thisMonth) as any,
+    supabase
+      .from('household_members')
+      .select('id, full_name, display_name, color, sort_order, is_shared')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('forecast_member_settings')
+      .select('member_full_name, age, retirement_age')
+      .eq('user_id', user.id),
   ])
 
   // Starting balances from accounts
@@ -80,11 +91,13 @@ export default async function ForecastPage() {
     expense_monthly: settingsRow?.expense_monthly ?? avgMonthlyExpenses,
     expense_growth_rate: settingsRow?.expense_growth_rate ?? 3,
     investment_growth_rate: settingsRow?.investment_growth_rate ?? 7,
-    tim_age: settingsRow?.tim_age ?? null,
-    tim_retirement_age: settingsRow?.tim_retirement_age ?? null,
-    jess_age: settingsRow?.jess_age ?? null,
-    jess_retirement_age: settingsRow?.jess_retirement_age ?? null,
   }
+
+  const memberSettings: ForecastMemberSetting[] = (memberSettingsRows ?? []).map(r => ({
+    member_full_name: r.member_full_name,
+    age: r.age ?? null,
+    retirement_age: r.retirement_age ?? null,
+  }))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -93,12 +106,14 @@ export default async function ForecastPage() {
         <ForecastClient
           streams={(streams ?? []) as IncomeStream[]}
           settings={settings}
+          memberSettings={memberSettings}
           goals={(goals ?? []) as Pick<Goal, 'name' | 'target_date' | 'target_amount' | 'color'>[]}
           startingCash={cash}
           startingInvestments={investments}
           startingLiabilities={liabilities}
           userId={user.id}
           settingsExist={!!settingsRow}
+          members={members ?? []}
         />
       </div>
     </div>

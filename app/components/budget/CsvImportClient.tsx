@@ -13,13 +13,7 @@ interface ParsedRow {
   owner: string | null
 }
 
-const OWNER_COLORS: Record<string, string> = {
-  'Timothy Eng': 'bg-blue-100 text-blue-700',
-  'Jessica Li':  'bg-rose-100 text-rose-700',
-  'Shared':      'bg-gray-100 text-gray-600',
-}
-
-const VALID_OWNERS = new Set(['Timothy Eng', 'Jessica Li', 'Shared'])
+interface HouseholdMember { id: string; full_name: string; display_name: string; color: string; sort_order: number; is_shared: boolean }
 
 // Handles quoted fields with embedded commas
 function parseCSVLine(line: string): string[] {
@@ -41,7 +35,7 @@ function parseCSVLine(line: string): string[] {
   return result
 }
 
-function parseCSV(text: string): ParsedRow[] {
+function parseCSV(text: string, validOwners: Set<string>): ParsedRow[] {
   const lines = text.split('\n').filter(l => l.trim())
   if (lines.length < 2) return []
   const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase())
@@ -62,7 +56,7 @@ function parseCSV(text: string): ParsedRow[] {
     if (!isFinite(amountRaw)) continue
 
     const ownerRaw = cols[iOwner]?.trim() ?? ''
-    const owner = VALID_OWNERS.has(ownerRaw) ? ownerRaw : null
+    const owner = validOwners.has(ownerRaw) ? ownerRaw : null
 
     rows.push({
       date:     cols[iDate]?.trim()     ?? '',
@@ -77,7 +71,8 @@ function parseCSV(text: string): ParsedRow[] {
   return rows
 }
 
-export default function CsvImportClient() {
+export default function CsvImportClient({ members = [] }: { members?: HouseholdMember[] }) {
+  const validOwners = new Set(members.map(m => m.full_name))
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<ParsedRow[]>([])
@@ -95,7 +90,7 @@ export default function CsvImportClient() {
     setFileName(file.name)
     const reader = new FileReader()
     reader.onload = e => {
-      const parsed = parseCSV(e.target?.result as string)
+      const parsed = parseCSV(e.target?.result as string, validOwners)
       setRows(parsed)
       setStatus('idle')
       setResult(null)
@@ -198,14 +193,18 @@ export default function CsvImportClient() {
             <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
               <p className="text-xs text-gray-400 mb-2">By owner</p>
               <div className="space-y-1">
-                {Object.entries(ownerCounts).map(([name, count]) => (
-                  <div key={name} className="flex items-center justify-between gap-2">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OWNER_COLORS[name] ?? 'bg-gray-100 text-gray-500'}`}>
-                      {name === 'Timothy Eng' ? 'Tim' : name === 'Jessica Li' ? 'Jess' : name}
-                    </span>
-                    <span className="text-xs font-medium text-gray-700">{count.toLocaleString()}</span>
-                  </div>
-                ))}
+                {Object.entries(ownerCounts).map(([name, count]) => {
+                  const m = members.find(x => x.full_name === name)
+                  return (
+                    <div key={name} className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: m ? `${m.color}22` : '#f3f4f6', color: m?.color ?? '#6b7280' }}>
+                        {m?.display_name ?? name}
+                      </span>
+                      <span className="text-xs font-medium text-gray-700">{count.toLocaleString()}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -233,11 +232,15 @@ export default function CsvImportClient() {
                         {r.amount >= 0 ? '+' : ''}${Math.abs(r.amount).toFixed(2)}
                       </td>
                       <td className="px-3 py-2">
-                        {r.owner && (
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OWNER_COLORS[r.owner] ?? 'bg-gray-100 text-gray-500'}`}>
-                            {r.owner === 'Timothy Eng' ? 'Tim' : r.owner === 'Jessica Li' ? 'Jess' : r.owner}
-                          </span>
-                        )}
+                        {r.owner && (() => {
+                          const m = members.find(x => x.full_name === r.owner)
+                          return (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: m ? `${m.color}22` : '#f3f4f6', color: m?.color ?? '#6b7280' }}>
+                              {m?.display_name ?? r.owner}
+                            </span>
+                          )
+                        })()}
                       </td>
                     </tr>
                   ))}
@@ -306,9 +309,9 @@ export default function CsvImportClient() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Use Owner column from CSV</option>
-                <option value="Timothy Eng">Tim</option>
-                <option value="Jessica Li">Jess</option>
-                <option value="Shared">Shared</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.full_name}>{m.display_name}</option>
+                ))}
               </select>
             </div>
 

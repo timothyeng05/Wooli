@@ -5,43 +5,10 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
 import { useConfirm } from '@/app/components/ui/ToastProvider'
-
-const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
-
-interface Category {
-  id: string
-  name: string
-  color: string
-  icon: string | null
-  is_income: boolean
-  is_transfer: boolean
-  parent_id: string | null
-}
-
-interface Trip {
-  id: string
-  name: string
-  start_date?: string
-  end_date?: string
-}
-
-interface Transaction {
-  id: string
-  amount: number
-  description: string | null
-  merchant: string | null
-  transacted_at: string
-  plaid_transaction_id: string | null
-  is_transfer: boolean | null
-  is_pending: boolean | null
-  owner: string | null
-  account_name: string | null
-  trip_id: string | null
-  categories: { id: string; name: string; color: string; icon?: string | null } | null
-  trips: { id: string; name: string } | null
-}
-
-type SortOrder = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
+import { type Transaction, type Category, type Trip, type SortOrder, type HouseholdMember } from './transaction-types'
+import CategoryPicker from './CategoryPicker'
+import FilterPanel from './FilterPanel'
+import TransactionReviewSheet from './TransactionReviewSheet'
 
 function groupByDate(txns: Transaction[], asc = false) {
   const groups = new Map<string, Transaction[]>()
@@ -55,427 +22,31 @@ function groupByDate(txns: Transaction[], asc = false) {
   )
 }
 
-// ── Owner avatar ───────────────────────────────────────────────────────────────
-function OwnerAvatar({ owner }: { owner: string | null }) {
+function OwnerAvatar({ owner, members }: { owner: string | null; members: HouseholdMember[] }) {
   if (!owner) return null
-  const initial = owner === 'Timothy Eng' ? 'T' : owner === 'Jessica Li' ? 'J' : 'S'
-  const cls = owner === 'Timothy Eng'
-    ? 'bg-blue-500' : owner === 'Jessica Li' ? 'bg-rose-400' : 'bg-gray-400'
+  const member = members.find(m => m.full_name === owner)
+  const initial = (member?.display_name ?? owner)[0].toUpperCase()
+  const color = member?.color ?? '#6b7280'
   return (
-    <div className={`w-7 h-7 rounded-full ${cls} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+      style={{ backgroundColor: color }}>
       {initial}
     </div>
   )
 }
 
-// ── Shared checkbox ────────────────────────────────────────────────────────────
-function Checkbox({ checked }: { checked: boolean }) {
-  return (
-    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition ${
-      checked ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
-    }`}>
-      {checked && (
-        <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      )}
-    </div>
-  )
-}
-
-// ── Category picker ────────────────────────────────────────────────────────────
-function CategoryPicker({
-  categories,
-  currentCatId,
-  isTransfer,
-  onPick,
-  onClose,
-}: {
-  categories: Category[]
-  currentCatId: string | null
-  isTransfer: boolean
-  onPick: (catId: string) => void
-  onClose: () => void
-}) {
-  const parents  = categories.filter(c => !c.parent_id)
-  const children = categories.filter(c => !!c.parent_id)
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30" />
-      <div
-        className="relative bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-        style={{ maxHeight: '85dvh' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <span className="text-base font-semibold text-gray-900">Change Category</span>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition p-1 -mr-1">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto" style={{ maxHeight: 'calc(85dvh - 73px)' }}>
-          {/* Uncategorized */}
-          <button
-            onClick={() => onPick('')}
-            className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition"
-          >
-            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-sm flex-shrink-0">
-              <span className="text-gray-400 text-xs font-bold">?</span>
-            </div>
-            <span className="text-sm text-gray-700 flex-1 text-left">Uncategorized</span>
-            {!currentCatId && !isTransfer && (
-              <svg className="w-4 h-4 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </button>
-
-          {/* Transfer */}
-          <button
-            onClick={() => onPick('__transfer__')}
-            className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition"
-          >
-            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-sm flex-shrink-0">↔️</div>
-            <span className="text-sm text-gray-700 flex-1 text-left">Transfer</span>
-            {isTransfer && (
-              <svg className="w-4 h-4 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </button>
-
-          {/* Categories grouped by parent */}
-          {parents.map(parent => {
-            const subs = children.filter(c => c.parent_id === parent.id)
-            const pEmoji = getCatEmoji(parent.name, parent.icon)
-
-            if (subs.length === 0) {
-              // Parent with no children — show as selectable
-              return (
-                <button
-                  key={parent.id}
-                  onClick={() => onPick(parent.id)}
-                  className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition"
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                    style={{ backgroundColor: parent.color ? `${parent.color}22` : '#f3f4f6' }}>
-                    {pEmoji}
-                  </div>
-                  <span className="text-sm text-gray-700 flex-1 text-left">{parent.name}</span>
-                  {currentCatId === parent.id && (
-                    <svg className="w-4 h-4 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-              )
-            }
-
-            return (
-              <div key={parent.id}>
-                {/* Section header (non-selectable parent) */}
-                <div className="flex items-center gap-2 px-5 py-2 bg-gray-50 border-b border-gray-100">
-                  <span className="text-sm">{pEmoji}</span>
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{parent.name}</span>
-                </div>
-                {subs.map(child => {
-                  const cEmoji = getCatEmoji(child.name, child.icon)
-                  return (
-                    <button
-                      key={child.id}
-                      onClick={() => onPick(child.id)}
-                      className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 hover:bg-gray-50 transition"
-                    >
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                        style={{ backgroundColor: child.color ? `${child.color}22` : parent.color ? `${parent.color}22` : '#f3f4f6' }}>
-                        {cEmoji}
-                      </div>
-                      <span className="text-sm text-gray-700 flex-1 text-left">{child.name}</span>
-                      {currentCatId === child.id && (
-                        <svg className="w-4 h-4 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Filter panel ───────────────────────────────────────────────────────────────
-type FilterScreen = 'main' | 'sort' | 'accounts' | 'categories' | 'owners' | 'trips'
-
-const SORTS: { value: SortOrder; label: string }[] = [
-  { value: 'date-desc',   label: 'Date (new to old)' },
-  { value: 'date-asc',    label: 'Date (old to new)' },
-  { value: 'amount-desc', label: 'Amount (high to low)' },
-  { value: 'amount-asc',  label: 'Amount (low to high)' },
-]
-
-const SORT_LABEL: Record<SortOrder, string> = Object.fromEntries(SORTS.map(s => [s.value, s.label])) as Record<SortOrder, string>
-
-function FilterPanel({
-  onClose, sortOrder, onSort,
-  accounts, selectedAccounts, onAccountsChange,
-  categories, selectedCatIds, onCatsChange,
-  selectedOwners, onOwnersChange,
-  trips, selectedTripIds, onTripsChange,
-  onClear,
-}: {
-  onClose: () => void
-  sortOrder: SortOrder
-  onSort: (s: SortOrder) => void
-  accounts: string[]
-  selectedAccounts: Set<string>
-  onAccountsChange: (s: Set<string>) => void
-  categories: Category[]
-  selectedCatIds: Set<string>
-  onCatsChange: (s: Set<string>) => void
-  selectedOwners: Set<string>
-  onOwnersChange: (s: Set<string>) => void
-  trips: Trip[]
-  selectedTripIds: Set<string>
-  onTripsChange: (s: Set<string>) => void
-  onClear: () => void
-}) {
-  const [screen, setScreen] = useState<FilterScreen>('main')
-
-  const toggleAccount = (a: string) => {
-    const next = new Set(selectedAccounts); next.has(a) ? next.delete(a) : next.add(a); onAccountsChange(next)
-  }
-  const toggleCat = (id: string) => {
-    const next = new Set(selectedCatIds); next.has(id) ? next.delete(id) : next.add(id); onCatsChange(next)
-  }
-  const toggleOwner = (o: string) => {
-    const next = new Set(selectedOwners); next.has(o) ? next.delete(o) : next.add(o); onOwnersChange(next)
-  }
-  const toggleTrip = (id: string) => {
-    const next = new Set(selectedTripIds); next.has(id) ? next.delete(id) : next.add(id); onTripsChange(next)
-  }
-
-  const topCats = categories.filter(c => !c.parent_id)
-
-  const SCREEN_TITLE: Record<FilterScreen, string> = {
-    main: 'Filters', sort: 'Sort By',
-    accounts: 'Accounts', categories: 'Categories', owners: 'Owners', trips: 'Trips',
-  }
-
-  // Rows shown on the main screen
-  const mainRows: { key: FilterScreen; label: string; count: number; hidden?: boolean }[] = [
-    { key: 'accounts',   label: 'Accounts',   count: selectedAccounts.size, hidden: accounts.length === 0 },
-    { key: 'categories', label: 'Categories', count: selectedCatIds.size },
-    { key: 'owners',     label: 'Owners',     count: selectedOwners.size },
-    { key: 'trips',      label: 'Trips',      count: selectedTripIds.size, hidden: trips.length === 0 },
-  ]
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30" />
-      <div
-        className="relative bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-        style={{ maxHeight: '85dvh' }}
-      >
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
-          {screen !== 'main' ? (
-            <button onClick={() => setScreen('main')}
-              className="text-blue-600 hover:text-blue-700 transition -ml-1 p-1">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-          ) : null}
-          <span className="text-base font-semibold text-gray-900 flex-1">{SCREEN_TITLE[screen]}</span>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition p-1 -mr-1">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* ── Body ───────────────────────────────────────────────────────── */}
-        <div className="overflow-y-auto" style={{ maxHeight: 'calc(85dvh - 130px)' }}>
-
-          {/* Main screen */}
-          {screen === 'main' && (
-            <>
-              {/* Sort By — single drill-down row */}
-              <button
-                onClick={() => setScreen('sort')}
-                className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-              >
-                <div className="text-left">
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Sort By</p>
-                  <p className="text-sm text-gray-800">{SORT_LABEL[sortOrder]}</p>
-                </div>
-                <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-
-              {/* Filter By header */}
-              <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Filter By</p>
-              </div>
-
-              {/* Filter rows */}
-              {mainRows.filter(r => !r.hidden).map(row => (
-                <button
-                  key={row.key}
-                  onClick={() => setScreen(row.key)}
-                  className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-                >
-                  <span className="text-sm text-gray-800">{row.label}</span>
-                  <div className="flex items-center gap-2">
-                    {row.count > 0 && (
-                      <span className="text-xs font-semibold text-white bg-blue-600 rounded-full w-5 h-5 flex items-center justify-center">
-                        {row.count}
-                      </span>
-                    )}
-                    <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
-                </button>
-              ))}
-            </>
-          )}
-
-          {/* Sort sub-screen */}
-          {screen === 'sort' && SORTS.map(s => (
-            <button
-              key={s.value}
-              onClick={() => { onSort(s.value); setScreen('main') }}
-              className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-            >
-              <span className={`text-sm ${sortOrder === s.value ? 'font-semibold text-blue-600' : 'text-gray-800'}`}>
-                {s.label}
-              </span>
-              {sortOrder === s.value && (
-                <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
-            </button>
-          ))}
-
-          {/* Accounts sub-screen */}
-          {screen === 'accounts' && accounts.map(a => (
-            <button
-              key={a}
-              onClick={() => toggleAccount(a)}
-              className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-            >
-              <Checkbox checked={selectedAccounts.has(a)} />
-              <span className="text-sm text-gray-800">{a}</span>
-            </button>
-          ))}
-
-          {/* Categories sub-screen */}
-          {screen === 'categories' && topCats.map(cat => {
-            const subs = categories.filter(c => c.parent_id === cat.id)
-            if (subs.length === 0) {
-              // No children — show as a plain selectable row
-              return (
-                <button key={cat.id} onClick={() => toggleCat(cat.id)}
-                  className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition">
-                  <Checkbox checked={selectedCatIds.has(cat.id)} />
-                  <span className="text-sm text-gray-800">{getCatEmoji(cat.name, cat.icon)} {cat.name}</span>
-                </button>
-              )
-            }
-            // Has children — section header + sub-category rows
-            return (
-              <div key={cat.id}>
-                <div className="px-5 py-2 bg-gray-50 border-b border-gray-100">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                    {getCatEmoji(cat.name, cat.icon)} {cat.name}
-                  </span>
-                </div>
-                {subs.map(sub => (
-                  <button key={sub.id} onClick={() => toggleCat(sub.id)}
-                    className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition">
-                    <Checkbox checked={selectedCatIds.has(sub.id)} />
-                    <span className="text-sm text-gray-800">{getCatEmoji(sub.name, sub.icon)} {sub.name}</span>
-                  </button>
-                ))}
-              </div>
-            )
-          })}
-
-          {/* Owners sub-screen */}
-          {screen === 'owners' && OWNERS.map(o => {
-            const label = o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : 'Shared'
-            return (
-              <button
-                key={o}
-                onClick={() => toggleOwner(o)}
-                className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-              >
-                <Checkbox checked={selectedOwners.has(o)} />
-                <span className="text-sm text-gray-800">{label}</span>
-              </button>
-            )
-          })}
-
-          {/* Trips sub-screen */}
-          {screen === 'trips' && trips.map(tp => (
-            <button
-              key={tp.id}
-              onClick={() => toggleTrip(tp.id)}
-              className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition"
-            >
-              <Checkbox checked={selectedTripIds.has(tp.id)} />
-              <span className="text-sm text-gray-800">✈ {tp.name}</span>
-            </button>
-          ))}
-
-        </div>
-
-        {/* ── Footer ─────────────────────────────────────────────────────── */}
-        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 bg-white">
-          <button
-            onClick={() => { onClear(); setScreen('main') }}
-            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
-          >
-            Clear all
-          </button>
-          <button
-            onClick={screen === 'main' ? onClose : () => setScreen('main')}
-            className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
-          >
-            {screen === 'main' ? 'Apply' : 'Done'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Main ───────────────────────────────────────────────────────────────────────
 export default function TransactionList({
   transactions,
   categories = [],
   trips = [],
+  members = [],
   initialOwner,
   initialType,
 }: {
   transactions: Transaction[]
   categories?: Category[]
   trips?: Trip[]
+  members?: HouseholdMember[]
   initialOwner?: string
   initialType?: 'income' | 'expense'
 }) {
@@ -497,52 +68,11 @@ export default function TransactionList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
 
-  // ── Category picker ───────────────────────────────────────────────────────
+  // ── Category picker + review sheet ────────────────────────────────────────
   const [catPickerTx, setCatPickerTx] = useState<Transaction | null>(null)
-
-  // ── Review panel ──────────────────────────────────────────────────────────
   const [reviewTxn, setReviewTxn] = useState<Transaction | null>(null)
-  const [reviewIsTransfer, setReviewIsTransfer] = useState(false)
-  const [reviewCatId, setReviewCatId] = useState('')
-  const [reviewOwner, setReviewOwner] = useState('')
-  const [reviewTripId, setReviewTripId] = useState('')
-  const [reviewSaving, setReviewSaving] = useState(false)
 
-  const openReview = (t: Transaction) => {
-    setReviewTxn(t)
-    setReviewIsTransfer(!!t.is_transfer)
-    setReviewCatId(t.categories?.id ?? '')
-    setReviewOwner(t.owner ?? '')
-    setReviewTripId(t.trip_id ?? '')
-  }
-
-  const saveReview = async () => {
-    if (!reviewTxn) return
-    setReviewSaving(true)
-    const supabase = createClient()
-    const catId = reviewIsTransfer ? null : (reviewCatId || null)
-    const tripId = reviewTripId || null
-    await supabase.from('transactions').update({
-      is_transfer: reviewIsTransfer,
-      category_id: catId,
-      owner: reviewOwner || null,
-      trip_id: tripId,
-    }).eq('id', reviewTxn.id)
-    const found = catId ? (categories.find(c => c.id === catId) ?? null) : null
-    const foundTrip = tripId ? (trips.find(tp => tp.id === tripId) ?? null) : null
-    setItems(prev => prev.map(t =>
-      t.id === reviewTxn.id
-        ? { ...t, is_transfer: reviewIsTransfer, categories: found ? { id: found.id, name: found.name, color: found.color } : null, owner: reviewOwner || null, trip_id: tripId, trips: foundTrip ? { id: foundTrip.id, name: foundTrip.name } : null }
-        : t
-    ))
-    setReviewSaving(false)
-    setReviewTxn(null)
-  }
-
-  const parents = categories.filter(c => !c.parent_id)
-  const children = categories.filter(c => !!c.parent_id)
-
-  // ── Category inline change (from review panel) ────────────────────────────
+  // ── Category inline change ────────────────────────────────────────────────
   const handleCategoryChange = async (txId: string, catId: string) => {
     const supabase = createClient()
     const newCatId = catId || null
@@ -559,7 +89,6 @@ export default function TransactionList({
     ))
   }
 
-  // ── Category picker handler ───────────────────────────────────────────────
   const handleCatPick = async (catId: string) => {
     if (!catPickerTx) return
     const txId = catPickerTx.id
@@ -617,7 +146,6 @@ export default function TransactionList({
     setItems(prev => prev.filter(t => !ids.includes(t.id)))
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
-
   const bulkTagTrip = async (tripId: string) => {
     setBulkLoading(true)
     const supabase = createClient()
@@ -647,7 +175,6 @@ export default function TransactionList({
         const txCatId = t.categories?.id ?? ''
         const txCat = categories.find(c => c.id === txCatId)
         const txParentId = txCat?.parent_id ?? ''
-        // Match exact sub-category, OR its parent if parent is selected (catches leaf categories with no sub-categories selected)
         if (!selectedCatIds.has(txCatId) && !selectedCatIds.has(txParentId)) return false
       }
       if (selectedOwners.size > 0 && !selectedOwners.has(t.owner ?? '')) return false
@@ -681,18 +208,10 @@ export default function TransactionList({
     setTypeFilter(null)
   }
 
-  const removeAccountFilter = (a: string) => {
-    const n = new Set(selectedAccounts); n.delete(a); setSelectedAccounts(n)
-  }
-  const removeCatFilter = (id: string) => {
-    const n = new Set(selectedCatIds); n.delete(id); setSelectedCatIds(n)
-  }
-  const removeOwnerFilter = (o: string) => {
-    const n = new Set(selectedOwners); n.delete(o); setSelectedOwners(n)
-  }
-  const removeTripFilter = (id: string) => {
-    const n = new Set(selectedTripIds); n.delete(id); setSelectedTripIds(n)
-  }
+  const removeAccountFilter = (a: string) => { const n = new Set(selectedAccounts); n.delete(a); setSelectedAccounts(n) }
+  const removeCatFilter    = (id: string) => { const n = new Set(selectedCatIds);    n.delete(id); setSelectedCatIds(n) }
+  const removeOwnerFilter  = (o: string)  => { const n = new Set(selectedOwners);    n.delete(o);  setSelectedOwners(n) }
+  const removeTripFilter   = (id: string) => { const n = new Set(selectedTripIds);   n.delete(id); setSelectedTripIds(n) }
 
   if (items.length === 0) {
     return (
@@ -704,12 +223,13 @@ export default function TransactionList({
   }
 
   const transferCatIds = new Set(categories.filter(c => c.is_transfer).map(c => c.id))
+  const parents  = categories.filter(c => !c.parent_id)
+  const children = categories.filter(c => !!c.parent_id)
 
   return (
     <div>
       {/* ── Search + filter bar ────────────────────────────────────────────── */}
       <div className="flex gap-2 pt-4 pb-2">
-        {/* Search */}
         <div className="relative flex-1">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -733,7 +253,6 @@ export default function TransactionList({
           )}
         </div>
 
-        {/* Filter button */}
         <button
           onClick={() => setFilterOpen(true)}
           className={`relative px-3 py-2.5 border rounded-xl transition flex items-center gap-1.5 text-sm font-medium ${
@@ -752,7 +271,6 @@ export default function TransactionList({
           )}
         </button>
 
-        {/* Select button */}
         <button
           onClick={() => selectMode ? cancelSelect() : setSelectMode(true)}
           className={`px-3 py-2.5 border rounded-xl text-sm font-medium transition ${
@@ -791,7 +309,7 @@ export default function TransactionList({
           })}
           {[...selectedOwners].map(o => (
             <span key={o} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
-              {o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : 'Shared'}
+              {members.find(m => m.full_name === o)?.display_name ?? o}
               <button onClick={() => removeOwnerFilter(o)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
             </span>
           ))}
@@ -856,7 +374,6 @@ export default function TransactionList({
 
           return (
             <div key={date || 'flat'}>
-              {/* Date header */}
               {date && (
                 <div className="flex items-center justify-between py-2.5 mt-2">
                   <span className="text-sm font-semibold text-gray-500">
@@ -870,7 +387,6 @@ export default function TransactionList({
                 </div>
               )}
 
-              {/* Rows */}
               <div className="divide-y divide-gray-50">
                 {(txns as Transaction[]).map(t => {
                   const name = t.merchant || t.description || 'Unknown'
@@ -888,9 +404,8 @@ export default function TransactionList({
                       className={`flex items-center gap-3 py-3 cursor-pointer rounded-lg px-2 transition ${
                         selectMode && selectedIds.has(t.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
                       }`}
-                      onClick={selectMode ? () => toggleSelect(t.id) : () => openReview(t)}
+                      onClick={selectMode ? () => toggleSelect(t.id) : () => setReviewTxn(t)}
                     >
-                      {/* Checkbox */}
                       {selectMode && (
                         <input type="checkbox"
                           checked={selectedIds.has(t.id)}
@@ -899,7 +414,6 @@ export default function TransactionList({
                           className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-blue-600" />
                       )}
 
-                      {/* Category icon — tap to change category */}
                       {!selectMode && (
                         <button
                           onClick={e => { e.stopPropagation(); setCatPickerTx(t) }}
@@ -914,7 +428,6 @@ export default function TransactionList({
                         </button>
                       )}
 
-                      {/* Name + pending */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
@@ -939,7 +452,6 @@ export default function TransactionList({
                         </div>
                       </div>
 
-                      {/* Amount */}
                       <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
                         t.is_pending ? 'text-amber-500'
                         : t.is_transfer ? 'text-gray-400'
@@ -949,8 +461,7 @@ export default function TransactionList({
                         {t.amount >= 0 && !t.is_transfer ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
                       </span>
 
-                      {/* Owner avatar */}
-                      <OwnerAvatar owner={t.owner} />
+                      <OwnerAvatar owner={t.owner} members={members} />
                     </div>
                   )
                 })}
@@ -983,6 +494,7 @@ export default function TransactionList({
           categories={categories}
           selectedCatIds={selectedCatIds}
           onCatsChange={setSelectedCatIds}
+          members={members}
           selectedOwners={selectedOwners}
           onOwnersChange={setSelectedOwners}
           trips={trips}
@@ -992,114 +504,20 @@ export default function TransactionList({
         />
       )}
 
-      {/* ── Review panel ───────────────────────────────────────────────────── */}
+      {/* ── Review sheet ───────────────────────────────────────────────────── */}
       {reviewTxn && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setReviewTxn(null)}>
-          <div className="absolute inset-0 bg-black/20" />
-          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-sm mx-0 sm:mx-4 p-6 space-y-5"
-            onClick={e => e.stopPropagation()}>
-            <div>
-              <p className="font-semibold text-gray-900 truncate">{reviewTxn.merchant || reviewTxn.description || 'Transaction'}</p>
-              <p className="text-sm text-gray-400 mt-0.5">
-                {new Date(reviewTxn.transacted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                {reviewTxn.account_name && <> · {reviewTxn.account_name}</>}
-              </p>
-              <p className={`text-2xl font-bold mt-1 ${reviewTxn.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                {reviewTxn.amount >= 0 ? '+' : ''}${Math.abs(reviewTxn.amount).toFixed(2)}
-              </p>
-            </div>
-
-            {/* Type */}
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Type</p>
-              <div className="flex gap-2">
-                {(['income/expense', 'transfer'] as const).map(type => (
-                  <button key={type} onClick={() => setReviewIsTransfer(type === 'transfer')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                      (type === 'transfer') === reviewIsTransfer
-                        ? 'bg-gray-900 text-white border-gray-900'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                    }`}>
-                    {type === 'transfer' ? 'Transfer' : 'Income / Expense'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Category */}
-            {!reviewIsTransfer && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Category</p>
-                <select value={reviewCatId} onChange={e => setReviewCatId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Uncategorized</option>
-                  {parents.map(parent => {
-                    const subs = children.filter(c => c.parent_id === parent.id)
-                    const pEmoji = getCatEmoji(parent.name, parent.icon)
-                    if (subs.length === 0) return <option key={parent.id} value={parent.id}>{pEmoji} {parent.name}</option>
-                    return (
-                      <optgroup key={parent.id} label={`${pEmoji} ${parent.name}`}>
-                        {subs.map(child => (
-                          <option key={child.id} value={child.id}>{getCatEmoji(child.name, child.icon)} {child.name}</option>
-                        ))}
-                      </optgroup>
-                    )
-                  })}
-                </select>
-              </div>
-            )}
-
-            {/* Trip */}
-            {trips.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Trip</p>
-                <select value={reviewTripId} onChange={e => setReviewTripId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">None</option>
-                  {trips.map(tp => (
-                    <option key={tp.id} value={tp.id}>{tp.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Owner */}
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Owner</p>
-              <div className="flex gap-2">
-                {(['', ...OWNERS] as const).map(o => (
-                  <button key={o} onClick={() => setReviewOwner(o)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${
-                      reviewOwner === o
-                        ? o === 'Timothy Eng' ? 'bg-blue-600 text-white border-blue-600'
-                          : o === 'Jessica Li' ? 'bg-rose-500 text-white border-rose-500'
-                          : o === 'Shared' ? 'bg-gray-700 text-white border-gray-700'
-                          : 'bg-gray-100 text-gray-600 border-gray-200'
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-                    }`}>
-                    {o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : o === 'Shared' ? 'Shared' : 'None'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2 pt-1">
-              <button onClick={saveReview} disabled={reviewSaving}
-                className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50">
-                {reviewSaving ? 'Saving…' : 'Save'}
-              </button>
-              <Link href={`/budget/${reviewTxn.id}`}
-                className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Edit
-              </Link>
-              <button onClick={() => { handleDelete(reviewTxn.id); setReviewTxn(null) }}
-                className="px-4 py-2.5 border border-red-100 text-red-500 rounded-lg text-sm font-medium hover:bg-red-50 transition">
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
+        <TransactionReviewSheet
+          transaction={reviewTxn}
+          categories={categories}
+          trips={trips}
+          members={members}
+          onClose={() => setReviewTxn(null)}
+          onSaved={(txId, updates) => {
+            setItems(prev => prev.map(t => t.id === txId ? { ...t, ...updates } : t))
+            setReviewTxn(null)
+          }}
+          onDelete={handleDelete}
+        />
       )}
 
       {/* ── Bulk action bar ─────────────────────────────────────────────────── */}

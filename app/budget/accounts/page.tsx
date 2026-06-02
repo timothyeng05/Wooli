@@ -18,6 +18,7 @@ export default async function AccountsPage() {
     { data: manualAccounts },
     { data: history },
     { data: netWorthHistory },
+    { data: members },
   ] = await Promise.all([
     supabase
       .from('plaid_accounts')
@@ -25,7 +26,7 @@ export default async function AccountsPage() {
       .eq('user_id', user.id),
     supabase
       .from('plaid_items')
-      .select('item_id, institution_name')
+      .select('item_id, institution_name, default_owner')
       .eq('user_id', user.id),
     supabase
       .from('accounts')
@@ -43,6 +44,11 @@ export default async function AccountsPage() {
       .select('recorded_on, net_worth')
       .eq('user_id', user.id)
       .order('recorded_on', { ascending: true }),
+    supabase
+      .from('household_members')
+      .select('id, full_name, display_name, color, sort_order, is_shared')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }),
   ])
 
   // ── Last synced timestamp (max updated_at across Plaid accounts) ──────────
@@ -155,6 +161,8 @@ export default async function AccountsPage() {
           netWorthHistory={(freshNetWorthHistory ?? []) as { recorded_on: string; net_worth: number }[]}
           userId={user.id}
           lastSynced={lastSynced}
+          members={members ?? []}
+          plaidItems={(plaidItems ?? []) as { item_id: string; institution_name: string | null; default_owner: string | null }[]}
         />
       </div>
     </div>

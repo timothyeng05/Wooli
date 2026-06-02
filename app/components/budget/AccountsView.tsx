@@ -3,14 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
-import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, OWNERS, type Account, type AccountType } from '@/lib/budget/account-utils'
+import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, type Account, type AccountType } from '@/lib/budget/account-utils'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
-const OWNER_BADGE: Record<string, string> = {
-  'Timothy Eng': 'bg-blue-100 text-blue-600',
-  'Jessica Li':  'bg-rose-100 text-rose-600',
-  'Shared':      'bg-gray-100 text-gray-500',
-}
+interface HouseholdMember { id: string; full_name: string; display_name: string; color: string; sort_order: number; is_shared: boolean }
 
 const TYPE_BADGE_COLOR: Record<AccountType, string> = {
   checking:   'bg-blue-50 text-blue-700',
@@ -30,9 +26,11 @@ function formatMoney(n: number, isLiability = false): string {
 export default function AccountsView({
   userId,
   initialAccounts,
+  members = [],
 }: {
   userId: string
   initialAccounts: Account[]
+  members?: HouseholdMember[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -109,7 +107,7 @@ export default function AccountsView({
 
       {/* Add account form */}
       {adding ? (
-        <AddAccountForm onSubmit={addAccount} onCancel={() => setAdding(false)} />
+        <AddAccountForm onSubmit={addAccount} onCancel={() => setAdding(false)} members={members} />
       ) : (
         <button
           onClick={() => setAdding(true)}
@@ -231,7 +229,7 @@ function AccountRow({
               className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
             >
               <option value="">No owner</option>
-              {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
+              {members.map(m => <option key={m.id} value={m.full_name}>{m.display_name}</option>)}
             </select>
           </div>
         </div>
@@ -254,11 +252,15 @@ function AccountRow({
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           {account.institution && <p className="text-xs text-gray-500">{account.institution}</p>}
-          {account.owner && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OWNER_BADGE[account.owner] ?? 'bg-gray-100 text-gray-500'}`}>
-              {account.owner === 'Timothy Eng' ? 'Tim' : account.owner === 'Jessica Li' ? 'Jess' : account.owner}
-            </span>
-          )}
+          {account.owner && (() => {
+            const m = members.find(x => x.full_name === account.owner)
+            return (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: m ? `${m.color}22` : '#f3f4f6', color: m?.color ?? '#6b7280' }}>
+                {m?.display_name ?? account.owner}
+              </span>
+            )
+          })()}
         </div>
       </div>
       <div className="text-right">
@@ -279,9 +281,11 @@ function AccountRow({
 function AddAccountForm({
   onSubmit,
   onCancel,
+  members = [],
 }: {
   onSubmit: (payload: { name: string; type: AccountType; institution: string; current_balance: number; owner: string }) => void
   onCancel: () => void
+  members?: HouseholdMember[]
 }) {
   const [name, setName] = useState('')
   const [institution, setInstitution] = useState('')
@@ -360,7 +364,7 @@ function AddAccountForm({
           className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
         >
           <option value="">No owner</option>
-          {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
+          {members.map(m => <option key={m.id} value={m.full_name}>{m.display_name}</option>)}
         </select>
       </div>
       <div className="flex gap-2">

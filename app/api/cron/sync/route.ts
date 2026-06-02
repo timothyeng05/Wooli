@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   const { data: allItems } = await supabase
     .from('plaid_items')
-    .select('item_id, access_token, cursor, user_id')
+    .select('item_id, access_token, cursor, user_id, default_owner')
 
   if (!allItems?.length) return NextResponse.json({ ok: true, users: 0 })
 
@@ -66,10 +66,13 @@ export async function GET(request: Request) {
 
     const { data: plaidAccts } = await supabase
       .from('plaid_accounts')
-      .select('account_id, name, mask')
+      .select('account_id, name, mask, owner')
       .eq('user_id', userId)
     const accountNameMap = new Map(
       (plaidAccts ?? []).map(a => [a.account_id, a.mask ? `${a.name} ···${a.mask}` : a.name])
+    )
+    const accountOwnerMap = new Map(
+      (plaidAccts ?? []).map(a => [a.account_id, a.owner ?? null])
     )
 
     for (const item of items) {
@@ -112,7 +115,7 @@ export async function GET(request: Request) {
               transacted_at: t.date + 'T00:00:00',
               category_id: isTransfer ? null : (categoryMap.get(t.transaction_id) ?? null),
               is_transfer: isTransfer,
-              owner: 'Timothy Eng',
+              owner: accountOwnerMap.get(t.account_id) ?? null,
             }
           })
           await supabase.from('transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })

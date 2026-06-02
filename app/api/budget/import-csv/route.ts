@@ -11,12 +11,16 @@ interface CsvRow {
   owner: string | null
 }
 
-const VALID_OWNERS = new Set(['Timothy Eng', 'Jessica Li', 'Shared'])
-
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: householdMembers } = await supabase
+    .from('household_members')
+    .select('full_name')
+    .eq('user_id', user.id)
+  const validOwners = new Set((householdMembers ?? []).map(m => m.full_name))
 
   const { rows, replace, accountNames }: { rows: CsvRow[]; replace: boolean; accountNames?: string[] } = await request.json()
 
@@ -66,7 +70,7 @@ export async function POST(request: Request) {
     .map(r => {
       const isTransfer = transferCategory.test(r.category.trim()) || transferMerchant.test(r.merchant.trim())
       const catId = isTransfer ? null : (catMap.get(r.category.toLowerCase()) ?? null)
-      const owner = r.owner && VALID_OWNERS.has(r.owner) ? r.owner : null
+      const owner = r.owner && validOwners.has(r.owner) ? r.owner : null
       const mask = extractMask(r.account)
       const plaidAccountId = mask ? (maskToPlaidId.get(mask) ?? null) : null
       return {

@@ -1,8 +1,5 @@
 export type AccountType = 'checking' | 'savings' | 'credit' | 'investment' | 'cash' | 'loan' | 'other'
 
-export const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
-export type Owner = typeof OWNERS[number]
-
 export interface Account {
   id: string
   name: string

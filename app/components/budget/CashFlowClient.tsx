@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import type { CashFlowTransaction, CashFlowCategory } from '@/app/budget/cashflow/page'
+import type { HouseholdMember } from './transaction-types'
 import { createClient } from '@/lib/supabase-client'
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -313,24 +314,7 @@ function BreakdownSection({
 }
 
 // ── Owner breakdown ───────────────────────────────────────────────────────────
-const OWNER_DISPLAY: Record<string, string> = {
-  'Timothy Eng': 'Tim',
-  'Jessica Li': 'Jess',
-  'Shared': 'Shared',
-  'Unknown': 'Unassigned',
-}
-const OWNER_COLORS: Record<string, string> = {
-  'Timothy Eng': '#3b82f6',
-  'Jessica Li': '#f43f5e',
-  'Shared': '#8b5cf6',
-}
-const OWNER_LINK: Record<string, string> = {
-  'Timothy Eng': '/budget/transactions?owner=Timothy+Eng',
-  'Jessica Li': '/budget/transactions?owner=Jessica+Li',
-  'Shared': '/budget/transactions?owner=Shared',
-}
-
-function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] }) {
+function OwnerBreakdown({ transactions, members }: { transactions: CashFlowTransaction[]; members: HouseholdMember[] }) {
   const rows = useMemo(() => {
     const map = new Map<string, { expenses: number; income: number }>()
     for (const t of transactions) {
@@ -340,17 +324,16 @@ function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] 
       else entry.income += t.amount
       map.set(key, entry)
     }
-    const order = ['Timothy Eng', 'Jessica Li', 'Shared', 'Unknown']
     return [...map.entries()]
       .sort((a, b) => {
-        const ai = order.indexOf(a[0]), bi = order.indexOf(b[0])
-        // Push Unknown to the end
         if (a[0] === 'Unknown') return 1
         if (b[0] === 'Unknown') return -1
-        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+        const aOrder = members.find(m => m.full_name === a[0])?.sort_order ?? 98
+        const bOrder = members.find(m => m.full_name === b[0])?.sort_order ?? 98
+        return aOrder - bOrder
       })
       .filter(([, v]) => v.expenses > 0 || v.income > 0)
-  }, [transactions])
+  }, [transactions, members])
 
   if (rows.length === 0) return null
 
@@ -361,11 +344,12 @@ function OwnerBreakdown({ transactions }: { transactions: CashFlowTransaction[] 
       <p className="text-sm font-bold text-gray-900 mb-3">Spending by Person</p>
       <div className="grid grid-cols-3 gap-3">
         {rows.map(([owner, { expenses, income }]) => {
-          const label = OWNER_DISPLAY[owner] ?? owner
+          const member = members.find(m => m.full_name === owner)
           const isUnknown = owner === 'Unknown'
-          const color = isUnknown ? '#9ca3af' : (OWNER_COLORS[owner] ?? '#6b7280')
+          const label = isUnknown ? 'Unassigned' : (member?.display_name ?? owner)
+          const color = isUnknown ? '#9ca3af' : (member?.color ?? '#6b7280')
           const pct = totalExpenses > 0 ? Math.round((expenses / totalExpenses) * 100) : 0
-          const href = OWNER_LINK[owner]
+          const href = isUnknown ? undefined : `/budget/transactions?owner=${encodeURIComponent(owner)}`
           const card = (
             <div
               className={`rounded-xl p-3 ${isUnknown ? 'border border-dashed border-gray-300 bg-gray-50' : ''} ${href ? 'hover:brightness-95 transition-all' : ''}`}
@@ -558,11 +542,13 @@ function CategoryTrends({
 export default function CashFlowClient({
   transactions,
   categories,
+  members = [],
   currentYear,
   currentMonth,
 }: {
   transactions: CashFlowTransaction[]
   categories: CashFlowCategory[]
+  members?: HouseholdMember[]
   currentYear: number
   currentMonth: number
 }) {
@@ -735,7 +721,7 @@ export default function CashFlowClient({
       />
 
       {/* Spending by Person */}
-      <OwnerBreakdown transactions={selectedTxns} />
+      <OwnerBreakdown transactions={selectedTxns} members={members} />
 
       {/* Breakdowns */}
       <BreakdownSection title="Income"   isIncome={true}  transactions={incomeTxns}  categories={categories}

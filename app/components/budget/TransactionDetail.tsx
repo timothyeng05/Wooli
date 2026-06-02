@@ -37,7 +37,7 @@ interface Transaction {
   notes: string | null
 }
 
-const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
+interface HouseholdMember { id: string; full_name: string; display_name: string; color: string; sort_order: number; is_shared: boolean }
 
 // ── Field row ──────────────────────────────────────────────────────────────────
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -53,10 +53,12 @@ export default function TransactionDetail({
   transaction,
   categories,
   accounts,
+  members = [],
 }: {
   transaction: Transaction
   categories: Category[]
   accounts: Account[]
+  members?: HouseholdMember[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -241,10 +243,8 @@ export default function TransactionDetail({
               className="text-sm text-gray-900 text-right bg-transparent border-none outline-none cursor-pointer appearance-none"
             >
               <option value="">No owner</option>
-              {OWNERS.map(o => (
-                <option key={o} value={o}>
-                  {o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : 'Shared'}
-                </option>
+              {members.map(m => (
+                <option key={m.id} value={m.full_name}>{m.display_name}</option>
               ))}
             </select>
           </Row>

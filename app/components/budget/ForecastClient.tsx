@@ -20,10 +20,12 @@ export interface ForecastSettings {
   expense_monthly: number
   expense_growth_rate: number
   investment_growth_rate: number
-  tim_age: number | null
-  tim_retirement_age: number | null
-  jess_age: number | null
-  jess_retirement_age: number | null
+}
+
+export interface ForecastMemberSetting {
+  member_full_name: string
+  age: number | null
+  retirement_age: number | null
 }
 
 interface YearlyPoint {
@@ -37,10 +39,9 @@ interface YearlyPoint {
 
 const THIS_YEAR = new Date().getFullYear()
 
-function makeYears(timAge: number | null, jessAge: number | null): number[] {
-  const yearsToTim80 = timAge ? 80 - timAge : null
-  const yearsToJess80 = jessAge ? 80 - jessAge : null
-  const horizon = Math.max(yearsToTim80 ?? 10, yearsToJess80 ?? 10, 10)
+function makeYears(memberSettings: { age: number | null }[]): number[] {
+  const horizons = memberSettings.filter(m => m.age != null).map(m => 80 - m.age!)
+  const horizon = Math.max(...horizons, 10)
   return Array.from({ length: horizon + 1 }, (_, i) => THIS_YEAR + i)
 }
 
@@ -54,22 +55,13 @@ function fmtK(n: number) {
   return String(Math.round(n))
 }
 
-const OWNER_COLORS: Record<string, string> = {
-  'Timothy Eng': '#3b82f6',
-  'Jessica Li': '#f43f5e',
-  'Shared': '#8b5cf6',
-}
-const OWNER_DISPLAY: Record<string, string> = {
-  'Timothy Eng': 'Tim',
-  'Jessica Li': 'Jess',
-  'Shared': 'Shared',
-}
+interface HouseholdMember { id: string; full_name: string; display_name: string; color: string; sort_order: number; is_shared: boolean }
 
 // ── Projection ────────────────────────────────────────────────────────────────
 function computeProjection({
   startingCash, startingInvestments, startingLiabilities,
   streams, expenseMonthly, expenseGrowthRate, investmentGrowthRate,
-  goals, years, timRetirementYear, jessRetirementYear,
+  goals, years, retirementYears,
 }: {
   startingCash: number
   startingInvestments: number
@@ -80,8 +72,7 @@ function computeProjection({
   investmentGrowthRate: number
   goals: { target_date: string | null; target_amount: number }[]
   years: number[]
-  timRetirementYear: number | null
-  jessRetirementYear: number | null
+  retirementYears: Map<string, number>
 }): YearlyPoint[] {
   const points: YearlyPoint[] = []
   let cash = startingCash
@@ -94,8 +85,10 @@ function computeProjection({
 
     const income = streams.reduce((s, st) => {
       // Zero out income after owner's retirement
-      if (st.owner === 'Timothy Eng' && timRetirementYear && year > timRetirementYear) return s
-      if (st.owner === 'Jessica Li' && jessRetirementYear && year > jessRetirementYear) return s
+      if (st.owner) {
+        const retYear = retirementYears.get(st.owner)
+        if (retYear && year > retYear) return s
+      }
       if (st.growth_type === 'manual') {
         return s + (st.yearly_amounts[String(year)] ?? st.monthly_amount) * 12
       }
@@ -134,12 +127,13 @@ interface ExplorerParams {
   years: number[]
 }
 
-function ForecastChart({ points, retirementMarkers, goals, explorerMode, explorerParams }: {
+function ForecastChart({ points, retirementMarkers, goals, explorerMode, explorerParams, memberFullNames }: {
   points: YearlyPoint[]
   retirementMarkers: { year: number; label: string; color: string }[]
   goals: { target_date: string | null; target_amount: number; color: string; name: string }[]
   explorerMode: boolean
   explorerParams: ExplorerParams
+  memberFullNames: string[]
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
@@ -159,7 +153,7 @@ function ForecastChart({ points, retirementMarkers, goals, explorerMode, explore
 
   // Explorer projection — recomputed on every hover in explorer mode
   const explorerProjection = explorerMode && hover !== null
-    ? computeProjection({ ...explorerParams, timRetirementYear: points[hover].year, jessRetirementYear: points[hover].year })
+    ? computeProjection({ ...explorerParams, retirementYears: new Map(memberFullNames.map(n => [n, points[hover].year])) })
     : null
   const explorerEndNW = explorerProjection?.[explorerProjection.length - 1]?.netWorth ?? 0
   const explorerGoesNegative = explorerProjection?.some(p => p.netWorth < 0) ?? false
@@ -309,12 +303,14 @@ function StreamForm({
   onSave,
   onCancel,
   saving,
+  members = [],
 }: {
   initial: Partial<IncomeStream>
   forecastYears: number[]
   onSave: (data: Omit<IncomeStream, 'id' | 'sort_order'>) => void
   onCancel: () => void
   saving: boolean
+  members?: HouseholdMember[]
 }) {
   const [name, setName] = useState(initial.name ?? '')
   const [owner, setOwner] = useState(initial.owner ?? '')
@@ -390,9 +386,9 @@ function StreamForm({
           <select value={owner} onChange={e => setOwner(e.target.value)}
             className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
             <option value="">—</option>
-            <option value="Timothy Eng">Tim</option>
-            <option value="Jessica Li">Jess</option>
-            <option value="Shared">Shared</option>
+            {members.map(m => (
+              <option key={m.id} value={m.full_name}>{m.display_name}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -483,21 +479,25 @@ function StreamForm({
 export default function ForecastClient({
   streams: initial,
   settings: initialSettings,
+  memberSettings: initialMemberSettings = [],
   goals,
   startingCash,
   startingInvestments,
   startingLiabilities,
   userId,
   settingsExist,
+  members = [],
 }: {
   streams: IncomeStream[]
   settings: ForecastSettings
+  memberSettings?: ForecastMemberSetting[]
   goals: { target_date: string | null; target_amount: number; name: string; color: string }[]
   startingCash: number
   startingInvestments: number
   startingLiabilities: number
   userId: string
   settingsExist: boolean
+  members?: HouseholdMember[]
 }) {
   const { toast } = useToast()
   const supabase = createClient()
@@ -506,30 +506,39 @@ export default function ForecastClient({
   const [expenseAnnual, setExpenseAnnual] = useState(String(Math.round(initialSettings.expense_monthly * 12)))
   const [expenseGrowthRate, setExpenseGrowthRate] = useState(String(initialSettings.expense_growth_rate))
   const [investmentGrowthRate, setInvestmentGrowthRate] = useState(String(initialSettings.investment_growth_rate))
-  const [timAge, setTimAge] = useState(String(initialSettings.tim_age ?? ''))
-  const [timRetirementAge, setTimRetirementAge] = useState(String(initialSettings.tim_retirement_age ?? ''))
-  const [jessAge, setJessAge] = useState(String(initialSettings.jess_age ?? ''))
-  const [jessRetirementAge, setJessRetirementAge] = useState(String(initialSettings.jess_retirement_age ?? ''))
+  const [memberAgeSettings, setMemberAgeSettings] = useState(() =>
+    members.filter(m => !m.is_shared).map(m => {
+      const s = initialMemberSettings.find(x => x.member_full_name === m.full_name)
+      return { full_name: m.full_name, display_name: m.display_name, color: m.color, age: String(s?.age ?? ''), retirement_age: String(s?.retirement_age ?? '') }
+    })
+  )
   const [addingStream, setAddingStream] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [savingStream, setSavingStream] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [explorerMode, setExplorerMode] = useState(false)
 
-  const timAgeN = parseInt(timAge) || null
-  const jessAgeN = parseInt(jessAge) || null
-  const timRetirementAgeN = parseInt(timRetirementAge) || null
-  const jessRetirementAgeN = parseInt(jessRetirementAge) || null
+  const memberAgeNumbers = memberAgeSettings.map(m => ({
+    ...m,
+    ageN: parseInt(m.age) || null,
+    retirementAgeN: parseInt(m.retirement_age) || null,
+  }))
 
-  const forecastYears = useMemo(() => makeYears(timAgeN, jessAgeN), [timAgeN, jessAgeN])
+  const forecastYears = useMemo(
+    () => makeYears(memberAgeNumbers.map(m => ({ age: m.ageN }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memberAgeSettings]
+  )
 
-  const timRetirementYear = timAgeN && timRetirementAgeN ? THIS_YEAR + (timRetirementAgeN - timAgeN) : null
-  const jessRetirementYear = jessAgeN && jessRetirementAgeN ? THIS_YEAR + (jessRetirementAgeN - jessAgeN) : null
+  const retirementYears = new Map(
+    memberAgeNumbers
+      .filter(m => m.ageN && m.retirementAgeN)
+      .map(m => [m.full_name, THIS_YEAR + (m.retirementAgeN! - m.ageN!)])
+  )
 
-  const retirementMarkers = [
-    timRetirementYear ? { year: timRetirementYear, label: 'Tim retires', color: '#10b981' } : null,
-    jessRetirementYear ? { year: jessRetirementYear, label: 'Jess retires', color: '#10b981' } : null,
-  ].filter(Boolean) as { year: number; label: string; color: string }[]
+  const retirementMarkers = memberAgeNumbers
+    .filter(m => retirementYears.has(m.full_name))
+    .map(m => ({ year: retirementYears.get(m.full_name)!, label: `${m.display_name} retires`, color: '#10b981' }))
 
   const projection = useMemo(() => computeProjection({
     startingCash,
@@ -541,9 +550,8 @@ export default function ForecastClient({
     investmentGrowthRate: parseFloat(investmentGrowthRate) || 0,
     goals,
     years: forecastYears,
-    timRetirementYear,
-    jessRetirementYear,
-  }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, timRetirementYear, jessRetirementYear])
+    retirementYears,
+  }), [streams, expenseAnnual, expenseGrowthRate, investmentGrowthRate, startingCash, startingInvestments, startingLiabilities, goals, forecastYears, retirementYears])
 
   const explorerParams: ExplorerParams = useMemo(() => ({
     startingCash,
@@ -612,16 +620,23 @@ export default function ForecastClient({
         expense_monthly: (parseFloat(expenseAnnual) || 0) / 12,
         expense_growth_rate: parseFloat(expenseGrowthRate) || 0,
         investment_growth_rate: parseFloat(investmentGrowthRate) || 0,
-        tim_age: parseInt(timAge) || null,
-        tim_retirement_age: parseInt(timRetirementAge) || null,
-        jess_age: parseInt(jessAge) || null,
-        jess_retirement_age: parseInt(jessRetirementAge) || null,
         updated_at: new Date().toISOString(),
       }
-      const { error } = settingsExist
+      const { error: settingsError } = settingsExist
         ? await supabase.from('forecast_settings').update(patch).eq('user_id', userId)
         : await supabase.from('forecast_settings').insert(patch)
-      if (error) throw error
+      if (settingsError) throw settingsError
+
+      for (const m of memberAgeSettings) {
+        const { error } = await supabase.from('forecast_member_settings').upsert({
+          user_id: userId,
+          member_full_name: m.full_name,
+          age: parseInt(m.age) || null,
+          retirement_age: parseInt(m.retirement_age) || null,
+        }, { onConflict: 'user_id,member_full_name' })
+        if (error) throw error
+      }
+
       toast.success('Settings saved')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save')
@@ -692,7 +707,7 @@ export default function ForecastClient({
             <p className="text-xs text-orange-500 flex-shrink-0 ml-4">Hover to see retirement scenarios → orange = safe, red = goes negative</p>
           )}
         </div>
-        <ForecastChart points={projection} retirementMarkers={retirementMarkers} goals={goals} explorerMode={explorerMode} explorerParams={explorerParams} />
+        <ForecastChart points={projection} retirementMarkers={retirementMarkers} goals={goals} explorerMode={explorerMode} explorerParams={explorerParams} memberFullNames={memberAgeSettings.map(m => m.full_name)} />
       </div>
 
       {/* Income streams + Settings side by side */}
@@ -703,18 +718,22 @@ export default function ForecastClient({
           <div className="space-y-2 mb-3">
             {streams.map(s =>
               editingId === s.id ? (
-                <StreamForm key={s.id} initial={s} forecastYears={forecastYears} onSave={handleEditStream} onCancel={() => setEditingId(null)} saving={savingStream} />
+                <StreamForm key={s.id} initial={s} forecastYears={forecastYears} onSave={handleEditStream} onCancel={() => setEditingId(null)} saving={savingStream} members={members} />
               ) : (
                 <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-lg">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-                      {s.owner && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: `${OWNER_COLORS[s.owner] ?? '#6b7280'}18`, color: OWNER_COLORS[s.owner] ?? '#6b7280' }}>
-                          {OWNER_DISPLAY[s.owner] ?? s.owner}
-                        </span>
-                      )}
+                      {s.owner && (() => {
+                        const m = members.find(x => x.full_name === s.owner)
+                        const color = m?.color ?? '#6b7280'
+                        return (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: `${color}18`, color }}>
+                            {m?.display_name ?? s.owner}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       ${fmtK(s.monthly_amount * 12 / (1 - (s.tax_rate ?? 40) / 100))}/yr pre-tax
@@ -735,7 +754,7 @@ export default function ForecastClient({
             )}
           </div>
           {addingStream ? (
-            <StreamForm initial={{}} forecastYears={forecastYears} onSave={handleAddStream} onCancel={() => setAddingStream(false)} saving={savingStream} />
+            <StreamForm initial={{}} forecastYears={forecastYears} onSave={handleAddStream} onCancel={() => setAddingStream(false)} saving={savingStream} members={members} />
           ) : (
             <button onClick={() => { setAddingStream(true); setEditingId(null) }}
               className="w-full py-2 rounded-lg border-2 border-dashed border-gray-200 text-xs font-medium text-gray-400 hover:border-blue-300 hover:text-blue-500 transition">
@@ -785,36 +804,43 @@ export default function ForecastClient({
           </div>
 
           {/* People */}
-          <div className="border-t border-gray-100 pt-5">
-            <p className="text-sm font-semibold text-gray-900 mb-3">People</p>
-            <div className="space-y-3">
-              {[
-                { label: 'Tim', age: timAge, setAge: setTimAge, retAge: timRetirementAge, setRetAge: setTimRetirementAge, retYear: timRetirementYear },
-                { label: 'Jess', age: jessAge, setAge: setJessAge, retAge: jessRetirementAge, setRetAge: setJessRetirementAge, retYear: jessRetirementYear },
-              ].map(({ label, age, setAge, retAge, setRetAge, retYear }) => (
-                <div key={label}>
-                  <p className="text-xs font-medium text-gray-600 mb-1.5">{label}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">Current age</label>
-                      <input type="number" min="1" max="100" value={age} onChange={e => setAge(e.target.value)}
-                        placeholder="25"
-                        className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          {memberAgeSettings.length > 0 && (
+            <div className="border-t border-gray-100 pt-5">
+              <p className="text-sm font-semibold text-gray-900 mb-3">People</p>
+              <div className="space-y-3">
+                {memberAgeSettings.map((m, i) => {
+                  const retYear = retirementYears.get(m.full_name) ?? null
+                  return (
+                    <div key={m.full_name}>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: m.color }} />
+                        <p className="text-xs font-medium text-gray-600">{m.display_name}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] text-gray-400 mb-1 block">Current age</label>
+                          <input type="number" min="1" max="100" value={m.age}
+                            onChange={e => setMemberAgeSettings(prev => prev.map((x, j) => j === i ? { ...x, age: e.target.value } : x))}
+                            placeholder="25"
+                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-gray-400 mb-1 block">Retirement age</label>
+                          <input type="number" min="1" max="100" value={m.retirement_age}
+                            onChange={e => setMemberAgeSettings(prev => prev.map((x, j) => j === i ? { ...x, retirement_age: e.target.value } : x))}
+                            placeholder="65"
+                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      {retYear && (
+                        <p className="text-[11px] text-green-600 mt-1">Retires in {retYear} · income streams stop then</p>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">Retirement age</label>
-                      <input type="number" min="1" max="100" value={retAge} onChange={e => setRetAge(e.target.value)}
-                        placeholder="65"
-                        className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                    </div>
-                  </div>
-                  {retYear && (
-                    <p className="text-[11px] text-green-600 mt-1">Retires in {retYear} · income streams stop then</p>
-                  )}
-                </div>
-              ))}
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {goals.length > 0 && (
             <div className="border-t border-gray-100 pt-5">

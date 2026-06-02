@@ -7,6 +7,12 @@ export default async function ImportPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: members } = await supabase
+    .from('household_members')
+    .select('id, full_name, display_name, color, sort_order, is_shared')
+    .eq('user_id', user.id)
+    .order('sort_order', { ascending: true })
+
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
@@ -16,7 +22,7 @@ export default async function ImportPage() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <CsvImportClient />
+        <CsvImportClient members={members ?? []} />
       </div>
     </div>
   )

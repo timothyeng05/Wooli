@@ -33,7 +33,7 @@ interface ExistingTransaction {
   notes: string | null
 }
 
-const OWNERS = ['Timothy Eng', 'Jessica Li', 'Shared'] as const
+interface HouseholdMember { id: string; full_name: string; display_name: string; color: string; sort_order: number; is_shared: boolean }
 
 export default function TransactionForm({
   userId,
@@ -43,6 +43,7 @@ export default function TransactionForm({
   accountNames = [],
   defaultDate,
   transaction,
+  members = [],
 }: {
   userId: string
   categories: Category[]
@@ -51,6 +52,7 @@ export default function TransactionForm({
   accountNames?: string[]
   defaultDate?: string
   transaction?: ExistingTransaction
+  members?: HouseholdMember[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -72,7 +74,7 @@ export default function TransactionForm({
       ? transaction.transacted_at.split('T')[0]
       : defaultDate || new Date().toISOString().split('T')[0]
   )
-  const [owner, setOwner] = useState(isEdit ? (transaction.owner || '') : 'Timothy Eng')
+  const [owner, setOwner] = useState(isEdit ? (transaction.owner || '') : (members.find(m => !m.is_shared)?.full_name ?? ''))
   const [notes, setNotes] = useState(isEdit ? (transaction.notes || '') : '')
 
   const parents = categories.filter(c => !c.parent_id)
@@ -296,8 +298,8 @@ export default function TransactionForm({
           className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">No owner</option>
-          {OWNERS.map(o => (
-            <option key={o} value={o}>{o}</option>
+          {members.map(m => (
+            <option key={m.id} value={m.full_name}>{m.display_name}</option>
           ))}
         </select>
       </div>

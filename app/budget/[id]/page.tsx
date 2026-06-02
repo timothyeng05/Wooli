@@ -8,7 +8,7 @@ export default async function EditTransactionPage({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [txnResult, catResult, acctResult] = await Promise.all([
+  const [txnResult, catResult, acctResult, memberResult] = await Promise.all([
     supabase
       .from('transactions')
       .select('id, amount, description, merchant, category_id, account_id, account_name, transacted_at, is_transfer, is_pending, owner, notes')
@@ -26,6 +26,11 @@ export default async function EditTransactionPage({ params }: { params: Promise<
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('name') as any,
+    supabase
+      .from('household_members')
+      .select('id, full_name, display_name, color, sort_order, is_shared')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }),
   ])
 
   if (!txnResult.data) notFound()
@@ -35,6 +40,7 @@ export default async function EditTransactionPage({ params }: { params: Promise<
       transaction={txnResult.data as any}
       categories={catResult.data || []}
       accounts={acctResult.data || []}
+      members={memberResult.data || []}
     />
   )
 }

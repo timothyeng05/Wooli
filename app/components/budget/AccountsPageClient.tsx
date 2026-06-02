@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
-import { ACCOUNT_TYPES, isAssetType, OWNERS, type AccountType } from '@/lib/budget/account-utils'
+import { ACCOUNT_TYPES, isAssetType, type AccountType } from '@/lib/budget/account-utils'
+import type { HouseholdMember } from './transaction-types'
 import { fmtSyncTime } from '@/lib/budget/format-utils'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
@@ -229,11 +230,12 @@ function NetWorthChart({ series, period, onPeriod }: {
 }
 
 // ── Plaid account row (editable) ─────────────────────────────────────────────
-function PlaidAccountRow({ account, sparkValues, onUpdate, onHide }: {
+function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
   account: UnifiedAccount
   sparkValues: number[]
   onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
   onHide: (id: string) => Promise<void>
+  members: HouseholdMember[]
 }) {
   const [editing, setEditing] = useState(false)
   const [nickname, setNickname] = useState(account.nickname || '')
@@ -274,7 +276,7 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide }: {
             <select value={owner} onChange={e => setOwner(e.target.value)}
               className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
               <option value="">—</option>
-              {OWNERS.map(o => <option key={o} value={o}>{o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : o}</option>)}
+              {members.map(m => <option key={m.id} value={m.full_name}>{m.display_name}</option>)}
             </select>
           </div>
         </div>
@@ -326,15 +328,15 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide }: {
             {displayName}
             {account.mask && <span className="text-gray-400 font-normal"> ···{account.mask}</span>}
           </p>
-          {account.owner && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-              account.owner === 'Timothy Eng' ? 'bg-blue-100 text-blue-600'
-              : account.owner === 'Jessica Li' ? 'bg-rose-100 text-rose-500'
-              : 'bg-gray-100 text-gray-500'
-            }`}>
-              {account.owner === 'Timothy Eng' ? 'Tim' : account.owner === 'Jessica Li' ? 'Jess' : 'Shared'}
-            </span>
-          )}
+          {account.owner && (() => {
+            const m = members.find(x => x.full_name === account.owner)
+            return (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: m ? `${m.color}22` : '#f3f4f6', color: m?.color ?? '#6b7280' }}>
+                {m?.display_name ?? account.owner}
+              </span>
+            )
+          })()}
           {account.exclude_from_net_worth && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">excluded</span>
           )}
@@ -360,11 +362,12 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide }: {
 }
 
 // ── Manual account row (editable) ─────────────────────────────────────────────
-function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
+function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }: {
   account: UnifiedAccount
   sparkValues: number[]
   onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
   onArchive: (id: string) => Promise<void>
+  members: HouseholdMember[]
 }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(account.name)
@@ -431,7 +434,7 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
             <select value={owner} onChange={e => setOwner(e.target.value)}
               className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
               <option value="">—</option>
-              {OWNERS.map(o => <option key={o} value={o}>{o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : o}</option>)}
+              {members.map(m => <option key={m.id} value={m.full_name}>{m.display_name}</option>)}
             </select>
           </div>
         </div>
@@ -477,15 +480,15 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-medium text-gray-900 truncate">{account.name}</p>
-          {account.owner && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-              account.owner === 'Timothy Eng' ? 'bg-blue-100 text-blue-600'
-              : account.owner === 'Jessica Li' ? 'bg-rose-100 text-rose-500'
-              : 'bg-gray-100 text-gray-500'
-            }`}>
-              {account.owner === 'Timothy Eng' ? 'Tim' : account.owner === 'Jessica Li' ? 'Jess' : 'Shared'}
-            </span>
-          )}
+          {account.owner && (() => {
+            const m = members.find(x => x.full_name === account.owner)
+            return (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: m ? `${m.color}22` : '#f3f4f6', color: m?.color ?? '#6b7280' }}>
+                {m?.display_name ?? account.owner}
+              </span>
+            )
+          })()}
           {account.exclude_from_net_worth && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">excluded</span>
           )}
@@ -513,10 +516,11 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive }: {
 }
 
 // ── Inline add form ───────────────────────────────────────────────────────────
-function AddAccountInlineForm({ groupKey, userId, onDone }: {
+function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
   groupKey: 'cash' | 'investment' | 'credit'
   userId: string
   onDone: () => void
+  members: HouseholdMember[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -590,7 +594,7 @@ function AddAccountInlineForm({ groupKey, userId, onDone }: {
           <select value={owner} onChange={e => setOwner(e.target.value)}
             className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
             <option value="">—</option>
-            {OWNERS.map(o => <option key={o} value={o}>{o === 'Timothy Eng' ? 'Tim' : o === 'Jessica Li' ? 'Jess' : o}</option>)}
+            {members.map(m => <option key={m.id} value={m.full_name}>{m.display_name}</option>)}
           </select>
         </div>
       </div>
@@ -609,7 +613,7 @@ function AddAccountInlineForm({ groupKey, userId, onDone }: {
 }
 
 // ── Account group ─────────────────────────────────────────────────────────────
-function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, userId, onUpdateManual, onArchive, onUpdatePlaid, onHidePlaid }: {
+function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, userId, onUpdateManual, onArchive, onUpdatePlaid, onHidePlaid, members }: {
   label: string
   groupKey: 'cash' | 'investment' | 'credit'
   accounts: UnifiedAccount[]
@@ -621,6 +625,7 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
   onArchive: (id: string) => Promise<void>
   onUpdatePlaid: (id: string, patch: Record<string, unknown>) => Promise<void>
   onHidePlaid: (id: string) => Promise<void>
+  members: HouseholdMember[]
 }) {
   const [adding, setAdding] = useState(false)
   if (accounts.length === 0 && !adding) {
@@ -644,7 +649,7 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
           </button>
         </div>
         {adding && (
-          <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} />
+          <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} members={members} />
         )}
       </div>
     )
@@ -681,11 +686,11 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
         <div className="ml-2 mt-0.5">
           {accounts.map(a =>
             a.source === 'manual'
-              ? <ManualAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdateManual} onArchive={onArchive} />
-              : <PlaidAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdatePlaid} onHide={onHidePlaid} />
+              ? <ManualAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdateManual} onArchive={onArchive} members={members} />
+              : <PlaidAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdatePlaid} onHide={onHidePlaid} members={members} />
           )}
           {adding && (
-            <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} />
+            <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} members={members} />
           )}
           {!adding && (
             <button
@@ -745,12 +750,16 @@ export default function AccountsPageClient({
   netWorthHistory,
   userId,
   lastSynced,
+  members = [],
+  plaidItems = [],
 }: {
   accounts: UnifiedAccount[]
   history: BalancePoint[]
   netWorthHistory: { recorded_on: string; net_worth: number }[]
   userId: string
   lastSynced?: string | null
+  members?: HouseholdMember[]
+  plaidItems?: { item_id: string; institution_name: string | null; default_owner: string | null }[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -758,7 +767,6 @@ export default function AccountsPageClient({
   const [period, setPeriod] = useState(90)
   const [open, setOpen] = useState({ cash: true, investments: true, credit: true })
   const [syncing, setSyncing] = useState(false)
-
   const handleSync = async () => {
     setSyncing(true)
     try {
@@ -889,15 +897,15 @@ export default function AccountsPageClient({
           <AccountGroup label="Cash" groupKey="cash" accounts={cash} sparkMap={sparkMap}
             open={open.cash} onToggle={() => setOpen(o => ({ ...o, cash: !o.cash }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} />
+            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
           <AccountGroup label="Investments" groupKey="investment" accounts={investments} sparkMap={sparkMap}
             open={open.investments} onToggle={() => setOpen(o => ({ ...o, investments: !o.investments }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} />
+            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
           <AccountGroup label="Credit Cards" groupKey="credit" accounts={credit} sparkMap={sparkMap}
             open={open.credit} onToggle={() => setOpen(o => ({ ...o, credit: !o.credit }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} />
+            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
           {accounts.length === 0 && (
             <p className="text-center text-gray-400 text-sm py-10">No accounts connected yet</p>
           )}
@@ -951,6 +959,7 @@ export default function AccountsPageClient({
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>

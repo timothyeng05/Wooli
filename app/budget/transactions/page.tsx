@@ -82,7 +82,7 @@ export default async function TransactionsPage({
     if (data.length < PAGE) break
   }
 
-  const [catResult, tripResult] = await Promise.all([
+  const [catResult, tripResult, memberResult] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, is_income, is_transfer, parent_id, icon')
@@ -93,10 +93,16 @@ export default async function TransactionsPage({
       .select('id, name, start_date, end_date')
       .eq('user_id', user.id)
       .order('start_date', { ascending: false }) as any,
+    supabase
+      .from('household_members')
+      .select('id, full_name, display_name, color, sort_order, is_shared')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }),
   ])
 
-  const categories   = catResult.data || []
-  const trips        = tripResult.data || []
+  const categories = catResult.data || []
+  const trips      = tripResult.data || []
+  const members    = memberResult.data || []
 
   return (
     <div className="min-h-screen bg-white">
@@ -121,6 +127,7 @@ export default async function TransactionsPage({
           transactions={transactions}
           categories={categories}
           trips={trips}
+          members={members}
           initialOwner={initialOwner}
           initialType={initialType}
         />

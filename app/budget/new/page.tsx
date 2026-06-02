@@ -13,7 +13,7 @@ export default async function NewTransactionPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: categories }, { data: accounts }, { data: txnAccounts }, { data: plaidAccountRows }] = await Promise.all([
+  const [{ data: categories }, { data: accounts }, { data: txnAccounts }, { data: plaidAccountRows }, { data: members }] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, is_income, parent_id, sort_order')
@@ -35,6 +35,11 @@ export default async function NewTransactionPage({
       .select('account_id, name, mask, type')
       .eq('user_id', user.id)
       .order('name') as any,
+    supabase
+      .from('household_members')
+      .select('id, full_name, display_name, color, sort_order, is_shared')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }),
   ])
 
   // Plaid accounts formatted for the dropdown — prefixed so the form can distinguish them
@@ -76,6 +81,7 @@ export default async function NewTransactionPage({
             plaidAccounts={plaidForDropdown}
             accountNames={accountNames}
             defaultDate={date}
+            members={members || []}
           />
         </div>
       </div>
