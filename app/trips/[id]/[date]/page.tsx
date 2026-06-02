@@ -14,9 +14,9 @@ type EditorSection = SectionData & { _id: string }
 
 // ─── Display components (view mode) ────────────────────────────────────────
 
-function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, expanded, onToggleExpand }: {
+function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpand }: {
   meta: SectionMeta; lines: string[]
-  confirmed: boolean; onToggle: () => void; onEdit?: () => void
+  onEdit?: () => void
   title?: string; type?: string
   expanded: boolean; onToggleExpand: () => void
 }) {
@@ -70,15 +70,6 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
             Edit
           </button>
         )}
-        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={onToggle}
-            aria-label="Planned"
-            className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
-          />
-        </label>
       </div>
       {expanded && body.length > 0 && (
         <div className={`px-3 pb-2.5 pt-2 border-t ${meta.border}`}>
@@ -100,9 +91,9 @@ function SectionCard({ meta, lines, confirmed, onToggle, onEdit, title, type, ex
   )
 }
 
-function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
+function HotelCard({ meta, lines, onEdit }: {
   meta: SectionMeta; lines: string[]
-  confirmed: boolean; onToggle: () => void; onEdit?: () => void
+  onEdit?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const content = lines.map(l => l.trim()).filter(Boolean)
@@ -127,15 +118,6 @@ function HotelCard({ meta, lines, confirmed, onToggle, onEdit }: {
         {onEdit && (
           <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0">Edit</button>
         )}
-        <label className="flex items-center cursor-pointer select-none flex-shrink-0" onClick={e => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={onToggle}
-            aria-label="Planned"
-            className="w-4 h-4 rounded border-gray-300 accent-green-500 cursor-pointer"
-          />
-        </label>
       </div>
       {open && (
         <>
@@ -679,7 +661,6 @@ export default function TripDayPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editSnapshot, setEditSnapshot] = useState<EditorSection | null>(null)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
-  const [confirmedSections, setConfirmedSections] = useState<string[]>([])
   const [insertAt, setInsertAt] = useState<number | null>(null)
   const [showAddPicker, setShowAddPicker] = useState(false)
   const [aiSummary, setAiSummary] = useState<string | null>(null)
@@ -692,7 +673,7 @@ export default function TripDayPage() {
 
       const [{ data: tripData }, { data: allDays }] = await Promise.all([
         supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
-        supabase.from('trip_days').select('date, title, notes, confirmed_sections, location').eq('trip_id', params.id).order('date'),
+        supabase.from('trip_days').select('date, title, notes, location').eq('trip_id', params.id).order('date'),
       ])
 
       setTrip(tripData)
@@ -723,16 +704,6 @@ export default function TripDayPage() {
         setSectionItems(itemsWithTitles)
         if (window.innerWidth >= 1024) {
           setExpandedSections(new Set(itemsWithTitles.map(s => s._id)))
-        }
-
-        if (current.confirmed_sections === null) {
-          const autoPlanned = sectionData
-            .map((s, idx) => ({ s, idx }))
-            .filter(({ s }) => { const m = findMeta(s.type); return !!(m?.hotel || m?.banner) })
-            .map(({ idx }) => String(idx))
-          setConfirmedSections(autoPlanned)
-        } else {
-          setConfirmedSections(current.confirmed_sections)
         }
 
         if (itemsWithTitles !== items) {
@@ -768,20 +739,6 @@ export default function TripDayPage() {
     setEditingId(null)
     setTimeout(() => setSaved(false), 2000)
     fetchSummary(items)
-  }
-
-  const toggleConfirmed = async (label: string) => {
-    const next = confirmedSections.includes(label)
-      ? confirmedSections.filter(s => s !== label)
-      : [...confirmedSections, label]
-    setConfirmedSections(next)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('trip_days').upsert(
-      { trip_id: params.id, user_id: user.id, date: params.date, confirmed_sections: next },
-      { onConflict: 'trip_id,date' }
-    )
   }
 
   const fetchSummary = async (sections: EditorSection[]) => {
@@ -1105,8 +1062,8 @@ export default function TripDayPage() {
                               }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
-                            ? <HotelCard meta={s.meta} lines={s.lines} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} confirmed={confirmedSections.includes(String(i))} onToggle={() => toggleConfirmed(String(i))} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
+                            ? <HotelCard meta={s.meta} lines={s.lines} onEdit={() => startEdit(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
                           }
                         </div>
                       </div>
