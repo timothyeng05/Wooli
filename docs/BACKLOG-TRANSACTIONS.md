@@ -10,6 +10,14 @@ _Generated 2026-06-04. Pick up from here; check off items as they land._
 
 ---
 
+- **T-01** — ReviewSheet now has editable description + merchant fields; category replaced with CategoryPicker
+- **T-02** — Date range filter added to FilterPanel + TransactionList (chips + filter logic)
+- **T-03** — Recurring generator moved to `/api/cron/recurring` (runs daily at 6am); removed from page load
+- **T-05** — ReviewSheet category picker replaced with CategoryPicker component
+- **T-06** — Pending badge changed from "P" to "Pending"
+
+---
+
 ## P1 — Bugs / broken UX
 
 ### [T-01] `TransactionReviewSheet` can't edit core fields

@@ -62,6 +62,8 @@ export default function TransactionList({
   const [selectedOwners, setSelectedOwners] = useState<Set<string>>(initialOwner ? new Set([initialOwner]) : new Set())
   const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set())
   const [typeFilter, setTypeFilter] = useState<'income' | 'expense' | null>(initialType ?? null)
+  const [dateStart, setDateStart] = useState('')
+  const [dateEnd, setDateEnd] = useState('')
 
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
@@ -166,7 +168,7 @@ export default function TransactionList({
     () => [...new Set(items.map(t => t.account_name).filter(Boolean) as string[])].sort(),
     [items]
   )
-  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size + (typeFilter ? 1 : 0)
+  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size + (typeFilter ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0)
 
   const filtered = useMemo(() => {
     const result = items.filter(t => {
@@ -186,6 +188,8 @@ export default function TransactionList({
       if (selectedTripIds.size > 0 && !selectedTripIds.has(t.trip_id ?? '')) return false
       if (typeFilter === 'income' && t.amount < 0) return false
       if (typeFilter === 'expense' && t.amount >= 0) return false
+      if (dateStart && t.transacted_at < dateStart) return false
+      if (dateEnd && t.transacted_at > dateEnd + 'T23:59:59') return false
       if (!search) return true
       const q = search.toLowerCase()
       return (
@@ -198,7 +202,7 @@ export default function TransactionList({
     if (sortOrder === 'amount-desc') return [...result].sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
     if (sortOrder === 'amount-asc')  return [...result].sort((a, b) => Math.abs(Number(a.amount)) - Math.abs(Number(b.amount)))
     return result
-  }, [items, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, sortOrder])
+  }, [items, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
 
   const grouped = useMemo(
     () => groupByDate(filtered, sortOrder === 'date-asc'),
@@ -211,6 +215,8 @@ export default function TransactionList({
     setSelectedOwners(new Set())
     setSelectedTripIds(new Set())
     setTypeFilter(null)
+    setDateStart('')
+    setDateEnd('')
   }
 
   const removeAccountFilter = (a: string) => { const n = new Set(selectedAccounts); n.delete(a); setSelectedAccounts(n) }
@@ -295,6 +301,18 @@ export default function TransactionList({
             <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
               {typeFilter === 'income' ? 'Income only' : 'Expenses only'}
               <button onClick={() => setTypeFilter(null)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
+            </span>
+          )}
+          {dateStart && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
+              From {dateStart}
+              <button onClick={() => setDateStart('')} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
+            </span>
+          )}
+          {dateEnd && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
+              To {dateEnd}
+              <button onClick={() => setDateEnd('')} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
             </span>
           )}
           {[...selectedAccounts].map(a => (
@@ -444,7 +462,7 @@ export default function TransactionList({
                           <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
                           {t.is_pending && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
-                              P
+                              Pending
                             </span>
                           )}
                         </div>
@@ -511,6 +529,10 @@ export default function TransactionList({
           trips={trips}
           selectedTripIds={selectedTripIds}
           onTripsChange={setSelectedTripIds}
+          dateStart={dateStart}
+          dateEnd={dateEnd}
+          onDateStartChange={setDateStart}
+          onDateEndChange={setDateEnd}
           onClear={clearFilters}
         />
       )}

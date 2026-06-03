@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
 import type { Category, Trip, SortOrder, HouseholdMember } from './transaction-types'
 
-type FilterScreen = 'main' | 'sort' | 'accounts' | 'categories' | 'owners' | 'trips'
+type FilterScreen = 'main' | 'sort' | 'accounts' | 'categories' | 'owners' | 'trips' | 'daterange'
 
 const SORTS: { value: SortOrder; label: string }[] = [
   { value: 'date-desc',   label: 'Date (new to old)' },
@@ -35,6 +35,7 @@ export default function FilterPanel({
   categories, selectedCatIds, onCatsChange,
   members, selectedOwners, onOwnersChange,
   trips, selectedTripIds, onTripsChange,
+  dateStart, dateEnd, onDateStartChange, onDateEndChange,
   onClear,
 }: {
   onClose: () => void
@@ -52,6 +53,10 @@ export default function FilterPanel({
   trips: Trip[]
   selectedTripIds: Set<string>
   onTripsChange: (s: Set<string>) => void
+  dateStart: string
+  dateEnd: string
+  onDateStartChange: (s: string) => void
+  onDateEndChange: (s: string) => void
   onClear: () => void
 }) {
   const [screen, setScreen] = useState<FilterScreen>('main')
@@ -71,12 +76,15 @@ export default function FilterPanel({
 
   const topCats = categories.filter(c => !c.parent_id)
 
+  const dateCount = (dateStart ? 1 : 0) + (dateEnd ? 1 : 0)
+
   const SCREEN_TITLE: Record<FilterScreen, string> = {
     main: 'Filters', sort: 'Sort By',
-    accounts: 'Accounts', categories: 'Categories', owners: 'Owners', trips: 'Trips',
+    accounts: 'Accounts', categories: 'Categories', owners: 'Owners', trips: 'Trips', daterange: 'Date Range',
   }
 
   const mainRows: { key: FilterScreen; label: string; count: number; hidden?: boolean }[] = [
+    { key: 'daterange',  label: 'Date Range', count: dateCount },
     { key: 'accounts',   label: 'Accounts',   count: selectedAccounts.size, hidden: accounts.length === 0 },
     { key: 'categories', label: 'Categories', count: selectedCatIds.size },
     { key: 'owners',     label: 'Owners',     count: selectedOwners.size },
@@ -150,6 +158,37 @@ export default function FilterPanel({
                 </button>
               ))}
             </>
+          )}
+
+          {screen === 'daterange' && (
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">From</label>
+                <input
+                  type="date"
+                  value={dateStart}
+                  onChange={e => onDateStartChange(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">To</label>
+                <input
+                  type="date"
+                  value={dateEnd}
+                  onChange={e => onDateEndChange(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {(dateStart || dateEnd) && (
+                <button
+                  onClick={() => { onDateStartChange(''); onDateEndChange('') }}
+                  className="text-xs text-red-500 hover:text-red-700 transition"
+                >
+                  Clear dates
+                </button>
+              )}
+            </div>
           )}
 
           {screen === 'sort' && SORTS.map(s => (
