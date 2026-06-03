@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
-import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords, MOOD_OPTIONS, ratingStyle } from '@/lib/trips/trip-utils'
+import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords } from '@/lib/trips/trip-utils'
 import { SectionCard, HotelCard, TravelBanner, DayMapCollapsible } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
@@ -39,10 +39,6 @@ export default function TripDayPage() {
   const [days, setDays] = useState<DayData[]>([])
   const [allDates, setAllDates] = useState<string[]>([])
   const [title, setTitle] = useState('')
-  const [dayRating, setDayRating] = useState<number | null>(null)
-  const [dayMood, setDayMood] = useState<string | null>(null)
-  const [journal, setJournal] = useState('')
-  const [journalOpen, setJournalOpen] = useState(false)
   const [sectionItems, setSectionItems] = useState<EditorSection[]>([])
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
@@ -63,7 +59,7 @@ export default function TripDayPage() {
 
       const [{ data: tripData }, { data: allDays }] = await Promise.all([
         supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
-        supabase.from('trip_days').select('date, title, notes, rating, mood, journal').eq('trip_id', params.id).order('date'),
+        supabase.from('trip_days').select('date, title, notes').eq('trip_id', params.id).order('date'),
       ])
 
       setTrip(tripData)
@@ -90,10 +86,6 @@ export default function TripDayPage() {
       const current = allDays?.find(d => d.date === params.date)
       if (current) {
         setTitle(current.title ?? '')
-        setDayRating((current as any).rating ?? null)
-        setDayMood((current as any).mood ?? null)
-        setJournal((current as any).journal ?? '')
-        if ((current as any).journal) setJournalOpen(true)
         const sectionData = notesToSectionData(current.notes)
         const items = sectionData.map(s => ({ ...s, _id: newId() }))
         const itemsWithTitles = await generateMissingTitles(items)
@@ -116,12 +108,7 @@ export default function TripDayPage() {
     load()
   }, [params.id, params.date])
 
-  const save = async (
-    overrideItems?: EditorSection[],
-    overrideRating?: number | null,
-    overrideMood?: string | null,
-    overrideJournal?: string,
-  ) => {
+  const save = async (overrideItems?: EditorSection[]) => {
     if (saving) return
     setSaving(true)
     const supabase = createClient()
@@ -129,11 +116,8 @@ export default function TripDayPage() {
     if (!user) { setSaving(false); return }
     const items = overrideItems ?? sectionItems
     const notesJson = items.length > 0 ? JSON.stringify(items.map(({ _id, ...s }) => s)) : null
-    const ratingVal = overrideRating !== undefined ? overrideRating : dayRating
-    const moodVal = overrideMood !== undefined ? overrideMood : dayMood
-    const journalVal = overrideJournal !== undefined ? overrideJournal : journal
     await supabase.from('trip_days').upsert(
-      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson, rating: ratingVal, mood: moodVal || null, journal: journalVal || null },
+      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson },
       { onConflict: 'trip_id,date' }
     )
     setSaving(false)
@@ -386,31 +370,6 @@ export default function TripDayPage() {
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
 
-          {/* Day rating + mood */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-gray-400 font-medium whitespace-nowrap">Day rating</span>
-            <div className="flex gap-1">
-              {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
-                const active = dayRating === n
-                const style = active ? ratingStyle(n) : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                return (
-                  <button key={n} type="button"
-                    onClick={() => { const v = active ? null : n; setDayRating(v); save(undefined, v) }}
-                    className={`w-7 h-7 rounded-lg text-xs font-bold transition ${style}`}
-                  >{n}</button>
-                )
-              })}
-            </div>
-            <div className="flex gap-1">
-              {MOOD_OPTIONS.map(opt => (
-                <button key={opt.value} type="button" title={opt.label}
-                  onClick={() => { const v = dayMood === opt.value ? null : opt.value; setDayMood(v); save(undefined, undefined, v) }}
-                  className={`text-lg leading-none transition rounded-md px-1 py-0.5 ${dayMood === opt.value ? 'ring-2 ring-blue-400 bg-blue-50' : 'opacity-50 hover:opacity-100'}`}
-                >{opt.emoji}</button>
-              ))}
-            </div>
-          </div>
-
           {/* Collapsible day map */}
           {dayLocations.length > 0 && <DayMapCollapsible locations={dayLocations} />}
 
@@ -496,31 +455,6 @@ export default function TripDayPage() {
               </div>
             </>
           ) : null}
-
-          {/* Journal */}
-          {journalOpen ? (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
-                <span className="text-xs font-medium text-gray-500">📓 Journal</span>
-                <button onClick={() => setJournalOpen(false)} className="text-xs text-gray-400 hover:text-gray-600 transition">Collapse</button>
-              </div>
-              <textarea
-                value={journal}
-                onChange={e => setJournal(e.target.value)}
-                onBlur={() => save(undefined, undefined, undefined, journal)}
-                placeholder="What actually happened today…"
-                rows={4}
-                className="w-full px-3 py-2.5 text-sm text-gray-700 placeholder-gray-300 focus:outline-none resize-none"
-              />
-            </div>
-          ) : (
-            <button
-              onClick={() => setJournalOpen(true)}
-              className="w-full border border-dashed border-gray-200 rounded-xl py-2.5 text-sm text-gray-400 hover:text-gray-600 hover:border-gray-300 transition text-left px-4"
-            >
-              {journal ? `📓 ${journal.slice(0, 60)}${journal.length > 60 ? '…' : ''}` : '📓 Add journal entry'}
-            </button>
-          )}
 
           {/* Add section */}
           {showAddPicker

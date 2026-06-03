@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Breadcrumbs from '@/app/components/Breadcrumbs'
-import ShoppingStoreList from '@/app/components/trips/ShoppingStoreList'
+
 
 type Trip = {
   id: string
@@ -89,10 +89,7 @@ export default async function TripsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: trips }, { data: stores }] = await Promise.all([
-    supabase.from('trips').select('*').eq('user_id', user.id).order('start_date', { ascending: true }),
-    supabase.from('shopping_stores').select('id, name').eq('user_id', user.id).order('created_at', { ascending: true }),
-  ])
+  const { data: trips } = await supabase.from('trips').select('*').eq('user_id', user.id).order('start_date', { ascending: true })
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -139,8 +136,6 @@ export default async function TripsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-10">
-        <ShoppingStoreList initialStores={stores ?? []} />
-
         {totalTrips === 0 ? (
           <div>
             <div className="text-center py-6 mb-8">

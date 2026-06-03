@@ -4,8 +4,9 @@ import { redirect, notFound } from 'next/navigation'
 import Breadcrumbs from '@/app/components/Breadcrumbs'
 import ShareButton from '@/app/components/ShareButton'
 import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
-import CurrencyConverter from '@/app/components/trips/CurrencyConverter'
+
 import { notesToSectionData } from '@/lib/trips/trip-sections'
+
 
 function generateDays(startDate: string, endDate: string): string[] {
   const days: string[] = []
@@ -147,7 +148,6 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        <CurrencyConverter />
         {mealsEaten.length > 0 && (
           <details className="rounded-xl border border-amber-100 overflow-hidden">
             <summary className="flex items-center justify-between px-4 py-3 bg-amber-50 cursor-pointer select-none list-none hover:bg-amber-100 transition">
@@ -199,7 +199,6 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                     weekday: 'short', month: 'short', day: 'numeric',
                   })
                   const hasContent = !!(dayData?.notes || dayData?.title)
-
                   return (
                     <Link key={date} href={`/trips/${id}/${date}`}>
                       <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition group">
