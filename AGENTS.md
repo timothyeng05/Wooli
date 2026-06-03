@@ -49,6 +49,47 @@ See `docs/LESSONS_LEARNED.md` for full details.
 
 ---
 
+## Three-Agent Review Pipeline
+
+Use this when reviewing or improving an existing feature (not for greenfield builds).
+
+**When to use:** User says "review X", "improve X", "audit X", or "let's work on Y" for a feature that already exists.
+
+### Step 0 — Screenshots (required for PM)
+1. Create `app/{route}/preview/page.tsx` — renders the component without auth, `process.env.NODE_ENV !== 'development'` guard
+2. Add dev-only middleware exception for that path
+3. `npm run dev &` in background, wait for 200, then Playwright screenshots of every step/state
+4. Read all screenshots before spawning PM
+5. After screenshots: delete preview page, revert middleware, kill dev server (`kill $(lsof -t -i:3000)`)
+
+### Step 1 — PM Agent (foreground)
+- Input: screenshots + code files + list of already-fixed items
+- Output: writes findings to `/tmp/{feature}-spec.md` (NOT relayed through Claude)
+- Format per finding: `### [F-XX] Title — P[0-3]` with What / Where / Fix / Visual evidence
+
+### Step 2 — Builder Agent (foreground, `isolation: worktree`)
+- Reads `/tmp/{feature}-spec.md` directly — no re-prompting needed
+- Runs `npx tsc --noEmit` and reports result
+
+### Step 3 — QA Agent (foreground, `subagent_type: general-purpose`)
+- Reads `/tmp/{feature}-spec.md` as checklist
+- Reviews builder's worktree files, fixes real bugs directly
+- Runs `npx tsc --noEmit`
+
+### Step 4 — Apply & commit (CRITICAL ORDER)
+1. `diff` key files to verify
+2. `cp` worktree → working directory
+3. `npx tsc --noEmit`
+4. **Commit immediately** — do NOT start round N+1 before committing round N. If round 2 worktree branches from pre-commit main, its `cp` will overwrite round 1 fixes.
+5. Push
+
+### Rules
+- After each round: grep the file to verify fixes are actually present before passing findings to the next round's builder
+- PM may flag already-fixed items — always cross-check against code, not just memory
+- Playwright is at `require('playwright')` from project root (CJS, not ESM)
+
+---
+
 ## Token Management
 
 At 85% budget used, START wrapping up — run `/wrap` to write session log, diary, and update backlog. Then stop new work and use remaining ~15% only for critical fixes. (Not a hard cutoff, just a signal to be more efficient.)
