@@ -1,8 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import Breadcrumbs from '@/app/components/Breadcrumbs'
-import JournalTabs from '@/app/components/JournalTabs'
 import { averageCycleLength, currentCycleDay, predictNextPeriodStart, type PeriodEntry } from '@/lib/period-utils'
 
 function formatDate(s: string) {
@@ -35,11 +33,6 @@ export default async function PeriodPage() {
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-b border-blue-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <Breadcrumbs items={[
-            { label: 'Journal', href: '/mood' },
-            { label: 'Periods' },
-          ]} />
-          <JournalTabs active="periods" />
           <div className="flex items-center justify-between mt-6">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Periods</h1>

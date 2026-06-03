@@ -28,8 +28,7 @@ export async function middleware(request: NextRequest) {
   // Allow '/' for unauthenticated users (landing page)
   if (!user && pathname !== '/' &&
       !pathname.startsWith('/login') &&
-      !pathname.startsWith('/signup') &&
-      !(process.env.NODE_ENV === 'development' && pathname.startsWith('/budget/onboarding/preview'))) {
+      !pathname.startsWith('/signup')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -47,6 +46,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/mood/:path*', '/budget/:path*', '/trips/:path*',
-            '/calendar/:path*']
+  matcher: ['/', '/budget/:path*', '/trips/:path*', '/period/:path*']
 }

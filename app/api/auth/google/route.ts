@@ -6,7 +6,6 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      scopes: 'https://www.googleapis.com/auth/calendar.readonly',
       queryParams: { access_type: 'offline', prompt: 'consent' },
       redirectTo: `${new URL(request.url).origin}/auth/callback`,
     },

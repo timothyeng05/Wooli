@@ -63,6 +63,7 @@ type CatRow = {
   is_income: boolean
   is_transfer: boolean
   deleted: boolean
+  budget_level?: 'parent' | 'sub' | null
 }
 
 type AddingState = {
@@ -144,7 +145,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
   const [step, setStep] = useState(1)
 
   // Step 2
-  const [members, setMembers] = useState([{ name: '', color: MEMBER_COLORS[0] }])
+  const [members, setMembers] = useState<{ id: string; name: string; color: string }[]>([{ id: crypto.randomUUID(), name: '', color: MEMBER_COLORS[0] }])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -155,6 +156,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
   const [openStyleId, setOpenStyleId] = useState<string | null>(null)
   const [adding, setAdding] = useState<AddingState | null>(null)
   const [addingLoading, setAddingLoading] = useState(false)
+  const [saveCatsError, setSaveCatsError] = useState('')
 
   // Step 4 — budget targets
   const [budgetAmounts, setBudgetAmounts] = useState<Record<string, string>>({})
@@ -163,7 +165,6 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
 
   // Step 5 — Plaid
   const [plaidError, setPlaidError] = useState('')
-
 
   const supabase = createClient()
 
@@ -177,27 +178,41 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
 
   useEffect(() => {
     if (step !== 3) return
+    if (cats.length > 0) return  // already loaded — don't clobber in-progress edits
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
 
     const load = async (attempt = 0) => {
+      if (cancelled) return
       setLoadingCats(true)
       const { data } = await supabase
         .from('categories')
-        .select('id, name, icon, color, parent_id, is_income, is_transfer')
+        .select('id, name, icon, color, parent_id, is_income, is_transfer, budget_level')
         .eq('user_id', userId)
         .order('sort_order', { ascending: true })
       if (cancelled) return
       if ((!data || data.length === 0) && attempt < 5) {
         // Seed still running — retry after a short wait
-        setTimeout(() => load(attempt + 1), 1000)
+        retryTimer = setTimeout(() => load(attempt + 1), 1000)
         return
       }
-      if (data) setCats(data.map(c => ({ ...c, originalName: c.name, originalIcon: c.icon, originalColor: c.color, deleted: false })))
+      if (data) {
+        setCats(data.map(c => ({ ...c, originalName: c.name, originalIcon: c.icon, originalColor: c.color, deleted: false })))
+        setBudgetLevels(
+          data.reduce<Record<string, 'parent' | 'sub'>>((acc, c) => {
+            if (c.budget_level != null) acc[c.id] = c.budget_level
+            return acc
+          }, {})
+        )
+      }
       setLoadingCats(false)
     }
 
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (retryTimer != null) clearTimeout(retryTimer)
+    }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Step 2 handlers ────────────────────────────────────────────────────────
@@ -208,7 +223,8 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
     setLoading(true)
     setError('')
     // Clear any existing members first so repeated wizard runs don't accumulate
-    await supabase.from('household_members').delete().eq('user_id', userId)
+    const { error: delErr } = await supabase.from('household_members').delete().eq('user_id', userId)
+    if (delErr) { setError(delErr.message); setLoading(false); return }
     const { error: err } = await supabase.from('household_members').insert(
       valid.map((m, i) => ({
         user_id: userId,
@@ -224,14 +240,14 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
     setStep(3) // → categories intro
   }
 
-  const updateMember = (i: number, patch: Partial<{ name: string; color: string }>) =>
-    setMembers(prev => prev.map((m, idx) => idx === i ? { ...m, ...patch } : m))
+  const updateMember = (id: string, patch: Partial<{ name: string; color: string }>) =>
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m))
 
   const addMemberRow = () =>
-    setMembers(prev => [...prev, { name: '', color: MEMBER_COLORS[prev.length % MEMBER_COLORS.length] }])
+    setMembers(prev => [...prev, { id: crypto.randomUUID(), name: '', color: MEMBER_COLORS[prev.length % MEMBER_COLORS.length] }])
 
-  const removeMemberRow = (i: number) =>
-    setMembers(prev => prev.filter((_, idx) => idx !== i))
+  const removeMemberRow = (id: string) =>
+    setMembers(prev => prev.filter(m => m.id !== id))
 
   // ── Step 3 handlers ────────────────────────────────────────────────────────
 
@@ -279,18 +295,22 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
     setAddingLoading(false)
   }
 
-  const handleSaveCategories = async () => {
+  const handleSaveCategories = async (backNav?: boolean) => {
     setSavingCats(true)
+    setSaveCatsError('')
     const toDelete = cats.filter(c => c.deleted).map(c => c.id)
     const toUpdate = cats.filter(c => !c.deleted && (
       c.name !== c.originalName || c.icon !== c.originalIcon || c.color !== c.originalColor
     ))
-    if (toDelete.length) await supabase.from('categories').delete().in('id', toDelete)
+    if (toDelete.length) {
+      const { error: delError } = await supabase.from('categories').delete().in('id', toDelete)
+      if (delError) { setSavingCats(false); setSaveCatsError(delError.message); return }
+    }
     for (const c of toUpdate) {
       await supabase.from('categories').update({ name: c.name, icon: c.icon, color: c.color }).eq('id', c.id)
     }
     setSavingCats(false)
-    setStep(4) // → budget targets
+    setStep(backNav ? 2 : 4)
   }
 
   const handleSaveBudgets = async () => {
@@ -530,7 +550,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
           )}
 
           {/* Add parent category button */}
-          {adding?.parentId !== null || adding?.section !== section ? (
+          {(!adding || adding.parentId !== null || adding.section !== section) ? (
             <button
               onClick={() => {
                 setAdding({ parentId: null, section, name: '', icon: section === 'income' ? '💵' : section === 'transfer' ? '↔️' : '📁', color: meta.color })
@@ -547,6 +567,8 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
     )
   }
 
+  const isCatsDirty = cats.some(c => c.deleted || c.name !== c.originalName || c.icon !== c.originalIcon || c.color !== c.originalColor)
+
   const progress = Math.min(((step - 1) / (TOTAL_STEPS - 2)) * 100, 100)
 
   return (
@@ -560,7 +582,13 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
             <div className="flex items-center gap-1.5 mb-3">
               {step > 1 && (
                 <button
-                  onClick={() => setStep(s => s - 1)}
+                  onClick={async () => {
+                    if (step === 3 && isCatsDirty) {
+                      await handleSaveCategories(true)
+                    } else {
+                      setStep(s => s - 1)
+                    }
+                  }}
                   className="text-gray-400 hover:text-gray-600 transition mr-1 flex-shrink-0"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -635,7 +663,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
 
                 <div className="space-y-3 mb-4">
                   {members.map((m, i) => (
-                    <div key={i} className="rounded-xl border border-gray-200 px-3 py-3 space-y-2.5">
+                    <div key={m.id} className="rounded-xl border border-gray-200 px-3 py-3 space-y-2.5">
                       <div className="flex items-center gap-2">
                         <div
                           className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
@@ -645,20 +673,20 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                         </div>
                         <input
                           value={m.name}
-                          onChange={e => updateMember(i, { name: e.target.value })}
+                          onChange={e => updateMember(m.id, { name: e.target.value })}
                           placeholder={i === 0 ? 'Your name' : 'Their name'}
                           autoFocus={i === 0}
                           className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         {members.length > 1 && (
-                          <button onClick={() => removeMemberRow(i)} className="text-gray-300 hover:text-red-400 transition text-lg leading-none">×</button>
+                          <button onClick={() => removeMemberRow(m.id)} className="text-gray-300 hover:text-red-400 transition text-lg leading-none">×</button>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 pl-10">
                         {MEMBER_COLORS.map(c => (
                           <button
                             key={c}
-                            onClick={() => updateMember(i, { color: c })}
+                            onClick={() => updateMember(m.id, { color: c })}
                             className={`w-5 h-5 rounded-full border-2 transition ${m.color === c ? 'border-gray-700 scale-110' : 'border-transparent'}`}
                             style={{ backgroundColor: c }}
                           />
@@ -666,7 +694,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                         <input
                           type="color"
                           value={m.color}
-                          onChange={e => updateMember(i, { color: e.target.value })}
+                          onChange={e => updateMember(m.id, { color: e.target.value })}
                           className="w-6 h-6 rounded cursor-pointer border border-gray-200"
                         />
                       </div>
@@ -682,6 +710,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                 </button>
 
                 {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+
                 <button
                   onClick={handleAddMembers}
                   disabled={loading || !members.some(m => m.name.trim())}
@@ -690,20 +719,17 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                   {loading ? 'Setting up…' : 'Continue'}
                 </button>
                 <a
+                  href="#"
                   onClick={async (e) => {
                     e.preventDefault()
                     await supabase.from('household_members').delete().eq('user_id', userId)
-                    supabase.from('household_members').insert({
-                      user_id: userId,
-                      full_name: 'Me',
-                      display_name: 'Me',
-                      color: MEMBER_COLORS[0],
-                      sort_order: 0,
-                      is_shared: false,
+                    await supabase.from('household_members').insert({
+                      user_id: userId, full_name: 'Me', display_name: 'Me',
+                      color: MEMBER_COLORS[0], sort_order: 0, is_shared: false,
                     })
                     setStep(3)
                   }}
-                  className="w-full text-center text-sm text-gray-400 hover:text-gray-600 transition mt-2 block cursor-pointer"
+                  className="w-full text-center text-sm text-gray-400 hover:text-gray-600 transition mt-2 block"
                 >
                   Skip — just me
                 </a>
@@ -720,7 +746,10 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                 <p className="text-xs text-gray-400 mb-5">You can always change these later in <strong>Categories</strong>.</p>
 
                 {loadingCats ? (
-                  <div className="py-20 text-center text-sm text-gray-400">Loading categories…</div>
+                  <div className="py-20 text-center text-sm text-gray-400">
+                    <div className="animate-pulse mb-2">⚙️</div>
+                    Setting up your categories — just a moment…
+                  </div>
                 ) : (
                   <>
                     {renderSection('income')}
@@ -730,12 +759,13 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                 )}
 
                 <button
-                  onClick={handleSaveCategories}
+                  onClick={() => handleSaveCategories()}
                   disabled={savingCats || loadingCats}
                   className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition"
                 >
                   {savingCats ? 'Saving…' : 'Looks good →'}
                 </button>
+                {saveCatsError && <p className="text-xs text-red-500 mt-2">{saveCatsError}</p>}
               </div>
             )}
 
@@ -879,10 +909,10 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                   }}
                   onError={msg => setPlaidError(msg)}
                 />
+                {plaidError && (
+                  <p className="text-xs text-red-500 mt-2">Could not connect to Plaid. You can skip for now and connect later from the Accounts page.</p>
+                )}
               </div>
-            )}
-            {step === 5 && plaidError && (
-              <p className="text-xs text-red-500 mb-3">Could not connect to Plaid. You can skip for now and connect later from the Accounts page.</p>
             )}
 
             {/* Step 5 — Link accounts */}
@@ -912,7 +942,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                 </div>
 
                 <button
-                  onClick={() => setStep(6)}
+                  onClick={async () => { await markComplete(); setStep(6) }}
                   className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
                 >
                   Skip for now

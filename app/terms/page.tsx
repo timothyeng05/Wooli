@@ -17,7 +17,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-gray-900 mb-1">Google Services</h2>
-          <p>Wooli uses Google OAuth to authenticate users and read-only access to Google Calendar to display events. Use of Google services is subject to <a href="https://policies.google.com/terms" className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">Google's Terms of Service</a>.</p>
+          <p>Wooli uses Google OAuth to authenticate users. Use of Google services is subject to <a href="https://policies.google.com/terms" className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">Google's Terms of Service</a>.</p>
         </section>
 
         <section>

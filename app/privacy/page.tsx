@@ -11,11 +11,6 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="font-semibold text-gray-900 mb-1">Google Calendar Access</h2>
-          <p>Wooli requests read-only access to your Google Calendar (<code>calendar.readonly</code>) to display your events on the dashboard. Calendar data is never stored, sold, or shared with third parties. It is fetched in real time and displayed only to you.</p>
-        </section>
-
-        <section>
           <h2 className="font-semibold text-gray-900 mb-1">Data Storage</h2>
           <p>App data (trips, mood entries, transactions, lists) is stored in a private Supabase database accessible only to the authenticated user. No data is shared with or sold to third parties.</p>
         </section>
