@@ -15,5 +15,10 @@ export default async function OnboardingPage() {
 
   if (profile?.onboarding_completed_at) redirect('/budget')
 
-  return <OnboardingWizard userId={user.id} />
+  const { count } = await supabase
+    .from('categories')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+
+  return <OnboardingWizard userId={user.id} hasExistingSetup={!!count && count > 0} />
 }

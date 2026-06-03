@@ -87,6 +87,13 @@ function StylePanel({ icon, color, onIcon, onColor, showColor = true }: {
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Icon</p>
         <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+          <button
+            onClick={() => onIcon('')}
+            className={`w-8 h-8 flex items-center justify-center rounded text-xs text-gray-400 hover:bg-gray-100 border border-dashed border-gray-200 transition ${!icon ? 'bg-blue-50 ring-2 ring-blue-400' : ''}`}
+            title="No icon (use default)"
+          >
+            ✕
+          </button>
           {ICON_SECTIONS.map(section => (
             <div key={section.label}>
               <p className="text-[10px] text-gray-400 mb-1">{section.label}</p>
@@ -132,7 +139,7 @@ function StylePanel({ icon, color, onIcon, onColor, showColor = true }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function OnboardingWizard({ userId }: { userId: string }) {
+export default function OnboardingWizard({ userId, hasExistingSetup = false }: { userId: string; hasExistingSetup?: boolean }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
 
@@ -153,6 +160,9 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
   const [budgetAmounts, setBudgetAmounts] = useState<Record<string, string>>({})
   const [budgetLevels, setBudgetLevels] = useState<Record<string, 'parent' | 'sub'>>({})
   const [savingBudgets, setSavingBudgets] = useState(false)
+
+  // Step 5 — Plaid
+  const [plaidError, setPlaidError] = useState('')
 
 
   const supabase = createClient()
@@ -537,7 +547,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
     )
   }
 
-  const progress = ((step - 1) / (TOTAL_STEPS - 1)) * 100
+  const progress = Math.min(((step - 1) / (TOTAL_STEPS - 2)) * 100, 100)
 
   return (
     <div className="flex-1 flex flex-col bg-white">
@@ -591,12 +601,12 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
             {step === 1 && (
               <div>
                 <div className="text-4xl mb-4">👋</div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Wooli Budget</h1>
-                <p className="text-gray-500 mb-8">4 steps — takes about 3 minutes.</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">{hasExistingSetup ? 'Reset your budget setup' : 'Welcome to Wooli Budget'}</h1>
+                <p className="text-gray-500 mb-8">{hasExistingSetup ? 'Your existing setup will be updated.' : '4 steps — takes about 3 minutes.'}</p>
                 <ul className="space-y-3 mb-10">
                   {[
                     ['👤', 'Add your household members'],
-                    ['🗂️', 'Set up your categories'],
+                    ['🗂️', hasExistingSetup ? 'Set up your categories (will be updated)' : 'Set up your categories'],
                     ['💰', 'Set monthly spending targets'],
                     ['🏦', 'Link a bank account (optional)'],
                   ].map(([icon, text]) => (
@@ -672,7 +682,6 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 </button>
 
                 {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
-
                 <button
                   onClick={handleAddMembers}
                   disabled={loading || !members.some(m => m.name.trim())}
@@ -680,6 +689,24 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                 >
                   {loading ? 'Setting up…' : 'Continue'}
                 </button>
+                <a
+                  onClick={async (e) => {
+                    e.preventDefault()
+                    await supabase.from('household_members').delete().eq('user_id', userId)
+                    supabase.from('household_members').insert({
+                      user_id: userId,
+                      full_name: 'Me',
+                      display_name: 'Me',
+                      color: MEMBER_COLORS[0],
+                      sort_order: 0,
+                      is_shared: false,
+                    })
+                    setStep(3)
+                  }}
+                  className="w-full text-center text-sm text-gray-400 hover:text-gray-600 transition mt-2 block cursor-pointer"
+                >
+                  Skip — just me
+                </a>
               </div>
             )}
 
@@ -754,7 +781,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                             onChange={e => setBudgetAmounts(prev => ({ ...prev, [cat.id]: e.target.value.replace(/[^0-9]/g, '') }))}
                             className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
-                          <span className="text-xs text-gray-400">/mo</span>
+                          <span className="text-xs text-gray-400">{cat.is_income ? '/mo expected' : '/mo'}</span>
                         </div>
                       )}
                     </div>
@@ -781,7 +808,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                                   onChange={e => setBudgetAmounts(prev => ({ ...prev, [child.id]: e.target.value.replace(/[^0-9]/g, '') }))}
                                   className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
-                                <span className="text-xs text-gray-400">/mo</span>
+                                <span className="text-xs text-gray-400">{child.is_income ? '/mo expected' : '/mo'}</span>
                               </div>
                             ) : (
                               <span className="text-xs text-gray-300 flex-shrink-0">included</span>
@@ -806,7 +833,7 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                     <div className="space-y-3 mb-5">
                       <div className="flex items-center gap-2 pb-1">
                         <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Income</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Expected income</p>
                       </div>
                       {incomeParents.map(renderCatGroup)}
                     </div>
@@ -850,8 +877,12 @@ export default function OnboardingWizard({ userId }: { userId: string }) {
                     await markComplete()
                     router.push('/budget')
                   }}
+                  onError={msg => setPlaidError(msg)}
                 />
               </div>
+            )}
+            {step === 5 && plaidError && (
+              <p className="text-xs text-red-500 mb-3">Could not connect to Plaid. You can skip for now and connect later from the Accounts page.</p>
             )}
 
             {/* Step 5 — Link accounts */}

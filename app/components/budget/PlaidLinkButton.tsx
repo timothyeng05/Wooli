@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 
-export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false, className }: {
+export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false, className, onError }: {
   onSuccess?: () => void
   onComplete?: () => void  // if provided, called instead of window.location.reload()
   atLimit?: boolean
   className?: string
+  onError?: (error: string) => void
 }) {
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -18,9 +19,9 @@ export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false
       .then(r => r.json())
       .then(d => {
         if (d.link_token) setLinkToken(d.link_token)
-        else setError(d.error || 'Failed to load')
+        else { setError(d.error || 'Failed to load'); onError?.(d.error || 'Failed to load') }
       })
-      .catch(() => setError('Network error'))
+      .catch(() => { setError('Network error'); onError?.('Network error') })
   }, [])
 
   const onPlaidSuccess = useCallback(async (public_token: string, metadata: any) => {
@@ -37,7 +38,9 @@ export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false
     setLoading(false)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      setError(body.error ?? 'Failed to connect institution')
+      const msg = body.error ?? 'Failed to connect institution'
+      setError(msg)
+      onError?.(msg)
       return
     }
     onSuccess?.()
@@ -48,6 +51,13 @@ export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false
   const { open, ready } = usePlaidLink({
     token: linkToken ?? '',
     onSuccess: onPlaidSuccess,
+    onExit: (err) => {
+      if (err) {
+        const msg = err.error_message ?? err.display_message ?? 'Plaid exited with an error'
+        setError(msg)
+        onError?.(msg)
+      }
+    },
   })
 
   if (error) return <p className="text-sm text-red-500">Error: {error}</p>
