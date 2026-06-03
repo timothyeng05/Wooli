@@ -42,6 +42,7 @@ export type SectionData = {
   timeOverride?: string
   duration?: string
   pinned?: boolean
+  skipped?: boolean
   coords?: string
   title?: string
   rating?: number

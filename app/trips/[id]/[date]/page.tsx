@@ -1,696 +1,15 @@
 'use client'
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
-import DayLocationMap, { type LocationPoint } from '@/app/components/trips/DayLocationMapClient'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import {
-  SECTIONS, SectionMeta, SectionData, ParsedSection,
-  findMeta, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData,
-} from '@/lib/trips/trip-sections'
+import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
+import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords, MOOD_OPTIONS, ratingStyle } from '@/lib/trips/trip-utils'
+import { SectionCard, HotelCard, TravelBanner, DayMapCollapsible } from '@/app/components/trips/SectionCards'
+import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
+import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 
-type DayData = { title: string | null; notes: string | null; date: string; location: string | null }
-type EditorSection = SectionData & { _id: string }
-
-// ─── Display components (view mode) ────────────────────────────────────────
-
-function ratingStyle(r: number): string {
-  if (r >= 8) return 'bg-green-500 text-white'
-  if (r >= 5) return 'bg-amber-400 text-white'
-  return 'bg-red-400 text-white'
-}
-
-function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpand, rating }: {
-  meta: SectionMeta; lines: string[]
-  onEdit?: () => void
-  title?: string; type?: string
-  expanded: boolean; onToggleExpand: () => void
-  rating?: number
-}) {
-  const allContent = lines.map(l => l.trim()).filter(Boolean)
-  const t = type?.toUpperCase() ?? ''
-  const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
-
-  let duration: string | null = null
-  let content = allContent
-  const dl = allContent.find(l => l.startsWith('~'))
-  if (dl) {
-    duration = dl.slice(1).trim()
-    content = allContent.filter(l => !l.startsWith('~'))
-  }
-
-  let displayName: string | null = null
-  let body = content
-  if (isActivityOrMeal) {
-    const nameIdx = content.findIndex(l => !l.startsWith('-'))
-    if (nameIdx >= 0) {
-      displayName = content[nameIdx]
-      body = content.filter((_, i) => i !== nameIdx)
-    }
-  }
-
-  if (!content.length && !duration && !title) return null
-  const headerText = displayName || title || meta.label
-  const hasBody = body.length > 0
-
-  return (
-    <div className={`rounded-xl border overflow-hidden ${meta.bg} ${meta.border}`}>
-      <div
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
-        onClick={onToggleExpand}
-      >
-        <span className="flex-shrink-0 text-base">{meta.icon}</span>
-        <div className="flex-1 min-w-0">
-          <p className={`text-base font-semibold leading-snug ${meta.text}`}>{headerText}</p>
-          {duration && (
-            <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>
-          )}
-        </div>
-        {hasBody && (
-          <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
-        )}
-        {rating != null && (
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>
-            {rating}/10
-          </span>
-        )}
-        {onEdit && (
-          <button
-            onClick={e => { e.stopPropagation(); onEdit() }}
-            className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0"
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      {expanded && body.length > 0 && (
-        <div className={`px-3 pb-2.5 pt-2 border-t ${meta.border}`}>
-          <ul className="space-y-1">
-            {body.map((line, i) => {
-              const isBullet = line.startsWith('-')
-              const text = isBullet ? line.slice(1).trim() : line
-              return (
-                <li key={i} className={`text-base text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
-                  {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
-                  <span>{text}</span>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function HotelCard({ meta, lines, onEdit }: {
-  meta: SectionMeta; lines: string[]
-  onEdit?: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const content = lines.map(l => l.trim()).filter(Boolean)
-  const name = content[0]
-  const location = content[1]
-  if (!name) return null
-  const query = encodeURIComponent([name, location].filter(Boolean).join(', '))
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
-  const embedUrl = `https://maps.google.com/maps?q=${query}&output=embed&z=15`
-  return (
-    <div className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden`}>
-      <div
-        className="px-3 py-2.5 flex items-center gap-2 cursor-pointer select-none"
-        onClick={() => setOpen(o => !o)}
-      >
-        <span className="text-base flex-shrink-0">{meta.icon}</span>
-        <div className="flex-1 min-w-0">
-          <p className={`text-base font-semibold ${meta.text}`}>{name}</p>
-          {location && <p className="text-sm text-gray-500">{location}</p>}
-        </div>
-        <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
-        {onEdit && (
-          <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0">Edit</button>
-        )}
-      </div>
-      {open && (
-        <>
-          <iframe
-            src={embedUrl}
-            className="w-full border-t border-gray-100"
-            style={{ height: 220 }}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-          <div className={`px-3 py-2 border-t border-gray-100 ${meta.bg}`}>
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`text-sm font-semibold ${meta.text} hover:underline`}
-              onClick={e => e.stopPropagation()}
-            >
-              Open in Google Maps →
-            </a>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function TravelBanner({ sections }: { sections: ParsedSection[] }) {
-  const travel = sections.filter(s => s.meta.banner)
-  if (!travel.length) return null
-  return (
-    <div className="space-y-2">
-      {travel.map((s, i) => {
-        const lines = s.lines.map(l => l.trim()).filter(Boolean)
-        const duration = lines.find(l => l.startsWith('~'))?.slice(1).trim()
-        const content = lines.filter(l => !l.startsWith('~')).map(l => l.replace(/^-\s*/, ''))
-        const route = content.find(l => l.includes('→'))
-        const detail = content.find(l => l !== route)
-        const time = s.timeOverride
-        return (
-          <div key={i} className={`rounded-xl border px-5 py-4 ${s.meta.bg} ${s.meta.border} flex items-center gap-4`}>
-            <span className="text-2xl flex-shrink-0">{s.meta.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className={`text-xs font-semibold uppercase tracking-wide ${s.meta.text} mb-0.5`}>{s.meta.label}</p>
-              {route && <p className="text-base font-bold text-gray-900 leading-snug">{route}</p>}
-              {detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{detail}</p>}
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {time && <span className={`text-sm font-bold ${s.meta.text}`}>{time}</span>}
-              {duration && <span className={`text-sm font-bold ${s.meta.text}`}>⏱ {duration}</span>}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── Editor components ──────────────────────────────────────────────────────
-
-const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
-const labelCls = 'block text-xs text-gray-500 mb-1'
-
-function parseDuration(raw: string): { hours: number; minutes: number } {
-  const h = raw.match(/(\d+)\s*h/i)
-  const m = raw.match(/(\d+)\s*m(?:in)?/i)
-  const col = !h && !m ? raw.match(/^(\d+):(\d{2})$/) : null
-  let hours = h ? parseInt(h[1]) : col ? parseInt(col[1]) : 0
-  let minutes = m ? parseInt(m[1]) : col ? parseInt(col[2]) : 0
-  if (minutes >= 60) { hours += Math.floor(minutes / 60); minutes %= 60 }
-  return { hours, minutes }
-}
-
-function formatDuration(h: number, m: number): string {
-  if (!h && !m) return ''
-  if (!h) return `${m}m`
-  if (!m) return `${h}h`
-  return `${h}h ${m}m`
-}
-
-function DurationInput({ value, onChange }: { value?: string; onChange: (val: string | undefined) => void }) {
-  const init = value ? parseDuration(value) : { hours: 0, minutes: 0 }
-  const [h, setH] = useState(init.hours)
-  const [m, setM] = useState(init.minutes)
-  const emit = (nh: number, nm: number) => { const s = formatDuration(nh, nm); onChange(s || undefined) }
-  return (
-    <div className="flex items-center gap-1.5">
-      <input type="number" min={0} max={99} value={h || ''} placeholder="0"
-        onChange={e => { const v = Math.max(0, parseInt(e.target.value) || 0); setH(v); emit(v, m) }}
-        className="w-14 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
-      <span className="text-xs text-gray-400 font-medium">h</span>
-      <input type="number" min={0} max={59} value={m || ''} placeholder="0"
-        onChange={e => { const v = Math.max(0, Math.min(59, parseInt(e.target.value) || 0)); setM(v); emit(h, v) }}
-        className="w-14 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
-      <span className="text-xs text-gray-400 font-medium">m</span>
-    </div>
-  )
-}
-
-function AutoTextarea({ value, onChange, className, placeholder }: {
-  value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
-  className?: string; placeholder?: string
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-  useLayoutEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = 'auto'
-      ref.current.style.height = ref.current.scrollHeight + 'px'
-    }
-  }, [value])
-  return (
-    <textarea
-      ref={ref}
-      rows={2}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={className}
-      style={{ overflow: 'hidden', resize: 'none' }}
-    />
-  )
-}
-
-function TravelEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const routeLine = section.lines.find(l => l.includes('→')) ?? ''
-  const detailLines = section.lines.filter(l => !l.includes('→')).join('\n')
-
-  const setRoute = (val: string) => {
-    const others = section.lines.filter(l => !l.includes('→'))
-    onChange({ lines: val ? [val, ...others] : others })
-  }
-  const setDetails = (val: string) => {
-    const rl = section.lines.find(l => l.includes('→'))
-    const newDetails = val.split('\n').filter(Boolean)
-    onChange({ lines: rl ? [rl, ...newDetails] : newDetails })
-  }
-
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <label className={labelCls}>Route</label>
-        <input className={inputCls} value={routeLine} onChange={e => setRoute(e.target.value)} placeholder="SFO → NRT" />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className={labelCls}>Departs</label>
-          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="2:00 AM" />
-        </div>
-        <div>
-          <label className={labelCls}>Duration</label>
-          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Details (flight #, airline, etc.)</label>
-        <input className={inputCls} value={detailLines} onChange={e => setDetails(e.target.value)} placeholder="UA 7923, United Airlines" />
-      </div>
-    </div>
-  )
-}
-
-function HotelEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const name = section.lines[0] ?? ''
-  const location = section.lines[1] ?? ''
-
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <label className={labelCls}>Name</label>
-        <input className={inputCls} value={name} onChange={e => onChange({ lines: [e.target.value, location].filter((v, i) => i === 0 || location) })} placeholder="Park Hyatt Tokyo" />
-      </div>
-      <div>
-        <label className={labelCls}>Location</label>
-        <input className={inputCls} value={location} onChange={e => onChange({ lines: name ? [name, e.target.value] : [e.target.value] })} placeholder="Shinjuku, Tokyo" />
-      </div>
-      <div>
-        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
-        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
-      </div>
-    </div>
-  )
-}
-
-function DriveEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const routeIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
-  const routeLine = routeIdx >= 0 ? section.lines[routeIdx] : ''
-  const noteLines = section.lines.slice(routeIdx + 1).join('\n')
-
-  const setRoute = (val: string) => {
-    const bullets = section.lines.filter(l => l.trim().startsWith('-'))
-    onChange({ lines: val ? [val, ...bullets] : bullets })
-  }
-  const setNotes = (val: string) => {
-    onChange({ lines: routeLine ? [routeLine, ...val.split('\n')] : val.split('\n') })
-  }
-
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <label className={labelCls}>Route / description</label>
-        <input className={inputCls} value={routeLine} onChange={e => setRoute(e.target.value)} placeholder="Kagoshima → Ebino Kogen" />
-      </div>
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className={labelCls}>Start time</label>
-          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="9:00 AM" />
-        </div>
-        <div className="flex-shrink-0">
-          <label className={labelCls}>Duration</label>
-          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Notes (optional)</label>
-        <AutoTextarea className={inputCls} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Exit B2&#10;- Platform 3" />
-      </div>
-    </div>
-  )
-}
-
-function CarEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const pickup = section.lines[0] ?? ''
-  const returnLoc = section.lines[1] ?? ''
-
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <label className={labelCls}>Pickup</label>
-        <input className={inputCls} value={pickup} onChange={e => onChange({ lines: [e.target.value, returnLoc].filter((v, i) => i === 0 || !!returnLoc) })} placeholder="Enterprise – Kagoshima Airport" />
-      </div>
-      <div>
-        <label className={labelCls}>Return</label>
-        <input className={inputCls} value={returnLoc} onChange={e => onChange({ lines: pickup ? [pickup, e.target.value] : [e.target.value] })} placeholder="Fukuoka Airport (or same location)" />
-      </div>
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className={labelCls}>Pickup time</label>
-          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="10:00 AM" />
-        </div>
-        <div className="w-28 flex-shrink-0">
-          <label className={labelCls}>Duration</label>
-          <input className={inputCls} value={section.duration ?? ''} onChange={e => onChange({ duration: e.target.value || undefined })} placeholder="9 days" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ActivityEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const titleIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
-  const titleLine = titleIdx >= 0 ? section.lines[titleIdx] : ''
-  const noteLines = section.lines.filter(l => l.trim().startsWith('-') || l !== titleLine).join('\n')
-
-  const setTitle = (val: string) => {
-    const rest = titleIdx >= 0 ? section.lines.filter((_, i) => i !== titleIdx) : section.lines
-    onChange({ lines: val ? [val, ...rest] : rest })
-  }
-  const setNotes = (val: string) => {
-    onChange({ lines: titleLine ? [titleLine, ...val.split('\n')] : val.split('\n') })
-  }
-
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <label className={labelCls}>Activity</label>
-        <input className={inputCls} value={titleLine} onChange={e => setTitle(e.target.value)} placeholder="Sumo Tournament" />
-      </div>
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className={labelCls}>Time</label>
-          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="11:00 AM" />
-        </div>
-        <div className="flex-shrink-0">
-          <label className={labelCls}>Duration</label>
-          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
-        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
-      </div>
-      <div>
-        <label className={labelCls}>Notes (optional)</label>
-        <AutoTextarea className={inputCls} value={noteLines} onChange={e => setNotes(e.target.value)} placeholder="- Bring camera&#10;- Book tickets in advance" />
-      </div>
-    </div>
-  )
-}
-
-function MealEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  const nameIdx = section.lines.findIndex(l => l.trim() !== '' && !l.trim().startsWith('-'))
-  const nameLine = nameIdx >= 0 ? section.lines[nameIdx] : ''
-  const bulletLines = nameIdx >= 0 ? section.lines.slice(nameIdx + 1) : section.lines
-
-  // Strip '- ' prefix for display so users type items plainly
-  const foodDisplay = bulletLines
-    .map(l => l.trim().startsWith('- ') ? l.trim().slice(2) : l.trim())
-    .join('\n')
-
-  const setName = (val: string) => {
-    const rest = nameIdx >= 0 ? section.lines.filter((_, i) => i !== nameIdx) : section.lines
-    onChange({ lines: val ? [val, ...rest] : rest })
-  }
-  const setFood = (val: string) => {
-    const items = val.split('\n').map(l => l.trim() ? `- ${l.trim()}` : '')
-    onChange({ lines: nameLine ? [nameLine, ...items] : items })
-  }
-
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <label className={labelCls}>Restaurant / place</label>
-        <input className={inputCls} value={nameLine} onChange={e => setName(e.target.value)} placeholder="Chanko Tomoegata" />
-      </div>
-      <div>
-        <label className={labelCls}>Food items <span className="text-gray-400 font-normal">(one per line)</span></label>
-        <AutoTextarea className={inputCls} value={foodDisplay} onChange={e => setFood(e.target.value)} placeholder="Chanko nabe&#10;Sake" />
-      </div>
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className={labelCls}>Time</label>
-          <input className={inputCls} value={section.timeOverride ?? ''} onChange={e => onChange({ timeOverride: e.target.value || undefined })} placeholder="7:00 PM" />
-        </div>
-        <div className="flex-shrink-0">
-          <label className={labelCls}>Duration (optional)</label>
-          <DurationInput value={section.duration} onChange={v => onChange({ duration: v })} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Rating <span className="text-gray-400 font-normal">(optional)</span></label>
-        <div className="flex gap-1 flex-wrap">
-          {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
-            const active = section.rating === n
-            const style = active ? ratingStyle(n) : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            return (
-              <button
-                key={n}
-                type="button"
-                onClick={() => onChange({ rating: active ? undefined : n })}
-                className={`w-8 h-8 rounded-lg text-xs font-bold transition ${style}`}
-              >
-                {n}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
-        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
-      </div>
-    </div>
-  )
-}
-
-function GeneralEditor({ section, onChange }: { section: EditorSection; onChange: (u: Partial<SectionData>) => void }) {
-  return (
-    <div>
-      <label className={labelCls}>Notes (one per line)</label>
-      <AutoTextarea
-        className={`${inputCls} font-mono`}
-        value={section.lines.join('\n')}
-        onChange={e => onChange({ lines: e.target.value.split('\n') })}
-        placeholder="- Item 1&#10;- Item 2"
-      />
-    </div>
-  )
-}
-
-const ACTIVITY_TYPES = new Set(['MORNING', 'AFTERNOON', 'NIGHT', 'ACTIVITY'])
-const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
-const HIDE_TITLE_TYPES = new Set(['ACTIVITY', 'MORNING', 'AFTERNOON', 'NIGHT', 'MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'HOTEL'])
-
-function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone, onCancel, dayOptions, currentDate, onMoveToDay }: {
-  section: EditorSection
-  onChange: (updates: Partial<SectionData>) => void
-  onDelete: () => void
-  onMoveUp?: () => void
-  onMoveDown?: () => void
-  onDone?: () => void
-  onCancel?: () => void
-  dayOptions?: { date: string; label: string }[]
-  currentDate?: string
-  onMoveToDay?: (targetDate: string) => void
-}) {
-  const [moveDayTarget, setMoveDayTarget] = useState(currentDate ?? '')
-  const meta = findMeta(section.type)
-  if (!meta) return null
-
-  const t = section.type.toUpperCase()
-
-  return (
-    <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {(onMoveUp || onMoveDown) && (
-            <div className="flex flex-col gap-0.5">
-              <button onClick={onMoveUp} disabled={!onMoveUp}
-                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-default transition leading-none text-xs px-0.5" title="Move up">▲</button>
-              <button onClick={onMoveDown} disabled={!onMoveDown}
-                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-default transition leading-none text-xs px-0.5" title="Move down">▼</button>
-            </div>
-          )}
-          <select
-            value={section.type}
-            onChange={e => onChange({ type: e.target.value })}
-            className={`text-sm font-semibold border-0 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-300 rounded px-1 py-0.5 cursor-pointer ${meta.text}`}
-          >
-            {ALL_SECTION_TYPES.map(type => {
-              const m = findMeta(type)
-              return m ? <option key={type} value={type}>{m.icon} {m.label}</option> : null
-            })}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Mark as must-do / appointment">
-            <input type="checkbox" checked={!!section.pinned}
-              onChange={e => onChange({ pinned: e.target.checked || undefined })}
-              className="w-4 h-4 rounded border-gray-300 accent-amber-500 cursor-pointer" />
-            <span className="text-xs text-gray-400">⭐ Important</span>
-          </label>
-        </div>
-      </div>
-      {!HIDE_TITLE_TYPES.has(t) && (
-        <div className="mb-3">
-          <input
-            type="text"
-            value={section.title ?? ''}
-            onChange={e => onChange({ title: e.target.value || undefined })}
-            placeholder="Title (auto-generated if blank)"
-            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-          />
-        </div>
-      )}
-      {(meta.banner || meta.travel) && !meta.car
-        ? <TravelEditor section={section} onChange={onChange} />
-        : meta.hotel
-        ? <HotelEditor section={section} onChange={onChange} />
-        : meta.car
-        ? <CarEditor section={section} onChange={onChange} />
-        : (meta.drive || meta.transit)
-        ? <DriveEditor section={section} onChange={onChange} />
-        : ACTIVITY_TYPES.has(t)
-        ? <ActivityEditor section={section} onChange={onChange} />
-        : MEAL_TYPES.has(t)
-        ? <MealEditor section={section} onChange={onChange} />
-        : <GeneralEditor section={section} onChange={onChange} />
-      }
-      {onDone && (
-        <div className="mt-3 pt-3 border-t border-gray-200/60 space-y-2">
-          {dayOptions && dayOptions.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 whitespace-nowrap">Move to:</span>
-              <select
-                value={moveDayTarget}
-                onChange={e => setMoveDayTarget(e.target.value)}
-                className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
-              >
-                {dayOptions.map(opt => (
-                  <option key={opt.date} value={opt.date}>{opt.label}</option>
-                ))}
-              </select>
-              {moveDayTarget !== currentDate && onMoveToDay && (
-                <button
-                  onClick={() => onMoveToDay(moveDayTarget)}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition whitespace-nowrap"
-                >
-                  Move →
-                </button>
-              )}
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <button onClick={onDelete} className="text-xs font-medium text-red-400 hover:text-red-600 transition">
-              Delete
-            </button>
-            <div className="flex items-center gap-3">
-              {onCancel && (
-                <button onClick={onCancel} className="text-xs font-medium text-gray-400 hover:text-gray-600 transition">
-                  Cancel
-                </button>
-              )}
-              <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Groups for the Add Section picker
-const ADD_SECTION_GROUPS = [
-  { label: 'Travel', types: ['FLIGHT', 'TRAIN', 'DRIVE', 'RENTAL CAR', 'SUBWAY'] },
-  { label: 'Plan',   types: ['ACTIVITY', 'MEAL'] },
-  { label: 'Stay',   types: ['HOTEL'] },
-]
-const ALL_SECTION_TYPES = ADD_SECTION_GROUPS.flatMap(g => g.types)
-
-function AddSectionPicker({ onAdd, onCancel }: { onAdd: (type: string) => void; onCancel?: () => void }) {
-  return (
-    <div className="border border-dashed border-gray-300 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Add section</p>
-        {onCancel && <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600 transition">Cancel</button>}
-      </div>
-      {ADD_SECTION_GROUPS.map(group => (
-        <div key={group.label}>
-          <p className="text-xs text-gray-400 mb-1.5">{group.label}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {group.types.map(type => {
-              const meta = findMeta(type)
-              if (!meta) return null
-              return (
-                <button
-                  key={type}
-                  onClick={() => onAdd(type)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition hover:shadow-sm ${meta.bg} ${meta.border} ${meta.text}`}
-                >
-                  {meta.icon} {meta.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function DayMapCollapsible({ locations }: { locations: LocationPoint[] }) {
-  const [open, setOpen] = useState(false)
-  if (!locations.length) return null
-  const label = locations.length === 1 ? locations[0].label : `${locations.length} locations today`
-  return (
-    <div className="rounded-xl border border-gray-100 overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition text-sm font-medium text-gray-600"
-      >
-        <span className="flex items-center gap-2">
-          <span>🗺</span>
-          <span>{label}</span>
-        </span>
-        <span className="text-gray-400 text-xs">{open ? '▲ Hide map' : '▼ Show map'}</span>
-      </button>
-      {open && <DayLocationMap locations={locations} />}
-    </div>
-  )
-}
-
-// ─── Main page ──────────────────────────────────────────────────────────────
-
-function parseCoords(raw: string | undefined): { lat: number; lng: number } | null {
-  if (!raw) return null
-  const parts = raw.split(',').map(s => parseFloat(s.trim()))
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return { lat: parts[0], lng: parts[1] }
-  return null
-}
+type DayData = { title: string | null; notes: string | null; date: string }
 
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
@@ -709,12 +28,8 @@ async function generateMissingTitles(items: EditorSection[]): Promise<EditorSect
     })
     const { titles }: { titles: string[] } = await res.json()
     if (!Array.isArray(titles)) return items
-    let idx = 0
-    return items.map(item =>
-      !item.title && item.lines.filter(Boolean).some(l => l.trim())
-        ? { ...item, title: titles[idx++] || undefined }
-        : item
-    )
+    const titleMap = new Map(candidates.map((c, i) => [c._id, titles[i] || undefined]))
+    return items.map(item => titleMap.has(item._id) ? { ...item, title: titleMap.get(item._id) } : item)
   } catch { return items }
 }
 
@@ -724,7 +39,10 @@ export default function TripDayPage() {
   const [days, setDays] = useState<DayData[]>([])
   const [allDates, setAllDates] = useState<string[]>([])
   const [title, setTitle] = useState('')
-  const [location, setLocation] = useState('')
+  const [dayRating, setDayRating] = useState<number | null>(null)
+  const [dayMood, setDayMood] = useState<string | null>(null)
+  const [journal, setJournal] = useState('')
+  const [journalOpen, setJournalOpen] = useState(false)
   const [sectionItems, setSectionItems] = useState<EditorSection[]>([])
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
@@ -745,7 +63,7 @@ export default function TripDayPage() {
 
       const [{ data: tripData }, { data: allDays }] = await Promise.all([
         supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
-        supabase.from('trip_days').select('date, title, notes, location').eq('trip_id', params.id).order('date'),
+        supabase.from('trip_days').select('date, title, notes, rating, mood, journal').eq('trip_id', params.id).order('date'),
       ])
 
       setTrip(tripData)
@@ -772,7 +90,10 @@ export default function TripDayPage() {
       const current = allDays?.find(d => d.date === params.date)
       if (current) {
         setTitle(current.title ?? '')
-        setLocation((current as any).location ?? '')
+        setDayRating((current as any).rating ?? null)
+        setDayMood((current as any).mood ?? null)
+        setJournal((current as any).journal ?? '')
+        if ((current as any).journal) setJournalOpen(true)
         const sectionData = notesToSectionData(current.notes)
         const items = sectionData.map(s => ({ ...s, _id: newId() }))
         const itemsWithTitles = await generateMissingTitles(items)
@@ -785,18 +106,22 @@ export default function TripDayPage() {
           const notesJson = JSON.stringify(itemsWithTitles.map(({ _id, ...s }) => s))
           await supabase.from('trip_days').upsert(
             { trip_id: params.id, user_id: user.id, date: params.date,
-              title: current.title || null, notes: notesJson, location: (current as any).location || null },
+              title: current.title || null, notes: notesJson },
             { onConflict: 'trip_id,date' }
           )
         }
-
       }
       setLoading(false)
     }
     load()
   }, [params.id, params.date])
 
-  const save = async (overrideItems?: EditorSection[]) => {
+  const save = async (
+    overrideItems?: EditorSection[],
+    overrideRating?: number | null,
+    overrideMood?: string | null,
+    overrideJournal?: string,
+  ) => {
     if (saving) return
     setSaving(true)
     const supabase = createClient()
@@ -804,8 +129,11 @@ export default function TripDayPage() {
     if (!user) { setSaving(false); return }
     const items = overrideItems ?? sectionItems
     const notesJson = items.length > 0 ? JSON.stringify(items.map(({ _id, ...s }) => s)) : null
+    const ratingVal = overrideRating !== undefined ? overrideRating : dayRating
+    const moodVal = overrideMood !== undefined ? overrideMood : dayMood
+    const journalVal = overrideJournal !== undefined ? overrideJournal : journal
     await supabase.from('trip_days').upsert(
-      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson, location: location || null },
+      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson, rating: ratingVal, mood: moodVal || null, journal: journalVal || null },
       { onConflict: 'trip_id,date' }
     )
     setSaving(false)
@@ -814,7 +142,13 @@ export default function TripDayPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const startEdit = (itemId: string) => {
+  const startEdit = async (itemId: string) => {
+    if (editingId && editingId !== itemId) {
+      setEditSnapshot(null)
+      const withTitles = await generateMissingTitles(sectionItems)
+      setSectionItems(withTitles)
+      await save(withTitles)
+    }
     const item = sectionItems.find(s => s._id === itemId)
     if (item) setEditSnapshot({ ...item, lines: [...item.lines] })
     setEditingId(itemId)
@@ -866,12 +200,8 @@ export default function TripDayPage() {
     setEditingId(id)
   }
 
-  const updateSection = (id: string, updates: Partial<SectionData>) => {
+  const updateSection = (id: string, updates: Partial<EditorSection>) => {
     setSectionItems(s => s.map(item => item._id === id ? { ...item, ...updates } : item))
-  }
-
-  const removeSection = (id: string) => {
-    setSectionItems(s => s.filter(item => item._id !== id))
   }
 
   const handleMoveToDay = async (sectionId: string, targetDate: string, currentItems: EditorSection[]) => {
@@ -882,20 +212,18 @@ export default function TripDayPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
-    // Save current day without this section
     const newItems = currentItems.filter(s => s._id !== sectionId)
     const notesJson = newItems.length > 0 ? JSON.stringify(newItems.map(({ _id, ...s }) => s)) : null
     await supabase.from('trip_days').upsert(
-      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson, location: location || null },
+      { trip_id: params.id, user_id: user.id, date: params.date, title: title || null, notes: notesJson },
       { onConflict: 'trip_id,date' }
     )
     setSectionItems(newItems)
     setEditingId(null)
     setEditSnapshot(null)
 
-    // Append section to target day
     const { data: targetDay } = await supabase.from('trip_days')
-      .select('notes, title, location')
+      .select('notes, title')
       .eq('trip_id', params.id)
       .eq('date', targetDate)
       .maybeSingle()
@@ -904,7 +232,7 @@ export default function TripDayPage() {
     const newTargetNotes = JSON.stringify([...targetSections, sectionData])
     await supabase.from('trip_days').upsert(
       { trip_id: params.id, user_id: user.id, date: targetDate,
-        title: (targetDay as any)?.title || null, notes: newTargetNotes, location: (targetDay as any)?.location || null },
+        title: (targetDay as any)?.title || null, notes: newTargetNotes },
       { onConflict: 'trip_id,date' }
     )
 
@@ -914,34 +242,31 @@ export default function TripDayPage() {
   }
 
   const dayOptions = allDates.map((date, i) => {
-    const title = days.find(d => d.date === date)?.title
+    const t = days.find(d => d.date === date)?.title
     const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    return { date, label: `Day ${i + 1} — ${dateLabel}${title ? ` · ${title}` : ''}` }
+    return { date, label: `Day ${i + 1} — ${dateLabel}${t ? ` · ${t}` : ''}` }
   })
 
-  // Indexed 1:1 with sectionItems (may contain nulls); TravelBanner uses the filtered version
   const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
   const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
 
   const dayLocations = useMemo((): LocationPoint[] => {
     const locs: LocationPoint[] = []
     for (const item of sectionItems) {
-      const meta = findMeta(item.type)
-      if (!meta) continue
       const t = item.type.toUpperCase()
       const lines = item.lines.map(l => l.trim()).filter(Boolean)
-      const parsedCoords = parseCoords(item.coords)
-      if (!parsedCoords) continue
-      if (meta.hotel && lines[0]) {
-        locs.push({ label: lines[0], query: '', color: '#8b5cf6', coords: parsedCoords })
+      const coords = parseCoords(item.coords)
+      if (!coords) continue
+      if (t === 'HOTEL' && lines[0]) {
+        locs.push({ label: lines[0], query: '', color: '#8b5cf6', coords })
       } else if (ACTIVITY_TYPES.has(t) && lines[0]) {
-        locs.push({ label: lines[0], query: '', color: '#3b82f6', coords: parsedCoords })
+        locs.push({ label: lines[0], query: '', color: '#3b82f6', coords })
       } else if (MEAL_TYPES.has(t) && lines[0]) {
-        locs.push({ label: lines[0], query: '', color: '#f59e0b', coords: parsedCoords })
+        locs.push({ label: lines[0], query: '', color: '#f59e0b', coords })
       }
     }
     return locs
-  }, [sectionItems, location])
+  }, [sectionItems])
 
   const dayNumber = trip
     ? Math.round((new Date(params.date + 'T00:00:00').getTime() - new Date(trip.start_date + 'T00:00:00').getTime()) / 86400000) + 1
@@ -1051,26 +376,38 @@ export default function TripDayPage() {
 
         <div className="max-w-2xl mx-auto px-5 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
 
-          {/* Always-visible title + location edit */}
-          <div className="space-y-1.5">
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onBlur={() => save()}
-              placeholder="Day title, e.g. Arrival in Tokyo"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 text-sm">📍</span>
-              <input
-                type="text"
-                value={location}
-                onChange={e => setLocation(e.target.value)}
-                onBlur={() => save()}
-                placeholder="Day location (e.g. Tokyo, Japan)"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
+          {/* Always-visible title edit */}
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onBlur={() => save()}
+            placeholder="Day title, e.g. Arrival in Tokyo"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+
+          {/* Day rating + mood */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-gray-400 font-medium whitespace-nowrap">Day rating</span>
+            <div className="flex gap-1">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
+                const active = dayRating === n
+                const style = active ? ratingStyle(n) : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                return (
+                  <button key={n} type="button"
+                    onClick={() => { const v = active ? null : n; setDayRating(v); save(undefined, v) }}
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition ${style}`}
+                  >{n}</button>
+                )
+              })}
+            </div>
+            <div className="flex gap-1">
+              {MOOD_OPTIONS.map(opt => (
+                <button key={opt.value} type="button" title={opt.label}
+                  onClick={() => { const v = dayMood === opt.value ? null : opt.value; setDayMood(v); save(undefined, undefined, v) }}
+                  className={`text-lg leading-none transition rounded-md px-1 py-0.5 ${dayMood === opt.value ? 'ring-2 ring-blue-400 bg-blue-50' : 'opacity-50 hover:opacity-100'}`}
+                >{opt.emoji}</button>
+              ))}
             </div>
           </div>
 
@@ -1133,8 +470,8 @@ export default function TripDayPage() {
                               }}
                             />
                           ) : (s.meta.hotel || s.meta.car)
-                            ? <HotelCard meta={s.meta} lines={s.lines} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} rating={item.rating} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
+                            ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} rating={item.rating} skipped={item.skipped} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
                           }
                         </div>
                       </div>
@@ -1159,6 +496,31 @@ export default function TripDayPage() {
               </div>
             </>
           ) : null}
+
+          {/* Journal */}
+          {journalOpen ? (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
+                <span className="text-xs font-medium text-gray-500">📓 Journal</span>
+                <button onClick={() => setJournalOpen(false)} className="text-xs text-gray-400 hover:text-gray-600 transition">Collapse</button>
+              </div>
+              <textarea
+                value={journal}
+                onChange={e => setJournal(e.target.value)}
+                onBlur={() => save(undefined, undefined, undefined, journal)}
+                placeholder="What actually happened today…"
+                rows={4}
+                className="w-full px-3 py-2.5 text-sm text-gray-700 placeholder-gray-300 focus:outline-none resize-none"
+              />
+            </div>
+          ) : (
+            <button
+              onClick={() => setJournalOpen(true)}
+              className="w-full border border-dashed border-gray-200 rounded-xl py-2.5 text-sm text-gray-400 hover:text-gray-600 hover:border-gray-300 transition text-left px-4"
+            >
+              {journal ? `📓 ${journal.slice(0, 60)}${journal.length > 60 ? '…' : ''}` : '📓 Add journal entry'}
+            </button>
+          )}
 
           {/* Add section */}
           {showAddPicker
