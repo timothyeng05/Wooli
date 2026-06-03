@@ -172,10 +172,15 @@ export default function TransactionList({
     const result = items.filter(t => {
       if (selectedAccounts.size > 0 && !selectedAccounts.has(t.account_name ?? '')) return false
       if (selectedCatIds.size > 0) {
-        const txCatId = t.categories?.id ?? ''
-        const txCat = categories.find(c => c.id === txCatId)
-        const txParentId = txCat?.parent_id ?? ''
-        if (!selectedCatIds.has(txCatId) && !selectedCatIds.has(txParentId)) return false
+        const isUncategorized = !t.categories && !t.is_transfer
+        if (isUncategorized) {
+          if (!selectedCatIds.has('__uncategorized__')) return false
+        } else {
+          const txCatId = t.categories?.id ?? ''
+          const txCat = categories.find(c => c.id === txCatId)
+          const txParentId = txCat?.parent_id ?? ''
+          if (!selectedCatIds.has(txCatId) && !selectedCatIds.has(txParentId)) return false
+        }
       }
       if (selectedOwners.size > 0 && !selectedOwners.has(t.owner ?? '')) return false
       if (selectedTripIds.size > 0 && !selectedTripIds.has(t.trip_id ?? '')) return false
@@ -227,7 +232,7 @@ export default function TransactionList({
   const children = categories.filter(c => !!c.parent_id)
 
   return (
-    <div>
+    <div className={selectMode && selectedIds.size > 0 ? 'pb-24 md:pb-16' : ''}>
       {/* ── Search + filter bar ────────────────────────────────────────────── */}
       <div className="flex gap-2 pt-4 pb-2">
         <div className="relative flex-1">
@@ -299,6 +304,12 @@ export default function TransactionList({
             </span>
           ))}
           {[...selectedCatIds].map(id => {
+            if (id === '__uncategorized__') return (
+              <span key={id} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
+                Uncategorized
+                <button onClick={() => removeCatFilter(id)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
+              </span>
+            )
             const cat = categories.find(c => c.id === id)
             return cat ? (
               <span key={id} className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
@@ -331,7 +342,7 @@ export default function TransactionList({
       )}
 
       {/* ── Filter summary bar ─────────────────────────────────────────────── */}
-      {(activeFilterCount > 0 || search) && filtered.length > 0 && (() => {
+      {filtered.length > 0 && (() => {
         const nonTransfer = filtered.filter(t => !t.is_transfer)
         const spent  = nonTransfer.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
         const income = nonTransfer.filter(t => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0)

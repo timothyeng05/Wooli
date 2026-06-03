@@ -180,6 +180,13 @@ export default function FilterPanel({
             </button>
           ))}
 
+          {screen === 'categories' && <>
+            <button onClick={() => toggleCat('__uncategorized__')}
+              className="w-full flex items-center gap-3 px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition">
+              <Checkbox checked={selectedCatIds.has('__uncategorized__')} />
+              <span className="text-sm text-gray-800">Uncategorized</span>
+            </button>
+          </>}
           {screen === 'categories' && topCats.map(cat => {
             const subs = categories.filter(c => c.parent_id === cat.id)
             if (subs.length === 0) {
