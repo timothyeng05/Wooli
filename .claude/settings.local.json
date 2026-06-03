@@ -39,7 +39,23 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(xargs ls -lt)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(git *)",
+      "Bash(cp /Users/timothyeng/Desktop/Wooli/.claude/worktrees/agent-a0e100d014b56c67b/app/components/budget/OnboardingWizard.tsx /Users/timothyeng/Desktop/Wooli/app/components/budget/OnboardingWizard.tsx)",
+      "Bash(cp /Users/timothyeng/Desktop/Wooli/.claude/worktrees/agent-a0e100d014b56c67b/app/components/budget/PlaidLinkButton.tsx /Users/timothyeng/Desktop/Wooli/app/components/budget/PlaidLinkButton.tsx)",
+      "Bash(supabase --version)",
+      "Bash(supabase status *)",
+      "Bash(npx supabase *)",
+      "Bash(curl *)",
+      "Bash(cp /Users/timothyeng/Desktop/Wooli/.claude/worktrees/agent-abf1592bc61ce2cc7/app/components/budget/OnboardingWizard.tsx /Users/timothyeng/Desktop/Wooli/app/components/budget/OnboardingWizard.tsx)",
+      "Bash(cp /Users/timothyeng/Desktop/Wooli/.claude/worktrees/agent-abf1592bc61ce2cc7/app/components/budget/PlaidLinkButton.tsx /Users/timothyeng/Desktop/Wooli/app/components/budget/PlaidLinkButton.tsx)",
+      "Bash(cp /Users/timothyeng/Desktop/Wooli/.claude/worktrees/agent-abf1592bc61ce2cc7/app/budget/onboarding/page.tsx /Users/timothyeng/Desktop/Wooli/app/budget/onboarding/page.tsx)",
+      "Bash(rm /Users/timothyeng/Desktop/Wooli/app/components/trips/ShoppingStoreList.tsx /Users/timothyeng/Desktop/Wooli/app/components/trips/CurrencyConverter.tsx /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores/route.ts /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores/[id]/route.ts)",
+      "Bash(rmdir /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores/[id] /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores)",
+      "Bash(npx playwright *)"
     ]
   }
 }

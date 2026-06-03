@@ -602,7 +602,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
               <div>
                 <div className="text-4xl mb-4">👋</div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">{hasExistingSetup ? 'Reset your budget setup' : 'Welcome to Wooli Budget'}</h1>
-                <p className="text-gray-500 mb-8">{hasExistingSetup ? 'Your existing setup will be updated.' : '4 steps — takes about 3 minutes.'}</p>
+                <p className="text-gray-500 mb-8">{hasExistingSetup ? 'Your existing setup will be updated.' : '5 steps — takes about 3 minutes.'}</p>
                 <ul className="space-y-3 mb-10">
                   {[
                     ['👤', 'Add your household members'],
@@ -765,7 +765,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                           onClick={() => toggleLevel(cat.id)}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium flex-shrink-0 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
                         >
-                          {level === 'parent' ? 'By group' : 'By sub'}
+                          {level === 'parent' ? 'Split by sub' : 'Group together'}
                         </button>
                       )}
 
@@ -825,7 +825,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900 mb-1">Set monthly budgets</h1>
                   <p className="text-gray-500 text-sm mb-1">
-                    Set spending and income targets per month. Use <strong>By group</strong> for one combined limit, or <strong>By sub</strong> to budget each subcategory individually.
+                    Set spending and income targets per month. Use <strong>Group together</strong> for one combined limit, or <strong>Split by sub</strong> to budget each subcategory individually.
                   </p>
                   <p className="text-xs text-gray-400 mb-6">Leave blank to track without a limit. Adjust anytime in <strong>Budget → Targets</strong>.</p>
 

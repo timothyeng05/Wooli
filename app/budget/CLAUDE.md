@@ -1,6 +1,23 @@
 # Budget Module
 
-**Read `docs/modules/BUDGET.md` first** — it has the schema, routes, and component overview.
+**For any sub-feature, read that sub-feature's CLAUDE.md first** — each one lists exactly what to read and touch.
+
+| Sub-feature | What it does | Start here |
+|-------------|-------------|-----------|
+| Transactions / monthly overview | List, search, filter, edit transactions; monthly income vs spend by category | `app/budget/transactions/CLAUDE.md` |
+| Accounts & Plaid | Connect bank accounts via Plaid, sync transactions, view balance history | `app/budget/accounts/CLAUDE.md` |
+| Categories | Manage the income/expense/transfer category tree used for all transactions | `app/budget/categories/CLAUDE.md` |
+| Recurring rules | Define repeating transactions (rent, salary) that auto-generate each period | `app/budget/recurring/CLAUDE.md` |
+| CSV import | Bulk-import transactions from Monarch, Copilot, or generic CSV exports | `app/budget/import/CLAUDE.md` |
+| Cash flow | Month-by-month income vs expense charts with per-owner breakdown | `app/budget/cashflow/CLAUDE.md` |
+| Goals | Savings goals linked to account balances with target date and progress | `app/budget/goals/CLAUDE.md` |
+| Spend targets | Set monthly spend budgets per category and track actuals vs target | `app/budget/targets/CLAUDE.md` |
+| Forecast | Net worth / retirement projection based on income streams and growth rates | `app/budget/forecast/CLAUDE.md` |
+
+For schema and shared conventions: `docs/budget/overview.md`
+For component quick-reference: `app/components/budget/CLAUDE.md`
+
+**If you only know "budget" and nothing more specific**, read `docs/budget/overview.md` then ask which sub-feature to focus on.
 
 ## Module boundary (only touch these paths)
 

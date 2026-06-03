@@ -28,7 +28,8 @@ export async function middleware(request: NextRequest) {
   // Allow '/' for unauthenticated users (landing page)
   if (!user && pathname !== '/' &&
       !pathname.startsWith('/login') &&
-      !pathname.startsWith('/signup')) {
+      !pathname.startsWith('/signup') &&
+      !(process.env.NODE_ENV === 'development' && pathname.startsWith('/budget/onboarding/preview'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
