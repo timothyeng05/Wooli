@@ -12,7 +12,6 @@ _Generated 2026-06-04. Pick up from here; check off items as they land._
 
 - **T-01** — ReviewSheet now has editable description + merchant fields; category replaced with CategoryPicker
 - **T-02** — Date range filter added to FilterPanel + TransactionList (chips + filter logic)
-- **T-03** — Recurring generator moved to `/api/cron/recurring` (runs daily at 6am); removed from page load
 - **T-05** — ReviewSheet category picker replaced with CategoryPicker component
 - **T-06** — Pending badge changed from "P" to "Pending"
 
@@ -35,9 +34,10 @@ _Generated 2026-06-04. Pick up from here; check off items as they land._
 ## P2 — Missing UX
 
 ### [T-03] Recurring transaction generator runs on every page load
-**What:** `app/budget/transactions/page.tsx:33-52` loops over due recurring transactions and inserts new ones on *every* request to the transactions page. This is a DB write on every page load and will produce duplicates if the page is loaded twice in the same day before the `next_date` is advanced.
+**What:** `app/budget/transactions/page.tsx` loops over due recurring transactions and inserts new ones on *every* request. This is a DB write on every page load.
 **Where:** `app/budget/transactions/page.tsx`
-**Fix:** Move this logic to `app/api/cron/sync/route.ts` (or a dedicated `/api/cron/recurring/route.ts`). Schedule it daily via Vercel Cron (`vercel.json` crons). Remove from page load path. Medium.
+**Constraint:** Only one Vercel cron slot available and it is used by `/api/cron/sync` (Plaid sync).
+**Fix options:** (a) Fold recurring generation into the existing `/api/cron/sync/route.ts` as a second step after Plaid sync. (b) Add a `last_run_date` column to a settings table and skip generation if it already ran today. Option (a) is cleaner.
 
 ### [T-04] All transactions loaded into memory — no month scoping
 **What:** The page fetches every transaction for the user (paginated 1000-at-a-time until exhausted). For a user with 2+ years of data this is hundreds of KB on every page load.

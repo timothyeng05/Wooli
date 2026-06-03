@@ -21,6 +21,36 @@ export default async function TransactionsPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Auto-generate any due recurring transactions
+  const today = new Date().toISOString().split('T')[0]
+  const { data: dueRecurring } = await supabase
+    .from('recurring_transactions')
+    .select('id, amount, description, merchant, category_id, next_date, frequency, day_of_month')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .lte('next_date', today)
+
+  if (dueRecurring?.length) {
+    for (const item of dueRecurring) {
+      await supabase.from('transactions').insert({
+        user_id:      user.id,
+        amount:       item.amount,
+        description:  item.description,
+        merchant:     item.merchant,
+        category_id:  item.category_id,
+        transacted_at: item.next_date + 'T12:00:00',
+      })
+      const d = new Date(item.next_date + 'T00:00:00')
+      if      (item.frequency === 'monthly')  { d.setMonth(d.getMonth() + 1); d.setDate(item.day_of_month ?? 1) }
+      else if (item.frequency === 'biweekly') d.setDate(d.getDate() + 14)
+      else if (item.frequency === 'weekly')   d.setDate(d.getDate() + 7)
+      else if (item.frequency === 'yearly')   d.setFullYear(d.getFullYear() + 1)
+      await supabase.from('recurring_transactions')
+        .update({ next_date: d.toISOString().split('T')[0], last_generated_date: item.next_date })
+        .eq('id', item.id)
+    }
+  }
+
   // Last synced timestamp
   const { data: plaidAccts } = await supabase
     .from('plaid_accounts')

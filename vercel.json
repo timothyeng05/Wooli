@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/sync",
       "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/recurring",
-      "schedule": "0 6 * * *"
     }
   ]
 }
