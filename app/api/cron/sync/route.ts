@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { plaidClient } from '@/lib/budget/plaid-client'
-import { categorizeWithGroq, buildSelectableCategories, type FewShotExample } from '@/lib/budget/groq-categorize'
+import { buildPipelineContext } from '@/lib/budget/categorize/context'
+import { categorizeBatch } from '@/lib/budget/categorize/pipeline'
+import type { CategorizeInput } from '@/lib/budget/categorize/types'
 
 export const maxDuration = 300 // 5 min — long enough for multi-user sync
 
@@ -23,7 +25,7 @@ export async function GET(request: Request) {
 
   const { data: allItems } = await supabase
     .from('plaid_items')
-    .select('item_id, access_token, cursor, user_id, default_owner')
+    .select('item_id, access_token, cursor, user_id')
 
   if (!allItems?.length) return NextResponse.json({ ok: true, users: 0 })
 
@@ -41,27 +43,8 @@ export async function GET(request: Request) {
 
     // ── 1. Sync transactions ──────────────────────────────────────────────────
 
-    const { data: allCategories } = await supabase
-      .from('categories')
-      .select('id, name, parent_id, keywords')
-      .eq('user_id', userId)
-
-    const categories = buildSelectableCategories(allCategories ?? [])
-    const categoryNameMap = new Map(categories.map(c => [c.id, c.name]))
-
-    const { data: exampleTxns } = await supabase
-      .from('transactions')
-      .select('merchant, category_id')
-      .eq('user_id', userId)
-      .not('category_id', 'is', null)
-      .not('merchant', 'is', null)
-      .limit(100)
-
-    const fewShot: FewShotExample[] = (exampleTxns ?? [])
-      .filter(t => categoryNameMap.has(t.category_id))
-      .map(t => ({ merchant: t.merchant!, categoryName: categoryNameMap.get(t.category_id)! }))
-      .filter((e, i, arr) => arr.findIndex(x => x.merchant === e.merchant) === i)
-
+    // Deterministic-only categorization at sync (no Groq in the cron path).
+    const pipelineCtx = await buildPipelineContext(supabase, userId, { enableGroq: false })
     const transferKeywords = /payment|autopay|transfer|zelle|venmo|paypal|cashapp|wire|ach|direct dep/i
 
     const { data: plaidAccts } = await supabase
@@ -88,19 +71,19 @@ export async function GET(request: Request) {
         const { added, modified, removed, next_cursor, has_more } = res.data
 
         if (added.length) {
-          const CHUNK = 50
-          const categoryMap = new Map<string, string | null>()
-          for (let i = 0; i < added.length; i += CHUNK) {
-            const chunk = added.slice(i, i + CHUNK).map(t => ({
-              id: t.transaction_id,
-              description: t.name,
-              merchant: t.merchant_name ?? null,
-            }))
-            const partial = await categorizeWithGroq(chunk, categories, fewShot)
-            partial.forEach((v, k) => categoryMap.set(k, v))
-          }
-          const rows = added.map(t => {
-            const isTransfer = !!(
+          const inputs: CategorizeInput[] = added.map(t => ({
+            raw_merchant: t.merchant_name ?? null,
+            description: t.name,
+            amount: -(t.amount),
+            account_name: accountNameMap.get(t.account_id) ?? null,
+            provider_category: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null,
+            provider_confidence: t.personal_finance_category?.confidence_level ?? null,
+          }))
+          const cat = await categorizeBatch(inputs, pipelineCtx)
+
+          const rows = added.map((t, i) => {
+            const r = cat[i]
+            const isTransfer = r.is_transfer || !!(
               t.personal_finance_category?.primary?.includes('TRANSFER') ||
               transferKeywords.test(t.name)
             )
@@ -113,9 +96,15 @@ export async function GET(request: Request) {
               description: t.name,
               merchant: t.merchant_name ?? null,
               transacted_at: t.date + 'T00:00:00',
-              category_id: isTransfer ? null : (categoryMap.get(t.transaction_id) ?? null),
+              category_id: isTransfer ? null : r.category_id,
               is_transfer: isTransfer,
               owner: accountOwnerMap.get(t.account_id) ?? null,
+              normalized_merchant: r.normalized_merchant,
+              provider_category: inputs[i].provider_category,
+              categorization_source: isTransfer ? 'none' : r.source,
+              categorization_confidence: r.confidence,
+              needs_review: !isTransfer && r.needs_review,
+              groq_called: false,
             }
           })
           await supabase.from('transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })

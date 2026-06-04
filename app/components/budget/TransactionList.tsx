@@ -83,6 +83,10 @@ export default function TransactionList({
     const updates: Record<string, unknown> = makeTransfer
       ? { category_id: null, is_transfer: true }
       : { category_id: newCatId, is_transfer: false }
+    // Tag as a user confirmation so the DB trigger records merchant memory.
+    updates.categorization_source = 'user_confirmed'
+    updates.categorization_confidence = 1
+    updates.needs_review = false
     await supabase.from('transactions').update(updates).eq('id', txId)
     setItems(prev => prev.map(t =>
       t.id === txId
@@ -97,7 +101,7 @@ export default function TransactionList({
     setCatPickerTx(null)
     if (catId === '__transfer__') {
       const supabase = createClient()
-      await supabase.from('transactions').update({ is_transfer: true, category_id: null }).eq('id', txId)
+      await supabase.from('transactions').update({ is_transfer: true, category_id: null, categorization_source: 'user_confirmed', categorization_confidence: 1, needs_review: false }).eq('id', txId)
       setItems(prev => prev.map(t => t.id === txId ? { ...t, is_transfer: true, categories: null } : t))
     } else {
       await handleCategoryChange(txId, catId)
@@ -126,7 +130,7 @@ export default function TransactionList({
     setBulkLoading(true)
     const supabase = createClient()
     const ids = [...selectedIds]
-    await supabase.from('transactions').update({ category_id: catId }).in('id', ids)
+    await supabase.from('transactions').update({ category_id: catId, is_transfer: false, categorization_source: 'user_confirmed', categorization_confidence: 1, needs_review: false }).in('id', ids)
     const found = categories.find(c => c.id === catId) ?? null
     setItems(prev => prev.map(t => ids.includes(t.id) ? { ...t, categories: found ? { id: found.id, name: found.name, color: found.color } : null } : t))
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
@@ -135,7 +139,7 @@ export default function TransactionList({
     setBulkLoading(true)
     const supabase = createClient()
     const ids = [...selectedIds]
-    await supabase.from('transactions').update({ is_transfer: true, category_id: null }).in('id', ids)
+    await supabase.from('transactions').update({ is_transfer: true, category_id: null, categorization_source: 'user_confirmed', categorization_confidence: 1, needs_review: false }).in('id', ids)
     setItems(prev => prev.map(t => ids.includes(t.id) ? { ...t, is_transfer: true, categories: null } : t))
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }

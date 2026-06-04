@@ -1,58 +1,104 @@
-import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { categorizeWithGroq, buildSelectableCategories, type FewShotExample } from '@/lib/budget/groq-categorize'
+import { createClient } from '@supabase/supabase-js'
+import { buildPipelineContext } from '@/lib/budget/categorize/context'
+import { categorizeBatch } from '@/lib/budget/categorize/pipeline'
+import type { CategorizeInput } from '@/lib/budget/categorize/types'
 
+// Streams newline-delimited JSON progress events so the client can show a progress bar:
+//   { type: 'start',    total }
+//   { type: 'progress', done, total, updated }
+//   { type: 'done',     total, updated, bySource, groqCalls }
+//   { type: 'error',    message, updated }
+//
+// Runs the full layered pipeline (deterministic layers first, Groq only as fallback).
 export async function POST() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  const { data: allCategories } = await supabase
-    .from('categories')
-    .select('id, name, parent_id, keywords')
-    .eq('user_id', user.id)
+  // Service role for DB ops so RLS can't silently block rows in the route handler
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
 
-  const categories = buildSelectableCategories(allCategories ?? [])
-  const categoryNameMap = new Map(categories.map(c => [c.id, c.name]))
+  const ctx = await buildPipelineContext(admin, user.id, { enableGroq: true })
 
-  // Build few-shot examples from manually categorized transactions
-  const { data: examples } = await supabase
+  // Only uncategorized, non-transfer transactions. Fetched once so pagination can't
+  // shift as rows get categorized.
+  const { data: transactions } = await admin
     .from('transactions')
-    .select('merchant, description, category_id')
+    .select('id, description, merchant, account_name, amount, notes, provider_category')
     .eq('user_id', user.id)
-    .not('category_id', 'is', null)
-    .not('merchant', 'is', null)
-    .limit(100)
+    .is('category_id', null)
+    .eq('is_transfer', false)
 
-  const fewShot: FewShotExample[] = (examples ?? [])
-    .filter(t => categoryNameMap.has(t.category_id))
-    .map(t => ({
-      merchant: t.merchant!,
-      categoryName: categoryNameMap.get(t.category_id)!,
-    }))
-    // Deduplicate by merchant
-    .filter((e, i, arr) => arr.findIndex(x => x.merchant === e.merchant) === i)
+  const list = transactions ?? []
+  const encoder = new TextEncoder()
+  const CHUNK = 100
 
-  const { data: transactions } = await supabase
-    .from('transactions')
-    .select('id, description, merchant')
-    .eq('user_id', user.id)
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+      let updated = 0
+      let groqCalls = 0
+      const bySource: Record<string, number> = {}
 
-  if (!transactions?.length) return NextResponse.json({ updated: 0 })
+      try {
+        const total = list.length
+        send({ type: 'start', total })
+        if (!total) { send({ type: 'done', total: 0, updated: 0, bySource, groqCalls }); controller.close(); return }
 
-  const CHUNK = 50
-  let updated = 0
+        for (let i = 0; i < total; i += CHUNK) {
+          const chunk = list.slice(i, i + CHUNK)
+          const inputs: CategorizeInput[] = chunk.map(t => ({
+            id: t.id,
+            raw_merchant: t.merchant,
+            description: t.description,
+            amount: t.amount,
+            account_name: t.account_name,
+            notes: t.notes,
+            provider_category: t.provider_category,
+          }))
 
-  for (let i = 0; i < transactions.length; i += CHUNK) {
-    const chunk = transactions.slice(i, i + CHUNK)
-    const categoryMap = await categorizeWithGroq(chunk, categories, fewShot)
+          const results = await categorizeBatch(inputs, ctx)
 
-    for (const [txId, catId] of categoryMap) {
-      if (!catId) continue // never overwrite with null — leave existing category intact
-      await supabase.from('transactions').update({ category_id: catId }).eq('id', txId)
-      updated++
-    }
-  }
+          await Promise.all(results.map((r, j) => {
+            if (r.groq_called) groqCalls++
+            bySource[r.source] = (bySource[r.source] ?? 0) + 1
+            if (r.category_id || r.is_transfer) updated++
+            return admin.from('transactions').update({
+              category_id: r.category_id,
+              is_transfer: r.is_transfer,
+              normalized_merchant: r.normalized_merchant,
+              categorization_source: r.source,
+              categorization_confidence: r.confidence,
+              needs_review: r.needs_review,
+              groq_called: r.groq_called,
+            }).eq('id', chunk[j].id)
+          }))
 
-  return NextResponse.json({ updated })
+          send({ type: 'progress', done: Math.min(i + CHUNK, total), total, updated })
+        }
+
+        send({ type: 'done', total, updated, bySource, groqCalls })
+      } catch (e) {
+        const err = e as { status?: number }
+        const message = err?.status === 429
+          ? 'Groq daily token limit reached. Deterministic matches were saved; try again later to finish the rest.'
+          : (e instanceof Error ? e.message : 'Categorization failed')
+        send({ type: 'error', message, updated })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  })
 }

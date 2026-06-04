@@ -55,7 +55,14 @@
       "Bash(cp /Users/timothyeng/Desktop/Wooli/.claude/worktrees/agent-abf1592bc61ce2cc7/app/budget/onboarding/page.tsx /Users/timothyeng/Desktop/Wooli/app/budget/onboarding/page.tsx)",
       "Bash(rm /Users/timothyeng/Desktop/Wooli/app/components/trips/ShoppingStoreList.tsx /Users/timothyeng/Desktop/Wooli/app/components/trips/CurrencyConverter.tsx /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores/route.ts /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores/[id]/route.ts)",
       "Bash(rmdir /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores/[id] /Users/timothyeng/Desktop/Wooli/app/api/trips/shopping-stores)",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill -9)",
+      "Bash(open *)",
+      "Bash(vercel env *)",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "mcp__plugin_supabase_supabase__get_publishable_keys",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

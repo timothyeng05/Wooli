@@ -77,7 +77,7 @@ const TABS = [
   {
     href: '/budget/targets',
     label: 'Budget',
-    match: (p: string) => p.startsWith('/budget/targets') || p.startsWith('/budget/categories') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import'),
+    match: (p: string) => p.startsWith('/budget/targets') || p.startsWith('/budget/categories') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import') || p.startsWith('/budget/rules'),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth={filled ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">

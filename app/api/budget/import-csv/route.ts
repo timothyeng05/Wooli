@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { normalizeMerchant } from '@/lib/budget/categorize/normalize-merchant'
 
 interface CsvRow {
   date: string
@@ -73,6 +74,9 @@ export async function POST(request: Request) {
       const owner = r.owner && validOwners.has(r.owner) ? r.owner : null
       const mask = extractMask(r.account)
       const plaidAccountId = mask ? (maskToPlaidId.get(mask) ?? null) : null
+      // Monarch categories are user-curated, so treat the import as user-confirmed:
+      // this seeds merchant_memory (via the DB trigger) and bootstraps the
+      // deterministic layers for future Plaid syncs.
       return {
         user_id: user.id,
         amount: r.amount,
@@ -86,6 +90,10 @@ export async function POST(request: Request) {
         owner,
         account_name: r.account || null,
         plaid_account_id: plaidAccountId,
+        normalized_merchant: normalizeMerchant(r.merchant),
+        categorization_source: 'user_confirmed',
+        categorization_confidence: 1.0,
+        needs_review: false,
       }
     })
 

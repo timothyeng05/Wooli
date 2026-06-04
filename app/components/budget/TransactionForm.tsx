@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { normalizeMerchant } from '@/lib/budget/categorize/normalize-merchant'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
 interface Category {
@@ -106,6 +107,11 @@ export default function TransactionForm({
         is_transfer: isTransfer,
         owner: owner || null,
         notes: notes || null,
+        // Manually entered → treat as user-confirmed so it seeds merchant memory.
+        normalized_merchant: normalizeMerchant(merchant || description || null),
+        categorization_source: 'user_confirmed',
+        categorization_confidence: 1,
+        needs_review: false,
       }
 
       if (isEdit) {
