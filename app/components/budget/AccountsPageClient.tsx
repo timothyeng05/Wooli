@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, isAssetType, type AccountType } from '@/lib/budget/account-utils'
 import type { HouseholdMember } from './transaction-types'
 import { fmtSyncTime } from '@/lib/budget/format-utils'
+import { PLAID_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
 export interface UnifiedAccount {
@@ -768,18 +769,15 @@ export default function AccountsPageClient({
   const [period, setPeriod] = useState(90)
   const [open, setOpen] = useState({ cash: true, investments: true, credit: true })
   const [syncing, setSyncing] = useState(false)
+  // Transactions come from Monarch CSV, so this only refreshes account balances.
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const [txnRes, balRes] = await Promise.all([
-        fetch('/api/plaid/sync-transactions', { method: 'POST' }),
-        fetch('/api/plaid/refresh-balances', { method: 'POST' }),
-      ])
-      const txnData = await txnRes.json()
-      if (!txnRes.ok || !balRes.ok) {
-        toast.error(txnData.error ?? 'Sync failed')
+      const balRes = await fetch('/api/plaid/refresh-balances', { method: 'POST' })
+      if (!balRes.ok) {
+        toast.error('Balance refresh failed')
       } else {
-        toast.success(`Synced — ${txnData.added ?? 0} new transactions`)
+        toast.success('Balances updated')
         router.refresh()
       }
     } catch {
@@ -868,18 +866,20 @@ export default function AccountsPageClient({
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex items-center justify-between mb-1">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Net Worth</p>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            title="Sync now"
-            className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 transition disabled:opacity-50 group"
-          >
-            <svg className={`w-3 h-3 transition-transform ${syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-300'}`}
-              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-            </svg>
-            {syncing ? 'Syncing…' : lastSynced ? fmtSyncTime(lastSynced) : 'Sync now'}
-          </button>
+          {PLAID_BALANCE_SYNC_ENABLED && (
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              title="Refresh balances"
+              className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 transition disabled:opacity-50 group"
+            >
+              <svg className={`w-3 h-3 transition-transform ${syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-300'}`}
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+              </svg>
+              {syncing ? 'Syncing…' : lastSynced ? fmtSyncTime(lastSynced) : 'Sync now'}
+            </button>
+          )}
         </div>
         <div className="flex items-baseline gap-3 mb-4">
           <p className="text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 import { plaidClient } from '@/lib/budget/plaid-client'
+import { PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
 import { buildPipelineContext } from '@/lib/budget/categorize/context'
 import { categorizeBatch } from '@/lib/budget/categorize/pipeline'
 import type { CategorizeInput } from '@/lib/budget/categorize/types'
@@ -11,6 +12,9 @@ import type { CategorizeInput } from '@/lib/budget/categorize/types'
 // the pull stays quick and can't be aborted mid-write. Rows that no deterministic
 // layer can place are left needs_review for the explicit "Auto-categorize" (Groq) pass.
 export async function POST() {
+  // Transaction sync is disabled — Monarch CSV is the source of truth. See lib/budget/sync-config.ts
+  if (!PLAID_TRANSACTION_SYNC_ENABLED) return NextResponse.json({ added: 0, modified: 0, removed: 0, disabled: true })
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

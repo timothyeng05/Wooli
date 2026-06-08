@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 import { plaidClient } from '@/lib/budget/plaid-client'
+import { PLAID_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
 
 export async function POST() {
+  // Balance sync stays on (used for net worth) — see lib/budget/sync-config.ts
+  if (!PLAID_BALANCE_SYNC_ENABLED) return NextResponse.json({ updated: 0, disabled: true })
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
