@@ -92,7 +92,7 @@ describe('categorization pipeline — Groq is skipped when a deterministic layer
     expect(groqSpy).not.toHaveBeenCalled()
   })
 
-  it('low-confidence provider mapping does NOT short-circuit (falls through to Groq)', async () => {
+  it('low-confidence provider mapping still wins when its category keyword-matches (no Groq)', async () => {
     const { ctx, groqSpy } = makeCtx({
       groqResult: { category_id: 'cat-coffee', confidence: 0.9 },
     })
@@ -100,10 +100,12 @@ describe('categorization pipeline — Groq is skipped when a deterministic layer
       input('MYSTERY', { provider_category: 'FOOD_AND_DRINK_GROCERIES', provider_confidence: 'LOW' }),
       ctx,
     )
-    // LOW → 0.5 < 0.85 threshold, so provider is rejected and Groq runs.
-    expect(r.source).toBe('groq')
-    expect(r.groq_called).toBe(true)
-    expect(groqSpy).toHaveBeenCalledOnce()
+    // A keyword match against the user's own categories is the real signal, so even a
+    // LOW-confidence (0.5) PFC is accepted (mcc_mapping threshold = 0.5) and Groq is skipped.
+    expect(r.source).toBe('provider_mapping')
+    expect(r.category_id).toBe('cat-groc')
+    expect(r.groq_called).toBe(false)
+    expect(groqSpy).not.toHaveBeenCalled()
   })
 })
 
