@@ -18,35 +18,42 @@ export default async function BudgetDashboard() {
   const start = new Date(year, month - 5, 1).toISOString()
   const end = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
 
-  const PAGE = 1000
-  let allTxns: any[] = []
-  for (let page = 0; ; page++) {
-    const { data } = await supabase
-      .from('transactions')
-      .select(`
-        id, amount, merchant, description, transacted_at, is_transfer, is_pending, owner,
-        categories ( id, name, color, icon, is_income, is_transfer, parent_id )
-      `)
-      .eq('user_id', user.id)
-      .gte('transacted_at', start)
-      .lte('transacted_at', end)
-      .order('transacted_at', { ascending: false })
-      .range(page * PAGE, (page + 1) * PAGE - 1) as any
-    if (!data || data.length === 0) break
-    allTxns = allTxns.concat(data)
-    if (data.length < PAGE) break
+  // Transactions, categories, and members are independent — fetch concurrently
+  // instead of serially so the window query doesn't block the metadata reads.
+  const fetchWindowTxns = async () => {
+    const PAGE = 1000
+    let all: any[] = []
+    for (let page = 0; ; page++) {
+      const { data } = await supabase
+        .from('transactions')
+        .select(`
+          id, amount, merchant, description, transacted_at, is_transfer, is_pending, owner,
+          categories ( id, name, color, icon, is_income, is_transfer, parent_id )
+        `)
+        .eq('user_id', user.id)
+        .gte('transacted_at', start)
+        .lte('transacted_at', end)
+        .order('transacted_at', { ascending: false })
+        .range(page * PAGE, (page + 1) * PAGE - 1) as any
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < PAGE) break
+    }
+    return all
   }
 
-  const catResult = await supabase
-    .from('categories')
-    .select('id, name, color, icon, is_income, is_transfer, parent_id')
-    .eq('user_id', user.id) as any
-
-  const memberResult = await supabase
-    .from('household_members')
-    .select('id, full_name, display_name, color, sort_order, is_shared')
-    .eq('user_id', user.id)
-    .order('sort_order', { ascending: true })
+  const [allTxns, catResult, memberResult] = await Promise.all([
+    fetchWindowTxns(),
+    supabase
+      .from('categories')
+      .select('id, name, color, icon, is_income, is_transfer, parent_id')
+      .eq('user_id', user.id) as any,
+    supabase
+      .from('household_members')
+      .select('id, full_name, display_name, color, sort_order, is_shared')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true }),
+  ])
 
   const transactions: CashFlowTransaction[] = allTxns.map((t: any) => ({
     id: t.id,

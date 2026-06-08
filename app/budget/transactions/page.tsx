@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
+import { PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
 
 export default async function TransactionsPage({
   searchParams,
@@ -51,38 +52,37 @@ export default async function TransactionsPage({
     }
   }
 
-  // Last synced timestamp
-  const { data: plaidAccts } = await supabase
-    .from('plaid_accounts')
-    .select('updated_at')
-    .eq('user_id', user.id)
-
-  const lastSynced = (plaidAccts ?? []).reduce<string | null>((max, a) => {
-    if (!a.updated_at) return max
-    return max === null || a.updated_at > max ? a.updated_at : max
-  }, null)
-
-  // Paginate through all transactions — Supabase caps each request at 1000 rows
-  const PAGE = 1000
-  let transactions: any[] = []
-  for (let page = 0; ; page++) {
-    const { data } = await supabase
-      .from('transactions')
-      .select(`
-        id, amount, description, merchant, transacted_at, plaid_transaction_id,
-        is_transfer, is_pending, owner, account_name, trip_id,
-        categories ( id, name, color, icon ),
-        trips ( id, name )
-      `)
-      .eq('user_id', user.id)
-      .order('transacted_at', { ascending: false })
-      .range(page * PAGE, (page + 1) * PAGE - 1) as any
-    if (!data || data.length === 0) break
-    transactions = transactions.concat(data)
-    if (data.length < PAGE) break
+  // All independent reads run concurrently — transactions overlap with the
+  // smaller metadata queries instead of blocking them serially.
+  const fetchAllTransactions = async () => {
+    // Supabase caps each request at 1000 rows, so paginate.
+    const PAGE = 1000
+    let all: any[] = []
+    for (let page = 0; ; page++) {
+      const { data } = await supabase
+        .from('transactions')
+        .select(`
+          id, amount, description, merchant, transacted_at, plaid_transaction_id,
+          is_transfer, is_pending, owner, account_name, trip_id,
+          categories ( id, name, color, icon ),
+          trips ( id, name )
+        `)
+        .eq('user_id', user.id)
+        .order('transacted_at', { ascending: false })
+        .range(page * PAGE, (page + 1) * PAGE - 1) as any
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < PAGE) break
+    }
+    return all
   }
 
-  const [catResult, tripResult, memberResult] = await Promise.all([
+  const [transactions, plaidResult, catResult, tripResult, memberResult] = await Promise.all([
+    fetchAllTransactions(),
+    supabase
+      .from('plaid_accounts')
+      .select('updated_at')
+      .eq('user_id', user.id) as any,
     supabase
       .from('categories')
       .select('id, name, color, is_income, is_transfer, parent_id, icon')
@@ -100,6 +100,12 @@ export default async function TransactionsPage({
       .order('sort_order', { ascending: true }),
   ])
 
+  // Last synced = most recent plaid_accounts.updated_at
+  const lastSynced = (plaidResult.data ?? []).reduce((max: string | null, a: { updated_at: string | null }) => {
+    if (!a.updated_at) return max
+    return max === null || a.updated_at > max ? a.updated_at : max
+  }, null as string | null)
+
   const categories = catResult.data || []
   const trips      = tripResult.data || []
   const members    = memberResult.data || []
@@ -110,7 +116,7 @@ export default async function TransactionsPage({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 gap-3">
           <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
           <div className="flex items-center gap-2">
-            <SyncTransactionsButton lastSynced={lastSynced} />
+            {PLAID_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
             <Link
               href="/budget/new"
               className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"

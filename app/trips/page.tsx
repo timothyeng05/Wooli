@@ -89,7 +89,11 @@ export default async function TripsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: trips } = await supabase.from('trips').select('*').eq('user_id', user.id).order('start_date', { ascending: true })
+  const { data: trips } = await supabase
+    .from('trips')
+    .select('id, name, start_date, end_date, destination, description')
+    .eq('user_id', user.id)
+    .order('start_date', { ascending: true })
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)

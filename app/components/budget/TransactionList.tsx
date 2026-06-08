@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
@@ -9,6 +9,12 @@ import { type Transaction, type Category, type Trip, type SortOrder, type Househ
 import CategoryPicker from './CategoryPicker'
 import FilterPanel from './FilterPanel'
 import TransactionReviewSheet from './TransactionReviewSheet'
+
+// Render rows in windows so the full (possibly 1000+ row) dataset isn't all
+// committed to the DOM at once — the entire set still lives in memory for
+// instant client-side search/filter; we just cap what's painted.
+const WINDOW_INITIAL = 150
+const WINDOW_STEP = 150
 
 function groupByDate(txns: Transaction[], asc = false) {
   const groups = new Map<string, Transaction[]>()
@@ -208,9 +214,35 @@ export default function TransactionList({
     return result
   }, [items, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
 
+  // ── Render windowing ────────────────────────────────────────────────────────
+  const [visibleCount, setVisibleCount] = useState(WINDOW_INITIAL)
+
+  // Whenever the result set changes (search / filters / sort), jump back to the
+  // top window so we don't render thousands of now-irrelevant rows.
+  useEffect(() => {
+    setVisibleCount(WINDOW_INITIAL)
+  }, [search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
+  const hasMore = filtered.length > visible.length
+
+  // Auto-load the next window when the sentinel scrolls into view.
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!hasMore) return
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) setVisibleCount(c => c + WINDOW_STEP) },
+      { rootMargin: '600px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore])
+
   const grouped = useMemo(
-    () => groupByDate(filtered, sortOrder === 'date-asc'),
-    [filtered, sortOrder]
+    () => groupByDate(visible, sortOrder === 'date-asc'),
+    [visible, sortOrder]
   )
 
   const clearFilters = () => {
@@ -400,7 +432,7 @@ export default function TransactionList({
           {search ? `No results for "${search}"` : 'No transactions match your filters'}
         </p>
       ) : (
-        (sortOrder === 'amount-desc' || sortOrder === 'amount-asc' ? [['', filtered] as [string, Transaction[]]] : grouped).map(([date, txns]) => {
+        (sortOrder === 'amount-desc' || sortOrder === 'amount-asc' ? [['', visible] as [string, Transaction[]]] : grouped).map(([date, txns]) => {
           const dayTotal = (txns as Transaction[])
             .filter(t => !t.is_transfer && !t.is_pending && !transferCatIds.has(t.categories?.id ?? '') && t.amount < 0)
             .reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
@@ -502,6 +534,18 @@ export default function TransactionList({
             </div>
           )
         })
+      )}
+
+      {/* ── Infinite-scroll sentinel + manual fallback ─────────────────────── */}
+      {hasMore && (
+        <div ref={sentinelRef} className="pt-4 text-center">
+          <button
+            onClick={() => setVisibleCount(c => c + WINDOW_STEP)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Show more ({(filtered.length - visible.length).toLocaleString()} more)
+          </button>
+        </div>
       )}
 
       {/* ── Category picker ────────────────────────────────────────────────── */}
