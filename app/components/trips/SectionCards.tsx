@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import DayLocationMap, { type LocationPoint } from './DayLocationMapClient'
-import type { SectionMeta, ParsedSection } from '@/lib/trips/trip-sections'
+import type { SectionMeta } from '@/lib/trips/trip-sections'
 import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES } from '@/lib/trips/trip-utils'
 
 export function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpand, rating, skipped }: {
@@ -34,7 +34,28 @@ export function SectionCard({ meta, lines, onEdit, title, type, expanded, onTogg
     }
   }
 
-  if (!content.length && !duration && !title) return null
+  if (!content.length && !duration && !title) {
+    // Read-only contexts (e.g. share page) hide empty sections entirely.
+    if (!onEdit) return null
+    // In the editor, show a muted placeholder so the empty section stays
+    // visible and editable/deletable instead of rendering a blank card.
+    return (
+      <div className={`rounded-xl border ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''}`}>
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          <span className="flex-shrink-0 text-base opacity-50">{meta.icon}</span>
+          <p className="flex-1 min-w-0 text-sm italic text-gray-400">
+            Empty {meta.label.toLowerCase()} — tap Edit to add details
+          </p>
+          <button
+            onClick={e => { e.stopPropagation(); onEdit() }}
+            className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0"
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    )
+  }
   const headerText = displayName || title || meta.label
   const hasBody = body.length > 0
 
@@ -147,37 +168,6 @@ export function HotelCard({ meta, lines, onEdit, skipped }: {
           </div>
         </>
       )}
-    </div>
-  )
-}
-
-export function TravelBanner({ sections }: { sections: ParsedSection[] }) {
-  const travel = sections.filter(s => s.meta.banner)
-  if (!travel.length) return null
-  return (
-    <div className="space-y-2">
-      {travel.map((s, i) => {
-        const lines = s.lines.map(l => l.trim()).filter(Boolean)
-        const duration = lines.find(l => l.startsWith('~'))?.slice(1).trim()
-        const content = lines.filter(l => !l.startsWith('~')).map(l => l.replace(/^-\s*/, ''))
-        const route = content.find(l => l.includes('→'))
-        const detail = content.find(l => l !== route)
-        const time = s.timeOverride
-        return (
-          <div key={i} className={`rounded-xl border px-5 py-4 ${s.meta.bg} ${s.meta.border} flex items-center gap-4`}>
-            <span className="text-2xl flex-shrink-0">{s.meta.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className={`text-xs font-semibold uppercase tracking-wide ${s.meta.text} mb-0.5`}>{s.meta.label}</p>
-              {route && <p className="text-base font-bold text-gray-900 leading-snug">{route}</p>}
-              {detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{detail}</p>}
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {time && <span className={`text-sm font-bold ${s.meta.text}`}>{time}</span>}
-              {duration && <span className={`text-sm font-bold ${s.meta.text}`}>⏱ {duration}</span>}
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }

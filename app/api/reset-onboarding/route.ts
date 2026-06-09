@@ -17,7 +17,10 @@ export async function POST() {
   await supabase.from('categories').delete().eq('user_id', user.id)
   await supabase.from('household_members').delete().eq('user_id', user.id)
   await supabase.from('budgets').delete().eq('user_id', user.id)
-  await supabase.from('profiles').update({ onboarding_completed_at: null }).eq('id', user.id)
+  // Clear CTA dismissal too so the re-onboarded (new again) user sees Next steps
+  await supabase.from('profiles')
+    .update({ onboarding_completed_at: null, setup_cta_dismissed: {} })
+    .eq('id', user.id)
 
   return NextResponse.json({ ok: true })
 }

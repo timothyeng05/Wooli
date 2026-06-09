@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
 import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords } from '@/lib/trips/trip-utils'
-import { SectionCard, HotelCard, TravelBanner, DayMapCollapsible } from '@/app/components/trips/SectionCards'
+import { SectionCard, HotelCard, DayMapCollapsible } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 
@@ -376,7 +376,6 @@ export default function TripDayPage() {
           {/* Sections */}
           {displaySections.length > 0 ? (
             <>
-              <TravelBanner sections={displaySections} />
               <div>
                 {sectionItems.map((item, i) => {
                   const s = displaySectionsRaw[i]

@@ -104,6 +104,14 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Rank by rating (highest first; unrated last), then by date
+  mealsEaten.sort((a, b) => {
+    const ra = a.rating ?? -1
+    const rb = b.rating ?? -1
+    if (rb !== ra) return rb - ra
+    return a.date.localeCompare(b.date)
+  })
+
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">

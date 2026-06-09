@@ -11,7 +11,6 @@ export default function ResetOnboardingButton() {
     if (!confirm('Reset the setup wizard? This will delete all your categories and restart onboarding.')) return
     setLoading(true)
     await fetch('/api/reset-onboarding', { method: 'POST' })
-    localStorage.removeItem('wooli_setup_dismissed')
     router.push('/budget/onboarding')
   }
 

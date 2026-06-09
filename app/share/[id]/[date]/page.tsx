@@ -1,39 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { parseSectionsFromNotes, ParsedSection, SectionMeta } from '@/lib/trips/trip-sections'
+import { parseSectionsFromNotes, SectionMeta } from '@/lib/trips/trip-sections'
 
 function serviceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
-
-function TravelBanner({ sections }: { sections: ParsedSection[] }) {
-  const travel = sections.filter(s => s.meta.banner)
-  if (!travel.length) return null
-  return (
-    <div className="space-y-2">
-      {travel.map((s, i) => {
-        const lines = s.lines.map(l => l.trim()).filter(Boolean)
-        const duration = lines.find(l => l.startsWith('~'))?.slice(1).trim()
-        const content = lines.filter(l => !l.startsWith('~')).map(l => l.replace(/^-\s*/, ''))
-        const route = content.find(l => l.includes('→'))
-        const detail = content.find(l => l !== route)
-        return (
-          <div key={i} className={`rounded-xl border px-5 py-4 ${s.meta.bg} ${s.meta.border} flex items-center gap-4`}>
-            <span className="text-2xl flex-shrink-0">{s.meta.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className={`text-xs font-semibold uppercase tracking-wide ${s.meta.text} mb-0.5`}>{s.meta.label}</p>
-              {route && <p className="text-base font-bold text-gray-900 leading-snug">{route}</p>}
-              {detail && <p className="text-xs text-gray-500 mt-0.5 truncate">{detail}</p>}
-            </div>
-            {duration && <span className={`text-sm font-bold ${s.meta.text} flex-shrink-0`}>⏱ {duration}</span>}
-          </div>
-        )
-      })}
-    </div>
   )
 }
 
@@ -163,8 +136,6 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-        {sections.length > 0 && <TravelBanner sections={sections} />}
-
         {sections.length > 0 ? (
           <div>
             {sections.map((s, i) => {

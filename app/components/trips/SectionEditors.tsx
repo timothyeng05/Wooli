@@ -220,9 +220,10 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
   const nameLine = nameIdx >= 0 ? section.lines[nameIdx] : ''
   const bulletLines = nameIdx >= 0 ? section.lines.slice(nameIdx + 1) : section.lines
 
-  // Strip '- ' prefix for display so users type items plainly
+  // Strip '- ' prefix for display so users type items plainly.
+  // Preserve inner/trailing whitespace so spaces can be typed.
   const foodDisplay = bulletLines
-    .map(l => l.trim().startsWith('- ') ? l.trim().slice(2) : l.trim())
+    .map(l => l.replace(/^- /, ''))
     .join('\n')
 
   const setName = (val: string) => {
@@ -230,7 +231,9 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
     onChange({ lines: val ? [val, ...rest] : rest })
   }
   const setFood = (val: string) => {
-    const items = val.split('\n').map(l => l.trim() ? `- ${l.trim()}` : '')
+    // Don't trim each line while typing — that strips the trailing space
+    // mid-keystroke and makes spaces impossible to enter.
+    const items = val.split('\n').map(l => l.trim() ? `- ${l}` : '')
     onChange({ lines: nameLine ? [nameLine, ...items] : items })
   }
 

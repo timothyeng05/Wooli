@@ -42,7 +42,7 @@ export default async function BudgetDashboard() {
     return all
   }
 
-  const [allTxns, catResult, memberResult] = await Promise.all([
+  const [allTxns, catResult, memberResult, profileResult] = await Promise.all([
     fetchWindowTxns(),
     supabase
       .from('categories')
@@ -53,6 +53,11 @@ export default async function BudgetDashboard() {
       .select('id, full_name, display_name, color, sort_order, is_shared')
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }),
+    supabase
+      .from('profiles')
+      .select('setup_cta_dismissed')
+      .eq('id', user.id)
+      .single(),
   ])
 
   const transactions: CashFlowTransaction[] = allTxns.map((t: any) => ({
@@ -66,6 +71,7 @@ export default async function BudgetDashboard() {
   }))
 
   const categories: CashFlowCategory[] = catResult.data ?? []
+  const setupCtaDismissed: Record<string, boolean> = profileResult.data?.setup_cta_dismissed ?? {}
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-8 pb-16">
@@ -75,6 +81,8 @@ export default async function BudgetDashboard() {
         members={memberResult.data ?? []}
         currentYear={year}
         currentMonth={month}
+        userId={user.id}
+        setupCtaDismissed={setupCtaDismissed}
       />
 
     </div>

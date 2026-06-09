@@ -26,20 +26,17 @@ const CTA_ITEMS = [
   },
 ]
 
-function SetupChecklist() {
-  const [dismissed, setDismissed] = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('wooli_setup_dismissed') || '{}')
-      setDismissed(stored)
-    } catch {}
-  }, [])
+// Per-user CTA: dismissal lives on profiles.setup_cta_dismissed (server-side) so it
+// never leaks across users on a shared browser, and only new / freshly-reset accounts
+// (whose map is still empty) ever see it.
+function SetupChecklist({ userId, initialDismissed }: { userId: string; initialDismissed: Record<string, boolean> }) {
+  const [dismissed, setDismissed] = useState<Record<string, boolean>>(initialDismissed)
 
   const dismiss = (key: string) => {
     const next = { ...dismissed, [key]: true }
     setDismissed(next)
-    localStorage.setItem('wooli_setup_dismissed', JSON.stringify(next))
+    createClient().from('profiles').update({ setup_cta_dismissed: next }).eq('id', userId)
+      .then(({ error }) => { if (error) console.error('Failed to save CTA dismissal', error) })
   }
 
   const visible = CTA_ITEMS.filter(item => !dismissed[item.key])
@@ -625,12 +622,16 @@ export default function CashFlowClient({
   members = [],
   currentYear,
   currentMonth,
+  userId,
+  setupCtaDismissed = {},
 }: {
   transactions: CashFlowTransaction[]
   categories: CashFlowCategory[]
   members?: HouseholdMember[]
   currentYear: number
   currentMonth: number
+  userId: string
+  setupCtaDismissed?: Record<string, boolean>
 }) {
   // ── View toggle ──────────────────────────────────────────────────────────────
   const [view, setView] = useState<'monthly' | 'yearly'>('monthly')
@@ -777,7 +778,7 @@ export default function CashFlowClient({
       </div>
 
       {/* Setup checklist */}
-      <SetupChecklist />
+      <SetupChecklist userId={userId} initialDismissed={setupCtaDismissed} />
 
       {/* Income vs Expenses */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6 overflow-hidden">
