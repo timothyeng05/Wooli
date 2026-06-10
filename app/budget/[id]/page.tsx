@@ -8,10 +8,10 @@ export default async function EditTransactionPage({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [txnResult, catResult, acctResult, memberResult] = await Promise.all([
+  const [txnResult, catResult, acctResult, memberResult, plaidAcctResult] = await Promise.all([
     supabase
       .from('transactions')
-      .select('id, amount, description, merchant, category_id, account_id, account_name, transacted_at, is_transfer, is_pending, owner, notes')
+      .select('id, amount, description, merchant, category_id, account_id, account_name, plaid_account_id, transacted_at, is_transfer, is_pending, owner, notes')
       .eq('id', id)
       .eq('user_id', user.id)
       .single(),
@@ -31,6 +31,11 @@ export default async function EditTransactionPage({ params }: { params: Promise<
       .select('id, full_name, display_name, color, sort_order, is_shared')
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }),
+    supabase
+      .from('plaid_accounts')
+      .select('id, name, mask, official_name')
+      .eq('user_id', user.id)
+      .order('name') as any,
   ])
 
   if (!txnResult.data) notFound()
@@ -41,6 +46,7 @@ export default async function EditTransactionPage({ params }: { params: Promise<
       categories={catResult.data || []}
       accounts={acctResult.data || []}
       members={memberResult.data || []}
+      plaidAccounts={plaidAcctResult.data || []}
     />
   )
 }

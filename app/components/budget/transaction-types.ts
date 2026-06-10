@@ -24,6 +24,7 @@ export interface Transaction {
   plaid_transaction_id: string | null
   is_transfer: boolean | null
   is_pending: boolean | null
+  needs_review: boolean | null
   owner: string | null
   account_name: string | null
   trip_id: string | null

@@ -466,7 +466,7 @@ export default function TransactionList({
                   return (
                     <div
                       key={t.id}
-                      className={`flex items-center gap-3 py-3 cursor-pointer rounded-lg px-2 transition ${
+                      className={`group flex items-center gap-3 py-3 cursor-pointer rounded-lg px-2 transition ${
                         selectMode && selectedIds.has(t.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
                       }`}
                       onClick={selectMode ? () => toggleSelect(t.id) : () => setReviewTxn(t)}
@@ -501,6 +501,11 @@ export default function TransactionList({
                               Pending
                             </span>
                           )}
+                          {t.needs_review && !t.is_transfer && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 flex-shrink-0">
+                              Review
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           {catName && !t.is_transfer && (
@@ -527,6 +532,15 @@ export default function TransactionList({
                       </span>
 
                       <OwnerAvatar owner={t.owner} members={members} />
+                      {!selectMode && (
+                        <svg
+                          className="w-4 h-4 text-gray-300 flex-shrink-0 opacity-30 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                          strokeLinecap="round" strokeLinejoin="round"
+                        >
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      )}
                     </div>
                   )
                 })}

@@ -22,6 +22,13 @@ interface Account {
   type: string
 }
 
+interface PlaidAccount {
+  id: string
+  name: string
+  mask: string | null
+  official_name: string | null
+}
+
 interface Transaction {
   id: string
   amount: number
@@ -30,6 +37,7 @@ interface Transaction {
   category_id: string | null
   account_id: string | null
   account_name: string | null
+  plaid_account_id: string | null
   transacted_at: string
   is_transfer: boolean | null
   is_pending: boolean | null
@@ -54,11 +62,13 @@ export default function TransactionDetail({
   categories,
   accounts,
   members = [],
+  plaidAccounts = [],
 }: {
   transaction: Transaction
   categories: Category[]
   accounts: Account[]
   members?: HouseholdMember[]
+  plaidAccounts?: PlaidAccount[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -93,6 +103,7 @@ export default function TransactionDetail({
       const { error } = await supabase.from('transactions').update({
         amount: signed,
         merchant: merchant.trim() || null,
+        description: transaction.description,
         category_id: mode === 'transfer' ? null : (categoryId || null),
         account_id: accountId || null,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
@@ -218,9 +229,11 @@ export default function TransactionDetail({
 
           {/* Account */}
           <Row label="Account">
-            {transaction.account_name && !transaction.account_id ? (
-              /* Plaid account — read-only */
-              <span className="text-sm text-gray-900">{transaction.account_name}</span>
+            {transaction.plaid_account_id ? (
+              /* Plaid account — resolve name from plaidAccounts list, fall back to account_name */
+              <span className="text-sm text-gray-900">
+                {plaidAccounts.find(a => a.id === transaction.plaid_account_id)?.name ?? transaction.account_name ?? 'Unknown account'}
+              </span>
             ) : (
               <select
                 value={accountId}
