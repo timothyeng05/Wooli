@@ -106,6 +106,22 @@ export default function TripDayPage() {
       setLoading(false)
     }
     load()
+
+    // Re-fetch when the tab becomes visible again (e.g. after editing on iOS).
+    // 1.5 s delay lets any in-flight web saves complete before we overwrite state.
+    let visibilityTimer: ReturnType<typeof setTimeout>
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        visibilityTimer = setTimeout(load, 1500)
+      } else {
+        clearTimeout(visibilityTimer)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearTimeout(visibilityTimer)
+    }
   }, [params.id, params.date])
 
   const save = async (overrideItems?: EditorSection[]) => {
