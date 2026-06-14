@@ -23,7 +23,7 @@ const NAV_GROUPS = [
         href: '/budget/transactions',
         label: 'Transactions',
         match: (p: string) => p === '/budget/transactions' ||
-          (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','goals','forecast'].some(s => p.startsWith(`/budget/${s}`))),
+          (p.startsWith('/budget/') && !['accounts','categories','recurring','import','targets','goals','forecast','zoo'].some(s => p.startsWith(`/budget/${s}`))),
         icon: (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
@@ -64,6 +64,20 @@ const NAV_GROUPS = [
         icon: (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+          </svg>
+        ),
+      },
+      {
+        href: '/budget/zoo',
+        label: 'Zoo',
+        match: (p: string) => p.startsWith('/budget/zoo'),
+        icon: (
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <ellipse cx="12" cy="15.5" rx="4.5" ry="3.5" />
+            <ellipse cx="6.5" cy="10.5" rx="2" ry="2.5" />
+            <ellipse cx="10" cy="8.5"  rx="2" ry="2.5" />
+            <ellipse cx="14" cy="8.5"  rx="2" ry="2.5" />
+            <ellipse cx="17.5" cy="10.5" rx="2" ry="2.5" />
           </svg>
         ),
       },
