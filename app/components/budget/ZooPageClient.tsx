@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { SPRITES } from './ZooSprites'
 
 // ── Stage & habitat definitions ───────────────────────────────────────────────
@@ -64,8 +64,7 @@ const HABITATS = [
   },
 ] as const
 
-// ── Scene positions ───────────────────────────────────────────────────────────
-// Home view: all 14 unlocked animals roaming together
+// ── Position tables ───────────────────────────────────────────────────────────
 const SCENE_POS = [
   { left: 6,  yLevel: 0, dir:  1, dist: 14, dur:  9.0, delay: 0.0 },
   { left: 28, yLevel: 1, dir: -1, dist: 11, dur: 11.5, delay: 1.5 },
@@ -83,7 +82,6 @@ const SCENE_POS = [
   { left: 46, yLevel: 1, dir: -1, dist: 11, dur: 10.0, delay: 1.2 },
 ]
 
-// Museum exhibit view: 3-animal and 4-animal spread layouts
 const MUSEUM_POS_4 = [
   { left: 6,  yLevel: 1, dir:  1, dist: 12, dur: 10.0, delay: 0.0 },
   { left: 30, yLevel: 0, dir: -1, dist: 14, dur: 12.5, delay: 1.5 },
@@ -96,7 +94,19 @@ const MUSEUM_POS_3 = [
   { left: 72, yLevel: 2, dir:  1, dist: 11, dur:  9.5, delay: 2.5 },
 ]
 
-// Y% from scene bottom, and px sizes, by yLevel (front → back perspective)
+// Simple spread for background carousel cards (no animation)
+const BG_POS_4 = [
+  { left: 8,  bottom: 29 },
+  { left: 30, bottom: 33 },
+  { left: 58, bottom: 27 },
+  { left: 78, bottom: 31 },
+]
+const BG_POS_3 = [
+  { left: 12, bottom: 30 },
+  { left: 44, bottom: 34 },
+  { left: 74, bottom: 29 },
+]
+
 const Y_PCT    = [29, 35, 41]
 const SIZES    = [40, 32, 24]
 const HERO_SIZE = 58
@@ -123,12 +133,10 @@ function getStage(balance: number) {
   }
   return 0
 }
-
 function progress(balance: number, stage: number) {
   if (stage >= THRESHOLDS.length - 1) return 1
   return Math.min((balance - THRESHOLDS[stage]) / (THRESHOLDS[stage + 1] - THRESHOLDS[stage]), 1)
 }
-
 function fmtFull(n: number) {
   return Math.abs(n).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
@@ -138,8 +146,15 @@ function fmtShort(n: number) {
   if (a >= 1_000)     return `$${Math.round(a / 1_000)}K`
   return `$${Math.round(a).toLocaleString()}`
 }
-
 function today() { return new Date().toISOString().split('T')[0] }
+
+// Circular offset so the lazy-Susan always has neighbours on both sides
+function carouselOffset(habIdx: number, viewed: number): number {
+  let o = habIdx - viewed
+  if (o >  2) o -= 4
+  if (o < -2) o += 4
+  return o
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props { balance: number; monthlyIncome: number; monthlySpend: number }
@@ -164,13 +179,15 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
   const [selectedLocked, setSelected] = useState<number|null>(null)
   const [viewedHabitat,  setViewed]   = useState(current.habitat)
 
+  // Touch / swipe tracking
+  const touchX = useRef<number|null>(null)
+
   useEffect(() => {
     try {
       const goalDate = localStorage.getItem(GOAL_DATE)
       const goal     = localStorage.getItem(GOAL_KEY) ?? ''
       setSavedGoal(goal)
       if (goalDate !== today()) setShowGoal(true)
-
       const saved = parseInt(localStorage.getItem(STAGE_KEY) ?? '-1', 10)
       if (stage > saved && saved >= 0) {
         setEvolvedInto(STAGES[stage])
@@ -183,91 +200,311 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
 
   const commitGoal = () => {
     const g = goalChoice || customGoal || 'Keep saving!'
-    try {
-      localStorage.setItem(GOAL_KEY, g)
-      localStorage.setItem(GOAL_DATE, today())
-    } catch { /* */ }
-    setSavedGoal(g)
-    setShowGoal(false)
-    setGoalChoice('')
-    setCustomGoal('')
-    setGoalStep('intro')
+    try { localStorage.setItem(GOAL_KEY, g); localStorage.setItem(GOAL_DATE, today()) } catch { /* */ }
+    setSavedGoal(g); setShowGoal(false); setGoalChoice(''); setCustomGoal(''); setGoalStep('intro')
   }
 
   const handleHeroTap = () => {
-    setTapped(true)
-    setTapCount(c => c + 1)
+    setTapped(true); setTapCount(c => c + 1)
     if ('vibrate' in navigator) navigator.vibrate(40)
     setTimeout(() => setTapped(false), 550)
   }
 
-  // ── Museum-mode derived values ────────────────────────────────────────────
+  const navigate = (dir: 1 | -1) => setViewed(v => ((v + dir + 4) % 4))
+
+  // ── Derived ───────────────────────────────────────────────────────────────
   const viewedHab  = HABITATS[viewedHabitat]
   const isBrowsing = viewedHabitat !== current.habitat
-  const habitatEntries = STAGES
-    .map((s, i) => ({ ...s, absIdx: i }))
-    .filter(s => s.habitat === viewedHabitat)
-  const museumPos = habitatEntries.length === 4 ? MUSEUM_POS_4 : MUSEUM_POS_3
+  const habitatEntries = STAGES.map((s, i) => ({ ...s, absIdx: i })).filter(s => s.habitat === viewedHabitat)
+  const museumPos  = habitatEntries.length === 4 ? MUSEUM_POS_4 : MUSEUM_POS_3
 
-  // Scene decoration flags use the VIEWED habitat (so decor changes when browsing)
-  const sceneIsOcean   = viewedHabitat === 0
-  const sceneIsJungle  = viewedHabitat === 1
-  const sceneIsSavanna = viewedHabitat === 2
-  const sceneIsMythical= viewedHabitat === 3
-
-  // ── CSS keyframes ─────────────────────────────────────────────────────────
-  // Home view: all unlocked animals
+  // CSS keyframes for active-card animals
   const homeCss = Array.from({ length: stage + 1 }, (_, i) => {
-    const p = SCENE_POS[i]
-    const sf = p.dir > 0 ? 1 : -1
+    const p = SCENE_POS[i]; const sf = p.dir > 0 ? 1 : -1
     return `
-      @keyframes roam${i} {
-        0%,100% { transform: translateX(0); }
-        45%,55% { transform: translateX(${p.dist * p.dir}vw); }
-      }
-      @keyframes face${i} {
-        0%,43%  { transform: scaleX(${sf}); }
-        44%,56% { transform: scaleX(${sf}) translateY(-5px); }
-        57%,100%{ transform: scaleX(${-sf}); }
-      }
-    `
+      @keyframes roam${i}{0%,100%{transform:translateX(0)}45%,55%{transform:translateX(${p.dist*p.dir}vw)}}
+      @keyframes face${i}{0%,43%{transform:scaleX(${sf})}44%,56%{transform:scaleX(${sf}) translateY(-5px)}57%,100%{transform:scaleX(${-sf})}}`
   }).join('\n')
 
-  // Museum view: per-habitat animals
-  const museumCss = habitatEntries.map((_, localIdx) => {
-    const p  = museumPos[localIdx]
-    const sf = p.dir > 0 ? 1 : -1
+  const museumCss = habitatEntries.map((_, li) => {
+    const p = museumPos[li]; const sf = p.dir > 0 ? 1 : -1
     return `
-      @keyframes mroam${localIdx} {
-        0%,100% { transform: translateX(0); }
-        45%,55% { transform: translateX(${p.dist * p.dir}vw); }
-      }
-      @keyframes mface${localIdx} {
-        0%,43%  { transform: scaleX(${sf}); }
-        44%,56% { transform: scaleX(${sf}) translateY(-5px); }
-        57%,100%{ transform: scaleX(${-sf}); }
-      }
-    `
+      @keyframes mroam${li}{0%,100%{transform:translateX(0)}45%,55%{transform:translateX(${p.dist*p.dir}vw)}}
+      @keyframes mface${li}{0%,43%{transform:scaleX(${sf})}44%,56%{transform:scaleX(${sf}) translateY(-5px)}57%,100%{transform:scaleX(${-sf})}}`
   }).join('\n')
 
   const spiritText = tapCount > 5
-    ? `Hehe — stop poking me! 😤`
-    : next
-      ? prog > 0.8
-        ? `So close! ${fmtShort(THRESHOLDS[stage + 1] - balance)} to ${next.name}! 🔥`
-        : current.says
-      : '🌟 Legendary status — the mythical realm is yours!'
+    ? 'Hehe — stop poking me! 😤'
+    : next ? (prog > 0.8 ? `So close! ${fmtShort(THRESHOLDS[stage+1]-balance)} to ${next.name}! 🔥` : current.says)
+    : '🌟 Legendary status — the mythical realm is yours!'
 
   const lockedStages = STAGES.slice(stage + 1)
 
-  return (
-    <div className="relative overflow-hidden" style={{
-      minHeight:'100dvh',
-      background:`linear-gradient(to bottom, ${viewedHab.skyFrom}, ${viewedHab.skyTo})`,
-      transition:'background .5s ease',
-    }}>
+  // ── Render carousel card internals ───────────────────────────────────────
+  function renderCard(habIdx: number, isActive: boolean) {
+    const h       = HABITATS[habIdx]
+    const entries = STAGES.map((s, i) => ({ ...s, absIdx: i })).filter(s => s.habitat === habIdx)
+    const bgPos   = entries.length === 4 ? BG_POS_4 : BG_POS_3
+    const isOcean    = habIdx === 0
+    const isJungle   = habIdx === 1
+    const isSavanna  = habIdx === 2
+    const isMythical = habIdx === 3
 
-      {/* ── CSS animations ── */}
+    return (
+      <>
+        {/* Celestial body (active cards only for perf) */}
+        {isActive && !isOcean && (
+          <div className="absolute rounded-full pointer-events-none" style={{
+            width: isMythical?52:isSavanna?72:60, height: isMythical?52:isSavanna?72:60,
+            top:18, right:22,
+            background: isMythical ? 'radial-gradient(circle at 40% 40%,#c4b5fd,#7c3aed)'
+              : isSavanna ? 'radial-gradient(circle at 40% 40%,#fed7aa,#f97316)'
+              : 'radial-gradient(circle at 40% 40%,#FFFDE7,#FCD34D)',
+            boxShadow: isMythical ? '0 0 32px rgba(139,92,246,.6)'
+              : isSavanna ? '0 0 48px rgba(249,115,22,.5)'
+              : '0 0 28px rgba(252,211,77,.5)',
+          }}/>
+        )}
+
+        {/* Background-card simple sky element */}
+        {!isActive && (
+          <div className="absolute pointer-events-none" style={{
+            top:14, right:14,
+            width: isOcean?0:28, height:28, borderRadius:'50%',
+            background: isMythical?'rgba(196,181,253,.4)':isSavanna?'rgba(249,115,22,.4)':isJungle?'rgba(253,224,71,.3)':'none',
+          }}/>
+        )}
+
+        {/* Ocean: caustic rays + bubbles */}
+        {isOcean && isActive && (
+          <>
+            <div className="absolute inset-0 pointer-events-none" style={{ opacity:.14 }}>
+              {[12,28,46,62,78].map((x,i)=>(
+                <div key={i} style={{ position:'absolute',top:0,left:`${x}%`,width:22,height:'100%',
+                  background:'linear-gradient(to bottom,#38bdf8,transparent)',
+                  transform:`rotate(${(i-2)*6}deg)`,transformOrigin:'top center' }}/>
+              ))}
+            </div>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({length:10},(_,i)=>(
+                <div key={i} style={{ position:'absolute',left:`${(i*19+5)%90}%`,bottom:`${(i*11)%40}%`,
+                  width:5+i%6,height:5+i%6,borderRadius:'50%',
+                  border:'1.5px solid rgba(56,189,248,.4)',
+                  animation:`bubble ${2+i%3}s ${i*.4}s ease-out infinite` }}/>
+              ))}
+            </div>
+          </>
+        )}
+        {isOcean && !isActive && (
+          <div className="absolute inset-0 pointer-events-none" style={{ opacity:.2 }}>
+            {[20,50,75].map((x,i)=>(
+              <div key={i} style={{ position:'absolute',top:0,left:`${x}%`,width:16,height:'100%',
+                background:'linear-gradient(to bottom,#38bdf8,transparent)',
+                transform:`rotate(${(i-1)*8}deg)`,transformOrigin:'top center' }}/>
+            ))}
+          </div>
+        )}
+
+        {/* Jungle: canopy + fireflies */}
+        {isJungle && isActive && (
+          <>
+            <div className="absolute pointer-events-none" style={{ top:50,left:'6%',animation:'cloudDrift 11s ease-in-out infinite' }}><CloudShape color="rgba(34,197,94,.35)"/></div>
+            <div className="absolute pointer-events-none" style={{ top:90,left:'55%',transform:'scale(.65)',animation:'cloudDrift 16s ease-in-out 4s infinite' }}><CloudShape color="rgba(34,197,94,.3)"/></div>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({length:10},(_,i)=>(
+                <div key={i} style={{ position:'absolute',left:`${(i*23+8)%92}%`,top:`${(i*17+10)%60}%`,
+                  width:4,height:4,borderRadius:'50%',background:'#fef08a',opacity:.7,
+                  animation:`heroGlow ${1.5+i%2}s ${i*.4}s ease-in-out infinite` }}/>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Savanna: heat haze */}
+        {isSavanna && isActive && (
+          <>
+            <div className="absolute pointer-events-none" style={{ top:40,left:'5%',animation:'cloudDrift 12s ease-in-out infinite' }}><CloudShape color="rgba(251,191,36,.25)"/></div>
+            <div className="absolute pointer-events-none" style={{ top:70,left:'60%',transform:'scale(.7)',animation:'cloudDrift 18s ease-in-out 5s infinite' }}><CloudShape color="rgba(234,88,12,.2)"/></div>
+          </>
+        )}
+
+        {/* Mythical: stars + aurora */}
+        {isMythical && isActive && (
+          <>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({length:20},(_,i)=>(
+                <div key={i} style={{ position:'absolute',left:`${(i*19+3)%98}%`,top:`${(i*13+2)%55}%`,
+                  width:i%4===0?4:i%3===0?3:2,height:i%4===0?4:i%3===0?3:2,
+                  borderRadius:'50%',background:'white',opacity:.8,
+                  animation:`heroGlow ${2+i%3}s ${i*.25}s ease-in-out infinite` }}/>
+              ))}
+            </div>
+            <div className="absolute inset-0 pointer-events-none" style={{ opacity:.08 }}>
+              {[0,1,2].map(i=>(
+                <div key={i} style={{ position:'absolute',top:`${10+i*12}%`,left:0,right:0,height:18,
+                  background:`linear-gradient(to right,transparent,${['#a78bfa','#67e8f9','#f9a8d4'][i]},transparent)`,
+                  animation:`cloudDrift ${8+i*3}s ${i*2}s ease-in-out infinite` }}/>
+              ))}
+            </div>
+          </>
+        )}
+        {/* Background-card stars (simplified) */}
+        {isMythical && !isActive && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {[15,35,55,75,90].map((x,i)=>(
+              <div key={i} style={{ position:'absolute',left:`${x}%`,top:`${(i*17+8)%50}%`,
+                width:2,height:2,borderRadius:'50%',background:'white',opacity:.6 }}/>
+            ))}
+          </div>
+        )}
+
+        {/* Ground decorations */}
+        {isOcean && isActive && (
+          <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
+            <svg viewBox="0 0 400 30" width="100%" height="30" preserveAspectRatio="none">
+              {[10,60,110,160,220,280,330,370].map((x,i)=>(
+                <ellipse key={i} cx={x} cy={10} rx={8+i%5} ry={10+i%8} fill={i%2===0?'#0e7490':'#155e75'} opacity=".8"/>
+              ))}
+            </svg>
+          </div>
+        )}
+        {isJungle && (
+          <>
+            {isActive && (
+              <>
+                <div className="absolute pointer-events-none" style={{ bottom:'33%',left:4 }}><JungleTree/></div>
+                <div className="absolute pointer-events-none" style={{ bottom:'33%',right:6,transform:'scale(.8) scaleX(-1)' }}><JungleTree/></div>
+              </>
+            )}
+            {!isActive && (
+              <>
+                <div className="absolute pointer-events-none" style={{ bottom:'30%',left:4,transform:'scale(.6)' }}><JungleTree/></div>
+                <div className="absolute pointer-events-none" style={{ bottom:'30%',right:6,transform:'scale(.55) scaleX(-1)' }}><JungleTree/></div>
+              </>
+            )}
+            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
+              <TallGrass color="#15803d"/>
+            </div>
+          </>
+        )}
+        {isSavanna && (
+          <>
+            {isActive && (
+              <>
+                <div className="absolute pointer-events-none" style={{ bottom:'33%',left:4 }}><AcaciaTree/></div>
+                <div className="absolute pointer-events-none" style={{ bottom:'33%',right:6,transform:'scale(.78) scaleX(-1)' }}><AcaciaTree/></div>
+              </>
+            )}
+            {!isActive && (
+              <>
+                <div className="absolute pointer-events-none" style={{ bottom:'30%',left:4,transform:'scale(.55)' }}><AcaciaTree/></div>
+                <div className="absolute pointer-events-none" style={{ bottom:'30%',right:6,transform:'scale(.5) scaleX(-1)' }}><AcaciaTree/></div>
+              </>
+            )}
+            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
+              <TallGrass color="#ca8a04"/>
+            </div>
+          </>
+        )}
+        {isMythical && isActive && (
+          <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
+            <svg viewBox="0 0 400 28" width="100%" height="28" preserveAspectRatio="none">
+              <path d="M0 28 L30 6 L50 20 L80 2 L110 18 L140 8 L170 24 L200 4 L230 20 L260 10 L290 22 L320 6 L350 18 L380 8 L400 28Z" fill="#4c1d95" opacity=".9"/>
+              <path d="M0 28 L35 10 L55 22 L85 6 L115 20 L145 12 L175 26 L205 8 L235 22 L265 14 L295 24 L325 10 L355 20 L385 10 L400 28Z" fill="#5b21b6" opacity=".7"/>
+            </svg>
+          </div>
+        )}
+        {isMythical && !isActive && (
+          <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
+            <svg viewBox="0 0 200 14" width="100%" height="14" preserveAspectRatio="none">
+              <path d="M0 14 L15 3 L25 10 L40 1 L55 9 L70 4 L85 12 L100 2 L115 10 L130 5 L145 11 L160 3 L175 9 L190 4 L200 14Z" fill="#4c1d95"/>
+            </svg>
+          </div>
+        )}
+
+        {/* Ground */}
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{
+          height:'36%',
+          background:`linear-gradient(to bottom,${h.groundFrom},${h.groundTo})`,
+          borderRadius:h.groundRadius,
+        }}/>
+
+        {/* Habitat name label on background cards */}
+        {!isActive && (
+          <div style={{ position:'absolute',bottom:'38%',left:0,right:0,textAlign:'center',
+            color:'white',fontSize:9,fontWeight:'bold',letterSpacing:'.05em',
+            opacity:.75,textShadow:'0 1px 4px rgba(0,0,0,.8)' }}>
+            {h.name.toUpperCase()}
+          </div>
+        )}
+
+        {/* Animals */}
+        {entries.map((s, localIdx) => {
+          const isUnlocked = s.absIdx <= stage
+          const isHero     = s.absIdx === stage
+          const Sp         = SPRITES[s.absIdx]
+
+          if (isActive) {
+            // Full animated farm/museum view
+            const mPos = museumPos[localIdx]
+            const fPos = SCENE_POS[s.absIdx]
+            const pos  = isBrowsing ? mPos : fPos
+            const animName  = isBrowsing ? `mroam${localIdx}` : `roam${s.absIdx}`
+            const faceName  = isBrowsing ? `mface${localIdx}` : `face${s.absIdx}`
+            const dur       = pos.dur; const dly = pos.delay
+            const sz        = isHero ? HERO_SIZE : SIZES[pos.yLevel]
+            const btm       = Y_PCT[pos.yLevel]
+
+            // In farm (home) mode show all unlocked; in museum show only this habitat's
+            const showAnimal = isBrowsing || s.absIdx <= stage
+
+            return showAnimal ? (
+              <div key={s.absIdx} style={{
+                position:'absolute', left:`${pos.left}%`, bottom:`${btm}%`,
+                animation: isUnlocked ? `${animName} ${dur}s ${dly}s ease-in-out infinite` : 'none',
+                zIndex: isHero ? 5 : 3 - pos.yLevel,
+              }}>
+                <div onClick={isHero ? handleHeroTap : undefined} style={{
+                  cursor: isHero?'pointer':'default',
+                  opacity: isUnlocked?1:.22,
+                  filter: isUnlocked?'none':'grayscale(1)',
+                  animation: isUnlocked
+                    ? isHero
+                      ? tapped ? 'tapPop .55s ease'
+                        : `${faceName} ${dur}s ${dly}s ease-in-out infinite, heroGlow 2.5s ease-in-out infinite`
+                      : `${faceName} ${dur}s ${dly}s ease-in-out infinite`
+                    : 'none',
+                }}>
+                  <Sp size={sz}/>
+                </div>
+                {isHero && (
+                  <div style={{ textAlign:'center',fontSize:9,color:'white',fontWeight:'bold',
+                    textShadow:'0 1px 3px rgba(0,0,0,.8)',marginTop:2 }}>★ you</div>
+                )}
+              </div>
+            ) : null
+          } else {
+            // Background card: simple spread, small, no animation
+            const bgp = bgPos[localIdx] ?? bgPos[0]
+            return (
+              <div key={s.absIdx} style={{
+                position:'absolute', left:`${bgp.left}%`, bottom:`${bgp.bottom}%`,
+                opacity: isUnlocked ? 0.9 : 0.18,
+                filter: isUnlocked ? 'none' : 'grayscale(1)',
+              }}>
+                <Sp size={isHero ? 22 : 16}/>
+              </div>
+            )
+          }
+        })}
+      </>
+    )
+  }
+
+  // ── JSX ───────────────────────────────────────────────────────────────────
+  return (
+    <div className="relative overflow-hidden" style={{ minHeight:'100dvh', background: '#000' }}>
+
       <style>{`
         @keyframes cloudDrift   { 0%,100%{transform:translateX(0)} 50%{transform:translateX(16px)} }
         @keyframes tapPop       { 0%{transform:scale(1)} 30%{transform:scale(1.3) rotate(-8deg)} 60%{transform:scale(.92) rotate(5deg)} 100%{transform:scale(1)} }
@@ -282,295 +519,108 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         ${isBrowsing ? museumCss : homeCss}
       `}</style>
 
-      {/* ── Scene area (top 57%) ──────────────────────────────────────────────── */}
-      <div className="absolute left-0 right-0 top-0" style={{ height:'57%' }}>
+      {/* ── Scene: lazy-Susan carousel (top 57%) ──────────────────────────── */}
+      <div
+        className="absolute left-0 right-0 top-0"
+        style={{ height:'57%', overflow:'hidden' }}
+        onTouchStart={e => { touchX.current = e.touches[0].clientX }}
+        onTouchEnd={e => {
+          if (touchX.current === null) return
+          const dx = e.changedTouches[0].clientX - touchX.current
+          if (Math.abs(dx) > 44) navigate(dx < 0 ? 1 : -1)
+          touchX.current = null
+        }}
+      >
+        {/* 3-D carousel perspective wrapper */}
+        <div style={{ position:'relative', width:'100%', height:'100%',
+          perspective:'1100px', perspectiveOrigin:'50% 60%' }}>
 
-        {/* Celestial body */}
-        {!sceneIsOcean && (
-          <div className="absolute rounded-full pointer-events-none" style={{
-            width: sceneIsMythical ? 52 : sceneIsSavanna ? 72 : 60,
-            height: sceneIsMythical ? 52 : sceneIsSavanna ? 72 : 60,
-            top:18, right:22,
-            background: sceneIsMythical
-              ? 'radial-gradient(circle at 40% 40%,#c4b5fd,#7c3aed)'
-              : sceneIsSavanna
-                ? 'radial-gradient(circle at 40% 40%,#fed7aa,#f97316)'
-                : 'radial-gradient(circle at 40% 40%,#FFFDE7,#FCD34D)',
-            boxShadow: sceneIsMythical
-              ? '0 0 32px rgba(139,92,246,.6)'
-              : sceneIsSavanna
-                ? '0 0 48px rgba(249,115,22,.5)'
-                : '0 0 28px rgba(252,211,77,.5)',
-          }}/>
-        )}
+          {HABITATS.map((h, habIdx) => {
+            const offset   = carouselOffset(habIdx, viewedHabitat)
+            const abs      = Math.abs(offset)
+            const isActive = offset === 0
 
-        {/* Ocean: caustic rays + bubbles */}
-        {sceneIsOcean && (
-          <>
-            <div className="absolute inset-0 pointer-events-none" style={{ opacity:.14 }}>
-              {[12,28,46,62,78].map((x,i)=>(
-                <div key={i} style={{
-                  position:'absolute', top:0, left:`${x}%`, width:22, height:'100%',
-                  background:'linear-gradient(to bottom,#38bdf8,transparent)',
-                  transform:`rotate(${(i-2)*6}deg)`, transformOrigin:'top center',
-                }}/>
-              ))}
-            </div>
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {Array.from({length:14},(_,i)=>(
-                <div key={i} style={{
-                  position:'absolute', left:`${(i*19+5)%90}%`, bottom:`${(i*11)%40}%`,
-                  width:5+i%7, height:5+i%7, borderRadius:'50%',
-                  border:'1.5px solid rgba(56,189,248,.4)',
-                  animation:`bubble ${2+i%3}s ${i*.4}s ease-out infinite`,
-                }}/>
-              ))}
-            </div>
-          </>
-        )}
+            // Transform math for lazy-Susan layout
+            // offset ±1 = side cards, offset ±2 = rear card (barely peeking)
+            const tx       = offset * 68            // horizontal shift %
+            const scale    = isActive ? 1 : abs === 1 ? 0.66 : 0.38
+            const ry       = offset * -34           // rotateY deg (angles card away)
+            const opacity  = isActive ? 1 : abs === 1 ? 0.78 : 0.38
+            const zi       = isActive ? 4 : abs === 1 ? 3 : 1
 
-        {/* Jungle: canopy mist + fireflies */}
-        {sceneIsJungle && (
-          <>
-            <div className="absolute pointer-events-none" style={{ top:50,left:'6%', animation:'cloudDrift 11s ease-in-out infinite' }}>
-              <CloudShape color="rgba(34,197,94,.35)"/>
-            </div>
-            <div className="absolute pointer-events-none" style={{ top:90,left:'55%',transform:'scale(.65)', animation:'cloudDrift 16s ease-in-out 4s infinite' }}>
-              <CloudShape color="rgba(34,197,94,.3)"/>
-            </div>
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {Array.from({length:12},(_,i)=>(
-                <div key={i} style={{
-                  position:'absolute', left:`${(i*23+8)%92}%`, top:`${(i*17+10)%60}%`,
-                  width:4, height:4, borderRadius:'50%', background:'#fef08a', opacity:.7,
-                  animation:`heroGlow ${1.5+i%2}s ${i*.4}s ease-in-out infinite`,
-                }}/>
-              ))}
-            </div>
-          </>
-        )}
+            return (
+              <div
+                key={habIdx}
+                onClick={!isActive ? () => setViewed(habIdx) : undefined}
+                style={{
+                  position:'absolute', inset:0,
+                  background:`linear-gradient(to bottom,${h.skyFrom},${h.skyTo})`,
+                  transform:`translateX(${tx}%) scale(${scale}) rotateY(${ry}deg)`,
+                  transformOrigin:'center center',
+                  transition:'transform .45s cubic-bezier(.4,0,.2,1),opacity .45s ease',
+                  zIndex: zi,
+                  opacity,
+                  cursor: !isActive ? 'pointer' : 'default',
+                  borderRadius: isActive ? 0 : 18,
+                  overflow:'hidden',
+                  boxShadow: !isActive ? '0 8px 48px rgba(0,0,0,.65)' : 'none',
+                }}
+              >
+                {renderCard(habIdx, isActive)}
+              </div>
+            )
+          })}
 
-        {/* Savanna: heat haze */}
-        {sceneIsSavanna && (
-          <>
-            <div className="absolute pointer-events-none" style={{ top:40,left:'5%', animation:'cloudDrift 12s ease-in-out infinite' }}>
-              <CloudShape color="rgba(251,191,36,.25)"/>
-            </div>
-            <div className="absolute pointer-events-none" style={{ top:70,left:'60%',transform:'scale(.7)', animation:'cloudDrift 18s ease-in-out 5s infinite' }}>
-              <CloudShape color="rgba(234,88,12,.2)"/>
-            </div>
-          </>
-        )}
-
-        {/* Mythical: stars + aurora */}
-        {sceneIsMythical && (
-          <>
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {Array.from({length:24},(_,i)=>(
-                <div key={i} style={{
-                  position:'absolute', left:`${(i*19+3)%98}%`, top:`${(i*13+2)%55}%`,
-                  width:i%4===0?4:i%3===0?3:2, height:i%4===0?4:i%3===0?3:2,
-                  borderRadius:'50%', background:'white', opacity:.8,
-                  animation:`heroGlow ${2+i%3}s ${i*.25}s ease-in-out infinite`,
-                }}/>
-              ))}
-            </div>
-            <div className="absolute inset-0 pointer-events-none" style={{ opacity:.08 }}>
-              {[0,1,2].map(i=>(
-                <div key={i} style={{
-                  position:'absolute', top:`${10+i*12}%`, left:0, right:0, height:18,
-                  background:`linear-gradient(to right,transparent,${['#a78bfa','#67e8f9','#f9a8d4'][i]},transparent)`,
-                  animation:`cloudDrift ${8+i*3}s ${i*2}s ease-in-out infinite`,
-                }}/>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Ground decorations */}
-        {sceneIsOcean && (
-          <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
-            <svg viewBox="0 0 400 30" width="100%" height="30" preserveAspectRatio="none">
-              {[10,60,110,160,220,280,330,370].map((x,i)=>(
-                <ellipse key={i} cx={x} cy={10} rx={8+i%5} ry={10+i%8} fill={i%2===0?'#0e7490':'#155e75'} opacity=".8"/>
-              ))}
-            </svg>
-          </div>
-        )}
-        {sceneIsJungle && (
-          <>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}><JungleTree/></div>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.8) scaleX(-1)' }}><JungleTree/></div>
-            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}><TallGrass color="#15803d"/></div>
-          </>
-        )}
-        {sceneIsSavanna && (
-          <>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}><AcaciaTree/></div>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.78) scaleX(-1)' }}><AcaciaTree/></div>
-            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}><TallGrass color="#ca8a04"/></div>
-          </>
-        )}
-        {sceneIsMythical && (
-          <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
-            <svg viewBox="0 0 400 28" width="100%" height="28" preserveAspectRatio="none">
-              <path d="M0 28 L30 6 L50 20 L80 2 L110 18 L140 8 L170 24 L200 4 L230 20 L260 10 L290 22 L320 6 L350 18 L380 8 L400 28Z" fill="#4c1d95" opacity=".9"/>
-              <path d="M0 28 L35 10 L55 22 L85 6 L115 20 L145 12 L175 26 L205 8 L235 22 L265 14 L295 24 L325 10 L355 20 L385 10 L400 28Z" fill="#5b21b6" opacity=".7"/>
-            </svg>
-          </div>
-        )}
-
-        {/* Ground */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{
-          height:'36%',
-          background:`linear-gradient(to bottom, ${viewedHab.groundFrom}, ${viewedHab.groundTo})`,
-          borderRadius: viewedHab.groundRadius,
-        }}/>
-
-        {/* ── Habitat navigation badge ── */}
-        <div className="absolute left-0 right-0 flex justify-center items-center gap-2" style={{ top:12 }}>
-          <button
-            onClick={() => setViewed(v => Math.max(0, v - 1))}
-            disabled={viewedHabitat === 0}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
-            style={{
-              background:'rgba(0,0,0,.35)', backdropFilter:'blur(4px)',
-              border:'1px solid rgba(255,255,255,.15)',
-              opacity: viewedHabitat === 0 ? .25 : 1,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M9 2 L4 7 L9 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-
-          <div className="px-3 py-1 rounded-full text-xs font-bold border" style={{
-            backdropFilter:'blur(8px)',
-            background: viewedHab.badgeBg,
-            borderColor: viewedHab.badgeBorder,
-            color: viewedHab.badgeText,
-          }}>
-            {isBrowsing
-              ? `${viewedHab.name} — Exhibit`
-              : `${viewedHab.name} · Stage ${stage} · ${current.name}`}
-          </div>
-
-          <button
-            onClick={() => setViewed(v => Math.min(3, v + 1))}
-            disabled={viewedHabitat === 3}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
-            style={{
-              background:'rgba(0,0,0,.35)', backdropFilter:'blur(4px)',
-              border:'1px solid rgba(255,255,255,.15)',
-              opacity: viewedHabitat === 3 ? .25 : 1,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M5 2 L10 7 L5 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* ── Habitat dots indicator ── */}
-        <div className="absolute left-0 right-0 flex justify-center gap-1.5" style={{ top:48 }}>
-          {HABITATS.map((_, i) => (
+          {/* Navigation badge + arrows (above all cards) */}
+          <div className="absolute left-0 right-0 flex justify-center items-center gap-2" style={{ top:10, zIndex:10 }}>
             <button
-              key={i}
-              onClick={() => setViewed(i)}
-              className="rounded-full transition-all"
-              style={{
-                width: i === viewedHabitat ? 16 : 6,
-                height: 6,
+              onClick={() => navigate(-1)}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
+              style={{ background:'rgba(0,0,0,.45)', backdropFilter:'blur(4px)', border:'1px solid rgba(255,255,255,.18)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M9 2 L4 7 L9 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            <div className="px-3 py-1 rounded-full text-xs font-bold border" style={{
+              backdropFilter:'blur(10px)',
+              background: viewedHab.badgeBg,
+              borderColor: viewedHab.badgeBorder,
+              color: viewedHab.badgeText,
+            }}>
+              {isBrowsing ? `${viewedHab.name} — Exhibit` : `${viewedHab.name} · Stage ${stage} · ${current.name}`}
+            </div>
+
+            <button
+              onClick={() => navigate(1)}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
+              style={{ background:'rgba(0,0,0,.45)', backdropFilter:'blur(4px)', border:'1px solid rgba(255,255,255,.18)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M5 2 L10 7 L5 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Dot indicator */}
+          <div className="absolute left-0 right-0 flex justify-center gap-1.5" style={{ top:46, zIndex:10 }}>
+            {HABITATS.map((_, i) => (
+              <button key={i} onClick={() => setViewed(i)} className="rounded-full transition-all" style={{
+                width: i === viewedHabitat ? 16 : 6, height:6,
                 background: i === viewedHabitat
                   ? viewedHab.badgeBorder
                   : i === current.habitat
-                    ? 'rgba(255,255,255,.5)'
-                    : 'rgba(255,255,255,.2)',
-              }}
-            />
-          ))}
-        </div>
+                    ? 'rgba(255,255,255,.55)'
+                    : 'rgba(255,255,255,.22)',
+              }}/>
+            ))}
+          </div>
 
-        {/* ── Animals ── */}
-        {isBrowsing ? (
-          // Museum exhibit: this habitat's animals, locked ones silhouetted
-          habitatEntries.map((s, localIdx) => {
-            const pos        = museumPos[localIdx]
-            const isUnlocked = s.absIdx <= stage
-            const isHero     = s.absIdx === stage
-            const sz         = isHero ? HERO_SIZE : SIZES[pos.yLevel]
-            const bottom     = Y_PCT[pos.yLevel]
-            const Sp         = SPRITES[s.absIdx]
-            return (
-              <div key={s.absIdx} style={{
-                position:'absolute', left:`${pos.left}%`, bottom:`${bottom}%`,
-                animation: isUnlocked ? `mroam${localIdx} ${pos.dur}s ${pos.delay}s ease-in-out infinite` : 'none',
-                zIndex: isHero ? 5 : 3 - pos.yLevel,
-              }}>
-                <div style={{
-                  opacity: isUnlocked ? 1 : 0.22,
-                  filter: isUnlocked ? 'none' : 'grayscale(1)',
-                  animation: isUnlocked && !isHero
-                    ? `mface${localIdx} ${pos.dur}s ${pos.delay}s ease-in-out infinite`
-                    : isHero
-                      ? tapped
-                        ? 'tapPop .55s ease'
-                        : `mface${localIdx} ${pos.dur}s ${pos.delay}s ease-in-out infinite, heroGlow 2.5s ease-in-out infinite`
-                      : 'none',
-                  cursor: isHero ? 'pointer' : 'default',
-                }}
-                  onClick={isHero ? handleHeroTap : undefined}
-                >
-                  <Sp size={sz}/>
-                </div>
-                <div style={{ textAlign:'center', marginTop:2, fontSize:8, fontWeight:'bold',
-                  color: isUnlocked ? 'white' : 'rgba(255,255,255,.25)',
-                  textShadow: isUnlocked ? '0 1px 3px rgba(0,0,0,.8)' : 'none',
-                }}>
-                  {isUnlocked ? (isHero ? '★ you' : s.name) : '???'}
-                </div>
-              </div>
-            )
-          })
-        ) : (
-          // Home: all unlocked animals wandering
-          Array.from({ length: stage + 1 }, (_, i) => {
-            const pos       = SCENE_POS[i]
-            const isCurrent = i === stage
-            const sz        = isCurrent ? HERO_SIZE : SIZES[pos.yLevel]
-            const bottom    = Y_PCT[pos.yLevel]
-            const Sp        = SPRITES[i]
-            return (
-              <div key={i} style={{
-                position:'absolute', left:`${pos.left}%`, bottom:`${bottom}%`,
-                animation:`roam${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite`,
-                zIndex: isCurrent ? 5 : 3 - pos.yLevel,
-              }}>
-                <div
-                  onClick={isCurrent ? handleHeroTap : undefined}
-                  style={{
-                    cursor: isCurrent ? 'pointer' : 'default',
-                    animation: isCurrent
-                      ? tapped
-                        ? 'tapPop .55s ease'
-                        : `face${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite, heroGlow 2.5s ease-in-out infinite`
-                      : `face${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite`,
-                  }}
-                >
-                  <Sp size={sz}/>
-                </div>
-                {isCurrent && (
-                  <div style={{ textAlign:'center', fontSize:9, color:'white', fontWeight:'bold', textShadow:'0 1px 3px rgba(0,0,0,.8)', marginTop:2 }}>
-                    ★ you
-                  </div>
-                )}
-              </div>
-            )
-          })
-        )}
+        </div>
       </div>
 
-      {/* ── Info panel (bottom 43%) ───────────────────────────────────────────── */}
+      {/* ── Info panel (bottom 43%) ───────────────────────────────────────── */}
       <div className="absolute left-0 right-0 bottom-0 flex flex-col" style={{
         height:'43%',
         background: viewedHab.panelBg,
@@ -578,9 +628,8 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         borderTop:'1px solid rgba(255,255,255,.15)',
         paddingBottom:'max(8px, env(safe-area-inset-bottom))',
       }}>
-
         {isBrowsing ? (
-          /* ── Museum exhibit panel ── */
+          /* Museum exhibit panel */
           <>
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <div>
@@ -603,33 +652,16 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 pb-2" style={{ scrollbarWidth:'none' }}>
-              <div
-                key={viewedHabitat}
-                className="grid grid-cols-2 gap-2"
-                style={{ animation:'fadeSlide .25s ease' }}
-              >
+              <div key={viewedHabitat} className="grid grid-cols-2 gap-2" style={{ animation:'fadeSlide .25s ease' }}>
                 {habitatEntries.map(s => {
                   const isUnlocked = s.absIdx <= stage
                   const isHero     = s.absIdx === stage
                   const Sp         = SPRITES[s.absIdx]
-                  const needed     = THRESHOLDS[s.absIdx] - balance
                   return (
-                    <div
-                      key={s.absIdx}
-                      className="rounded-xl p-3 border flex items-center gap-2.5 transition-all"
-                      style={{
-                        background: isHero
-                          ? `${viewedHab.badgeBorder}22`
-                          : isUnlocked
-                            ? 'rgba(255,255,255,.1)'
-                            : 'rgba(0,0,0,.2)',
-                        borderColor: isHero
-                          ? viewedHab.badgeBorder
-                          : isUnlocked
-                            ? 'rgba(255,255,255,.18)'
-                            : 'rgba(255,255,255,.05)',
-                      }}
-                    >
+                    <div key={s.absIdx} className="rounded-xl p-3 border flex items-center gap-2.5" style={{
+                      background: isHero ? `${viewedHab.badgeBorder}22` : isUnlocked ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.2)',
+                      borderColor: isHero ? viewedHab.badgeBorder : isUnlocked ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)',
+                    }}>
                       <div style={{ opacity:isUnlocked?1:.22, filter:isUnlocked?'none':'grayscale(1)', flexShrink:0 }}>
                         <Sp size={34}/>
                       </div>
@@ -638,11 +670,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
                           {isUnlocked ? s.name : '???'}
                         </p>
                         <p style={{ fontSize:9, marginTop:1, color: isHero ? viewedHab.badgeText : 'rgba(255,255,255,.38)' }}>
-                          {isHero
-                            ? '★ your current'
-                            : isUnlocked
-                              ? `✓ Unlocked`
-                              : `${fmtShort(needed)} needed`}
+                          {isHero ? '★ your current' : isUnlocked ? '✓ Unlocked' : `${fmtShort(THRESHOLDS[s.absIdx]-balance)} needed`}
                         </p>
                       </div>
                     </div>
@@ -651,7 +679,6 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
               </div>
             </div>
 
-            {/* Finance cards */}
             <div className="px-4 pt-1" style={{ maxWidth:420, margin:'0 auto', width:'100%' }}>
               <div className="grid grid-cols-3 gap-2">
                 <FinCard label="Net Worth" value={fmtFull(balance)}       neg={balance<0}/>
@@ -661,7 +688,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
             </div>
           </>
         ) : (
-          /* ── Home panel ── */
+          /* Home panel */
           <>
             {savedGoal && (
               <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg flex items-center gap-2" style={{ background:'rgba(255,255,255,.08)' }}>
@@ -675,24 +702,20 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
                 <span className="text-white text-xs font-semibold">{current.name}</span>
                 {next
                   ? <span className="text-white/55 text-xs">{fmtShort(THRESHOLDS[stage+1]-balance)} to {next.name}</span>
-                  : <span className="text-white/55 text-xs">Max level 🌟</span>
-                }
+                  : <span className="text-white/55 text-xs">Max level 🌟</span>}
               </div>
               <div className="rounded-full overflow-hidden" style={{ height:6, background:'rgba(255,255,255,.14)' }}>
                 <div className="h-full rounded-full transition-all duration-700" style={{
                   width:`${Math.round(prog*100)}%`,
-                  background:`linear-gradient(to right, ${hab.badgeBorder}, rgba(255,255,255,.8))`,
+                  background:`linear-gradient(to right,${hab.badgeBorder},rgba(255,255,255,.8))`,
                   boxShadow:`0 0 8px ${hab.badgeBorder}`,
                 }}/>
               </div>
             </div>
 
-            <div
-              key={spiritText}
-              className="mx-4 px-3 py-1.5 rounded-xl text-center text-xs font-medium"
+            <div key={spiritText} className="mx-4 px-3 py-1.5 rounded-xl text-center text-xs font-medium"
               style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.9)', animation:'dialoguePop .3s ease', cursor:'pointer' }}
-              onClick={handleHeroTap}
-            >
+              onClick={handleHeroTap}>
               {spiritText}
             </div>
 
@@ -703,30 +726,20 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
                 </p>
                 <div className="flex gap-2 overflow-x-auto px-4" style={{ scrollbarWidth:'none' }}>
                   {lockedStages.map((s, idx) => {
-                    const absIdx = stage + 1 + idx
-                    const isSel  = selectedLocked === absIdx
-                    const Sp     = SPRITES[absIdx]
+                    const absIdx = stage + 1 + idx; const isSel = selectedLocked === absIdx
+                    const Sp = SPRITES[absIdx]
                     return (
-                      <div
-                        key={absIdx}
-                        onClick={() => setSelected(isSel ? null : absIdx)}
+                      <div key={absIdx} onClick={() => setSelected(isSel?null:absIdx)}
                         className="flex-shrink-0 flex flex-col items-center rounded-xl cursor-pointer transition-all active:scale-95"
-                        style={{
-                          width:60, paddingTop:5, paddingBottom:5,
-                          background: isSel ? 'rgba(255,255,255,.16)' : 'rgba(0,0,0,.28)',
-                          border:`1.5px solid ${isSel ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.06)'}`,
-                        }}
-                      >
+                        style={{ width:60,paddingTop:5,paddingBottom:5,
+                          background:isSel?'rgba(255,255,255,.16)':'rgba(0,0,0,.28)',
+                          border:`1.5px solid ${isSel?'rgba(255,255,255,.4)':'rgba(255,255,255,.06)'}` }}>
                         <span className="text-white/25 font-bold" style={{ fontSize:8 }}>{absIdx}</span>
-                        <div style={{ opacity:.25, filter:'grayscale(1)', marginTop:2 }}>
-                          <Sp size={28}/>
-                        </div>
+                        <div style={{ opacity:.25,filter:'grayscale(1)',marginTop:2 }}><Sp size={28}/></div>
                         <span className="text-white/20 font-semibold mt-0.5" style={{ fontSize:8 }}>???</span>
-                        {isSel && (
-                          <span className="text-white/55 mt-0.5 text-center px-1 leading-tight" style={{ fontSize:7 }}>
-                            {fmtShort(THRESHOLDS[absIdx]-balance)} needed
-                          </span>
-                        )}
+                        {isSel && <span className="text-white/55 mt-0.5 text-center px-1 leading-tight" style={{ fontSize:7 }}>
+                          {fmtShort(THRESHOLDS[absIdx]-balance)} needed
+                        </span>}
                       </div>
                     )
                   })}
@@ -745,15 +758,13 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         )}
       </div>
 
-      {/* ── Daily goal overlay ────────────────────────────────────────────────── */}
+      {/* ── Daily goal overlay ────────────────────────────────────────────── */}
       {showGoal && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6" style={{
-          background:`linear-gradient(160deg, ${hab.skyFrom}F0, ${hab.groundTo}E8)`,
-          backdropFilter:'blur(2px)',
-        }}>
+          background:`linear-gradient(160deg,${hab.skyFrom}F0,${hab.groundTo}E8)`, backdropFilter:'blur(2px)' }}>
           {goalStep === 'intro' ? (
             <div className="text-center" style={{ animation:'introSlide .4s ease' }}>
-              <div style={{ display:'flex', justifyContent:'center', marginBottom:20, animation:'heroGlow 2.5s ease-in-out infinite' }}>
+              <div style={{ display:'flex',justifyContent:'center',marginBottom:20,animation:'heroGlow 2.5s ease-in-out infinite' }}>
                 <Sprite size={90}/>
               </div>
               <h2 className="text-2xl font-extrabold text-white mb-2" style={{ textShadow:'0 2px 8px rgba(0,0,0,.4)' }}>
@@ -761,56 +772,38 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
               </h2>
               <p className="text-sm text-white/80 mb-2">Your <strong>{hab.name}</strong> companion.</p>
               <p className="text-sm text-white/70 mb-8 max-w-xs mx-auto leading-relaxed">{current.says}</p>
-              <button
-                onClick={() => setGoalStep('pick')}
+              <button onClick={() => setGoalStep('pick')}
                 className="w-full max-w-xs py-3 rounded-2xl font-bold text-sm transition-all active:scale-95"
-                style={{ background:'rgba(255,255,255,.2)', border:'1.5px solid rgba(255,255,255,.4)', color:'white' }}
-              >
+                style={{ background:'rgba(255,255,255,.2)',border:'1.5px solid rgba(255,255,255,.4)',color:'white' }}>
                 Set today&apos;s focus →
               </button>
               <button onClick={commitGoal} className="mt-3 text-xs text-white/40 underline">Skip</button>
             </div>
           ) : (
             <div className="w-full max-w-sm" style={{ animation:'goalPop .35s ease' }}>
-              <div style={{ display:'flex', justifyContent:'center', marginBottom:16 }}>
-                <Sprite size={60}/>
-              </div>
+              <div style={{ display:'flex',justifyContent:'center',marginBottom:16 }}><Sprite size={60}/></div>
               <h3 className="text-xl font-extrabold text-white text-center mb-1">What&apos;s your focus today?</h3>
               <p className="text-xs text-white/55 text-center mb-5">{current.name} will cheer you on.</p>
               <div className="flex flex-col gap-2 mb-4">
                 {DAILY_GOALS.map(g => (
-                  <button
-                    key={g.text}
-                    onClick={() => setGoalChoice(g.text)}
+                  <button key={g.text} onClick={() => setGoalChoice(g.text)}
                     className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-left transition-all active:scale-95"
-                    style={{
-                      background: goalChoice===g.text ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.1)',
-                      border:`1.5px solid ${goalChoice===g.text ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.12)'}`,
-                      color:'white',
-                    }}
-                  >
+                    style={{ background:goalChoice===g.text?'rgba(255,255,255,.28)':'rgba(255,255,255,.1)',
+                      border:`1.5px solid ${goalChoice===g.text?'rgba(255,255,255,.6)':'rgba(255,255,255,.12)'}`,color:'white' }}>
                     <span style={{ fontSize:20 }}>{g.emoji}</span> {g.text}
                     {goalChoice===g.text && <span className="ml-auto">✓</span>}
                   </button>
                 ))}
               </div>
-              <input
-                type="text" placeholder="Or write your own…"
-                value={customGoal}
+              <input type="text" placeholder="Or write your own…" value={customGoal}
                 onChange={e => { setCustomGoal(e.target.value); setGoalChoice('') }}
                 className="w-full px-4 py-3 rounded-2xl text-sm font-medium mb-4"
-                style={{ background:'rgba(255,255,255,.1)', border:'1.5px solid rgba(255,255,255,.2)', color:'white', outline:'none' }}
-              />
-              <button
-                onClick={commitGoal}
-                disabled={!goalChoice && !customGoal}
+                style={{ background:'rgba(255,255,255,.1)',border:'1.5px solid rgba(255,255,255,.2)',color:'white',outline:'none' }}/>
+              <button onClick={commitGoal} disabled={!goalChoice && !customGoal}
                 className="w-full py-3 rounded-2xl font-bold text-sm transition-all active:scale-95"
-                style={{
-                  background:(goalChoice||customGoal)?'rgba(255,255,255,.25)':'rgba(255,255,255,.08)',
+                style={{ background:(goalChoice||customGoal)?'rgba(255,255,255,.25)':'rgba(255,255,255,.08)',
                   border:'1.5px solid rgba(255,255,255,.35)',
-                  color:(goalChoice||customGoal)?'white':'rgba(255,255,255,.3)',
-                }}
-              >
+                  color:(goalChoice||customGoal)?'white':'rgba(255,255,255,.3)' }}>
                 Let&apos;s go, {current.name}! 🚀
               </button>
             </div>
@@ -818,20 +811,17 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         </div>
       )}
 
-      {/* ── Stage-up overlay ─────────────────────────────────────────────────── */}
+      {/* ── Stage-up overlay ──────────────────────────────────────────────── */}
       {showOverlay && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center"
-          style={{ background:'rgba(0,0,0,.84)', backdropFilter:'blur(10px)' }}
-          onClick={() => setShowOverlay(false)}
-        >
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+          style={{ background:'rgba(0,0,0,.84)',backdropFilter:'blur(10px)' }}
+          onClick={() => setShowOverlay(false)}>
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {CONFETTI.map((c,i)=>(
               <div key={i} className="absolute w-2.5 h-2.5 rounded-sm" style={{
-                left:`${c.left}%`, top:'-4%', backgroundColor:c.color,
+                left:`${c.left}%`,top:'-4%',backgroundColor:c.color,
                 animation:`confettiFall ${c.duration}s ease-in ${c.delay}s both`,
-                transform:`rotate(${c.rotation}deg)`,
-              }}/>
+                transform:`rotate(${c.rotation}deg)` }}/>
             ))}
           </div>
           <div className="text-center px-6" style={{ animation:'evolveIn .5s ease-out both' }}>
@@ -849,10 +839,10 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
   )
 }
 
-// ── Scene decoration components ───────────────────────────────────────────────
-function CloudShape({ color = 'white', scale = 1 }: { color?: string; scale?: number }) {
+// ── Scene decoration helpers ──────────────────────────────────────────────────
+function CloudShape({ color='white',scale=1 }:{ color?:string; scale?:number }) {
   return (
-    <div style={{ transform:`scale(${scale})`, transformOrigin:'left top' }}>
+    <div style={{ transform:`scale(${scale})`,transformOrigin:'left top' }}>
       <svg width="92" height="48" viewBox="0 0 92 48">
         <ellipse cx="46" cy="38" rx="41" ry="12" fill={color}/>
         <ellipse cx="32" cy="28" rx="21" ry="17" fill={color}/>
@@ -861,7 +851,6 @@ function CloudShape({ color = 'white', scale = 1 }: { color?: string; scale?: nu
     </div>
   )
 }
-
 function JungleTree() {
   return (
     <svg width="54" height="84" viewBox="0 0 54 84" fill="none">
@@ -873,7 +862,6 @@ function JungleTree() {
     </svg>
   )
 }
-
 function AcaciaTree() {
   return (
     <svg width="56" height="78" viewBox="0 0 56 78" fill="none">
@@ -885,28 +873,23 @@ function AcaciaTree() {
     </svg>
   )
 }
-
-function TallGrass({ color }: { color: string }) {
+function TallGrass({ color }:{ color:string }) {
   return (
     <svg viewBox="0 0 400 32" width="100%" height="32" preserveAspectRatio="none">
-      {Array.from({length:28},(_,i)=>{
-        const x = i*15+4
-        return (
-          <g key={i}>
-            <path d={`M${x} 32 Q${x-4} ${14+i%6} ${x} ${6+i%8}`} stroke={color} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity=".8"/>
-            <path d={`M${x+6} 32 Q${x+10} ${16+i%5} ${x+6} ${8+i%7}`} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6"/>
-          </g>
-        )
-      })}
+      {Array.from({length:28},(_,i)=>{ const x=i*15+4; return (
+        <g key={i}>
+          <path d={`M${x} 32 Q${x-4} ${14+i%6} ${x} ${6+i%8}`} stroke={color} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity=".8"/>
+          <path d={`M${x+6} 32 Q${x+10} ${16+i%5} ${x+6} ${8+i%7}`} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6"/>
+        </g>
+      )})}
     </svg>
   )
 }
-
 function FinCard({ label,value,sub,neg }:{ label:string;value:string;sub?:string;neg?:boolean }) {
   return (
     <div className="rounded-xl p-2.5 text-center border border-white/10" style={{ background:'rgba(0,0,0,.22)' }}>
       <p className="font-semibold uppercase tracking-wide text-white/50" style={{ fontSize:9 }}>{label}</p>
-      <p className="font-bold leading-tight mt-0.5" style={{ fontSize:11, color:neg?'#FCA5A5':'white' }}>
+      <p className="font-bold leading-tight mt-0.5" style={{ fontSize:11,color:neg?'#FCA5A5':'white' }}>
         {neg?'-':''}{value}
       </p>
       {sub && <p className="text-white/35 mt-0.5" style={{ fontSize:9 }}>{sub}</p>}
