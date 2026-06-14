@@ -210,7 +210,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
     setTimeout(() => setTapped(false), 550)
   }
 
-  const navigate = (dir: 1 | -1) => setViewed(v => ((v + dir + 4) % 4))
+  const navigate = (dir: 1 | -1) => setViewed(v => ((v + dir + 4) % 4) as 0|1|2|3)
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const viewedHab  = HABITATS[viewedHabitat]
@@ -551,7 +551,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
             return (
               <div
                 key={habIdx}
-                onClick={!isActive ? () => setViewed(habIdx) : undefined}
+                onClick={!isActive ? () => setViewed(habIdx as 0|1|2|3) : undefined}
                 style={{
                   position:'absolute', inset:0,
                   background:`linear-gradient(to bottom,${h.skyFrom},${h.skyTo})`,
@@ -606,7 +606,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
           {/* Dot indicator */}
           <div className="absolute left-0 right-0 flex justify-center gap-1.5" style={{ top:46, zIndex:10 }}>
             {HABITATS.map((_, i) => (
-              <button key={i} onClick={() => setViewed(i)} className="rounded-full transition-all" style={{
+              <button key={i} onClick={() => setViewed(i as 0|1|2|3)} className="rounded-full transition-all" style={{
                 width: i === viewedHabitat ? 16 : 6, height:6,
                 background: i === viewedHabitat
                   ? viewedHab.badgeBorder
