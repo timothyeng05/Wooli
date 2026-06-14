@@ -31,8 +31,7 @@ const GOAL_DATE  = 'wooli_zoo_goal_date'
 // ── Habitat definitions ───────────────────────────────────────────────────────
 const HABITATS = [
   {
-    id: 'ocean',
-    name: 'Deep Ocean',
+    id: 'ocean', name: 'Deep Ocean',
     skyFrom: '#001833', skyTo: '#005f8a',
     groundFrom: '#b8860b', groundTo: '#6b4c11',
     groundRadius: '50% 50% 0 0 / 6% 6% 0 0',
@@ -40,8 +39,7 @@ const HABITATS = [
     panelBg: 'rgba(0,18,40,.84)',
   },
   {
-    id: 'jungle',
-    name: 'Rainforest',
+    id: 'jungle', name: 'Rainforest',
     skyFrom: '#0d3b1a', skyTo: '#1a6b2d',
     groundFrom: '#4a3018', groundTo: '#2d1c0d',
     groundRadius: '45% 45% 0 0 / 6% 6% 0 0',
@@ -49,8 +47,7 @@ const HABITATS = [
     panelBg: 'rgba(10,46,20,.84)',
   },
   {
-    id: 'savanna',
-    name: 'African Savanna',
+    id: 'savanna', name: 'African Savanna',
     skyFrom: '#7c2d00', skyTo: '#ea580c',
     groundFrom: '#ca8a04', groundTo: '#92400e',
     groundRadius: '40% 40% 0 0 / 5% 5% 0 0',
@@ -58,8 +55,7 @@ const HABITATS = [
     panelBg: 'rgba(100,35,0,.84)',
   },
   {
-    id: 'mythical',
-    name: 'Mythical Realm',
+    id: 'mythical', name: 'Mythical Realm',
     skyFrom: '#0c0a1d', skyTo: '#2d1b69',
     groundFrom: '#2e1065', groundTo: '#0c0a1d',
     groundRadius: '30% 30% 0 0 / 4% 4% 0 0',
@@ -68,7 +64,8 @@ const HABITATS = [
   },
 ] as const
 
-// Positions for up to 14 animals in the scene
+// ── Scene positions ───────────────────────────────────────────────────────────
+// Home view: all 14 unlocked animals roaming together
 const SCENE_POS = [
   { left: 6,  yLevel: 0, dir:  1, dist: 14, dur:  9.0, delay: 0.0 },
   { left: 28, yLevel: 1, dir: -1, dist: 11, dur: 11.5, delay: 1.5 },
@@ -86,10 +83,23 @@ const SCENE_POS = [
   { left: 46, yLevel: 1, dir: -1, dist: 11, dur: 10.0, delay: 1.2 },
 ]
 
+// Museum exhibit view: 3-animal and 4-animal spread layouts
+const MUSEUM_POS_4 = [
+  { left: 6,  yLevel: 1, dir:  1, dist: 12, dur: 10.0, delay: 0.0 },
+  { left: 30, yLevel: 0, dir: -1, dist: 14, dur: 12.5, delay: 1.5 },
+  { left: 58, yLevel: 2, dir:  1, dist: 11, dur:  9.0, delay: 0.8 },
+  { left: 78, yLevel: 1, dir: -1, dist: 10, dur: 11.0, delay: 2.2 },
+]
+const MUSEUM_POS_3 = [
+  { left: 10, yLevel: 1, dir:  1, dist: 13, dur: 10.0, delay: 0.0 },
+  { left: 42, yLevel: 0, dir: -1, dist: 12, dur: 12.0, delay: 1.2 },
+  { left: 72, yLevel: 2, dir:  1, dist: 11, dur:  9.5, delay: 2.5 },
+]
+
 // Y% from scene bottom, and px sizes, by yLevel (front → back perspective)
-const Y_PCT  = [29, 35, 41]
-const SIZES  = [40, 32, 24]   // px
-const HERO_SIZE = 58           // px
+const Y_PCT    = [29, 35, 41]
+const SIZES    = [40, 32, 24]
+const HERO_SIZE = 58
 
 const DAILY_GOALS = [
   { emoji: '💰', text: 'Review my spending' },
@@ -152,16 +162,15 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
   const [tapped,      setTapped]      = useState(false)
   const [tapCount,    setTapCount]    = useState(0)
   const [selectedLocked, setSelected] = useState<number|null>(null)
+  const [viewedHabitat,  setViewed]   = useState(current.habitat)
 
   useEffect(() => {
     try {
-      // Daily goal check
       const goalDate = localStorage.getItem(GOAL_DATE)
       const goal     = localStorage.getItem(GOAL_KEY) ?? ''
       setSavedGoal(goal)
       if (goalDate !== today()) setShowGoal(true)
 
-      // Stage-up detection
       const saved = parseInt(localStorage.getItem(STAGE_KEY) ?? '-1', 10)
       if (stage > saved && saved >= 0) {
         setEvolvedInto(STAGES[stage])
@@ -192,8 +201,23 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
     setTimeout(() => setTapped(false), 550)
   }
 
-  // Generate per-animal roam CSS
-  const animalCSS = Array.from({ length: stage + 1 }, (_, i) => {
+  // ── Museum-mode derived values ────────────────────────────────────────────
+  const viewedHab  = HABITATS[viewedHabitat]
+  const isBrowsing = viewedHabitat !== current.habitat
+  const habitatEntries = STAGES
+    .map((s, i) => ({ ...s, absIdx: i }))
+    .filter(s => s.habitat === viewedHabitat)
+  const museumPos = habitatEntries.length === 4 ? MUSEUM_POS_4 : MUSEUM_POS_3
+
+  // Scene decoration flags use the VIEWED habitat (so decor changes when browsing)
+  const sceneIsOcean   = viewedHabitat === 0
+  const sceneIsJungle  = viewedHabitat === 1
+  const sceneIsSavanna = viewedHabitat === 2
+  const sceneIsMythical= viewedHabitat === 3
+
+  // ── CSS keyframes ─────────────────────────────────────────────────────────
+  // Home view: all unlocked animals
+  const homeCss = Array.from({ length: stage + 1 }, (_, i) => {
     const p = SCENE_POS[i]
     const sf = p.dir > 0 ? 1 : -1
     return `
@@ -209,24 +233,39 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
     `
   }).join('\n')
 
+  // Museum view: per-habitat animals
+  const museumCss = habitatEntries.map((_, localIdx) => {
+    const p  = museumPos[localIdx]
+    const sf = p.dir > 0 ? 1 : -1
+    return `
+      @keyframes mroam${localIdx} {
+        0%,100% { transform: translateX(0); }
+        45%,55% { transform: translateX(${p.dist * p.dir}vw); }
+      }
+      @keyframes mface${localIdx} {
+        0%,43%  { transform: scaleX(${sf}); }
+        44%,56% { transform: scaleX(${sf}) translateY(-5px); }
+        57%,100%{ transform: scaleX(${-sf}); }
+      }
+    `
+  }).join('\n')
+
   const spiritText = tapCount > 5
     ? `Hehe — stop poking me! 😤`
     : next
       ? prog > 0.8
         ? `So close! ${fmtShort(THRESHOLDS[stage + 1] - balance)} to ${next.name}! 🔥`
         : current.says
-      : '🌟 Legendary status — the storm is yours!'
+      : '🌟 Legendary status — the mythical realm is yours!'
 
   const lockedStages = STAGES.slice(stage + 1)
 
-  // Habitat-specific scene decorations
-  const isOcean    = current.habitat === 0
-  const isJungle   = current.habitat === 1
-  const isSavanna  = current.habitat === 2
-  const isMythical = current.habitat === 3
-
   return (
-    <div className="relative overflow-hidden" style={{ minHeight:'100dvh', background:`linear-gradient(to bottom, ${hab.skyFrom}, ${hab.skyTo})` }}>
+    <div className="relative overflow-hidden" style={{
+      minHeight:'100dvh',
+      background:`linear-gradient(to bottom, ${viewedHab.skyFrom}, ${viewedHab.skyTo})`,
+      transition:'background .5s ease',
+    }}>
 
       {/* ── CSS animations ── */}
       <style>{`
@@ -236,41 +275,40 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         @keyframes evolveIn     { 0%{opacity:0;transform:scale(.3) translateY(20px)} 60%{transform:scale(1.1)} 100%{opacity:1;transform:scale(1)} }
         @keyframes dialoguePop  { 0%{opacity:0;transform:scale(.85) translateY(6px)} 100%{opacity:1;transform:scale(1)} }
         @keyframes heroGlow     { 0%,100%{filter:drop-shadow(0 0 5px rgba(255,255,255,.4))} 50%{filter:drop-shadow(0 0 14px rgba(255,255,255,.85))} }
-        @keyframes snowfall     { 0%{transform:translateY(-10px) rotate(0)} 100%{transform:translateY(60vh) rotate(360deg)} }
-        @keyframes lightning    { 0%,90%,100%{opacity:0} 92%,96%{opacity:1} }
         @keyframes bubble       { 0%{transform:translateY(0) scale(1);opacity:.6} 100%{transform:translateY(-60px) scale(1.3);opacity:0} }
         @keyframes introSlide   { 0%{opacity:0;transform:translateX(60px)} 100%{opacity:1;transform:translateX(0)} }
         @keyframes goalPop      { 0%{opacity:0;transform:scale(.8)} 100%{opacity:1;transform:scale(1)} }
-        ${animalCSS}
+        @keyframes fadeSlide    { 0%{opacity:0;transform:translateY(8px)} 100%{opacity:1;transform:translateY(0)} }
+        ${isBrowsing ? museumCss : homeCss}
       `}</style>
 
       {/* ── Scene area (top 57%) ──────────────────────────────────────────────── */}
       <div className="absolute left-0 right-0 top-0" style={{ height:'57%' }}>
 
-        {/* Celestial body — sun for savanna/jungle, deep moon for ocean, cosmic orb for mythical */}
-        {!isOcean && (
+        {/* Celestial body */}
+        {!sceneIsOcean && (
           <div className="absolute rounded-full pointer-events-none" style={{
-            width: isMythical ? 52 : isSavanna ? 72 : 60,
-            height: isMythical ? 52 : isSavanna ? 72 : 60,
-            top: 18, right: 22,
-            background: isMythical
+            width: sceneIsMythical ? 52 : sceneIsSavanna ? 72 : 60,
+            height: sceneIsMythical ? 52 : sceneIsSavanna ? 72 : 60,
+            top:18, right:22,
+            background: sceneIsMythical
               ? 'radial-gradient(circle at 40% 40%,#c4b5fd,#7c3aed)'
-              : isSavanna
+              : sceneIsSavanna
                 ? 'radial-gradient(circle at 40% 40%,#fed7aa,#f97316)'
                 : 'radial-gradient(circle at 40% 40%,#FFFDE7,#FCD34D)',
-            boxShadow: isMythical
+            boxShadow: sceneIsMythical
               ? '0 0 32px rgba(139,92,246,.6)'
-              : isSavanna
+              : sceneIsSavanna
                 ? '0 0 48px rgba(249,115,22,.5)'
                 : '0 0 28px rgba(252,211,77,.5)',
           }}/>
         )}
 
-        {/* Ocean: caustic light rays + bubbles */}
-        {isOcean && (
+        {/* Ocean: caustic rays + bubbles */}
+        {sceneIsOcean && (
           <>
             <div className="absolute inset-0 pointer-events-none" style={{ opacity:.14 }}>
-              {[12,28,46,62,78].map((x,i) => (
+              {[12,28,46,62,78].map((x,i)=>(
                 <div key={i} style={{
                   position:'absolute', top:0, left:`${x}%`, width:22, height:'100%',
                   background:'linear-gradient(to bottom,#38bdf8,transparent)',
@@ -281,8 +319,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               {Array.from({length:14},(_,i)=>(
                 <div key={i} style={{
-                  position:'absolute',
-                  left:`${(i*19+5)%90}%`, bottom:`${(i*11)%40}%`,
+                  position:'absolute', left:`${(i*19+5)%90}%`, bottom:`${(i*11)%40}%`,
                   width:5+i%7, height:5+i%7, borderRadius:'50%',
                   border:'1.5px solid rgba(56,189,248,.4)',
                   animation:`bubble ${2+i%3}s ${i*.4}s ease-out infinite`,
@@ -292,22 +329,20 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
           </>
         )}
 
-        {/* Jungle: canopy glow + fireflies */}
-        {isJungle && (
+        {/* Jungle: canopy mist + fireflies */}
+        {sceneIsJungle && (
           <>
-            <div className="absolute pointer-events-none" style={{ top:50, left:'6%', animation:'cloudDrift 11s ease-in-out infinite' }}>
+            <div className="absolute pointer-events-none" style={{ top:50,left:'6%', animation:'cloudDrift 11s ease-in-out infinite' }}>
               <CloudShape color="rgba(34,197,94,.35)"/>
             </div>
-            <div className="absolute pointer-events-none" style={{ top:90, left:'55%', transform:'scale(.65)', animation:'cloudDrift 16s ease-in-out 4s infinite' }}>
+            <div className="absolute pointer-events-none" style={{ top:90,left:'55%',transform:'scale(.65)', animation:'cloudDrift 16s ease-in-out 4s infinite' }}>
               <CloudShape color="rgba(34,197,94,.3)"/>
             </div>
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               {Array.from({length:12},(_,i)=>(
                 <div key={i} style={{
-                  position:'absolute',
-                  left:`${(i*23+8)%92}%`, top:`${(i*17+10)%60}%`,
-                  width:4, height:4, borderRadius:'50%',
-                  background:'#fef08a', opacity: .7,
+                  position:'absolute', left:`${(i*23+8)%92}%`, top:`${(i*17+10)%60}%`,
+                  width:4, height:4, borderRadius:'50%', background:'#fef08a', opacity:.7,
                   animation:`heroGlow ${1.5+i%2}s ${i*.4}s ease-in-out infinite`,
                 }}/>
               ))}
@@ -315,27 +350,26 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
           </>
         )}
 
-        {/* Savanna: dust + haze */}
-        {isSavanna && (
+        {/* Savanna: heat haze */}
+        {sceneIsSavanna && (
           <>
-            <div className="absolute pointer-events-none" style={{ top:40, left:'5%', animation:'cloudDrift 12s ease-in-out infinite' }}>
+            <div className="absolute pointer-events-none" style={{ top:40,left:'5%', animation:'cloudDrift 12s ease-in-out infinite' }}>
               <CloudShape color="rgba(251,191,36,.25)"/>
             </div>
-            <div className="absolute pointer-events-none" style={{ top:70, left:'60%', transform:'scale(.7)', animation:'cloudDrift 18s ease-in-out 5s infinite' }}>
+            <div className="absolute pointer-events-none" style={{ top:70,left:'60%',transform:'scale(.7)', animation:'cloudDrift 18s ease-in-out 5s infinite' }}>
               <CloudShape color="rgba(234,88,12,.2)"/>
             </div>
           </>
         )}
 
         {/* Mythical: stars + aurora */}
-        {isMythical && (
+        {sceneIsMythical && (
           <>
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               {Array.from({length:24},(_,i)=>(
                 <div key={i} style={{
-                  position:'absolute',
-                  left:`${(i*19+3)%98}%`, top:`${(i*13+2)%55}%`,
-                  width: i%4===0?4:i%3===0?3:2, height: i%4===0?4:i%3===0?3:2,
+                  position:'absolute', left:`${(i*19+3)%98}%`, top:`${(i*13+2)%55}%`,
+                  width:i%4===0?4:i%3===0?3:2, height:i%4===0?4:i%3===0?3:2,
                   borderRadius:'50%', background:'white', opacity:.8,
                   animation:`heroGlow ${2+i%3}s ${i*.25}s ease-in-out infinite`,
                 }}/>
@@ -345,7 +379,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
               {[0,1,2].map(i=>(
                 <div key={i} style={{
                   position:'absolute', top:`${10+i*12}%`, left:0, right:0, height:18,
-                  background:`linear-gradient(to right, transparent, ${['#a78bfa','#67e8f9','#f9a8d4'][i]}, transparent)`,
+                  background:`linear-gradient(to right,transparent,${['#a78bfa','#67e8f9','#f9a8d4'][i]},transparent)`,
                   animation:`cloudDrift ${8+i*3}s ${i*2}s ease-in-out infinite`,
                 }}/>
               ))}
@@ -353,8 +387,8 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
           </>
         )}
 
-        {/* Ocean: coral/seaweed on floor */}
-        {isOcean && (
+        {/* Ground decorations */}
+        {sceneIsOcean && (
           <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
             <svg viewBox="0 0 400 30" width="100%" height="30" preserveAspectRatio="none">
               {[10,60,110,160,220,280,330,370].map((x,i)=>(
@@ -363,39 +397,21 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
             </svg>
           </div>
         )}
-
-        {/* Jungle: trees + vines */}
-        {isJungle && (
+        {sceneIsJungle && (
           <>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}>
-              <JungleTree/>
-            </div>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.8) scaleX(-1)' }}>
-              <JungleTree/>
-            </div>
-            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
-              <TallGrass color="#15803d"/>
-            </div>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}><JungleTree/></div>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.8) scaleX(-1)' }}><JungleTree/></div>
+            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}><TallGrass color="#15803d"/></div>
           </>
         )}
-
-        {/* Savanna: acacia trees + tall grass */}
-        {isSavanna && (
+        {sceneIsSavanna && (
           <>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}>
-              <AcaciaTree/>
-            </div>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.78) scaleX(-1)' }}>
-              <AcaciaTree/>
-            </div>
-            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
-              <TallGrass color="#ca8a04"/>
-            </div>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}><AcaciaTree/></div>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.78) scaleX(-1)' }}><AcaciaTree/></div>
+            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}><TallGrass color="#ca8a04"/></div>
           </>
         )}
-
-        {/* Mythical: jagged crystal spires */}
-        {isMythical && (
+        {sceneIsMythical && (
           <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
             <svg viewBox="0 0 400 28" width="100%" height="28" preserveAspectRatio="none">
               <path d="M0 28 L30 6 L50 20 L80 2 L110 18 L140 8 L170 24 L200 4 L230 20 L260 10 L290 22 L320 6 L350 18 L380 8 L400 28Z" fill="#4c1d95" opacity=".9"/>
@@ -407,153 +423,329 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         {/* Ground */}
         <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{
           height:'36%',
-          background:`linear-gradient(to bottom, ${hab.groundFrom}, ${hab.groundTo})`,
-          borderRadius: hab.groundRadius,
+          background:`linear-gradient(to bottom, ${viewedHab.groundFrom}, ${viewedHab.groundTo})`,
+          borderRadius: viewedHab.groundRadius,
         }}/>
 
-        {/* Stage badge */}
-        <div className="absolute left-0 right-0 flex justify-center" style={{ top:12 }}>
-          <div className="px-4 py-1 rounded-full text-xs font-bold border" style={{
+        {/* ── Habitat navigation badge ── */}
+        <div className="absolute left-0 right-0 flex justify-center items-center gap-2" style={{ top:12 }}>
+          <button
+            onClick={() => setViewed(v => Math.max(0, v - 1))}
+            disabled={viewedHabitat === 0}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
+            style={{
+              background:'rgba(0,0,0,.35)', backdropFilter:'blur(4px)',
+              border:'1px solid rgba(255,255,255,.15)',
+              opacity: viewedHabitat === 0 ? .25 : 1,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9 2 L4 7 L9 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          <div className="px-3 py-1 rounded-full text-xs font-bold border" style={{
             backdropFilter:'blur(8px)',
-            background: hab.badgeBg,
-            borderColor: hab.badgeBorder,
-            color: hab.badgeText,
+            background: viewedHab.badgeBg,
+            borderColor: viewedHab.badgeBorder,
+            color: viewedHab.badgeText,
           }}>
-            {hab.name} · Stage {stage} · {current.name}
+            {isBrowsing
+              ? `${viewedHab.name} — Exhibit`
+              : `${viewedHab.name} · Stage ${stage} · ${current.name}`}
           </div>
+
+          <button
+            onClick={() => setViewed(v => Math.min(3, v + 1))}
+            disabled={viewedHabitat === 3}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
+            style={{
+              background:'rgba(0,0,0,.35)', backdropFilter:'blur(4px)',
+              border:'1px solid rgba(255,255,255,.15)',
+              opacity: viewedHabitat === 3 ? .25 : 1,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M5 2 L10 7 L5 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         </div>
 
-        {/* ── All unlocked animals wandering ── */}
-        {Array.from({ length: stage + 1 }, (_, i) => {
-          const pos       = SCENE_POS[i]
-          const isCurrent = i === stage
-          const sz        = isCurrent ? HERO_SIZE : SIZES[pos.yLevel]
-          const bottom    = Y_PCT[pos.yLevel]
-          const Sp        = SPRITES[i]
+        {/* ── Habitat dots indicator ── */}
+        <div className="absolute left-0 right-0 flex justify-center gap-1.5" style={{ top:48 }}>
+          {HABITATS.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setViewed(i)}
+              className="rounded-full transition-all"
+              style={{
+                width: i === viewedHabitat ? 16 : 6,
+                height: 6,
+                background: i === viewedHabitat
+                  ? viewedHab.badgeBorder
+                  : i === current.habitat
+                    ? 'rgba(255,255,255,.5)'
+                    : 'rgba(255,255,255,.2)',
+              }}
+            />
+          ))}
+        </div>
 
-          return (
-            <div key={i} style={{
-              position:'absolute', left:`${pos.left}%`, bottom:`${bottom}%`,
-              animation:`roam${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite`,
-              zIndex: isCurrent ? 5 : 3 - pos.yLevel,
-            }}>
-              <div
-                onClick={isCurrent ? handleHeroTap : undefined}
-                style={{
-                  cursor: isCurrent ? 'pointer' : 'default',
-                  animation: isCurrent
-                    ? tapped
-                      ? 'tapPop .55s ease'
-                      : `face${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite, heroGlow 2.5s ease-in-out infinite`
-                    : `face${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite`,
+        {/* ── Animals ── */}
+        {isBrowsing ? (
+          // Museum exhibit: this habitat's animals, locked ones silhouetted
+          habitatEntries.map((s, localIdx) => {
+            const pos        = museumPos[localIdx]
+            const isUnlocked = s.absIdx <= stage
+            const isHero     = s.absIdx === stage
+            const sz         = isHero ? HERO_SIZE : SIZES[pos.yLevel]
+            const bottom     = Y_PCT[pos.yLevel]
+            const Sp         = SPRITES[s.absIdx]
+            return (
+              <div key={s.absIdx} style={{
+                position:'absolute', left:`${pos.left}%`, bottom:`${bottom}%`,
+                animation: isUnlocked ? `mroam${localIdx} ${pos.dur}s ${pos.delay}s ease-in-out infinite` : 'none',
+                zIndex: isHero ? 5 : 3 - pos.yLevel,
+              }}>
+                <div style={{
+                  opacity: isUnlocked ? 1 : 0.22,
+                  filter: isUnlocked ? 'none' : 'grayscale(1)',
+                  animation: isUnlocked && !isHero
+                    ? `mface${localIdx} ${pos.dur}s ${pos.delay}s ease-in-out infinite`
+                    : isHero
+                      ? tapped
+                        ? 'tapPop .55s ease'
+                        : `mface${localIdx} ${pos.dur}s ${pos.delay}s ease-in-out infinite, heroGlow 2.5s ease-in-out infinite`
+                      : 'none',
+                  cursor: isHero ? 'pointer' : 'default',
                 }}
-              >
-                <Sp size={sz}/>
-              </div>
-              {isCurrent && (
-                <div style={{ textAlign:'center', fontSize:9, color:'white', fontWeight:'bold', textShadow:'0 1px 3px rgba(0,0,0,.8)', marginTop:2 }}>
-                  ★ you
+                  onClick={isHero ? handleHeroTap : undefined}
+                >
+                  <Sp size={sz}/>
                 </div>
-              )}
-            </div>
-          )
-        })}
+                <div style={{ textAlign:'center', marginTop:2, fontSize:8, fontWeight:'bold',
+                  color: isUnlocked ? 'white' : 'rgba(255,255,255,.25)',
+                  textShadow: isUnlocked ? '0 1px 3px rgba(0,0,0,.8)' : 'none',
+                }}>
+                  {isUnlocked ? (isHero ? '★ you' : s.name) : '???'}
+                </div>
+              </div>
+            )
+          })
+        ) : (
+          // Home: all unlocked animals wandering
+          Array.from({ length: stage + 1 }, (_, i) => {
+            const pos       = SCENE_POS[i]
+            const isCurrent = i === stage
+            const sz        = isCurrent ? HERO_SIZE : SIZES[pos.yLevel]
+            const bottom    = Y_PCT[pos.yLevel]
+            const Sp        = SPRITES[i]
+            return (
+              <div key={i} style={{
+                position:'absolute', left:`${pos.left}%`, bottom:`${bottom}%`,
+                animation:`roam${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite`,
+                zIndex: isCurrent ? 5 : 3 - pos.yLevel,
+              }}>
+                <div
+                  onClick={isCurrent ? handleHeroTap : undefined}
+                  style={{
+                    cursor: isCurrent ? 'pointer' : 'default',
+                    animation: isCurrent
+                      ? tapped
+                        ? 'tapPop .55s ease'
+                        : `face${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite, heroGlow 2.5s ease-in-out infinite`
+                      : `face${i} ${pos.dur}s ${pos.delay}s ease-in-out infinite`,
+                  }}
+                >
+                  <Sp size={sz}/>
+                </div>
+                {isCurrent && (
+                  <div style={{ textAlign:'center', fontSize:9, color:'white', fontWeight:'bold', textShadow:'0 1px 3px rgba(0,0,0,.8)', marginTop:2 }}>
+                    ★ you
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
       </div>
 
       {/* ── Info panel (bottom 43%) ───────────────────────────────────────────── */}
       <div className="absolute left-0 right-0 bottom-0 flex flex-col" style={{
         height:'43%',
-        background: hab.panelBg,
+        background: viewedHab.panelBg,
         backdropFilter:'blur(12px)',
         borderTop:'1px solid rgba(255,255,255,.15)',
         paddingBottom:'max(8px, env(safe-area-inset-bottom))',
       }}>
-        {/* Today's goal */}
-        {savedGoal && (
-          <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg flex items-center gap-2" style={{ background:'rgba(255,255,255,.08)' }}>
-            <span style={{ fontSize:14 }}>🎯</span>
-            <p className="text-xs text-white/75 font-medium">{savedGoal}</p>
-          </div>
-        )}
 
-        {/* Progress bar */}
-        <div className="px-4 pt-2 pb-1">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-white text-xs font-semibold">{current.name}</span>
-            {next
-              ? <span className="text-white/55 text-xs">{fmtShort(THRESHOLDS[stage+1]-balance)} to {next.name}</span>
-              : <span className="text-white/55 text-xs">Max level 🌟</span>
-            }
-          </div>
-          <div className="rounded-full overflow-hidden" style={{ height:6, background:'rgba(255,255,255,.14)' }}>
-            <div className="h-full rounded-full transition-all duration-700" style={{
-              width:`${Math.round(prog*100)}%`,
-              background:`linear-gradient(to right, ${hab.badgeBorder}, rgba(255,255,255,.8))`,
-              boxShadow:`0 0 8px ${hab.badgeBorder}`,
-            }}/>
-          </div>
-        </div>
-
-        {/* Spirit dialogue */}
-        <div
-          key={spiritText}
-          className="mx-4 px-3 py-1.5 rounded-xl text-center text-xs font-medium"
-          style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.9)', animation:'dialoguePop .3s ease', cursor:'pointer' }}
-          onClick={handleHeroTap}
-        >
-          {spiritText}
-        </div>
-
-        {/* Locked stages strip */}
-        {lockedStages.length > 0 && (
-          <div className="mt-1.5">
-            <p className="px-4 text-[9px] font-bold uppercase tracking-widest text-white/35 mb-1.5">
-              Locked — {lockedStages.length} remaining
-            </p>
-            <div className="flex gap-2 overflow-x-auto px-4" style={{ scrollbarWidth:'none' }}>
-              {lockedStages.map((s, idx) => {
-                const absIdx = stage + 1 + idx
-                const isSel  = selectedLocked === absIdx
-                const Sp     = SPRITES[absIdx]
-                return (
-                  <div
-                    key={absIdx}
-                    onClick={() => setSelected(isSel ? null : absIdx)}
-                    className="flex-shrink-0 flex flex-col items-center rounded-xl cursor-pointer transition-all active:scale-95"
-                    style={{
-                      width:60, paddingTop:5, paddingBottom:5,
-                      background: isSel ? 'rgba(255,255,255,.16)' : 'rgba(0,0,0,.28)',
-                      border:`1.5px solid ${isSel ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.06)'}`,
-                    }}
-                  >
-                    <span className="text-white/25 font-bold" style={{ fontSize:8 }}>{absIdx}</span>
-                    <div style={{ opacity:.25, filter:'grayscale(1)', marginTop:2 }}>
-                      <Sp size={28}/>
-                    </div>
-                    <span className="text-white/20 font-semibold mt-0.5" style={{ fontSize:8 }}>???</span>
-                    {isSel && (
-                      <span className="text-white/55 mt-0.5 text-center px-1 leading-tight" style={{ fontSize:7 }}>
-                        {fmtShort(THRESHOLDS[absIdx]-balance)} needed
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
+        {isBrowsing ? (
+          /* ── Museum exhibit panel ── */
+          <>
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <div>
+                <p className="text-white font-bold text-sm">{viewedHab.name}</p>
+                <p className="text-white/45 text-xs mt-0.5">
+                  {habitatEntries.filter(s => s.absIdx <= stage).length}/{habitatEntries.length} unlocked
+                </p>
+              </div>
+              <button
+                onClick={() => setViewed(current.habitat)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+                style={{ background:'rgba(255,255,255,.12)', border:'1px solid rgba(255,255,255,.2)', color:'white' }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M5 1 L1 5 L5 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M1 5 L9 5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                My habitat
+              </button>
             </div>
-          </div>
-        )}
 
-        {/* Finance cards */}
-        <div className="px-4 mt-auto" style={{ maxWidth:420, margin:'auto', width:'100%' }}>
-          <div className="grid grid-cols-3 gap-2">
-            <FinCard label="Net Worth" value={fmtFull(balance)}       neg={balance<0}/>
-            <FinCard label="Income"    value={fmtFull(monthlyIncome)} sub="this month"/>
-            <FinCard label="Spend"     value={fmtFull(monthlySpend)}  sub="this month"/>
-          </div>
-        </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-2" style={{ scrollbarWidth:'none' }}>
+              <div
+                key={viewedHabitat}
+                className="grid grid-cols-2 gap-2"
+                style={{ animation:'fadeSlide .25s ease' }}
+              >
+                {habitatEntries.map(s => {
+                  const isUnlocked = s.absIdx <= stage
+                  const isHero     = s.absIdx === stage
+                  const Sp         = SPRITES[s.absIdx]
+                  const needed     = THRESHOLDS[s.absIdx] - balance
+                  return (
+                    <div
+                      key={s.absIdx}
+                      className="rounded-xl p-3 border flex items-center gap-2.5 transition-all"
+                      style={{
+                        background: isHero
+                          ? `${viewedHab.badgeBorder}22`
+                          : isUnlocked
+                            ? 'rgba(255,255,255,.1)'
+                            : 'rgba(0,0,0,.2)',
+                        borderColor: isHero
+                          ? viewedHab.badgeBorder
+                          : isUnlocked
+                            ? 'rgba(255,255,255,.18)'
+                            : 'rgba(255,255,255,.05)',
+                      }}
+                    >
+                      <div style={{ opacity:isUnlocked?1:.22, filter:isUnlocked?'none':'grayscale(1)', flexShrink:0 }}>
+                        <Sp size={34}/>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate" style={{ color:isUnlocked?'white':'rgba(255,255,255,.28)' }}>
+                          {isUnlocked ? s.name : '???'}
+                        </p>
+                        <p style={{ fontSize:9, marginTop:1, color: isHero ? viewedHab.badgeText : 'rgba(255,255,255,.38)' }}>
+                          {isHero
+                            ? '★ your current'
+                            : isUnlocked
+                              ? `✓ Unlocked`
+                              : `${fmtShort(needed)} needed`}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Finance cards */}
+            <div className="px-4 pt-1" style={{ maxWidth:420, margin:'0 auto', width:'100%' }}>
+              <div className="grid grid-cols-3 gap-2">
+                <FinCard label="Net Worth" value={fmtFull(balance)}       neg={balance<0}/>
+                <FinCard label="Income"    value={fmtFull(monthlyIncome)} sub="this month"/>
+                <FinCard label="Spend"     value={fmtFull(monthlySpend)}  sub="this month"/>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* ── Home panel ── */
+          <>
+            {savedGoal && (
+              <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg flex items-center gap-2" style={{ background:'rgba(255,255,255,.08)' }}>
+                <span style={{ fontSize:14 }}>🎯</span>
+                <p className="text-xs text-white/75 font-medium">{savedGoal}</p>
+              </div>
+            )}
+
+            <div className="px-4 pt-2 pb-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-white text-xs font-semibold">{current.name}</span>
+                {next
+                  ? <span className="text-white/55 text-xs">{fmtShort(THRESHOLDS[stage+1]-balance)} to {next.name}</span>
+                  : <span className="text-white/55 text-xs">Max level 🌟</span>
+                }
+              </div>
+              <div className="rounded-full overflow-hidden" style={{ height:6, background:'rgba(255,255,255,.14)' }}>
+                <div className="h-full rounded-full transition-all duration-700" style={{
+                  width:`${Math.round(prog*100)}%`,
+                  background:`linear-gradient(to right, ${hab.badgeBorder}, rgba(255,255,255,.8))`,
+                  boxShadow:`0 0 8px ${hab.badgeBorder}`,
+                }}/>
+              </div>
+            </div>
+
+            <div
+              key={spiritText}
+              className="mx-4 px-3 py-1.5 rounded-xl text-center text-xs font-medium"
+              style={{ background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.9)', animation:'dialoguePop .3s ease', cursor:'pointer' }}
+              onClick={handleHeroTap}
+            >
+              {spiritText}
+            </div>
+
+            {lockedStages.length > 0 && (
+              <div className="mt-1.5">
+                <p className="px-4 text-[9px] font-bold uppercase tracking-widest text-white/35 mb-1.5">
+                  Locked — {lockedStages.length} remaining
+                </p>
+                <div className="flex gap-2 overflow-x-auto px-4" style={{ scrollbarWidth:'none' }}>
+                  {lockedStages.map((s, idx) => {
+                    const absIdx = stage + 1 + idx
+                    const isSel  = selectedLocked === absIdx
+                    const Sp     = SPRITES[absIdx]
+                    return (
+                      <div
+                        key={absIdx}
+                        onClick={() => setSelected(isSel ? null : absIdx)}
+                        className="flex-shrink-0 flex flex-col items-center rounded-xl cursor-pointer transition-all active:scale-95"
+                        style={{
+                          width:60, paddingTop:5, paddingBottom:5,
+                          background: isSel ? 'rgba(255,255,255,.16)' : 'rgba(0,0,0,.28)',
+                          border:`1.5px solid ${isSel ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.06)'}`,
+                        }}
+                      >
+                        <span className="text-white/25 font-bold" style={{ fontSize:8 }}>{absIdx}</span>
+                        <div style={{ opacity:.25, filter:'grayscale(1)', marginTop:2 }}>
+                          <Sp size={28}/>
+                        </div>
+                        <span className="text-white/20 font-semibold mt-0.5" style={{ fontSize:8 }}>???</span>
+                        {isSel && (
+                          <span className="text-white/55 mt-0.5 text-center px-1 leading-tight" style={{ fontSize:7 }}>
+                            {fmtShort(THRESHOLDS[absIdx]-balance)} needed
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="px-4 mt-auto" style={{ maxWidth:420, margin:'auto', width:'100%' }}>
+              <div className="grid grid-cols-3 gap-2">
+                <FinCard label="Net Worth" value={fmtFull(balance)}       neg={balance<0}/>
+                <FinCard label="Income"    value={fmtFull(monthlyIncome)} sub="this month"/>
+                <FinCard label="Spend"     value={fmtFull(monthlySpend)}  sub="this month"/>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ── Daily goal-setting overlay (Peak-style) ───────────────────────────── */}
+      {/* ── Daily goal overlay ────────────────────────────────────────────────── */}
       {showGoal && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6" style={{
           background:`linear-gradient(160deg, ${hab.skyFrom}F0, ${hab.groundTo}E8)`,
@@ -561,7 +753,6 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
         }}>
           {goalStep === 'intro' ? (
             <div className="text-center" style={{ animation:'introSlide .4s ease' }}>
-              {/* Hero animal */}
               <div style={{ display:'flex', justifyContent:'center', marginBottom:20, animation:'heroGlow 2.5s ease-in-out infinite' }}>
                 <Sprite size={90}/>
               </div>
@@ -569,9 +760,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
                 Hi! I&apos;m {current.name}.
               </h2>
               <p className="text-sm text-white/80 mb-2">Your <strong>{hab.name}</strong> companion.</p>
-              <p className="text-sm text-white/70 mb-8 max-w-xs mx-auto leading-relaxed">
-                {current.says}
-              </p>
+              <p className="text-sm text-white/70 mb-8 max-w-xs mx-auto leading-relaxed">{current.says}</p>
               <button
                 onClick={() => setGoalStep('pick')}
                 className="w-full max-w-xs py-3 rounded-2xl font-bold text-sm transition-all active:scale-95"
@@ -579,21 +768,15 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
               >
                 Set today&apos;s focus →
               </button>
-              <button onClick={commitGoal} className="mt-3 text-xs text-white/40 underline">
-                Skip
-              </button>
+              <button onClick={commitGoal} className="mt-3 text-xs text-white/40 underline">Skip</button>
             </div>
           ) : (
             <div className="w-full max-w-sm" style={{ animation:'goalPop .35s ease' }}>
               <div style={{ display:'flex', justifyContent:'center', marginBottom:16 }}>
                 <Sprite size={60}/>
               </div>
-              <h3 className="text-xl font-extrabold text-white text-center mb-1">
-                What&apos;s your focus today?
-              </h3>
+              <h3 className="text-xl font-extrabold text-white text-center mb-1">What&apos;s your focus today?</h3>
               <p className="text-xs text-white/55 text-center mb-5">{current.name} will cheer you on.</p>
-
-              {/* Preset goals */}
               <div className="flex flex-col gap-2 mb-4">
                 {DAILY_GOALS.map(g => (
                   <button
@@ -601,39 +784,31 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
                     onClick={() => setGoalChoice(g.text)}
                     className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-left transition-all active:scale-95"
                     style={{
-                      background: goalChoice === g.text ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.1)',
-                      border: `1.5px solid ${goalChoice === g.text ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.12)'}`,
+                      background: goalChoice===g.text ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.1)',
+                      border:`1.5px solid ${goalChoice===g.text ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.12)'}`,
                       color:'white',
                     }}
                   >
                     <span style={{ fontSize:20 }}>{g.emoji}</span> {g.text}
-                    {goalChoice === g.text && <span className="ml-auto">✓</span>}
+                    {goalChoice===g.text && <span className="ml-auto">✓</span>}
                   </button>
                 ))}
               </div>
-
-              {/* Custom input */}
               <input
-                type="text"
-                placeholder="Or write your own…"
+                type="text" placeholder="Or write your own…"
                 value={customGoal}
                 onChange={e => { setCustomGoal(e.target.value); setGoalChoice('') }}
                 className="w-full px-4 py-3 rounded-2xl text-sm font-medium mb-4"
-                style={{
-                  background:'rgba(255,255,255,.1)',
-                  border:'1.5px solid rgba(255,255,255,.2)',
-                  color:'white', outline:'none',
-                }}
+                style={{ background:'rgba(255,255,255,.1)', border:'1.5px solid rgba(255,255,255,.2)', color:'white', outline:'none' }}
               />
-
               <button
                 onClick={commitGoal}
                 disabled={!goalChoice && !customGoal}
                 className="w-full py-3 rounded-2xl font-bold text-sm transition-all active:scale-95"
                 style={{
-                  background: (goalChoice||customGoal) ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.08)',
+                  background:(goalChoice||customGoal)?'rgba(255,255,255,.25)':'rgba(255,255,255,.08)',
                   border:'1.5px solid rgba(255,255,255,.35)',
-                  color: (goalChoice||customGoal) ? 'white' : 'rgba(255,255,255,.3)',
+                  color:(goalChoice||customGoal)?'white':'rgba(255,255,255,.3)',
                 }}
               >
                 Let&apos;s go, {current.name}! 🚀
@@ -663,12 +838,8 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
             <div style={{ display:'flex',justifyContent:'center',marginBottom:16 }}>
               {(() => { const S = SPRITES[stage]; return <S size={100}/>; })()}
             </div>
-            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color:'rgba(255,255,255,.45)' }}>
-              Evolution!
-            </p>
-            <h2 className="text-3xl font-extrabold text-white mb-1">
-              You evolved into a {evolvedInto.name}!
-            </h2>
+            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color:'rgba(255,255,255,.45)' }}>Evolution!</p>
+            <h2 className="text-3xl font-extrabold text-white mb-1">You evolved into a {evolvedInto.name}!</h2>
             <p style={{ color:'rgba(255,255,255,.6)' }}>Stage {stage} · {HABITATS[STAGES[stage].habitat].name}</p>
             <p className="text-sm mt-8" style={{ color:'rgba(255,255,255,.3)' }}>Tap to continue</p>
           </div>
@@ -678,7 +849,7 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
   )
 }
 
-// ── Scene decorations ─────────────────────────────────────────────────────────
+// ── Scene decoration components ───────────────────────────────────────────────
 function CloudShape({ color = 'white', scale = 1 }: { color?: string; scale?: number }) {
   return (
     <div style={{ transform:`scale(${scale})`, transformOrigin:'left top' }}>
@@ -694,13 +865,10 @@ function CloudShape({ color = 'white', scale = 1 }: { color?: string; scale?: nu
 function JungleTree() {
   return (
     <svg width="54" height="84" viewBox="0 0 54 84" fill="none">
-      {/* trunk */}
       <path d="M27 82 Q25 62 28 44 Q30 24 27 12" stroke="#78350f" strokeWidth="6" strokeLinecap="round" fill="none"/>
-      {/* layered canopy */}
       <ellipse cx="27" cy="22" rx="20" ry="14" fill="#166534"/>
       <ellipse cx="27" cy="14" rx="14" ry="11" fill="#15803d"/>
       <ellipse cx="27" cy="8"  rx="9"  ry="8"  fill="#16a34a"/>
-      {/* vine */}
       <path d="M36 30 Q42 44 38 58" stroke="#4ade80" strokeWidth="1.5" fill="none" opacity=".7"/>
     </svg>
   )
@@ -709,9 +877,7 @@ function JungleTree() {
 function AcaciaTree() {
   return (
     <svg width="56" height="78" viewBox="0 0 56 78" fill="none">
-      {/* trunk with slight bend */}
       <path d="M28 76 Q26 58 30 40 Q32 28 28 18" stroke="#92400e" strokeWidth="5.5" strokeLinecap="round" fill="none"/>
-      {/* flat-top canopy */}
       <ellipse cx="28" cy="14" rx="24" ry="8" fill="#ca8a04"/>
       <ellipse cx="28" cy="11" rx="22" ry="6" fill="#d97706"/>
       <ellipse cx="16" cy="16" rx="12" ry="5" fill="#b45309"/>
