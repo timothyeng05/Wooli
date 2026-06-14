@@ -1,453 +1,556 @@
 // SVG animal sprites for WooliBudget Zoo — one component per stage
 // All sprites face RIGHT by default; the roam animation flips scaleX for leftward travel.
-// Each uses a fixed viewBox; pass `size` to scale the rendered px dimensions.
 
 type SP = { size?: number }
 
-// ── Beach: stages 0-2 ─────────────────────────────────────────────────────────
+// ── Ocean: stages 0-3 ($0 → $10K) ───────────────────────────────────────────
 
-export function SandCrab({ size = 48 }: SP) {
+export function Plankton({ size = 48 }: SP) {
   return (
-    <svg width={size} height={size * 0.82} viewBox="0 0 54 44" fill="none">
-      <ellipse cx="27" cy="28" rx="13" ry="10" fill="#E07840"/>
-      <ellipse cx="27" cy="27" rx="10" ry="7.5" fill="#F09050"/>
-      <path d="M17 24 Q27 20 37 24" stroke="#C05828" strokeWidth=".8" fill="none" opacity=".6"/>
-      <path d="M14 29 Q27 25 40 29" stroke="#C05828" strokeWidth=".8" fill="none" opacity=".6"/>
-      {/* eye stalks */}
-      <line x1="22" y1="20" x2="20" y2="14" stroke="#E07840" strokeWidth="2.5" strokeLinecap="round"/>
-      <circle cx="20" cy="13" r="3.5" fill="#F09050"/>
-      <circle cx="20" cy="12.5" r="2" fill="#111"/>
-      <circle cx="21" cy="12" r=".8" fill="white"/>
-      <line x1="32" y1="20" x2="34" y2="14" stroke="#E07840" strokeWidth="2.5" strokeLinecap="round"/>
-      <circle cx="34" cy="13" r="3.5" fill="#F09050"/>
-      <circle cx="34" cy="12.5" r="2" fill="#111"/>
-      <circle cx="35" cy="12" r=".8" fill="white"/>
-      {/* claws */}
-      <path d="M14 26 Q5 21 2 26 Q4 33 14 31Z" fill="#E07840"/>
-      <path d="M14 26 Q8 23 7 26 Q8 30 14 29.5Z" fill="#F09050"/>
-      <path d="M40 26 Q49 21 52 26 Q50 33 40 31Z" fill="#E07840"/>
-      <path d="M40 26 Q46 23 47 26 Q46 30 40 29.5Z" fill="#F09050"/>
-      {/* legs */}
-      <path d="M19 37 Q16 43 14 42" stroke="#E07840" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M23 38 Q22 44 20 44" stroke="#E07840" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M31 38 Q32 44 34 44" stroke="#E07840" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M35 37 Q38 43 40 42" stroke="#E07840" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-export function SeaTurtle({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size * 0.8} viewBox="0 0 56 45" fill="none">
-      {/* shell */}
-      <ellipse cx="26" cy="24" rx="16" ry="13" fill="#2E7D32"/>
-      <ellipse cx="26" cy="24" rx="13" ry="10" fill="#388E3C"/>
-      {/* shell hexagons */}
-      <polygon points="26,14 31,17 31,23 26,26 21,23 21,17" fill="none" stroke="#1B5E20" strokeWidth="1.2" opacity=".7"/>
-      <polygon points="26,22 29,24 29,28 26,30 23,28 23,24" fill="none" stroke="#1B5E20" strokeWidth="1" opacity=".5"/>
-      <path d="M34 17 Q38 19 38 24 Q38 28 34 30" stroke="#1B5E20" strokeWidth="1" fill="none" opacity=".5"/>
-      <path d="M18 17 Q14 19 14 24 Q14 28 18 30" stroke="#1B5E20" strokeWidth="1" fill="none" opacity=".5"/>
-      {/* head */}
-      <circle cx="42" cy="22" r="7" fill="#4CAF50"/>
-      <circle cx="44" cy="20" r="2" fill="#1A1A1A"/>
-      <circle cx="44.8" cy="19.4" r=".7" fill="white"/>
-      {/* flippers */}
-      <ellipse cx="12" cy="14" rx="7" ry="4" fill="#388E3C" transform="rotate(-30 12 14)"/>
-      <ellipse cx="12" cy="34" rx="7" ry="4" fill="#388E3C" transform="rotate(30 12 34)"/>
-      <ellipse cx="40" cy="10" rx="5" ry="3" fill="#388E3C" transform="rotate(-50 40 10)"/>
-      <ellipse cx="40" cy="38" rx="5" ry="3" fill="#388E3C" transform="rotate(50 40 38)"/>
+    <svg width={size} height={size * 0.9} viewBox="0 0 54 48" fill="none">
+      {/* translucent blob body */}
+      <ellipse cx="27" cy="28" rx="15" ry="13" fill="#93c5fd" opacity="0.72"/>
+      <ellipse cx="27" cy="27" rx="10" ry="8" fill="#bfdbfe" opacity="0.55"/>
+      {/* cilia/tentacles */}
+      <line x1="27" y1="15" x2="27" y2="8"  stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="18" y1="18" x2="12" y2="12" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="36" y1="18" x2="42" y2="12" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="13" y1="28" x2="6"  y2="26" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="41" y1="28" x2="48" y2="26" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="18" y1="38" x2="13" y2="44" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="36" y1="38" x2="41" y2="44" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+      {/* nucleus */}
+      <circle cx="27" cy="28" r="5" fill="#dbeafe" opacity="0.6"/>
+      {/* eyes */}
+      <circle cx="23" cy="24" r="3"   fill="white"/>
+      <circle cx="31" cy="24" r="3"   fill="white"/>
+      <circle cx="23.8" cy="24" r="1.8" fill="#1e3a8a"/>
+      <circle cx="31.8" cy="24" r="1.8" fill="#1e3a8a"/>
+      <circle cx="24.3" cy="23.3" r=".7" fill="white"/>
+      <circle cx="32.3" cy="23.3" r=".7" fill="white"/>
       {/* smile */}
-      <path d="M40 23 Q42 26 44 23" stroke="#1B5E20" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+      <path d="M22 31 Q27 35 32 31" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
     </svg>
   )
 }
 
-export function Pelican({ size = 48 }: SP) {
+export function Shrimp({ size = 48 }: SP) {
   return (
-    <svg width={size} height={size * 1.1} viewBox="0 0 44 48" fill="none">
-      {/* body */}
-      <ellipse cx="20" cy="32" rx="13" ry="11" fill="#ECEFF1"/>
-      <ellipse cx="20" cy="34" rx="9" ry="7" fill="#CFD8DC"/>
-      {/* wings hint */}
-      <path d="M8 28 Q4 24 6 20 L12 30Z" fill="#B0BEC5"/>
-      <path d="M32 28 Q36 24 34 20 L28 30Z" fill="#B0BEC5"/>
-      {/* head */}
-      <circle cx="28" cy="16" r="9" fill="#ECEFF1"/>
-      <ellipse cx="28" cy="13" rx="6" ry="4" fill="#CFD8DC"/>
+    <svg width={size} height={size * 0.9} viewBox="0 0 56 50" fill="none">
+      {/* curved body */}
+      <path d="M12 42 Q10 30 18 22 Q26 14 38 16 Q48 18 48 28 Q48 38 40 42 Q30 46 20 44 Q14 42 12 42Z" fill="#fda4af"/>
+      {/* segment lines */}
+      <path d="M18 22 Q20 28 18 34" stroke="#fb7185" strokeWidth="1.2" fill="none"/>
+      <path d="M24 18 Q26 26 24 34" stroke="#fb7185" strokeWidth="1.2" fill="none"/>
+      <path d="M30 16 Q32 25 30 34" stroke="#fb7185" strokeWidth="1.2" fill="none"/>
+      <path d="M36 16 Q38 25 36 34" stroke="#fb7185" strokeWidth="1.2" fill="none"/>
+      {/* tail fan */}
+      <path d="M12 42 L5 38 M12 42 L4 44 M12 42 L7 49" stroke="#fb7185" strokeWidth="2" strokeLinecap="round"/>
+      {/* antennae */}
+      <line x1="48" y1="24" x2="60" y2="12" stroke="#fb7185" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="47" y1="21" x2="58" y2="9"  stroke="#fb7185" strokeWidth="1.5" strokeLinecap="round"/>
       {/* eye */}
-      <circle cx="32" cy="15" r="2.5" fill="#FFF176"/>
-      <circle cx="32" cy="15" r="1.5" fill="#111"/>
-      <circle cx="32.6" cy="14.5" r=".6" fill="white"/>
-      {/* beak — long orange with pouch */}
-      <path d="M34 17 L48 20 L44 24 L34 21Z" fill="#FF8F00"/>
-      {/* pouch */}
-      <path d="M34 20 Q39 28 38 24 Q36 30 34 21Z" fill="#EF6C00"/>
-      {/* legs */}
-      <line x1="18" y1="42" x2="16" y2="48" stroke="#FF8F00" strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M13 48 L16 48 L19 48" stroke="#FF8F00" strokeWidth="2" strokeLinecap="round"/>
-      <line x1="24" y1="42" x2="26" y2="48" stroke="#FF8F00" strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M23 48 L26 48 L29 48" stroke="#FF8F00" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="48" cy="24" r="3.5" fill="#1c1917"/>
+      <circle cx="49" cy="23" r="1.2" fill="white"/>
+      {/* walking legs */}
+      <path d="M28 42 L24 49" stroke="#fb7185" strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M32 43 L30 50" stroke="#fb7185" strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M36 42 L36 49" stroke="#fb7185" strokeWidth="1.2" strokeLinecap="round"/>
     </svg>
   )
 }
 
-// ── Grassland: stages 3-5 ─────────────────────────────────────────────────────
-
-export function Bunny({ size = 48 }: SP) {
+export function Clownfish({ size = 48 }: SP) {
   return (
-    <svg width={size} height={size} viewBox="0 0 44 44" fill="none">
-      {/* ears */}
-      <ellipse cx="15" cy="9" rx="4" ry="9" fill="#90A4AE"/>
-      <ellipse cx="15" cy="9" rx="2.2" ry="7" fill="#F48FB1"/>
-      <ellipse cx="27" cy="7" rx="4" ry="9" fill="#90A4AE"/>
-      <ellipse cx="27" cy="7" rx="2.2" ry="7" fill="#F48FB1"/>
+    <svg width={size} height={size * 0.9} viewBox="0 0 58 52" fill="none">
+      {/* tail fin */}
+      <path d="M10 22 L2 14 M10 26 L2 26 M10 30 L2 38" stroke="#1c1917" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M10 18 Q4 22 4 26 Q4 30 10 34" fill="#f97316" stroke="#1c1917" strokeWidth="1.2"/>
       {/* body */}
-      <ellipse cx="22" cy="33" rx="13" ry="10" fill="#B0BEC5"/>
-      <ellipse cx="22" cy="34" rx="9" ry="7" fill="#CFD8DC"/>
-      {/* head */}
-      <circle cx="30" cy="22" r="10" fill="#B0BEC5"/>
-      {/* cheeks */}
-      <circle cx="34" cy="24" r="3.5" fill="#F48FB1" opacity=".45"/>
-      {/* eyes */}
-      <circle cx="33" cy="20" r="2.5" fill="#1A1A1A"/>
-      <circle cx="33.8" cy="19.4" r=".9" fill="white"/>
-      {/* nose */}
-      <ellipse cx="36" cy="23" rx="1.5" ry="1" fill="#F48FB1"/>
-      {/* mouth */}
-      <path d="M34 24 Q36 26 38 24" stroke="#999" strokeWidth=".8" fill="none" strokeLinecap="round"/>
-      {/* whiskers */}
-      <line x1="37" y1="22" x2="43" y2="21" stroke="#90A4AE" strokeWidth=".8" opacity=".7"/>
-      <line x1="37" y1="23" x2="43" y2="23.5" stroke="#90A4AE" strokeWidth=".8" opacity=".7"/>
-      {/* tail */}
-      <circle cx="8" cy="33" r="4.5" fill="#ECEFF1"/>
-      {/* feet */}
-      <ellipse cx="17" cy="43" rx="5" ry="2.5" fill="#90A4AE"/>
-      <ellipse cx="27" cy="43" rx="5" ry="2.5" fill="#90A4AE"/>
-    </svg>
-  )
-}
-
-export function Fox({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 46" fill="none">
-      {/* tail */}
-      <path d="M4 38 Q0 28 6 22 Q10 32 12 36Z" fill="#EF6C00"/>
-      <path d="M4 38 Q2 32 6 28 Q8 34 10 36Z" fill="#FFCC80"/>
-      {/* body */}
-      <ellipse cx="24" cy="32" rx="14" ry="11" fill="#EF6C00"/>
-      <ellipse cx="26" cy="34" rx="8" ry="6" fill="#FFCC80"/>
-      {/* ears */}
-      <polygon points="28,12 23,4 19,13" fill="#EF6C00"/>
-      <polygon points="28,12 24,6 21,13" fill="#D84315"/>
-      <polygon points="38,10 34,3 31,11" fill="#EF6C00"/>
-      <polygon points="38,10 35,5 33,11" fill="#D84315"/>
-      {/* head */}
-      <ellipse cx="32" cy="19" rx="12" ry="10" fill="#EF6C00"/>
-      {/* muzzle */}
-      <ellipse cx="38" cy="22" rx="7" ry="5" fill="#FFCC80"/>
-      {/* eyes */}
-      <circle cx="30" cy="17" r="2.5" fill="#1A1A1A"/>
-      <circle cx="30.8" cy="16.4" r=".9" fill="white"/>
-      {/* nose */}
-      <ellipse cx="40" cy="21" rx="1.8" ry="1.2" fill="#BF360C"/>
-      {/* mouth */}
-      <path d="M38 23 Q40 25 42 23" stroke="#BF360C" strokeWidth="1" fill="none" strokeLinecap="round"/>
-      {/* legs */}
-      <ellipse cx="18" cy="43" rx="4" ry="2" fill="#E65100"/>
-      <ellipse cx="30" cy="43" rx="4" ry="2" fill="#E65100"/>
-    </svg>
-  )
-}
-
-export function Deer({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
-      {/* antlers */}
-      <path d="M30 8 L28 2 M28 2 L24 0 M28 2 L32 0" stroke="#795548" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M38 10 L40 4 M40 4 L36 2 M40 4 L44 2" stroke="#795548" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      {/* ears */}
-      <ellipse cx="26" cy="12" rx="4" ry="6" fill="#A1887F" transform="rotate(-20 26 12)"/>
-      <ellipse cx="26" cy="12" rx="2.5" ry="4" fill="#FFCCBC" transform="rotate(-20 26 12)"/>
-      <ellipse cx="37" cy="12" rx="4" ry="6" fill="#A1887F" transform="rotate(15 37 12)"/>
-      <ellipse cx="37" cy="12" rx="2.5" ry="4" fill="#FFCCBC" transform="rotate(15 37 12)"/>
-      {/* body */}
-      <ellipse cx="22" cy="34" rx="14" ry="10" fill="#8D6E63"/>
-      {/* white spots */}
-      <circle cx="18" cy="30" r="2.5" fill="white" opacity=".7"/>
-      <circle cx="26" cy="28" r="2" fill="white" opacity=".7"/>
-      <circle cx="14" cy="35" r="1.8" fill="white" opacity=".6"/>
-      {/* neck */}
-      <path d="M28 24 Q34 20 36 16 Q38 18 36 22 Q34 26 30 28Z" fill="#8D6E63"/>
-      {/* head */}
-      <ellipse cx="38" cy="16" rx="9" ry="8" fill="#A1887F"/>
-      {/* snout */}
-      <ellipse cx="44" cy="18" rx="4.5" ry="3.5" fill="#BCAAA4"/>
-      {/* eye */}
-      <circle cx="37" cy="13" r="2.5" fill="#1A1A1A"/>
-      <circle cx="37.8" cy="12.4" r=".9" fill="white"/>
-      {/* nose */}
-      <ellipse cx="46" cy="17" rx="1.5" ry="1" fill="#5D4037"/>
-      {/* legs */}
-      <line x1="16" y1="42" x2="15" y2="48" stroke="#6D4C41" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="22" y1="43" x2="21" y2="48" stroke="#6D4C41" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="28" y1="43" x2="29" y2="48" stroke="#6D4C41" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="34" y1="42" x2="35" y2="47" stroke="#6D4C41" strokeWidth="3" strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-// ── Ocean: stages 6-8 ─────────────────────────────────────────────────────────
-
-export function Jellyfish({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size * 1.3} viewBox="0 0 44 57" fill="none">
-      {/* glow halo */}
-      <ellipse cx="22" cy="18" rx="20" ry="18" fill="#E040FB" opacity=".15"/>
-      {/* bell/dome */}
-      <path d="M2 20 Q2 4 22 4 Q42 4 42 20 Q42 26 22 28 Q2 26 2 20Z" fill="#CE93D8"/>
-      <path d="M6 20 Q6 10 22 10 Q38 10 38 20 Q38 24 22 25 Q6 24 6 20Z" fill="#E040FB"/>
-      {/* inner glow */}
-      <ellipse cx="22" cy="16" rx="10" ry="8" fill="#F3E5F5" opacity=".4"/>
-      <ellipse cx="22" cy="15" rx="5" ry="4" fill="white" opacity=".25"/>
-      {/* eyes */}
-      <circle cx="18" cy="17" r="2" fill="#6A1B9A"/>
-      <circle cx="18.7" cy="16.5" r=".7" fill="white"/>
-      <circle cx="26" cy="17" r="2" fill="#6A1B9A"/>
-      <circle cx="26.7" cy="16.5" r=".7" fill="white"/>
-      {/* tentacles — wavy paths */}
-      <path d="M10 28 Q8 35 10 40 Q12 45 10 52" stroke="#CE93D8" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M15 29 Q13 36 15 42 Q16 48 14 56" stroke="#E040FB" strokeWidth="2" fill="none" strokeLinecap="round"/>
-      <path d="M20 30 Q18 38 20 44 Q22 50 20 57" stroke="#CE93D8" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M25 30 Q27 38 25 44 Q24 50 26 57" stroke="#E040FB" strokeWidth="2" fill="none" strokeLinecap="round"/>
-      <path d="M30 29 Q32 36 30 42 Q28 48 30 56" stroke="#CE93D8" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M35 28 Q37 35 35 40 Q33 46 35 52" stroke="#E040FB" strokeWidth="2" fill="none" strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-export function Dolphin({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size * 0.72} viewBox="0 0 58 42" fill="none">
-      {/* tail flukes */}
-      <path d="M2 20 Q0 14 5 16 Q4 21 9 19 Q4 24 0 26 Q5 28 2 20Z" fill="#546E7A"/>
-      {/* body */}
-      <path d="M8 20 Q16 8 34 12 Q50 14 56 20 Q50 26 34 28 Q16 32 8 20Z" fill="#607D8B"/>
-      {/* belly */}
-      <path d="M14 20 Q22 14 36 16 Q48 17 54 20 Q48 23 36 24 Q22 26 14 20Z" fill="#ECEFF1"/>
+      <ellipse cx="30" cy="26" rx="18" ry="14" fill="#f97316"/>
+      <ellipse cx="30" cy="26" rx="18" ry="14" stroke="#1c1917" strokeWidth="1.5" fill="none"/>
+      {/* white stripes */}
+      <rect x="23" y="12" width="8" height="28" rx="4" fill="white"/>
+      <rect x="23" y="12" width="8" height="28" rx="4" stroke="#1c1917" strokeWidth="1" fill="none"/>
+      <rect x="38" y="14" width="5" height="24" rx="2.5" fill="white" opacity="0.7"/>
       {/* dorsal fin */}
-      <path d="M28 12 Q30 4 36 8 Q34 12 32 13Z" fill="#546E7A"/>
+      <path d="M26 12 Q29 4 38 6 Q42 14 40 14" fill="#f97316" stroke="#1c1917" strokeWidth="1.2"/>
+      {/* pectoral fin */}
+      <path d="M36 32 Q42 36 42 44 Q36 42 36 38" fill="#f97316" stroke="#1c1917" strokeWidth="1"/>
       {/* eye */}
-      <circle cx="48" cy="19" r="2.5" fill="#1A1A1A"/>
-      <circle cx="48.7" cy="18.4" r=".9" fill="white"/>
+      <circle cx="42" cy="22" r="4.5" fill="white"/>
+      <circle cx="42" cy="22" r="3"   fill="#1c1917"/>
+      <circle cx="43" cy="21" r="1"   fill="white"/>
       {/* smile */}
-      <path d="M50 21 Q53 24 56 21" stroke="#546E7A" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      {/* beak */}
-      <path d="M52 19 L58 20 L52 21Z" fill="#607D8B"/>
-      {/* side fin */}
-      <path d="M26 22 Q20 30 22 34 Q28 28 28 24Z" fill="#546E7A"/>
+      <path d="M44 27 Q46 30 44 31" stroke="#1c1917" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
     </svg>
   )
 }
 
-export function Shark({ size = 48 }: SP) {
+export function Pufferfish({ size = 48 }: SP) {
   return (
-    <svg width={size} height={size * 0.72} viewBox="0 0 60 43" fill="none">
-      {/* tail */}
-      <path d="M2 18 Q0 12 6 16 L8 21 L6 26 Q0 30 2 24Z" fill="#546E7A"/>
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      {/* spines */}
+      {[
+        [32,10,32,3],[19,14,14,8],[45,14,50,8],
+        [11,26,4,23],[53,26,60,23],
+        [11,40,4,43],[53,40,60,43],
+        [19,51,14,57],[45,51,50,57],[32,54,32,61],
+      ].map(([x1,y1,x2,y2],i)=>(
+        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#0e7490" strokeWidth="1.8" strokeLinecap="round"/>
+      ))}
       {/* body */}
-      <path d="M7 21 Q18 9 36 12 Q52 14 58 21 Q52 28 36 30 Q18 33 7 21Z" fill="#607D8B"/>
-      {/* white belly */}
-      <path d="M16 21 Q26 16 40 18 Q52 19 57 21 Q52 24 40 25 Q26 26 16 21Z" fill="#ECEFF1"/>
-      {/* dorsal fin — big and menacing */}
-      <path d="M24 12 Q28 1 36 8 Q34 12 30 13Z" fill="#546E7A"/>
-      {/* gills */}
-      <path d="M20 17 Q18 21 20 25" stroke="#455A64" strokeWidth="1.2" fill="none"/>
-      <path d="M24 16 Q22 21 24 26" stroke="#455A64" strokeWidth="1.2" fill="none"/>
-      {/* pec fin */}
-      <path d="M28 24 Q22 34 20 38 Q28 32 30 26Z" fill="#546E7A"/>
-      {/* eye */}
-      <circle cx="50" cy="19" r="3" fill="#1A1A1A"/>
-      <circle cx="50.8" cy="18.3" r="1" fill="white"/>
-      {/* teeth */}
-      <path d="M52 22 L54 25 L56 22 L58 25 L60 22" stroke="white" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
-      {/* nostril slits */}
-      <path d="M47 17 L46 16" stroke="#455A64" strokeWidth="1" strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-// ── Blizzard: stages 9-11 ─────────────────────────────────────────────────────
-
-export function Penguin({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 38 48" fill="none">
-      {/* body */}
-      <ellipse cx="19" cy="34" rx="13" ry="12" fill="#1A237E"/>
-      {/* white belly */}
-      <ellipse cx="19" cy="36" rx="8.5" ry="9" fill="#ECEFF1"/>
-      {/* head */}
-      <circle cx="19" cy="17" r="11" fill="#1A237E"/>
-      {/* face white patch */}
-      <ellipse cx="19" cy="19" rx="7" ry="6" fill="#ECEFF1"/>
+      <circle cx="32" cy="32" r="20" fill="#06b6d4"/>
+      {/* yellow belly */}
+      <ellipse cx="32" cy="36" rx="13" ry="11" fill="#fef08a"/>
+      {/* body dots */}
+      {[[20,24],[44,24],[16,34],[48,34]].map(([cx,cy],i)=>(
+        <circle key={i} cx={cx} cy={cy} r="2.2" fill="#0891b2"/>
+      ))}
+      {/* fins */}
+      <path d="M13 32 Q8 27 10 22" fill="#0e7490"/>
+      <path d="M51 32 Q56 27 54 22" fill="#0e7490"/>
       {/* eyes */}
-      <circle cx="16" cy="15" r="3" fill="white"/>
-      <circle cx="16" cy="15" r="1.8" fill="#111"/>
-      <circle cx="16.6" cy="14.4" r=".7" fill="white"/>
-      <circle cx="22" cy="15" r="3" fill="white"/>
-      <circle cx="22" cy="15" r="1.8" fill="#111"/>
-      <circle cx="22.6" cy="14.4" r=".7" fill="white"/>
-      {/* beak */}
-      <path d="M16 20 L19 25 L22 20Z" fill="#FF8F00"/>
-      {/* wings */}
-      <path d="M6 30 Q2 24 5 18 L8 34Z" fill="#0D47A1"/>
-      <path d="M32 30 Q36 24 33 18 L30 34Z" fill="#0D47A1"/>
-      {/* feet */}
-      <path d="M13 44 Q10 48 8 47 Q10 43 13 44Z" fill="#FF8F00"/>
-      <path d="M15 44 Q14 48 12 47 Q14 43 15 44Z" fill="#FF8F00"/>
-      <path d="M23 44 Q26 48 28 47 Q26 43 23 44Z" fill="#FF8F00"/>
-      <path d="M25 44 Q28 48 30 47 Q28 43 25 44Z" fill="#FF8F00"/>
+      <circle cx="25" cy="26" r="5.5" fill="white"/>
+      <circle cx="39" cy="26" r="5.5" fill="white"/>
+      <circle cx="25" cy="26" r="3.5" fill="#1c1917"/>
+      <circle cx="39" cy="26" r="3.5" fill="#1c1917"/>
+      <circle cx="26" cy="25" r="1.4" fill="white"/>
+      <circle cx="40" cy="25" r="1.4" fill="white"/>
+      {/* mouth — grumpy line */}
+      <path d="M26 37 L32 39 L38 37" stroke="#0e7490" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 
-export function ArcticFox({ size = 48 }: SP) {
+// ── Jungle: stages 4-7 ($10K → $100K) ───────────────────────────────────────
+
+export function TreeFrog({ size = 48 }: SP) {
   return (
-    <svg width={size} height={size} viewBox="0 0 50 46" fill="none">
-      {/* fluffy tail */}
-      <ellipse cx="6" cy="34" rx="7" ry="9" fill="#ECEFF1"/>
-      <ellipse cx="6" cy="34" rx="4.5" ry="6" fill="white"/>
+    <svg width={size} height={size} viewBox="0 0 60 60" fill="none">
+      {/* back legs */}
+      <path d="M14 48 Q8 54 12 60 Q17 57 20 52" fill="#22c55e" stroke="#15803d" strokeWidth="1"/>
+      <path d="M46 48 Q52 54 48 60 Q43 57 40 52" fill="#22c55e" stroke="#15803d" strokeWidth="1"/>
+      <circle cx="12" cy="60" r="3.5" fill="#4ade80"/>
+      <circle cx="48" cy="60" r="3.5" fill="#4ade80"/>
       {/* body */}
-      <ellipse cx="24" cy="32" rx="14" ry="11" fill="#ECEFF1"/>
-      <ellipse cx="24" cy="34" rx="10" ry="7.5" fill="white"/>
+      <ellipse cx="30" cy="44" rx="16" ry="12" fill="#22c55e"/>
+      <ellipse cx="30" cy="44" rx="16" ry="12" stroke="#15803d" strokeWidth="1.5" fill="none"/>
+      <ellipse cx="30" cy="46" rx="9"  ry="7"  fill="#bbf7d0"/>
+      {/* front legs */}
+      <path d="M16 46 Q10 51 14 57" fill="none" stroke="#15803d" strokeWidth="3.5" strokeLinecap="round"/>
+      <path d="M44 46 Q50 51 46 57" fill="none" stroke="#15803d" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="14" cy="57" r="3.5" fill="#4ade80"/>
+      <circle cx="46" cy="57" r="3.5" fill="#4ade80"/>
+      {/* head */}
+      <ellipse cx="30" cy="28" rx="15" ry="13" fill="#22c55e"/>
+      <ellipse cx="30" cy="28" rx="15" ry="13" stroke="#15803d" strokeWidth="1.5" fill="none"/>
+      {/* big bulging eyes */}
+      <circle cx="21" cy="21" r="8" fill="#fef08a"/>
+      <circle cx="39" cy="21" r="8" fill="#fef08a"/>
+      <circle cx="21" cy="21" r="5" fill="#dc2626"/>
+      <circle cx="39" cy="21" r="5" fill="#dc2626"/>
+      <circle cx="21" cy="21" r="3.5" fill="#1c1917"/>
+      <circle cx="39" cy="21" r="3.5" fill="#1c1917"/>
+      <circle cx="22" cy="20" r="1.2" fill="white"/>
+      <circle cx="40" cy="20" r="1.2" fill="white"/>
+      {/* smile */}
+      <path d="M23 34 Q30 38 37 34" stroke="#15803d" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+export function Toucan({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size * 1.1} viewBox="0 0 56 62" fill="none">
+      {/* tail */}
+      <path d="M10 50 L4 60 L14 56 L10 64" fill="#1c1917"/>
+      {/* body */}
+      <ellipse cx="24" cy="44" rx="14" ry="18" fill="#1c1917"/>
+      {/* white chest */}
+      <ellipse cx="24" cy="46" rx="9"  ry="12" fill="#f8fafc"/>
+      {/* red belly flash */}
+      <ellipse cx="24" cy="54" rx="7"  ry="5"  fill="#ef4444"/>
+      {/* wing */}
+      <path d="M12 40 Q9 30 12 22 Q16 28 16 38Z" fill="#292524"/>
+      {/* head */}
+      <circle cx="30" cy="22" r="13" fill="#1c1917"/>
+      {/* eye ring */}
+      <circle cx="32" cy="20" r="7"   fill="#4ade80"/>
+      <circle cx="32" cy="20" r="4.5" fill="#1c1917"/>
+      <circle cx="33" cy="19" r="1.8" fill="white"/>
+      {/* HUGE beak */}
+      <path d="M40 14 Q58 16 58 22 Q58 30 40 30 L36 26 L36 18 Z" fill="#f59e0b"/>
+      <path d="M40 14 Q42 22 40 30" stroke="#d97706" strokeWidth="1.5" fill="none"/>
+      <path d="M40 14 Q58 16 58 22 Q58 30 40 30" stroke="#92400e" strokeWidth="1.2" fill="none"/>
+      <ellipse cx="55" cy="22" rx="3" ry="2" fill="#dc2626"/>
+      {/* legs */}
+      <line x1="20" y1="60" x2="18" y2="66" stroke="#78716c" strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M15 66 L18 66 L21 66" stroke="#78716c" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="28" y1="60" x2="30" y2="66" stroke="#78716c" strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M27 66 L30 66 L33 66" stroke="#78716c" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+export function Monkey({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 60 60" fill="none">
+      {/* curling tail */}
+      <path d="M44 48 Q56 42 58 30 Q56 20 50 24" fill="none" stroke="#92400e" strokeWidth="3.5" strokeLinecap="round"/>
+      {/* body */}
+      <ellipse cx="28" cy="42" rx="14" ry="16" fill="#a16207"/>
+      <ellipse cx="28" cy="44" rx="9"  ry="11" fill="#fef3c7"/>
+      {/* arms */}
+      <path d="M14 38 Q6 32 8 22 Q14 24 16 32" fill="#a16207" stroke="#92400e" strokeWidth="1"/>
+      <path d="M42 38 Q50 32 48 22 Q42 24 40 32" fill="#a16207" stroke="#92400e" strokeWidth="1"/>
+      <circle cx="8"  cy="22" r="4.5" fill="#92400e"/>
+      <circle cx="48" cy="22" r="4.5" fill="#92400e"/>
+      {/* legs */}
+      <path d="M20 56 Q16 62 20 64 Q24 64 24 60" fill="#a16207" stroke="#92400e" strokeWidth="1"/>
+      <path d="M36 56 Q40 62 36 64 Q32 64 32 60" fill="#a16207" stroke="#92400e" strokeWidth="1"/>
+      {/* head */}
+      <circle cx="28" cy="24" r="15" fill="#a16207"/>
       {/* ears */}
-      <polygon points="26,12 21,4 18,13" fill="#ECEFF1"/>
-      <polygon points="26,12 22,6 20,13" fill="#FFCDD2"/>
-      <polygon points="36,11 32,4 30,12" fill="#ECEFF1"/>
-      <polygon points="36,11 33,6 31,12" fill="#FFCDD2"/>
-      {/* head */}
-      <ellipse cx="33" cy="19" rx="12" ry="10" fill="#ECEFF1"/>
-      {/* muzzle */}
-      <ellipse cx="40" cy="22" rx="7" ry="5" fill="white"/>
-      {/* ice-blue eyes */}
-      <circle cx="31" cy="17" r="3" fill="#B3E5FC"/>
-      <circle cx="31" cy="17" r="1.8" fill="#0277BD"/>
-      <circle cx="31.7" cy="16.4" r=".7" fill="white"/>
-      {/* nose */}
-      <ellipse cx="42" cy="21" rx="2" ry="1.3" fill="#EF9A9A"/>
-      {/* paws */}
-      <ellipse cx="18" cy="43" rx="4.5" ry="2" fill="#ECEFF1"/>
-      <ellipse cx="30" cy="43" rx="4.5" ry="2" fill="#ECEFF1"/>
-    </svg>
-  )
-}
-
-export function PolarBear({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 54 50" fill="none">
-      {/* body — big and round */}
-      <ellipse cx="26" cy="36" rx="18" ry="14" fill="#ECEFF1"/>
-      <ellipse cx="26" cy="38" rx="13" ry="9.5" fill="white"/>
-      {/* round ears */}
-      <circle cx="14" cy="13" r="6" fill="#ECEFF1"/>
-      <circle cx="14" cy="13" r="3.5" fill="#E0E0E0"/>
-      <circle cx="28" cy="11" r="6" fill="#ECEFF1"/>
-      <circle cx="28" cy="11" r="3.5" fill="#E0E0E0"/>
-      {/* big fluffy head */}
-      <circle cx="22" cy="22" r="16" fill="#ECEFF1"/>
-      {/* snout */}
-      <ellipse cx="32" cy="26" rx="10" ry="7" fill="#E0E0E0"/>
+      <circle cx="13" cy="24" r="7" fill="#a16207"/>
+      <circle cx="13" cy="24" r="4.5" fill="#fef3c7"/>
+      <circle cx="43" cy="24" r="7" fill="#a16207"/>
+      <circle cx="43" cy="24" r="4.5" fill="#fef3c7"/>
+      {/* face */}
+      <ellipse cx="28" cy="28" rx="10" ry="8" fill="#fef3c7"/>
       {/* eyes */}
-      <circle cx="18" cy="19" r="3" fill="#1A1A1A"/>
-      <circle cx="18.8" cy="18.3" r="1" fill="white"/>
-      {/* nose — big black */}
-      <ellipse cx="34" cy="24" rx="3.5" ry="2.5" fill="#111"/>
-      <circle cx="33" cy="23.5" r=".8" fill="#333"/>
+      <circle cx="23" cy="21" r="4"   fill="#1c1917"/>
+      <circle cx="33" cy="21" r="4"   fill="#1c1917"/>
+      <circle cx="24" cy="20" r="1.5" fill="white"/>
+      <circle cx="34" cy="20" r="1.5" fill="white"/>
+      {/* nose */}
+      <circle cx="28" cy="26" r="2.5" fill="#92400e"/>
+      <circle cx="27" cy="26" r="1"   fill="#1c1917"/>
+      <circle cx="29" cy="26" r="1"   fill="#1c1917"/>
       {/* smile */}
-      <path d="M30 27 Q34 30 38 27" stroke="#999" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-      {/* big paws */}
-      <ellipse cx="12" cy="48" rx="6" ry="2.5" fill="#ECEFF1"/>
-      <ellipse cx="38" cy="48" rx="6" ry="2.5" fill="#ECEFF1"/>
-      {/* arm */}
-      <ellipse cx="42" cy="36" rx="5" ry="8" fill="#E0E0E0" transform="rotate(20 42 36)"/>
+      <path d="M23 31 Q28 35 33 31" stroke="#92400e" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
     </svg>
   )
 }
 
-// ── Electric Storm: stages 12-13 ─────────────────────────────────────────────
-
-export function ThunderSerpent({ size = 48 }: SP) {
+export function Tiger({ size = 48 }: SP) {
   return (
-    <svg width={size} height={size * 0.55} viewBox="0 0 72 40" fill="none">
-      {/* body — wavy serpent */}
-      <path d="M2 20 Q8 10 16 20 Q24 30 32 20 Q40 10 48 20 Q56 30 62 22" stroke="#FDD835" strokeWidth="10" fill="none" strokeLinecap="round"/>
-      <path d="M2 20 Q8 10 16 20 Q24 30 32 20 Q40 10 48 20 Q56 30 62 22" stroke="#FFEE58" strokeWidth="7" fill="none" strokeLinecap="round"/>
-      {/* lightning bolt scales */}
-      <path d="M18 16 L16 20 L19 20 L17 24" stroke="#F57F17" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M32 20 L30 16 L33 16 L31 12" stroke="#F57F17" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M46 16 L44 20 L47 20 L45 24" stroke="#F57F17" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      {/* head */}
-      <ellipse cx="66" cy="21" rx="8" ry="6" fill="#FDD835"/>
-      <ellipse cx="70" cy="22" rx="5" ry="4" fill="#FFEE58"/>
-      {/* electric eyes */}
-      <circle cx="67" cy="19" r="2.5" fill="#FFEB3B"/>
-      <circle cx="67" cy="19" r="1.5" fill="#F57F17"/>
-      <circle cx="67.6" cy="18.4" r=".6" fill="white"/>
-      {/* forked tongue */}
-      <path d="M74 22 L78 21 M74 22 L78 23" stroke="#F57F17" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      {/* electric sparks */}
-      <path d="M10 12 L12 8 L14 12" stroke="#FFF176" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      <path d="M44 28 L46 32 L48 28" stroke="#FFF176" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-    </svg>
-  )
-}
-
-export function StormDragon({ size = 48 }: SP) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 56 54" fill="none">
-      {/* lightning wings */}
-      <path d="M28 22 Q14 10 2 14 Q10 20 16 26 Q12 28 8 32 Q18 28 22 24Z" fill="#5C35A0"/>
-      <path d="M28 22 Q14 10 2 14 Q10 20 16 26 Q12 28 8 32 Q18 28 22 24Z" stroke="#B39DDB" strokeWidth="1" fill="none"/>
-      <path d="M28 22 Q42 10 54 14 Q46 20 40 26 Q44 28 48 32 Q38 28 34 24Z" fill="#5C35A0"/>
-      <path d="M28 22 Q42 10 54 14 Q46 20 40 26 Q44 28 48 32 Q38 28 34 24Z" stroke="#B39DDB" strokeWidth="1" fill="none"/>
-      {/* lightning bolt on wing */}
-      <path d="M12 16 L10 20 L13 20 L11 24" stroke="#FFEE58" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      <path d="M44 16 L46 20 L43 20 L45 24" stroke="#FFEE58" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      {/* body */}
-      <ellipse cx="28" cy="38" rx="12" ry="14" fill="#4527A0"/>
-      {/* scales */}
-      <path d="M22 28 Q28 25 34 28" stroke="#7C4DFF" strokeWidth="1" fill="none" opacity=".7"/>
-      <path d="M20 33 Q28 30 36 33" stroke="#7C4DFF" strokeWidth="1" fill="none" opacity=".6"/>
-      <path d="M20 38 Q28 35 36 38" stroke="#7C4DFF" strokeWidth="1" fill="none" opacity=".5"/>
-      {/* neck */}
-      <path d="M26 24 Q28 18 30 14 Q32 18 30 24Z" fill="#4527A0"/>
-      {/* head */}
-      <ellipse cx="30" cy="12" rx="11" ry="9" fill="#5C35A0"/>
-      {/* snout */}
-      <path d="M34 12 Q42 12 44 15 Q42 18 34 17Z" fill="#4527A0"/>
-      {/* electric eyes */}
-      <circle cx="27" cy="10" r="3.5" fill="#FFEE58"/>
-      <circle cx="27" cy="10" r="2" fill="#F9A825"/>
-      <circle cx="27.7" cy="9.3" r=".8" fill="white"/>
-      {/* horn */}
-      <path d="M30 4 Q28 0 26 4 Q28 6 30 4Z" fill="#7C4DFF"/>
-      <path d="M38 6 Q38 2 36 5 Q37 7 38 6Z" fill="#7C4DFF"/>
+    <svg width={size} height={size} viewBox="0 0 62 62" fill="none">
       {/* tail */}
-      <path d="M20 50 Q12 54 8 50 Q10 46 18 48Z" fill="#4527A0"/>
+      <path d="M48 46 Q60 40 60 30 Q58 22 52 26" fill="none" stroke="#c2410c" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="52" cy="26" r="4" fill="#1c1917"/>
+      {/* body */}
+      <ellipse cx="28" cy="42" rx="17" ry="15" fill="#ea580c"/>
+      <ellipse cx="28" cy="44" rx="10" ry="9"  fill="#fef3c7"/>
+      {/* body stripes */}
+      {[16,22,34,40].map((x,i)=>(
+        <path key={i} d={`M${x} 30 Q${x+2} 40 ${x} 50`} stroke="#1c1917" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      ))}
+      {/* legs */}
+      {[14,22,32,40].map((x,i)=>(
+        <rect key={i} x={x} y="53" width="7" height="10" rx="3.5" fill="#ea580c"/>
+      ))}
+      {/* head */}
+      <circle cx="28" cy="24" r="15" fill="#ea580c"/>
+      {/* ears */}
+      <path d="M16 15 L12 6 L22 13" fill="#ea580c"/><path d="M16 15 L13 8 L20 13" fill="#fda4af"/>
+      <path d="M40 15 L44 6 L34 13" fill="#ea580c"/><path d="M40 15 L43 8 L36 13" fill="#fda4af"/>
+      {/* face */}
+      <ellipse cx="28" cy="28" rx="11" ry="9" fill="#fef3c7"/>
+      {/* forehead stripe */}
+      <path d="M28 10 Q30 15 28 20" stroke="#1c1917" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      {/* face stripes */}
+      <path d="M14 22 Q16 24 14 26" stroke="#1c1917" strokeWidth="2" fill="none" strokeLinecap="round"/>
+      <path d="M42 22 Q40 24 42 26" stroke="#1c1917" strokeWidth="2" fill="none" strokeLinecap="round"/>
+      {/* eyes */}
+      <circle cx="22" cy="21" r="4.5" fill="#fbbf24"/>
+      <circle cx="34" cy="21" r="4.5" fill="#fbbf24"/>
+      <ellipse cx="22" cy="21" rx="2.5" ry="3.5" fill="#1c1917"/>
+      <ellipse cx="34" cy="21" rx="2.5" ry="3.5" fill="#1c1917"/>
+      <circle cx="23" cy="20" r="1.2" fill="white"/>
+      <circle cx="35" cy="20" r="1.2" fill="white"/>
+      {/* nose */}
+      <path d="M24 28 L28 30 L32 28 L28 27 Z" fill="#e11d48"/>
+      {/* whiskers */}
+      {[[14,31,22,30],[14,33,22,32],[42,31,34,30],[42,33,34,32]].map(([x1,y1,x2,y2],i)=>(
+        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fef3c7" strokeWidth="1" strokeLinecap="round"/>
+      ))}
+    </svg>
+  )
+}
+
+// ── Savanna: stages 8-10 ($100K → $1M) ──────────────────────────────────────
+
+export function Zebra({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size * 1.1} viewBox="0 0 60 66" fill="none">
+      {/* tail */}
+      <path d="M8 44 Q2 50 4 58" fill="none" stroke="#1c1917" strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M4 58 Q4 62 6 62 Q8 62 8 58" fill="#1c1917"/>
+      {/* legs */}
+      {[12,20,30,38].map((x,i) => (
+        <g key={i}>
+          <rect x={x} y="50" width="7" height="14" rx="3.5" fill="white"/>
+          <rect x={x} y="54" width="7" height="3" fill="#1c1917"/>
+          <rect x={x} y="59" width="7" height="3" fill="#1c1917"/>
+        </g>
+      ))}
+      {/* body */}
+      <ellipse cx="28" cy="40" rx="20" ry="14" fill="white"/>
+      <ellipse cx="28" cy="40" rx="20" ry="14" stroke="#1c1917" strokeWidth="1" fill="none"/>
+      {/* body stripes */}
+      {[
+        'M16 28 Q14 36 16 44 Q18 46 18 44 Q16 36 18 28 Z',
+        'M23 26 Q20 36 22 46 Q24 48 24 46 Q22 36 25 26 Z',
+        'M31 26 Q28 36 30 46 Q32 48 32 46 Q30 36 33 26 Z',
+        'M39 28 Q37 36 39 44 Q41 46 41 44 Q39 36 41 28 Z',
+      ].map((d,i)=>(
+        <path key={i} d={d} fill="#1c1917"/>
+      ))}
+      {/* neck */}
+      <rect x="40" y="24" width="13" height="20" rx="6.5" fill="white"/>
+      <rect x="40" y="24" width="13" height="20" rx="6.5" stroke="#1c1917" strokeWidth="1" fill="none"/>
+      <line x1="40" y1="30" x2="53" y2="30" stroke="#1c1917" strokeWidth="2.5"/>
+      <line x1="40" y1="37" x2="53" y2="37" stroke="#1c1917" strokeWidth="2.5"/>
+      {/* mane */}
+      <path d="M40 24 Q44 14 48 18 Q50 22 48 26" fill="#1c1917"/>
+      <path d="M44 22 Q48 12 52 16 Q54 20 52 24" fill="#1c1917"/>
+      {/* head */}
+      <ellipse cx="52" cy="22" rx="9" ry="8" fill="white"/>
+      <ellipse cx="52" cy="22" rx="9" ry="8" stroke="#1c1917" strokeWidth="1" fill="none"/>
+      {/* head stripe */}
+      <path d="M46 16 Q50 14 52 18" stroke="#1c1917" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      {/* snout */}
+      <ellipse cx="58" cy="24" rx="5" ry="4" fill="#ffe4d0"/>
+      <circle cx="57" cy="24" r="1.2" fill="#1c1917"/>
+      <circle cx="59" cy="24" r="1.2" fill="#1c1917"/>
+      {/* eye */}
+      <circle cx="50" cy="20" r="3.5" fill="#1c1917"/>
+      <circle cx="51" cy="19" r="1.2" fill="white"/>
+      {/* ear */}
+      <path d="M46 16 L42 10 L50 14" fill="white" stroke="#1c1917" strokeWidth="1"/>
+    </svg>
+  )
+}
+
+export function Giraffe({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size * 1.3} viewBox="0 0 60 78" fill="none">
+      {/* legs */}
+      {[12,20,30,38].map((x,i)=>(
+        <g key={i}>
+          <rect x={x} y="52" width="7" height="22" rx="3.5" fill="#f59e0b"/>
+          <rect x={x} y="70" width="7" height="5"  rx="2"   fill="#92400e"/>
+        </g>
+      ))}
+      {/* body */}
+      <ellipse cx="28" cy="44" rx="20" ry="14" fill="#fbbf24"/>
+      {/* body patches */}
+      {[[18,38,6,5],[30,34,6,5],[42,40,5,4],[22,52,5,4],[36,52,5,4]].map(([cx,cy,rx,ry],i)=>(
+        <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} fill="#92400e"/>
+      ))}
+      {/* long neck */}
+      <rect x="44" y="14" width="12" height="34" rx="6" fill="#fbbf24"/>
+      {/* neck patches */}
+      {[[50,22,5,4],[48,34,5,4]].map(([cx,cy,rx,ry],i)=>(
+        <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} fill="#92400e"/>
+      ))}
+      {/* head */}
+      <ellipse cx="52" cy="14" rx="9" ry="8" fill="#fbbf24"/>
+      {/* ossicones */}
+      <line x1="47" y1="8" x2="45" y2="2" stroke="#92400e" strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="45" cy="2" r="2.5" fill="#92400e"/>
+      <line x1="54" y1="8" x2="56" y2="2" stroke="#92400e" strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="56" cy="2" r="2.5" fill="#92400e"/>
+      {/* snout */}
+      <ellipse cx="58" cy="16" rx="5.5" ry="4" fill="#f59e0b"/>
+      <circle cx="57" cy="16" r="1.2" fill="#92400e"/>
+      <circle cx="59" cy="16" r="1.2" fill="#92400e"/>
+      {/* eye */}
+      <circle cx="50" cy="12" r="3.5" fill="#92400e"/>
+      <circle cx="50" cy="12" r="2.5" fill="#1c1917"/>
+      <circle cx="51" cy="11" r="1"   fill="white"/>
+      {/* eyelashes */}
+      <line x1="48" y1="9" x2="46" y2="7" stroke="#92400e" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="50" y1="8" x2="50" y2="6" stroke="#92400e" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+export function Lion({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 62 62" fill="none">
+      {/* tail */}
+      <path d="M8 44 Q2 36 4 26 Q6 20 10 24" fill="none" stroke="#b45309" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="10" cy="24" r="5" fill="#92400e"/>
+      {/* body */}
+      <ellipse cx="30" cy="44" rx="19" ry="15" fill="#fbbf24"/>
+      {/* legs */}
+      {[12,20,30,38].map((x,i)=>(
+        <rect key={i} x={x} y="54" width="7" height="10" rx="3.5" fill="#fbbf24"/>
+      ))}
+      <ellipse cx="30" cy="46" rx="11" ry="9" fill="#fef3c7"/>
+      {/* big mane */}
+      <circle cx="32" cy="26" r="20" fill="#b45309"/>
+      {/* head */}
+      <circle cx="32" cy="26" r="14" fill="#fbbf24"/>
+      {/* ears inside mane */}
+      <path d="M20 17 L16 9 L26 14" fill="#fbbf24"/>
+      <path d="M44 17 L48 9 L38 14" fill="#fbbf24"/>
+      <path d="M20 17 L17 11 L24 14" fill="#fda4af"/>
+      <path d="M44 17 L47 11 L40 14" fill="#fda4af"/>
+      {/* face */}
+      <ellipse cx="32" cy="30" rx="11" ry="9" fill="#fef3c7"/>
+      {/* eyes */}
+      <circle cx="26" cy="24" r="4.5" fill="#fbbf24"/>
+      <circle cx="38" cy="24" r="4.5" fill="#fbbf24"/>
+      <ellipse cx="26" cy="24" rx="3"   ry="3.5" fill="#1c1917"/>
+      <ellipse cx="38" cy="24" rx="3"   ry="3.5" fill="#1c1917"/>
+      <circle cx="27" cy="23" r="1.2" fill="white"/>
+      <circle cx="39" cy="23" r="1.2" fill="white"/>
+      {/* nose */}
+      <path d="M28 30 L32 32 L36 30 L32 28 Z" fill="#e11d48"/>
+      {/* whiskers */}
+      {[[16,32,24,31],[16,34,24,33],[48,32,40,31],[48,34,40,33]].map(([x1,y1,x2,y2],i)=>(
+        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fef3c7" strokeWidth="1.2" strokeLinecap="round"/>
+      ))}
+      {/* smile */}
+      <path d="M28 34 Q32 38 36 34" stroke="#92400e" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+// ── Mythical: stages 11-13 ($1M → $100M) ────────────────────────────────────
+
+export function Griffin({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      {/* wings */}
+      <path d="M24 30 Q8 18 6 6 Q14 10 20 20 Q22 25 24 28" fill="#a78bfa" stroke="#7c3aed" strokeWidth="1.2"/>
+      <path d="M24 30 Q10 38 6 50 Q14 46 20 38 Q22 34 24 32" fill="#a78bfa" stroke="#7c3aed" strokeWidth="1.2"/>
+      {/* wing membrane */}
+      <path d="M24 28 Q12 6 10 2 Q16 8 18 16 L24 30" fill="#c4b5fd" opacity="0.5"/>
+      {/* lion body */}
+      <ellipse cx="26" cy="44" rx="14" ry="11" fill="#fbbf24"/>
+      <ellipse cx="26" cy="46" rx="9"  ry="7"  fill="#fef3c7"/>
+      {/* lion tail */}
+      <path d="M12 44 Q4 50 6 58" fill="none" stroke="#b45309" strokeWidth="3" strokeLinecap="round"/>
+      <circle cx="6" cy="58" r="5" fill="#92400e"/>
+      {/* lion legs */}
+      {[14,24].map((x,i)=>(
+        <rect key={i} x={x} y="52" width="7" height="10" rx="3.5" fill="#fbbf24"/>
+      ))}
+      {/* eagle body */}
+      <ellipse cx="40" cy="38" rx="13" ry="16" fill="#d97706"/>
+      <path d="M32 28 Q34 36 32 44" fill="#92400e"/>
+      <path d="M36 26 Q38 36 36 46" fill="#92400e"/>
+      {/* eagle head — white (bald eagle) */}
+      <circle cx="44" cy="22" r="12" fill="#d97706"/>
+      <circle cx="44" cy="22" r="10" fill="white"/>
+      {/* eye */}
+      <circle cx="46" cy="20" r="4"   fill="#fbbf24"/>
+      <circle cx="46" cy="20" r="2.5" fill="#1c1917"/>
+      <circle cx="47" cy="19" r="1"   fill="white"/>
+      {/* eagle beak */}
+      <path d="M50 18 L62 20 L50 26 Z" fill="#f59e0b"/>
+      <path d="M50 18 L62 20 L56 22" fill="#b45309"/>
+      {/* talons */}
+      <path d="M46 52 L44 58 M46 52 L48 58 M46 52 L50 56" stroke="#d97706" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+export function Phoenix({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 62 64" fill="none">
+      {/* flame tail */}
+      <path d="M14 50 Q10 58 14 64 Q18 58 16 50" fill="#fbbf24"/>
+      <path d="M20 52 Q16 62 22 66 Q26 58 22 50" fill="#f97316"/>
+      <path d="M26 54 Q22 64 28 66 Q32 60 28 52" fill="#ef4444"/>
+      {/* left wing — flame shape */}
+      <path d="M24 30 Q8 16 6 4  Q14 8 18 18 Q21 24 24 28" fill="#ef4444"/>
+      <path d="M24 30 Q10 30 4 38 Q8 44 18 40 Q22 38 24 34" fill="#f97316"/>
+      {/* right wing */}
+      <path d="M38 30 Q54 16 56 4  Q48 8 44 18 Q41 24 38 28" fill="#ef4444"/>
+      <path d="M38 30 Q52 30 58 38 Q54 44 44 40 Q40 38 38 34" fill="#f97316"/>
+      {/* body */}
+      <ellipse cx="31" cy="38" rx="11" ry="16" fill="#f97316"/>
+      <ellipse cx="31" cy="40" rx="6"  ry="10" fill="#fef08a"/>
+      {/* head */}
+      <circle cx="31" cy="22" r="11" fill="#ef4444"/>
+      {/* flame crest */}
+      <path d="M27 12 Q27 4 31 2  Q35 4 35 12" fill="#fbbf24"/>
+      <path d="M23 14 Q21 6  25 4  Q27 8 27 12" fill="#f97316"/>
+      <path d="M39 14 Q41 6  37 4  Q35 8 35 12" fill="#f97316"/>
+      {/* eyes */}
+      <circle cx="26" cy="22" r="4.5" fill="#fef08a"/>
+      <circle cx="36" cy="22" r="4.5" fill="#fef08a"/>
+      <circle cx="26" cy="22" r="3"   fill="#1c1917"/>
+      <circle cx="36" cy="22" r="3"   fill="#1c1917"/>
+      <circle cx="27" cy="21" r="1.2" fill="white"/>
+      <circle cx="37" cy="21" r="1.2" fill="white"/>
+      {/* beak */}
+      <path d="M27 27 L31 30 L35 27 L31 25 Z" fill="#fbbf24"/>
+      {/* glow */}
+      <circle cx="31" cy="34" r="26" fill="#fbbf24" opacity="0.05"/>
+    </svg>
+  )
+}
+
+export function Dragon({ size = 48 }: SP) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      {/* tail */}
+      <path d="M8 46 Q2 52 4 60 Q8 56 10 50" fill="#7c3aed"/>
+      <path d="M8 46 Q0 48 2 56 Q8 54 10 50" fill="#6d28d9"/>
+      {/* left wing */}
+      <path d="M22 24 Q6 10 4 0  Q14 4 18 14 Q20 18 22 22" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1.2"/>
+      <path d="M22 24 Q8 24 2 32 Q6 38 16 34 Q20 32 22 28" fill="#7c3aed" stroke="#6d28d9" strokeWidth="1.2"/>
+      <path d="M22 22 Q10 6 8 0 Q12 6 14 12 L22 24" fill="#a78bfa" opacity="0.45"/>
+      {/* body */}
+      <ellipse cx="28" cy="42" rx="17" ry="16" fill="#7c3aed"/>
+      <ellipse cx="28" cy="44" rx="10" ry="11" fill="#c4b5fd"/>
+      {/* belly scales */}
+      <path d="M21 42 Q25 38 28 42 Q31 38 35 42 Q31 46 28 42 Q25 46 21 42" fill="#ddd6fe"/>
+      {/* back spikes */}
+      {[18,26,34].map((x,i)=>(
+        <path key={i} d={`M${x} 28 L${x-3} 20 L${x+4} 26`} fill="#6d28d9"/>
+      ))}
+      {/* neck */}
+      <path d="M36 28 Q46 20 50 16" stroke="#7c3aed" strokeWidth="11" strokeLinecap="round" fill="none"/>
+      <path d="M36 28 Q46 20 50 16" stroke="#c4b5fd" strokeWidth="5"  strokeLinecap="round" fill="none"/>
+      {/* head */}
+      <ellipse cx="50" cy="14" rx="11" ry="9" fill="#7c3aed"/>
+      {/* horns */}
+      <path d="M44 8  L40 2  L46 6"  fill="#4c1d95"/>
+      <path d="M52 8  L56 2  L50 6"  fill="#4c1d95"/>
+      {/* snout */}
+      <ellipse cx="58" cy="16" rx="7" ry="5" fill="#8b5cf6"/>
+      <circle cx="56" cy="16" r="1.8" fill="#1c1917"/>
+      <circle cx="59" cy="16" r="1.8" fill="#1c1917"/>
+      {/* fire from nostrils */}
+      <path d="M55 13 Q56 9 56 13"  fill="#f97316"/>
+      <path d="M58 13 Q59 9 59 13"  fill="#ef4444"/>
+      {/* eye */}
+      <circle cx="48" cy="12" r="5"   fill="#fbbf24"/>
+      <ellipse cx="48" cy="12" rx="2.5" ry="4" fill="#1c1917"/>
+      <circle cx="49" cy="11" r="1.2" fill="white"/>
+      {/* legs */}
+      <path d="M14 54 Q12 60 16 62 Q20 60 18 54" fill="#7c3aed"/>
+      <path d="M38 54 Q40 60 36 62 Q32 60 34 54" fill="#7c3aed"/>
       {/* claws */}
-      <path d="M22 50 L20 54 M25 51 L24 55 M30 51 L30 55 M34 51 L36 54" stroke="#7C4DFF" strokeWidth="2" strokeLinecap="round"/>
-      {/* electric aura */}
-      <ellipse cx="30" cy="12" rx="13" ry="11" stroke="#7C4DFF" strokeWidth="1" fill="none" opacity=".3"/>
+      <path d="M16 62 L14 66 M16 62 L18 66 M16 62 L20 64" stroke="#4c1d95" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M36 62 L34 66 M36 62 L36 66 M36 62 L40 64" stroke="#4c1d95" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   )
 }
 
 // ── Lookup table: stage index → sprite component ──────────────────────────────
 export const SPRITES = [
-  SandCrab, SeaTurtle, Pelican,
-  Bunny, Fox, Deer,
-  Jellyfish, Dolphin, Shark,
-  Penguin, ArcticFox, PolarBear,
-  ThunderSerpent, StormDragon,
+  Plankton, Shrimp, Clownfish, Pufferfish,
+  TreeFrog, Toucan, Monkey, Tiger,
+  Zebra, Giraffe, Lion,
+  Griffin, Phoenix, Dragon,
 ] as const
 
 export type SpriteComponent = (typeof SPRITES)[number]

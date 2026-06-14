@@ -5,20 +5,20 @@ import { SPRITES } from './ZooSprites'
 
 // ── Stage & habitat definitions ───────────────────────────────────────────────
 const STAGES = [
-  { name: 'Sand Crab',        habitat: 0, min: 0,          says: 'Hey there! Even the mightiest castles start with one grain of sand. 🏖️' },
-  { name: 'Sea Turtle',       habitat: 0, min: 1_000,      says: 'Slow and steady wins the race. $1K is your first shell! 🐢' },
-  { name: 'Pelican',          habitat: 0, min: 5_000,      says: 'Soaring now! Keep filling that savings pouch. 🌊' },
-  { name: 'Bunny',            habitat: 1, min: 10_000,     says: 'Hippity hop! $10K and thriving in the meadow. 🌿' },
-  { name: 'Fox',              habitat: 1, min: 25_000,     says: 'Sly moves! $25K — you\'re outsmarting the average saver. 🦊' },
-  { name: 'Deer',             habitat: 1, min: 50_000,     says: 'Graceful and growing. The forest awaits beyond the meadow. 🌸' },
-  { name: 'Jellyfish',        habitat: 2, min: 75_000,     says: 'You\'ve dived into deep waters. $75K — glowing bright! ✨' },
-  { name: 'Dolphin',         habitat: 2, min: 100_000,    says: 'Six figures! You\'re riding the wave. Keep the momentum. 🌊' },
-  { name: 'Shark',            habitat: 2, min: 250_000,    says: 'Quarter million. You\'re apex predator territory now. 🦈' },
-  { name: 'Penguin',          habitat: 3, min: 500_000,    says: 'Half a million in the arctic vault. Unshakeable. 🧊' },
-  { name: 'Arctic Fox',       habitat: 3, min: 1_000_000,  says: 'Millionaire! The blizzard doesn\'t faze you anymore. ❄️' },
-  { name: 'Polar Bear',       habitat: 3, min: 2_500_000,  says: 'Two and a half million. You are the apex of this climate. 🐾' },
-  { name: 'Thunder Serpent',  habitat: 4, min: 5_000_000,  says: 'You\'ve reached the storm. $5M — pure electrical power. ⚡' },
-  { name: 'Storm Dragon',     habitat: 4, min: 10_000_000, says: 'LEGENDARY. Ten million. The storm bows to you. 🐉' },
+  { name: 'Plankton',   habitat: 0, min: 0,           says: 'Every ocean starts with a single drop. You\'re just beginning! 🌊' },
+  { name: 'Shrimp',     habitat: 0, min: 500,          says: 'Look at you, scuttling forward! $500 saved and counting.' },
+  { name: 'Clownfish',  habitat: 0, min: 2_000,        says: 'Finding your way through the reef! $2K — keep swimming.' },
+  { name: 'Pufferfish', habitat: 0, min: 6_000,        says: 'Puffed up with potential. $10K is just around the current!' },
+  { name: 'Tree Frog',  habitat: 1, min: 10_000,       says: 'You\'ve leapt into the jungle! $10K and climbing higher.' },
+  { name: 'Toucan',     habitat: 1, min: 20_000,       says: 'Colorful savings, colorful future. $20K looks good on you!' },
+  { name: 'Monkey',     habitat: 1, min: 40_000,       says: 'Swinging through the canopy! $40K — you\'re unstoppable.' },
+  { name: 'Tiger',      habitat: 1, min: 70_000,       says: 'Fierce and focused. The savanna is calling your name.' },
+  { name: 'Zebra',      habitat: 2, min: 100_000,      says: 'Six figures! Standing out from the herd in style.' },
+  { name: 'Giraffe',    habitat: 2, min: 300_000,      says: 'Head above the clouds, sights set even higher. $300K!' },
+  { name: 'Lion',       habitat: 2, min: 600_000,      says: 'Ruler of the savanna. One more leap into the mythical realm.' },
+  { name: 'Griffin',    habitat: 3, min: 1_000_000,    says: 'Half legend, half power. You\'ve crossed ONE MILLION. 🌟' },
+  { name: 'Phoenix',    habitat: 3, min: 10_000_000,   says: 'Rising in eternal flame. $10M — you are the fire itself.' },
+  { name: 'Dragon',     habitat: 3, min: 50_000_000,   says: 'Ancient. Mighty. Limitless. The mythical realm is yours. 🐉' },
 ] as const
 
 type Stage = (typeof STAGES)[number]
@@ -31,54 +31,40 @@ const GOAL_DATE  = 'wooli_zoo_goal_date'
 // ── Habitat definitions ───────────────────────────────────────────────────────
 const HABITATS = [
   {
-    id: 'beach',
-    name: 'Tropical Beach',
-    skyFrom: '#87CEEB', skyTo: '#FFE082',
-    groundFrom: '#F9A825', groundTo: '#F57F17',
-    groundRadius: '35% 35% 0 0 / 8% 8% 0 0',
-    textColor: '#0277BD',
-    badgeBg: 'rgba(255,236,153,.9)', badgeBorder: '#F9A825', badgeText: '#5D4037',
-    panelBg: 'rgba(2,119,189,.78)',
-  },
-  {
-    id: 'grassland',
-    name: 'Rolling Grasslands',
-    skyFrom: '#0EA5E9', skyTo: '#BAE6FD',
-    groundFrom: '#16A34A', groundTo: '#15803D',
-    groundRadius: '45% 45% 0 0 / 6% 6% 0 0',
-    textColor: '#0369A1',
-    badgeBg: 'rgba(224,242,254,.9)', badgeBorder: '#38BDF8', badgeText: '#0369A1',
-    panelBg: 'rgba(3,105,161,.78)',
-  },
-  {
     id: 'ocean',
     name: 'Deep Ocean',
-    skyFrom: '#01579B', skyTo: '#0288D1',
-    groundFrom: '#006064', groundTo: '#004D40',
+    skyFrom: '#001833', skyTo: '#005f8a',
+    groundFrom: '#b8860b', groundTo: '#6b4c11',
     groundRadius: '50% 50% 0 0 / 6% 6% 0 0',
-    textColor: '#B2EBF2',
-    badgeBg: 'rgba(1,87,155,.88)', badgeBorder: '#4FC3F7', badgeText: '#E1F5FE',
-    panelBg: 'rgba(0,77,64,.82)',
+    badgeBg: 'rgba(0,24,51,.9)', badgeBorder: '#38bdf8', badgeText: '#7dd3fc',
+    panelBg: 'rgba(0,18,40,.84)',
   },
   {
-    id: 'blizzard',
-    name: 'Arctic Blizzard',
-    skyFrom: '#B0BEC5', skyTo: '#ECEFF1',
-    groundFrom: '#E8EAF6', groundTo: '#C5CAE9',
+    id: 'jungle',
+    name: 'Rainforest',
+    skyFrom: '#0d3b1a', skyTo: '#1a6b2d',
+    groundFrom: '#4a3018', groundTo: '#2d1c0d',
+    groundRadius: '45% 45% 0 0 / 6% 6% 0 0',
+    badgeBg: 'rgba(13,59,26,.9)', badgeBorder: '#4ade80', badgeText: '#86efac',
+    panelBg: 'rgba(10,46,20,.84)',
+  },
+  {
+    id: 'savanna',
+    name: 'African Savanna',
+    skyFrom: '#7c2d00', skyTo: '#ea580c',
+    groundFrom: '#ca8a04', groundTo: '#92400e',
     groundRadius: '40% 40% 0 0 / 5% 5% 0 0',
-    textColor: '#1A237E',
-    badgeBg: 'rgba(232,234,246,.95)', badgeBorder: '#7986CB', badgeText: '#1A237E',
-    panelBg: 'rgba(26,35,126,.78)',
+    badgeBg: 'rgba(120,45,0,.9)', badgeBorder: '#f59e0b', badgeText: '#fcd34d',
+    panelBg: 'rgba(100,35,0,.84)',
   },
   {
-    id: 'electric',
-    name: 'Storm Pinnacle',
-    skyFrom: '#0D0020', skyTo: '#1A0040',
-    groundFrom: '#4A148C', groundTo: '#311B92',
+    id: 'mythical',
+    name: 'Mythical Realm',
+    skyFrom: '#0c0a1d', skyTo: '#2d1b69',
+    groundFrom: '#2e1065', groundTo: '#0c0a1d',
     groundRadius: '30% 30% 0 0 / 4% 4% 0 0',
-    textColor: '#CE93D8',
-    badgeBg: 'rgba(74,20,140,.92)', badgeBorder: '#CE93D8', badgeText: '#E040FB',
-    panelBg: 'rgba(49,27,146,.85)',
+    badgeBg: 'rgba(12,10,29,.9)', badgeBorder: '#a78bfa', badgeText: '#c4b5fd',
+    panelBg: 'rgba(8,6,22,.88)',
   },
 ] as const
 
@@ -234,10 +220,10 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
   const lockedStages = STAGES.slice(stage + 1)
 
   // Habitat-specific scene decorations
-  const isBeach    = current.habitat === 0
-  const isOcean    = current.habitat === 2
-  const isBlizzard = current.habitat === 3
-  const isElectric = current.habitat === 4
+  const isOcean    = current.habitat === 0
+  const isJungle   = current.habitat === 1
+  const isSavanna  = current.habitat === 2
+  const isMythical = current.habitat === 3
 
   return (
     <div className="relative overflow-hidden" style={{ minHeight:'100dvh', background:`linear-gradient(to bottom, ${hab.skyFrom}, ${hab.skyTo})` }}>
@@ -261,149 +247,159 @@ export default function ZooPageClient({ balance, monthlyIncome, monthlySpend }: 
       {/* ── Scene area (top 57%) ──────────────────────────────────────────────── */}
       <div className="absolute left-0 right-0 top-0" style={{ height:'57%' }}>
 
-        {/* Sun / Moon */}
-        {!isElectric && (
+        {/* Celestial body — sun for savanna/jungle, deep moon for ocean, cosmic orb for mythical */}
+        {!isOcean && (
           <div className="absolute rounded-full pointer-events-none" style={{
-            width:isBeach?76:64, height:isBeach?76:64,
-            top:22, right:22,
-            background: isBlizzard
-              ? 'radial-gradient(circle at 40% 40%,rgba(255,255,255,.9),rgba(200,210,230,.6))'
-              : isOcean
-                ? 'none'
+            width: isMythical ? 52 : isSavanna ? 72 : 60,
+            height: isMythical ? 52 : isSavanna ? 72 : 60,
+            top: 18, right: 22,
+            background: isMythical
+              ? 'radial-gradient(circle at 40% 40%,#c4b5fd,#7c3aed)'
+              : isSavanna
+                ? 'radial-gradient(circle at 40% 40%,#fed7aa,#f97316)'
                 : 'radial-gradient(circle at 40% 40%,#FFFDE7,#FCD34D)',
-            boxShadow: isBlizzard ? 'none' : `0 0 ${isBeach?44:28}px rgba(252,211,77,.5)`,
+            boxShadow: isMythical
+              ? '0 0 32px rgba(139,92,246,.6)'
+              : isSavanna
+                ? '0 0 48px rgba(249,115,22,.5)'
+                : '0 0 28px rgba(252,211,77,.5)',
           }}/>
         )}
 
-        {/* Ocean caustic light rays */}
+        {/* Ocean: caustic light rays + bubbles */}
         {isOcean && (
-          <div className="absolute inset-0 pointer-events-none" style={{ opacity:.12 }}>
-            {[15,30,50,65,80].map((x,i) => (
-              <div key={i} style={{
-                position:'absolute', top:0, left:`${x}%`,
-                width:20, height:'100%',
-                background:'linear-gradient(to bottom, #4FC3F7, transparent)',
-                transform:`rotate(${(i-2)*5}deg)`, transformOrigin:'top center',
-              }}/>
-            ))}
-          </div>
-        )}
-
-        {/* Clouds (not in ocean or electric) */}
-        {!isOcean && !isElectric && (
           <>
-            <div className="absolute pointer-events-none" style={{ top:50,left:'8%', animation:'cloudDrift 9s ease-in-out infinite' }}>
-              <CloudShape color={isBlizzard ? 'rgba(200,210,230,.9)' : 'white'}/>
+            <div className="absolute inset-0 pointer-events-none" style={{ opacity:.14 }}>
+              {[12,28,46,62,78].map((x,i) => (
+                <div key={i} style={{
+                  position:'absolute', top:0, left:`${x}%`, width:22, height:'100%',
+                  background:'linear-gradient(to bottom,#38bdf8,transparent)',
+                  transform:`rotate(${(i-2)*6}deg)`, transformOrigin:'top center',
+                }}/>
+              ))}
             </div>
-            <div className="absolute pointer-events-none" style={{ top:88,left:'52%',transform:'scale(.6)', animation:'cloudDrift 13s ease-in-out 3s infinite' }}>
-              <CloudShape color={isBlizzard ? 'rgba(200,210,230,.9)' : 'white'}/>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({length:14},(_,i)=>(
+                <div key={i} style={{
+                  position:'absolute',
+                  left:`${(i*19+5)%90}%`, bottom:`${(i*11)%40}%`,
+                  width:5+i%7, height:5+i%7, borderRadius:'50%',
+                  border:'1.5px solid rgba(56,189,248,.4)',
+                  animation:`bubble ${2+i%3}s ${i*.4}s ease-out infinite`,
+                }}/>
+              ))}
             </div>
           </>
         )}
 
-        {/* Electric: storm clouds + lightning */}
-        {isElectric && (
+        {/* Jungle: canopy glow + fireflies */}
+        {isJungle && (
           <>
-            <div className="absolute pointer-events-none" style={{ top:20, left:'5%' }}>
-              <CloudShape color="rgba(100,50,160,.8)" scale={1.4}/>
+            <div className="absolute pointer-events-none" style={{ top:50, left:'6%', animation:'cloudDrift 11s ease-in-out infinite' }}>
+              <CloudShape color="rgba(34,197,94,.35)"/>
             </div>
-            <div className="absolute pointer-events-none" style={{ top:10, left:'50%' }}>
-              <CloudShape color="rgba(80,30,140,.9)" scale={1.2}/>
+            <div className="absolute pointer-events-none" style={{ top:90, left:'55%', transform:'scale(.65)', animation:'cloudDrift 16s ease-in-out 4s infinite' }}>
+              <CloudShape color="rgba(34,197,94,.3)"/>
             </div>
-            {/* Lightning bolts */}
-            {[18, 45, 72].map((x, i) => (
-              <svg key={i} className="absolute pointer-events-none" style={{
-                top:30, left:`${x}%`,
-                animation:`lightning ${2+i*.7}s ${i*.5}s ease-in-out infinite`,
-              }} width="24" height="60" viewBox="0 0 24 60">
-                <path d="M14 0 L6 30 L12 30 L4 60" stroke="#E040FB" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M14 0 L6 30 L12 30 L4 60" stroke="#F3E5F5" strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity=".8"/>
-              </svg>
-            ))}
-          </>
-        )}
-
-        {/* Blizzard: snowflakes */}
-        {isBlizzard && (
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {Array.from({length:20},(_,i)=>(
-              <div key={i} style={{
-                position:'absolute',
-                left:`${(i*17+7)%100}%`, top:`${(i*13)%30}%`,
-                fontSize:i%3===0?'14px':i%3===1?'10px':'8px',
-                opacity:.6,
-                animation:`snowfall ${3+i%4}s ${i*.3}s linear infinite`,
-              }}>❄</div>
-            ))}
-          </div>
-        )}
-
-        {/* Ocean: bubbles */}
-        {isOcean && (
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {Array.from({length:12},(_,i)=>(
-              <div key={i} style={{
-                position:'absolute',
-                left:`${(i*19+5)%90}%`, bottom:`${(i*13)%40}%`,
-                width:6+i%6, height:6+i%6,
-                borderRadius:'50%',
-                border:'1.5px solid rgba(100,200,255,.4)',
-                animation:`bubble ${2+i%3}s ${i*.4}s ease-out infinite`,
-              }}/>
-            ))}
-          </div>
-        )}
-
-        {/* Beach: palm trees */}
-        {isBeach && (
-          <>
-            <div className="absolute pointer-events-none" style={{ bottom:'32%', left:6 }}>
-              <PalmTree/>
-            </div>
-            <div className="absolute pointer-events-none" style={{ bottom:'32%', right:10, transform:'scale(.75) scaleX(-1)' }}>
-              <PalmTree/>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({length:12},(_,i)=>(
+                <div key={i} style={{
+                  position:'absolute',
+                  left:`${(i*23+8)%92}%`, top:`${(i*17+10)%60}%`,
+                  width:4, height:4, borderRadius:'50%',
+                  background:'#fef08a', opacity: .7,
+                  animation:`heroGlow ${1.5+i%2}s ${i*.4}s ease-in-out infinite`,
+                }}/>
+              ))}
             </div>
           </>
         )}
 
-        {/* Grassland: trees + fence */}
-        {current.habitat === 1 && (
+        {/* Savanna: dust + haze */}
+        {isSavanna && (
           <>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:6 }}>
-              <PineTree/>
+            <div className="absolute pointer-events-none" style={{ top:40, left:'5%', animation:'cloudDrift 12s ease-in-out infinite' }}>
+              <CloudShape color="rgba(251,191,36,.25)"/>
             </div>
-            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:10, transform:'scale(.74)' }}>
-              <PineTree/>
-            </div>
-            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
-              <WoodFence/>
+            <div className="absolute pointer-events-none" style={{ top:70, left:'60%', transform:'scale(.7)', animation:'cloudDrift 18s ease-in-out 5s infinite' }}>
+              <CloudShape color="rgba(234,88,12,.2)"/>
             </div>
           </>
         )}
 
-        {/* Ocean/blizzard/electric: ground decorations */}
+        {/* Mythical: stars + aurora */}
+        {isMythical && (
+          <>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({length:24},(_,i)=>(
+                <div key={i} style={{
+                  position:'absolute',
+                  left:`${(i*19+3)%98}%`, top:`${(i*13+2)%55}%`,
+                  width: i%4===0?4:i%3===0?3:2, height: i%4===0?4:i%3===0?3:2,
+                  borderRadius:'50%', background:'white', opacity:.8,
+                  animation:`heroGlow ${2+i%3}s ${i*.25}s ease-in-out infinite`,
+                }}/>
+              ))}
+            </div>
+            <div className="absolute inset-0 pointer-events-none" style={{ opacity:.08 }}>
+              {[0,1,2].map(i=>(
+                <div key={i} style={{
+                  position:'absolute', top:`${10+i*12}%`, left:0, right:0, height:18,
+                  background:`linear-gradient(to right, transparent, ${['#a78bfa','#67e8f9','#f9a8d4'][i]}, transparent)`,
+                  animation:`cloudDrift ${8+i*3}s ${i*2}s ease-in-out infinite`,
+                }}/>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Ocean: coral/seaweed on floor */}
         {isOcean && (
           <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
             <svg viewBox="0 0 400 30" width="100%" height="30" preserveAspectRatio="none">
               {[10,60,110,160,220,280,330,370].map((x,i)=>(
-                <ellipse key={i} cx={x} cy={10} rx={8+i%5} ry={10+i%8} fill={i%2===0?'#4DB6AC':'#80CBC4'} opacity=".7"/>
+                <ellipse key={i} cx={x} cy={10} rx={8+i%5} ry={10+i%8} fill={i%2===0?'#0e7490':'#155e75'} opacity=".8"/>
               ))}
             </svg>
           </div>
         )}
-        {isBlizzard && (
-          <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
-            <svg viewBox="0 0 400 24" width="100%" height="24" preserveAspectRatio="none">
-              {[0,1,2,3,4,5,6].map(i=>(
-                <polygon key={i} points={`${i*60},24 ${i*60+30},2 ${i*60+60},24`} fill="#E8EAF6"/>
-              ))}
-            </svg>
-          </div>
+
+        {/* Jungle: trees + vines */}
+        {isJungle && (
+          <>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}>
+              <JungleTree/>
+            </div>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.8) scaleX(-1)' }}>
+              <JungleTree/>
+            </div>
+            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
+              <TallGrass color="#15803d"/>
+            </div>
+          </>
         )}
-        {isElectric && (
+
+        {/* Savanna: acacia trees + tall grass */}
+        {isSavanna && (
+          <>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', left:4 }}>
+              <AcaciaTree/>
+            </div>
+            <div className="absolute pointer-events-none" style={{ bottom:'33%', right:6, transform:'scale(.78) scaleX(-1)' }}>
+              <AcaciaTree/>
+            </div>
+            <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'31%' }}>
+              <TallGrass color="#ca8a04"/>
+            </div>
+          </>
+        )}
+
+        {/* Mythical: jagged crystal spires */}
+        {isMythical && (
           <div className="absolute left-0 right-0 pointer-events-none" style={{ bottom:'29%' }}>
-            <svg viewBox="0 0 400 20" width="100%" height="20" preserveAspectRatio="none">
-              <path d="M0 20 L40 4 L80 18 L120 6 L160 20 L200 8 L240 18 L280 4 L320 16 L360 6 L400 20Z" fill="#7C4DFF"/>
+            <svg viewBox="0 0 400 28" width="100%" height="28" preserveAspectRatio="none">
+              <path d="M0 28 L30 6 L50 20 L80 2 L110 18 L140 8 L170 24 L200 4 L230 20 L260 10 L290 22 L320 6 L350 18 L380 8 L400 28Z" fill="#4c1d95" opacity=".9"/>
+              <path d="M0 28 L35 10 L55 22 L85 6 L115 20 L145 12 L175 26 L205 8 L235 22 L265 14 L295 24 L325 10 L355 20 L385 10 L400 28Z" fill="#5b21b6" opacity=".7"/>
             </svg>
           </div>
         )}
@@ -695,38 +691,47 @@ function CloudShape({ color = 'white', scale = 1 }: { color?: string; scale?: nu
   )
 }
 
-function PalmTree() {
+function JungleTree() {
   return (
-    <svg width="52" height="80" viewBox="0 0 52 80" fill="none">
-      <path d="M26 78 Q24 60 28 40 Q30 20 26 10" stroke="#6D4C41" strokeWidth="5" strokeLinecap="round" fill="none"/>
-      <path d="M26 12 Q10 4 4 14 Q14 18 26 20Z" fill="#2E7D32"/>
-      <path d="M26 12 Q42 4 48 14 Q38 18 26 20Z" fill="#388E3C"/>
-      <path d="M26 16 Q16 8 18 22 Q22 20 26 20Z" fill="#43A047"/>
-      <path d="M26 16 Q36 8 34 22 Q30 20 26 20Z" fill="#43A047"/>
-      <path d="M26 18 Q26 6 30 4 Q32 12 26 20Z" fill="#2E7D32"/>
-      <ellipse cx="26" cy="78" rx="6" ry="2" fill="#5D4037"/>
+    <svg width="54" height="84" viewBox="0 0 54 84" fill="none">
+      {/* trunk */}
+      <path d="M27 82 Q25 62 28 44 Q30 24 27 12" stroke="#78350f" strokeWidth="6" strokeLinecap="round" fill="none"/>
+      {/* layered canopy */}
+      <ellipse cx="27" cy="22" rx="20" ry="14" fill="#166534"/>
+      <ellipse cx="27" cy="14" rx="14" ry="11" fill="#15803d"/>
+      <ellipse cx="27" cy="8"  rx="9"  ry="8"  fill="#16a34a"/>
+      {/* vine */}
+      <path d="M36 30 Q42 44 38 58" stroke="#4ade80" strokeWidth="1.5" fill="none" opacity=".7"/>
     </svg>
   )
 }
 
-function PineTree() {
+function AcaciaTree() {
   return (
-    <svg width="46" height="74" viewBox="0 0 46 74" fill="none">
-      <polygon points="23,2 46,47 0,47" fill="#15803D"/>
-      <polygon points="23,18 44,58 2,58" fill="#16A34A" opacity=".8"/>
-      <rect x="19" y="58" width="8" height="14" fill="#92400E" rx="1"/>
+    <svg width="56" height="78" viewBox="0 0 56 78" fill="none">
+      {/* trunk with slight bend */}
+      <path d="M28 76 Q26 58 30 40 Q32 28 28 18" stroke="#92400e" strokeWidth="5.5" strokeLinecap="round" fill="none"/>
+      {/* flat-top canopy */}
+      <ellipse cx="28" cy="14" rx="24" ry="8" fill="#ca8a04"/>
+      <ellipse cx="28" cy="11" rx="22" ry="6" fill="#d97706"/>
+      <ellipse cx="16" cy="16" rx="12" ry="5" fill="#b45309"/>
+      <ellipse cx="40" cy="16" rx="12" ry="5" fill="#b45309"/>
     </svg>
   )
 }
 
-function WoodFence() {
+function TallGrass({ color }: { color: string }) {
   return (
-    <svg viewBox="0 0 400 44" width="100%" height="44" preserveAspectRatio="none">
-      <rect x="0" y="8"  width="400" height="5" fill="#92400E" rx="1"/>
-      <rect x="0" y="24" width="400" height="5" fill="#92400E" rx="1"/>
-      {[0,1,2,3,4,5,6,7,8,9].map(i=>(
-        <rect key={i} x={i*44+10} y="2" width="10" height="38" fill="#78350F" rx="2"/>
-      ))}
+    <svg viewBox="0 0 400 32" width="100%" height="32" preserveAspectRatio="none">
+      {Array.from({length:28},(_,i)=>{
+        const x = i*15+4
+        return (
+          <g key={i}>
+            <path d={`M${x} 32 Q${x-4} ${14+i%6} ${x} ${6+i%8}`} stroke={color} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity=".8"/>
+            <path d={`M${x+6} 32 Q${x+10} ${16+i%5} ${x+6} ${8+i%7}`} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6"/>
+          </g>
+        )
+      })}
     </svg>
   )
 }
