@@ -2,7 +2,11 @@ import Groq from 'groq-sdk'
 import type { SelectableCategory } from '@/lib/budget/groq-categorize'
 import type { CategorizeInput, GroqResult } from './types'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+let _groq: Groq | null = null
+function getGroqClient(): Groq {
+  if (!_groq) _groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+  return _groq
+}
 
 // 8b-instant has a much higher free-tier daily token limit than 70b-versatile.
 const CATEGORIZE_MODEL = process.env.GROQ_CATEGORIZE_MODEL ?? 'llama-3.1-8b-instant'
@@ -53,7 +57,7 @@ async function categorizeChunk(
   categories: SelectableCategory[],
   out: Map<number, GroqResult>,
 ): Promise<void> {
-  const res = await groq.chat.completions.create({
+  const res = await getGroqClient().chat.completions.create({
     model: CATEGORIZE_MODEL,
     messages: [{ role: 'user', content: buildPrompt(rows, categories) }],
     temperature: 0,
