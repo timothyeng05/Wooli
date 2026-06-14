@@ -9,6 +9,17 @@
 
 **Don't:** Start a feature without checking the backlog. Ask before scope-creeping.
 
+### Standup Agent Pipeline
+
+At every standup, spin up four agents in this order:
+
+1. **PM Agent** — reads backlog, proposes today's focus, writes a spec to `/tmp/standup-spec.md`
+2. **Designer Agent** — reads the spec, proposes UI/UX approach and component structure
+3. **Engineer Agent** — implements based on designer output, runs `npx tsc --noEmit`
+4. **QA Agent** — reviews engineer's work against the spec, fixes real bugs, runs `npx tsc --noEmit`
+
+Run each agent sequentially (foreground). Do not start the next agent until the previous one completes.
+
 ---
 
 ## Module focus (context efficiency)
