@@ -5,18 +5,24 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
+import MonthNav from '@/app/components/budget/MonthNav'
 import { PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
 
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ owner?: string; type?: string }>
+  searchParams: Promise<{ owner?: string; type?: string; year?: string; month?: string }>
 }) {
   const params = await searchParams
   const initialOwner = params.owner
   const rawType = params.type
   const initialType: 'income' | 'expense' | undefined =
     rawType === 'income' ? 'income' : rawType === 'expense' ? 'expense' : undefined
+
+  const now = new Date()
+  const year = parseInt(params.year ?? '') || now.getFullYear()
+  const monthParam = parseInt(params.month ?? '')
+  const resolvedMonth = isNaN(monthParam) ? now.getMonth() : monthParam
 
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -52,9 +58,12 @@ export default async function TransactionsPage({
     }
   }
 
+  const monthStart = new Date(year, resolvedMonth, 1).toISOString()
+  const monthEnd   = new Date(year, resolvedMonth + 1, 0, 23, 59, 59).toISOString()
+
   // All independent reads run concurrently — transactions overlap with the
   // smaller metadata queries instead of blocking them serially.
-  const fetchAllTransactions = async () => {
+  const fetchMonthTransactions = async () => {
     // Supabase caps each request at 1000 rows, so paginate.
     const PAGE = 1000
     let all: any[] = []
@@ -68,6 +77,8 @@ export default async function TransactionsPage({
           trips ( id, name )
         `)
         .eq('user_id', user.id)
+        .gte('transacted_at', monthStart)
+        .lte('transacted_at', monthEnd)
         .order('transacted_at', { ascending: false })
         .range(page * PAGE, (page + 1) * PAGE - 1) as any
       if (!data || data.length === 0) break
@@ -78,7 +89,7 @@ export default async function TransactionsPage({
   }
 
   const [transactions, plaidResult, catResult, tripResult, memberResult] = await Promise.all([
-    fetchAllTransactions(),
+    fetchMonthTransactions(),
     supabase
       .from('plaid_accounts')
       .select('updated_at')
@@ -113,18 +124,34 @@ export default async function TransactionsPage({
   return (
     <div className="min-h-screen bg-white">
       <div className="sticky top-[53px] z-30 bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 gap-3">
-          <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
-          <div className="flex items-center gap-2">
-            {PLAID_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
-            <Link
-              href="/budget/new"
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
-            >
-              <span className="text-lg leading-none">+</span>
-              <span className="hidden sm:inline">Add</span>
-            </Link>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 sm:py-0">
+
+          {/* Single row on sm+, two rows on mobile */}
+          <div className="flex items-center justify-between sm:h-14 gap-3">
+            <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
+
+            {/* MonthNav: hidden on mobile (shown in row 2 below) */}
+            <div className="hidden sm:flex flex-1 justify-center">
+              <MonthNav year={year} month={resolvedMonth} />
+            </div>
+
+            <div className="flex items-center gap-2">
+              {PLAID_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
+              <Link
+                href="/budget/new"
+                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span className="hidden sm:inline">Add</span>
+              </Link>
+            </div>
           </div>
+
+          {/* MonthNav row — mobile only, sits below title row */}
+          <div className="flex justify-center pb-2 sm:hidden">
+            <MonthNav year={year} month={resolvedMonth} />
+          </div>
+
         </div>
       </div>
 
