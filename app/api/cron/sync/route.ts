@@ -114,6 +114,38 @@ async function syncUserTransactions(supabase: Admin, userId: string, items: Plai
   return { added, modified, removed }
 }
 
+// Generate any due recurring transactions for one user and advance their next_date.
+async function generateRecurringForUser(supabase: Admin, userId: string) {
+  const today = new Date().toISOString().split('T')[0]
+  const { data: dueRecurring } = await supabase
+    .from('recurring_transactions')
+    .select('id, amount, description, merchant, category_id, next_date, frequency, day_of_month')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .lte('next_date', today)
+
+  if (!dueRecurring?.length) return
+
+  for (const item of dueRecurring) {
+    await supabase.from('transactions').insert({
+      user_id:       userId,
+      amount:        item.amount,
+      description:   item.description,
+      merchant:      item.merchant,
+      category_id:   item.category_id,
+      transacted_at: item.next_date + 'T12:00:00',
+    })
+    const d = new Date(item.next_date + 'T00:00:00')
+    if      (item.frequency === 'monthly')  { d.setMonth(d.getMonth() + 1); d.setDate(item.day_of_month ?? 1) }
+    else if (item.frequency === 'biweekly') d.setDate(d.getDate() + 14)
+    else if (item.frequency === 'weekly')   d.setDate(d.getDate() + 7)
+    else if (item.frequency === 'yearly')   d.setFullYear(d.getFullYear() + 1)
+    await supabase.from('recurring_transactions')
+      .update({ next_date: d.toISOString().split('T')[0], last_generated_date: item.next_date })
+      .eq('id', item.id)
+  }
+}
+
 // Refresh current/available balances for one user's Plaid accounts.
 async function refreshUserBalances(supabase: Admin, items: PlaidItem[]) {
   for (const item of items) {
@@ -143,13 +175,26 @@ export async function GET(request: Request) {
     .from('plaid_items')
     .select('item_id, access_token, cursor, user_id')
 
-  if (!allItems?.length) return NextResponse.json({ ok: true, users: 0 })
-
-  // Group items by user
-  const byUser = new Map<string, typeof allItems>()
-  for (const item of allItems) {
+  // Group items by user (may be empty if Plaid is not connected)
+  const byUser = new Map<string, PlaidItem[]>()
+  for (const item of (allItems ?? [])) {
     if (!byUser.has(item.user_id)) byUser.set(item.user_id, [])
     byUser.get(item.user_id)!.push(item)
+  }
+
+  // If no Plaid items exist, still run recurring generation for all active users.
+  // Query distinct user_ids from recurring_transactions where is_active = true.
+  if (!byUser.size) {
+    const { data: recurringUsers } = await supabase
+      .from('recurring_transactions')
+      .select('user_id')
+      .eq('is_active', true)
+      .lte('next_date', today)
+    const userIds = [...new Set((recurringUsers ?? []).map(r => r.user_id))]
+    for (const userId of userIds) {
+      await generateRecurringForUser(supabase, userId)
+    }
+    return NextResponse.json({ ok: true, users: userIds.length })
   }
 
   const summary: Record<string, { added: number; modified: number; removed: number }> = {}
@@ -168,7 +213,10 @@ export async function GET(request: Request) {
       await refreshUserBalances(supabase, items)
     }
 
-    // ── 3. Snapshot net worth ─────────────────────────────────────────────────
+    // ── 3. Generate due recurring transactions ────────────────────────────────
+    await generateRecurringForUser(supabase, userId)
+
+    // ── 4. Snapshot net worth ─────────────────────────────────────────────────
 
     const [{ data: manualAccounts }, { data: plaidAccounts }] = await Promise.all([
       supabase.from('accounts').select('current_balance, is_asset').eq('user_id', userId).eq('is_active', true),

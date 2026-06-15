@@ -71,7 +71,7 @@ export default async function GoalsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-16">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 pb-16">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Goals</h1>
         <GoalsPageClient
           goals={(goals ?? []) as Goal[]}

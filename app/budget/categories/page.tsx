@@ -17,7 +17,7 @@ export default async function CategoriesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto px-4 pt-6 pb-16">
+      <div className="max-w-2xl mx-auto px-4 pt-8 pb-16">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Categories</h1>
 
         {needsMigration ? (
