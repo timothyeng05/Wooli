@@ -116,20 +116,18 @@ export function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMov
               )}
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <button onClick={onDelete} className="text-xs font-medium text-red-400 hover:text-red-600 transition">
-              Delete
+          <div className="flex items-center gap-2">
+            <button onClick={onDone} className="flex-1 bg-blue-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-blue-700 transition">
+              Save
             </button>
-            <div className="flex items-center gap-3">
-              {onCancel && (
-                <button onClick={onCancel} className="text-xs font-medium text-gray-400 hover:text-gray-600 transition">
-                  Cancel
-                </button>
-              )}
-              <button onClick={onDone} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">
-                Save
+            {onCancel && (
+              <button onClick={onCancel} className="text-sm font-medium text-gray-500 px-3 py-2 rounded-lg hover:bg-gray-100 transition">
+                Cancel
               </button>
-            </div>
+            )}
+            <button onClick={onDelete} title="Delete" className="text-gray-300 hover:text-red-500 px-2.5 py-2 rounded-lg hover:bg-red-50 transition">
+              🗑
+            </button>
           </div>
         </div>
       )}

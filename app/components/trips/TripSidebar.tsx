@@ -2,9 +2,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
-  DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent,
-} from '@dnd-kit/core'
-import {
   SortableContext, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -18,10 +15,10 @@ function fmt(date: string, opts?: Intl.DateTimeFormatOptions) {
   return new Date(date + 'T00:00:00').toLocaleDateString('en-US', opts ?? { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function DayItem({ date, index, activeDate, todayLocal, title, tripId }: {
-  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; tripId: string
+function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver }: {
+  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; tripId: string; cardOver: boolean
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: date })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: date, data: { type: 'day' } })
   const isActive = date === activeDate
   const isToday = date === todayLocal
   return (
@@ -29,7 +26,7 @@ function DayItem({ date, index, activeDate, todayLocal, title, tripId }: {
       ref={setNodeRef}
       data-day={date}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center ${isDragging ? 'opacity-60' : ''} ${isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
+      className={`flex items-center ${isDragging ? 'opacity-60' : ''} ${cardOver ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
     >
       <button {...attributes} {...listeners} title="Drag to swap days"
         className={`px-2 py-3 cursor-grab active:cursor-grabbing flex-shrink-0 ${isActive ? 'text-blue-200' : 'text-gray-300 hover:text-gray-500'}`}>⠿</button>
@@ -46,18 +43,18 @@ function DayItem({ date, index, activeDate, todayLocal, title, tripId }: {
 
 export default function TripSidebar({
   tripId, tripName, startDate, endDate, allDates, days, activeDate, todayLocal, shareUrl,
-  onSwapDays, hotelCount, ateCount, activePanel, onOpenPanel,
+  hotelCount, ateCount, activePanel, onOpenPanel, dragType, overDate,
 }: {
   tripId: string; tripName: string; startDate: string; endDate: string
   allDates: string[]; days: DayRow[]
   activeDate: string; todayLocal: string; shareUrl: string
-  onSwapDays: (a: string, b: string) => void
   hotelCount: number; ateCount: number
   activePanel: SidePanel
   onOpenPanel: (p: SidePanel) => void
+  dragType: 'day' | 'card' | null
+  overDate: string | null
 }) {
   const titleMap = useMemo(() => new Map(days.map(d => [d.date, d.title])), [days])
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -96,10 +93,6 @@ export default function TripSidebar({
     const next = new Set(prev); next.has(gi) ? next.delete(gi) : next.add(gi); return next
   })
 
-  const onDragEnd = (e: DragEndEvent) => {
-    if (e.over && e.active.id !== e.over.id) onSwapDays(String(e.active.id), String(e.over.id))
-  }
-
   const summaryCard = (key: 'hotels' | 'ate', icon: string, title: string, count: number) => (
     <button
       onClick={() => onOpenPanel(activePanel === key ? null : key)}
@@ -137,33 +130,32 @@ export default function TripSidebar({
 
       {/* Days (legs-grouped & collapsible, drag to swap) */}
       <div className="flex-1 overflow-y-auto" ref={scrollRef}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={visibleDates} strategy={verticalListSortingStrategy}>
-            {groups.map((g, gi) => {
-              const c = LEG_COLORS[gi % LEG_COLORS.length]
-              const isCollapsed = collapsed.has(gi)
-              return (
-                <div key={gi}>
-                  {g.leg && (
-                    <button
-                      onClick={() => toggleLeg(gi)}
-                      className={`w-full flex items-center gap-2 px-4 py-1.5 ${c.bg} border-y ${c.border} sticky top-0 z-10`}
-                    >
-                      <span className={`text-gray-400 text-[10px] transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▼</span>
-                      <span className="text-sm">{g.leg.emoji}</span>
-                      <span className={`text-xs font-bold ${c.text}`}>{g.leg.name}</span>
-                      <span className="text-[10px] text-gray-400 ml-auto">{g.dates.length}d</span>
-                    </button>
-                  )}
-                  {!isCollapsed && g.dates.map(date => (
-                    <DayItem key={date} date={date} index={allDates.indexOf(date)} activeDate={activeDate}
-                      todayLocal={todayLocal} title={titleMap.get(date) ?? null} tripId={tripId} />
-                  ))}
-                </div>
-              )
-            })}
-          </SortableContext>
-        </DndContext>
+        <SortableContext items={visibleDates} strategy={verticalListSortingStrategy}>
+          {groups.map((g, gi) => {
+            const c = LEG_COLORS[gi % LEG_COLORS.length]
+            const isCollapsed = collapsed.has(gi)
+            return (
+              <div key={gi}>
+                {g.leg && (
+                  <button
+                    onClick={() => toggleLeg(gi)}
+                    className={`w-full flex items-center gap-2 px-4 py-1.5 ${c.bg} border-y ${c.border} sticky top-0 z-10`}
+                  >
+                    <span className={`text-gray-400 text-[10px] transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▼</span>
+                    <span className="text-sm">{g.leg.emoji}</span>
+                    <span className={`text-xs font-bold ${c.text}`}>{g.leg.name}</span>
+                    <span className="text-[10px] text-gray-400 ml-auto">{g.dates.length}d</span>
+                  </button>
+                )}
+                {!isCollapsed && g.dates.map(date => (
+                  <DayItem key={date} date={date} index={allDates.indexOf(date)} activeDate={activeDate}
+                    todayLocal={todayLocal} title={titleMap.get(date) ?? null} tripId={tripId}
+                    cardOver={dragType === 'card' && overDate === date} />
+                ))}
+              </div>
+            )
+          })}
+        </SortableContext>
       </div>
     </aside>
   )

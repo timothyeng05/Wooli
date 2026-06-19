@@ -32,7 +32,7 @@ export const SECTIONS: SectionMeta[] = [
   { key: ['DINNER', 'DINNER OPTIONS'],                  time: '7 PM',   icon: '🍽️', label: 'Dinner',    bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
   // New canonical types — the only four offered going forward
   { key: ['TRANSIT'],                                   time: 'Transit',icon: '🚆', label: 'Transit',   bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true },
-  { key: ['ACTIVITY'],                                  time: '',       icon: '📍', label: 'Activity',  bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  dotColor: '#94a3b8' },
+  { key: ['ACTIVITY'],                                  time: '',       icon: '🎯', label: 'Activity',  bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  dotColor: '#94a3b8' },
   { key: ['MEAL'],                                      time: '',       icon: '🍴', label: 'Meal',      bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
   { key: ['HOTEL'],                                     time: 'Stay',   icon: '🏨', label: 'Hotel',     bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dotColor: '#7c3aed', hotel: true },
 ]

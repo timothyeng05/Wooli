@@ -59,7 +59,6 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
   rating?: number
   skipped?: boolean
 }) {
-  const hasLocation = !!parseCoords(coords)
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   const t = type?.toUpperCase() ?? ''
   const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
@@ -105,7 +104,6 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
           )}
           {duration && <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>}
         </div>
-        {hasLocation && <span className="text-xs flex-shrink-0" title="Location pinned">📍</span>}
         {rating != null && (
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>{rating}/10</span>
         )}

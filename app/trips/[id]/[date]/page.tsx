@@ -1,8 +1,12 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import {
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, closestCenter,
+  type DragStartEvent, type DragOverEvent, type DragEndEvent,
+} from '@dnd-kit/core'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
 import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords } from '@/lib/trips/trip-utils'
 import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/app/components/trips/SectionCards'
@@ -35,6 +39,18 @@ async function generateMissingTitles(items: EditorSection[]): Promise<EditorSect
     const titleMap = new Map(candidates.map((c, i) => [c._id, titles[i] || undefined]))
     return items.map(item => titleMap.has(item._id) ? { ...item, title: titleMap.get(item._id) } : item)
   } catch { return items }
+}
+
+// A timeline card you can drag (by its grip) onto another day in the sidebar.
+function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, data: { type: 'card' } })
+  return (
+    <div ref={setNodeRef} className={`flex items-stretch gap-1 ${isDragging ? 'opacity-50' : ''}`}>
+      <button {...attributes} {...listeners} title="Drag to another day"
+        className="px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex items-center flex-shrink-0">⠿</button>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  )
 }
 
 export default function TripDayPage() {
@@ -319,6 +335,27 @@ export default function TripDayPage() {
     await save(withTitles) // save() clears editingId
   }
 
+  // Drag-and-drop: swap days, or drop a section card onto another day.
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const [dragType, setDragType] = useState<'day' | 'card' | null>(null)
+  const [overDate, setOverDate] = useState<string | null>(null)
+  const onDragStart = (e: DragStartEvent) => setDragType((e.active.data.current?.type as 'day' | 'card') ?? null)
+  const onDragOver = (e: DragOverEvent) => {
+    if (e.active.data.current?.type === 'card') {
+      setOverDate(e.over?.data.current?.type === 'day' ? String(e.over.id) : null)
+    }
+  }
+  const onDragEnd = async (e: DragEndEvent) => {
+    const t = e.active.data.current?.type
+    const overType = e.over?.data.current?.type
+    setDragType(null); setOverDate(null)
+    if (t === 'day' && overType === 'day' && e.over && e.active.id !== e.over.id) {
+      await swapDays(String(e.active.id), String(e.over.id))
+    } else if (t === 'card' && overType === 'day' && e.over && String(e.over.id) !== params.date) {
+      await handleMoveToDay(String(e.active.id), String(e.over.id), sectionItems)
+    }
+  }
+
   // Hotels covering the current day, with a check-in/check-out badge on boundaries.
   const dayHotels = useMemo(() => {
     return hotels
@@ -398,6 +435,7 @@ export default function TripDayPage() {
   })()
 
   return (
+   <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDragType(null); setOverDate(null) }}>
     <div className="min-h-screen bg-white flex">
 
       {/* Sidebar */}
@@ -412,16 +450,17 @@ export default function TripDayPage() {
           activeDate={params.date}
           todayLocal={todayLocal}
           shareUrl={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/share/${params.id}`}
-          onSwapDays={swapDays}
           hotelCount={hotels.length}
           ateCount={ate.length}
           activePanel={sidePanel}
           onOpenPanel={setSidePanel}
+          dragType={dragType}
+          overDate={overDate}
         />
       )}
 
       {/* Main content */}
-      <div className="flex-1 lg:ml-72">
+      <div className={`flex-1 lg:ml-72 transition-[margin] duration-300 ${editingId ? 'lg:mr-[460px]' : ''}`}>
 
         {/* Sticky header */}
         <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
@@ -517,10 +556,12 @@ export default function TripDayPage() {
                           )}
                         </div>
                         <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-2'}`}>
-                          {(s.meta.hotel || s.meta.car)
-                            ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} onOpen={() => startEdit(item._id)} />
-                          }
+                          <DraggableCard id={item._id}>
+                            {(s.meta.hotel || s.meta.car)
+                              ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
+                              : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} onOpen={() => startEdit(item._id)} />
+                            }
+                          </DraggableCard>
                         </div>
                       </div>
                       {i < sectionItems.length - 1 && (
@@ -549,21 +590,12 @@ export default function TripDayPage() {
           {showAddPicker
             ? <AddSectionPicker onAdd={type => { addSection(type); setShowAddPicker(false) }} onCancel={() => setShowAddPicker(false)} />
             : (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddPicker(true)}
-                  className="flex-1 border border-dashed border-gray-200 rounded-xl py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition"
-                >
-                  + Add section
-                </button>
-                <button
-                  onClick={syncCalendar}
-                  disabled={saving}
-                  className="px-4 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50 transition disabled:opacity-50"
-                >
-                  Sync from Google
-                </button>
-              </div>
+              <button
+                onClick={() => setShowAddPicker(true)}
+                className="w-full border border-dashed border-gray-200 rounded-xl py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition"
+              >
+                + Add section
+              </button>
             )
           }
 
@@ -639,5 +671,6 @@ export default function TripDayPage() {
         })()}
       </EditPanel>
     </div>
+   </DndContext>
   )
 }

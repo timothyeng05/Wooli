@@ -10,9 +10,9 @@ export default function EditPanel({ open, onClose, title, children }: {
 }) {
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — only on mobile (desktop stays non-modal so other cards remain clickable) */}
       <div
-        className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-black/30 z-40 lg:hidden transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
       {/* Panel */}
