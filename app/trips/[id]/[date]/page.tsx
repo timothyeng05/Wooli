@@ -44,6 +44,7 @@ export default function TripDayPage() {
   const [sectionItems, setSectionItems] = useState<EditorSection[]>([])
   const [hotels, setHotels] = useState<TripHotel[]>([])
   const [userId, setUserId] = useState<string>('')
+  const [sidebarTab, setSidebarTab] = useState<'days' | 'hotels'>('days')
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -355,18 +356,36 @@ export default function TripDayPage() {
           </Link>
           <p className="text-xs text-gray-400 mt-0.5">{allDates.length} days</p>
         </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 px-3 pt-2 gap-1">
+          <button
+            onClick={() => setSidebarTab('days')}
+            className={`flex-1 text-sm font-semibold py-1.5 rounded-t-lg transition ${sidebarTab === 'days' ? 'bg-white text-blue-600 border border-gray-200 border-b-white -mb-px' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Days
+          </button>
+          <button
+            onClick={() => setSidebarTab('hotels')}
+            className={`flex-1 text-sm font-semibold py-1.5 rounded-t-lg transition ${sidebarTab === 'hotels' ? 'bg-white text-blue-600 border border-gray-200 border-b-white -mb-px' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            🏨 Hotels{hotels.length > 0 ? ` (${hotels.length})` : ''}
+          </button>
+        </div>
+
         <nav className="flex-1 overflow-y-auto py-1">
-          {trip && userId && (
-            <TripHotels
-              tripId={params.id}
-              userId={userId}
-              hotels={hotels}
-              defaultStart={trip.start_date}
-              defaultEnd={trip.end_date}
-              onChange={reloadHotels}
-            />
-          )}
-          {allDates.map((date, i) => {
+          {sidebarTab === 'hotels' ? (
+            trip && userId && (
+              <TripHotels
+                tripId={params.id}
+                userId={userId}
+                hotels={hotels}
+                defaultStart={trip.start_date}
+                defaultEnd={trip.end_date}
+                onChange={reloadHotels}
+              />
+            )
+          ) : allDates.map((date, i) => {
             const isActive = date === params.date
             const isToday = date === todayLocal
             const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
