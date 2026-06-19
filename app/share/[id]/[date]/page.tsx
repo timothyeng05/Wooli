@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { parseSectionsFromNotes, SectionMeta } from '@/lib/trips/trip-sections'
+import { notesToSectionData, findMeta, SectionMeta } from '@/lib/trips/trip-sections'
 
 function serviceClient() {
   return createClient(
@@ -38,20 +38,22 @@ function LocationCard({ meta, lines }: { meta: SectionMeta; lines: string[] }) {
   )
 }
 
-function SectionCard({ meta, lines }: { meta: SectionMeta; lines: string[] }) {
+function SectionCard({ meta, lines, title, place }: { meta: SectionMeta; lines: string[]; title?: string; place?: string }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   let duration: string | null = null
   let content = allContent
-  if (meta.travel) {
-    const dl = allContent.find(l => l.startsWith('~'))
-    if (dl) { duration = dl.slice(1).trim(); content = allContent.filter(l => !l.startsWith('~')) }
-  }
-  if (!content.length && !duration) return null
+  const dl = allContent.find(l => l.startsWith('~'))
+  if (dl) { duration = dl.slice(1).trim(); content = allContent.filter(l => !l.startsWith('~')) }
+
+  const headerText = title || content.find(l => !l.startsWith('-')) || meta.label
+  const body = title ? content : content.filter(l => l !== headerText)
+
+  if (!body.length && !duration && !place) return null
   return (
     <div className={`rounded-xl border p-4 ${meta.bg} ${meta.border}`}>
       <div className="flex items-center justify-between mb-2">
         <div className={`flex items-center gap-2 font-semibold text-sm ${meta.text}`}>
-          <span>{meta.icon}</span><span>{meta.label}</span>
+          <span>{meta.icon}</span><span>{headerText}</span>
         </div>
         {duration && (
           <span className="text-xs font-semibold bg-teal-100 text-teal-700 rounded-full px-2.5 py-1 flex items-center gap-1">
@@ -59,18 +61,21 @@ function SectionCard({ meta, lines }: { meta: SectionMeta; lines: string[] }) {
           </span>
         )}
       </div>
-      <ul className="space-y-1.5">
-        {content.map((line, i) => {
-          const isBullet = line.startsWith('-')
-          const text = isBullet ? line.slice(1).trim() : line
-          return (
-            <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
-              {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
-              <span>{text}</span>
-            </li>
-          )
-        })}
-      </ul>
+      {place && <p className="text-sm text-gray-500 mb-1.5 flex items-center gap-1"><span className="text-xs">📍</span>{place}</p>}
+      {body.length > 0 && (
+        <ul className="space-y-1.5">
+          {body.map((line, i) => {
+            const isBullet = line.startsWith('-')
+            const text = isBullet ? line.slice(1).trim() : line
+            return (
+              <li key={i} className={`text-sm text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
+                {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
+                <span>{text}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
@@ -98,7 +103,9 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   })
 
-  const sections = parseSectionsFromNotes(dayData?.notes ?? null)
+  const sections = notesToSectionData(dayData?.notes ?? null)
+    .map(s => ({ ...s, meta: findMeta(s.type) }))
+    .filter((s): s is typeof s & { meta: SectionMeta } => !!s.meta)
 
   return (
     <div className="min-h-screen bg-white">
@@ -143,7 +150,7 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
               return (
                 <div key={i} className="flex gap-3">
                   <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3.5">
-                    <span className="text-xs font-semibold text-gray-400 leading-none">{s.meta.time}</span>
+                    <span className="text-xs font-semibold text-gray-400 leading-none">{s.timeOverride || s.meta.time}</span>
                   </div>
                   <div className="flex flex-col items-center flex-shrink-0">
                     <div className="w-3 h-3 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: s.meta.dotColor }} />
@@ -159,7 +166,7 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
                   <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
                     {(s.meta.hotel || s.meta.car)
                       ? <LocationCard meta={s.meta} lines={s.lines} />
-                      : <SectionCard meta={s.meta} lines={s.lines} />
+                      : <SectionCard meta={s.meta} lines={s.lines} title={s.title} place={s.place} />
                     }
                   </div>
                 </div>

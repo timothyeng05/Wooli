@@ -46,6 +46,7 @@ export type SectionData = {
   coords?: string
   title?: string
   rating?: number
+  place?: string
 }
 
 export type ParsedSection = {

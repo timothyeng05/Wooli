@@ -1,8 +1,7 @@
-// TODO: Update to new middleware convention in Next.js 17+
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -32,10 +31,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Non-owner users can only access /budget and /trips
+  // Non-owner users can only access /budget, /trips, /api/trips, and /api/budget
   const isOwner = user?.email === 'woolitravel@gmail.com'
   const path = request.nextUrl.pathname
-  if (user && !isOwner && path !== '/' && !path.startsWith('/budget') && !path.startsWith('/trips')) {
+  if (user && !isOwner && path !== '/' &&
+      !path.startsWith('/budget') &&
+      !path.startsWith('/trips') &&
+      !path.startsWith('/api/trips') &&
+      !path.startsWith('/api/budget')) {
     return NextResponse.redirect(new URL('/budget', request.url))
   }
 
@@ -46,5 +49,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/budget/:path*', '/trips/:path*', '/period/:path*']
+  matcher: ['/', '/budget/:path*', '/trips/:path*', '/period/:path*', '/api/:path*']
 }

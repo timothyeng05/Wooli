@@ -268,6 +268,35 @@ export default function TripDayPage() {
     return locs
   }, [sectionItems])
 
+  const syncCalendar = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/trips/sync-calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: params.date }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        alert(data.error)
+        return
+      }
+      if (data.sections && data.sections.length > 0) {
+        const newItems = data.sections.map((s: any) => ({ ...s, _id: newId() }))
+        const updated = [...sectionItems, ...newItems]
+        setSectionItems(updated)
+        await save(updated)
+      } else {
+        alert('No events found for this day in Google Calendar.')
+      }
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const dayNumber = trip
     ? Math.round((new Date(params.date + 'T00:00:00').getTime() - new Date(trip.start_date + 'T00:00:00').getTime()) / 86400000) + 1
     : null
@@ -445,7 +474,7 @@ export default function TripDayPage() {
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} rating={item.rating} skipped={item.skipped} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} rating={item.rating} skipped={item.skipped} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
                           }
                         </div>
                       </div>
@@ -474,12 +503,23 @@ export default function TripDayPage() {
           {/* Add section */}
           {showAddPicker
             ? <AddSectionPicker onAdd={type => { addSection(type); setShowAddPicker(false) }} onCancel={() => setShowAddPicker(false)} />
-            : <button
-                onClick={() => setShowAddPicker(true)}
-                className="w-full border border-dashed border-gray-200 rounded-xl py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition"
-              >
-                + Add section
-              </button>
+            : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddPicker(true)}
+                  className="flex-1 border border-dashed border-gray-200 rounded-xl py-3 text-sm text-gray-400 hover:text-blue-500 hover:border-blue-300 transition"
+                >
+                  + Add section
+                </button>
+                <button
+                  onClick={syncCalendar}
+                  disabled={saving}
+                  className="px-4 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50 transition disabled:opacity-50"
+                >
+                  Sync from Google
+                </button>
+              </div>
+            )
           }
 
         </div>

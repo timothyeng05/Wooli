@@ -62,7 +62,32 @@
       "Bash(vercel env *)",
       "mcp__plugin_supabase_supabase__execute_sql",
       "mcp__plugin_supabase_supabase__get_publishable_keys",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "mcp__plugin_supabase_supabase__list_projects",
+      "Bash(echo \"EXIT:$?\")",
+      "Read(//Users/timothyeng/Downloads/**)",
+      "Bash(python3 -)",
+      "Bash(npx vitest *)",
+      "Bash(sed -n '775,785p' app/components/budget/CashFlowClient.tsx)",
+      "Bash(sed -n '348,356p' app/components/budget/OnboardingWizard.tsx)",
+      "Read(//Users/timothyeng/Documents/Wooli/**)",
+      "Bash(npx -v)",
+      "Bash(xcodebuild -version)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"branch: $\\(git -C /Users/timothyeng/Desktop/Wooli branch --show-current 2>&1\\)\")",
+      "Bash(echo \"branch: $\\(git -C /Users/timothyeng/Documents/Wooli branch --show-current 2>&1\\)\")",
+      "Read(//Applications/**)",
+      "Bash(mdfind \"kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'\")",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Wooli.xcodeproj -scheme Wooli -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift /tmp/icongen.swift \"Wooli/Assets.xcassets/AppIcon.appiconset/AppIcon.png\")",
+      "Bash(sips -g pixelWidth -g pixelHeight Wooli/Assets.xcassets/AppIcon.appiconset/AppIcon.png)",
+      "Skill(run)",
+      "Bash(echo \"PID: $!\")"
+    ],
+    "deny": [
+      "Read(//Users/timothyeng/Desktop/Wooli/.env.local)",
+      "Read(//Users/timothyeng/Desktop/Wooli/.env*)",
+      "Read(.env*)"
     ]
   }
 }

@@ -97,13 +97,10 @@ export default function DayLocationMap({ locations }: { locations: LocationPoint
           fetched.push({ label: loc.label, lat: loc.coords.lat, lng: loc.coords.lng, color: loc.color })
           return Promise.resolve()
         }
-        return fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(loc.query)}&format=json&limit=1`,
-          { headers: { 'Accept-Language': 'en' } }
-        )
+        return fetch(`/api/trips/geocode?q=${encodeURIComponent(loc.query)}`)
           .then(r => r.json())
           .then(data => {
-            if (data[0]) fetched.push({ label: loc.label, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), color: loc.color })
+            if (data.lat != null && data.lng != null) fetched.push({ label: loc.label, lat: data.lat, lng: data.lng, color: loc.color })
           })
           .catch(() => {})
       })

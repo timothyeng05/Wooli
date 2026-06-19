@@ -4,10 +4,10 @@ import DayLocationMap, { type LocationPoint } from './DayLocationMapClient'
 import type { SectionMeta } from '@/lib/trips/trip-sections'
 import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES } from '@/lib/trips/trip-utils'
 
-export function SectionCard({ meta, lines, onEdit, title, type, expanded, onToggleExpand, rating, skipped }: {
+export function SectionCard({ meta, lines, onEdit, title, type, place, expanded, onToggleExpand, rating, skipped }: {
   meta: SectionMeta; lines: string[]
   onEdit?: () => void
-  title?: string; type?: string
+  title?: string; type?: string; place?: string
   expanded: boolean; onToggleExpand: () => void
   rating?: number
   skipped?: boolean
@@ -24,9 +24,11 @@ export function SectionCard({ meta, lines, onEdit, title, type, expanded, onTogg
     content = allContent.filter(l => !l.startsWith('~'))
   }
 
+  // When an explicit title is set (e.g. from Mac app), use all lines as body.
+  // Otherwise extract the first non-bullet line as the display name.
   let displayName: string | null = null
   let body = content
-  if (isActivityOrMeal) {
+  if (isActivityOrMeal && !title) {
     const nameIdx = content.findIndex(l => !l.startsWith('-'))
     if (nameIdx >= 0) {
       displayName = content[nameIdx]
@@ -34,7 +36,7 @@ export function SectionCard({ meta, lines, onEdit, title, type, expanded, onTogg
     }
   }
 
-  if (!content.length && !duration && !title) {
+  if (!content.length && !duration && !title && !place) {
     // Read-only contexts (e.g. share page) hide empty sections entirely.
     if (!onEdit) return null
     // In the editor, show a muted placeholder so the empty section stays
@@ -56,8 +58,8 @@ export function SectionCard({ meta, lines, onEdit, title, type, expanded, onTogg
       </div>
     )
   }
-  const headerText = displayName || title || meta.label
-  const hasBody = body.length > 0
+  const headerText = title || displayName || meta.label
+  const hasBody = body.length > 0 || !!place
 
   return (
     <div className={`rounded-xl border overflow-hidden ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''}`}>
@@ -94,20 +96,27 @@ export function SectionCard({ meta, lines, onEdit, title, type, expanded, onTogg
           </button>
         )}
       </div>
-      {expanded && body.length > 0 && (
+      {expanded && hasBody && (
         <div className={`px-3 pb-2.5 pt-2 border-t ${meta.border}`}>
-          <ul className="space-y-1">
-            {body.map((line, i) => {
-              const isBullet = line.startsWith('-')
-              const text = isBullet ? line.slice(1).trim() : line
-              return (
-                <li key={i} className={`text-base text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
-                  {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
-                  <span>{text}</span>
-                </li>
-              )
-            })}
-          </ul>
+          {place && (
+            <p className="text-sm text-gray-500 mb-1.5 flex items-center gap-1">
+              <span className="text-xs">📍</span>{place}
+            </p>
+          )}
+          {body.length > 0 && (
+            <ul className="space-y-1">
+              {body.map((line, i) => {
+                const isBullet = line.startsWith('-')
+                const text = isBullet ? line.slice(1).trim() : line
+                return (
+                  <li key={i} className={`text-base text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
+                    {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
+                    <span>{text}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
       )}
     </div>
