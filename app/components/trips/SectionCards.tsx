@@ -4,13 +4,16 @@ import DayLocationMap, { type LocationPoint } from './DayLocationMapClient'
 import type { SectionMeta } from '@/lib/trips/trip-sections'
 import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES, parseCoords, parsePlaceId } from '@/lib/trips/trip-utils'
 
+// Maps Embed API (place card with the real listing) only works when the
+// "Maps Embed API" is enabled on the key. Opt in by setting this flag once it is.
+const USE_EMBED_API = process.env.NEXT_PUBLIC_MAPS_EMBED_API === '1'
 const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-// Build the best embed URL: the Maps Embed API place card (real listing) when
-// we have a place ID + key, otherwise a keyless coordinate pin.
+// Build the embed URL. Default to the keyless classic embed (always works);
+// use the richer Maps Embed API place card only when explicitly enabled.
 function mapEmbedUrl(coords: string | undefined, latLng: { lat: number; lng: number } | null): string | null {
   const placeId = parsePlaceId(coords)
-  if (placeId && GMAPS_KEY) return `https://www.google.com/maps/embed/v1/place?key=${GMAPS_KEY}&q=place_id:${placeId}`
+  if (USE_EMBED_API && placeId && GMAPS_KEY) return `https://www.google.com/maps/embed/v1/place?key=${GMAPS_KEY}&q=place_id:${placeId}`
   if (latLng) return `https://maps.google.com/maps?q=${latLng.lat},${latLng.lng}&z=16&output=embed`
   return null
 }
