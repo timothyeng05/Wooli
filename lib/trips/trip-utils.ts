@@ -38,6 +38,17 @@ export function formatDuration(h: number, m: number): string {
 
 export function parseCoords(raw: string | undefined): { lat: number; lng: number } | null {
   if (!raw) return null
+  // Google Maps URL → pull coords out of the link (most accurate pattern first)
+  if (/https?:\/\//i.test(raw)) {
+    let m = raw.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)         // place pin
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
+    m = raw.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)                  // map center
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
+    m = raw.match(/[?&](?:q|ll|query|destination|center)=(?:loc:)?(-?\d+\.\d+),\s*(-?\d+\.\d+)/)
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
+    return null
+  }
+  // Legacy "lat, lng" string
   const parts = raw.split(',').map(s => parseFloat(s.trim()))
   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return { lat: parts[0], lng: parts[1] }
   return null

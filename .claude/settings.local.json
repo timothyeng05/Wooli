@@ -82,7 +82,9 @@
       "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift /tmp/icongen.swift \"Wooli/Assets.xcassets/AppIcon.appiconset/AppIcon.png\")",
       "Bash(sips -g pixelWidth -g pixelHeight Wooli/Assets.xcassets/AppIcon.appiconset/AppIcon.png)",
       "Skill(run)",
-      "Bash(echo \"PID: $!\")"
+      "Bash(echo \"PID: $!\")",
+      "Bash(echo \"TSC_EXIT:$?\")",
+      "Bash(echo \"TSC exit: $?\")"
     ],
     "deny": [
       "Read(//Users/timothyeng/Desktop/Wooli/.env.local)",

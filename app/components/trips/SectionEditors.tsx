@@ -1,5 +1,5 @@
 'use client'
-import { useState, useLayoutEffect, useRef } from 'react'
+import { useState, useLayoutEffect, useRef, useEffect } from 'react'
 import type { SectionData } from '@/lib/trips/trip-sections'
 import type { EditorSection } from '@/lib/trips/trip-utils'
 import { inputCls, labelCls, parseDuration, formatDuration, ratingStyle } from '@/lib/trips/trip-utils'
@@ -46,6 +46,57 @@ function AutoTextarea({ value, onChange, onBlur, className, placeholder }: {
       className={className}
       style={{ overflow: 'hidden', resize: 'none' }}
     />
+  )
+}
+
+// Location field: paste a Google Maps link (short or long). Short links are
+// expanded server-side; the stored/displayed value is always the long URL,
+// and the map derives the pin from it via parseCoords().
+function CoordsInput({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
+  const [raw, setRaw] = useState(value ?? '')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'fail'>(value ? 'ok' : 'idle')
+
+  useEffect(() => { setRaw(value ?? '') }, [value])
+
+  const looksLikeUrl = (s: string) => /https?:\/\//i.test(s)
+
+  async function resolve(input: string) {
+    const trimmed = input.trim()
+    if (!trimmed) { setStatus('idle'); onChange(undefined); return }
+    if (!looksLikeUrl(trimmed)) { setStatus('fail'); return }
+    setStatus('loading')
+    try {
+      const res = await fetch(`/api/trips/geocode?url=${encodeURIComponent(trimmed)}`)
+      const data = await res.json()
+      if (data.url && data.lat != null && data.lng != null) {
+        setRaw(data.url)        // always show the long URL
+        onChange(data.url)
+        setStatus('ok')
+      } else {
+        setStatus('fail')
+      }
+    } catch {
+      setStatus('fail')
+    }
+  }
+
+  return (
+    <div>
+      <input
+        className={inputCls}
+        value={raw}
+        onChange={e => { setRaw(e.target.value); setStatus('idle') }}
+        onBlur={() => { if (looksLikeUrl(raw)) resolve(raw) }}
+        onPaste={e => {
+          const t = e.clipboardData.getData('text')
+          if (looksLikeUrl(t)) setTimeout(() => resolve(t), 0)
+        }}
+        placeholder="Paste a Google Maps link (short or long)"
+      />
+      {status === 'loading' && <p className="text-xs text-gray-400 mt-1">Expanding link…</p>}
+      {status === 'ok' && raw && <p className="text-xs text-green-600 mt-1">✓ Location pinned</p>}
+      {status === 'fail' && <p className="text-xs text-amber-600 mt-1">Couldn’t read that link — paste a Google Maps URL</p>}
+    </div>
   )
 }
 
@@ -102,8 +153,8 @@ export function HotelEditor({ section, onChange }: { section: EditorSection; onC
         <input className={inputCls} value={location} onChange={e => onChange({ lines: name ? [name, e.target.value] : [e.target.value] })} placeholder="Shinjuku, Tokyo" />
       </div>
       <div>
-        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
-        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
+        <label className={labelCls}>Location <span className="text-gray-400 font-normal">(optional — paste a Google Maps link)</span></label>
+        <CoordsInput value={section.coords} onChange={v => onChange({ coords: v })} />
       </div>
     </div>
   )
@@ -204,8 +255,8 @@ export function ActivityEditor({ section, onChange }: { section: EditorSection; 
         </div>
       </div>
       <div>
-        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
-        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
+        <label className={labelCls}>Location <span className="text-gray-400 font-normal">(optional — paste a Google Maps link)</span></label>
+        <CoordsInput value={section.coords} onChange={v => onChange({ coords: v })} />
       </div>
       <div>
         <label className={labelCls}>Notes (optional)</label>
@@ -277,8 +328,8 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
         </div>
       </div>
       <div>
-        <label className={labelCls}>Coordinates <span className="text-gray-400 font-normal">(optional — right-click on Google Maps → copy)</span></label>
-        <input className={inputCls} value={section.coords ?? ''} onChange={e => onChange({ coords: e.target.value || undefined })} placeholder="35.6896, 139.6917" />
+        <label className={labelCls}>Location <span className="text-gray-400 font-normal">(optional — paste a Google Maps link)</span></label>
+        <CoordsInput value={section.coords} onChange={v => onChange({ coords: v })} />
       </div>
     </div>
   )
