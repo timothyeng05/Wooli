@@ -84,7 +84,8 @@
       "Skill(run)",
       "Bash(echo \"PID: $!\")",
       "Bash(echo \"TSC_EXIT:$?\")",
-      "Bash(echo \"TSC exit: $?\")"
+      "Bash(echo \"TSC exit: $?\")",
+      "WebFetch(domain:developers.google.com)"
     ],
     "deny": [
       "Read(//Users/timothyeng/Desktop/Wooli/.env.local)",
