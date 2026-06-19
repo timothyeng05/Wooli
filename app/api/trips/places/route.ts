@@ -29,8 +29,10 @@ export async function GET(request: Request) {
       const lat = data.location?.latitude
       const lng = data.location?.longitude
       if (lat == null || lng == null) return NextResponse.json({ lat: null, lng: null, url: null })
-      const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-      return NextResponse.json({ lat, lng, url, name: data.displayName?.text ?? null })
+      // Include query_place_id so the stored URL opens the actual business
+      // listing (name, photos, reviews) rather than just dropping a pin.
+      const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${encodeURIComponent(placeId)}`
+      return NextResponse.json({ lat, lng, url, placeId, name: data.displayName?.text ?? null })
     }
 
     // Autocomplete → suggestion list

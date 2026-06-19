@@ -9,7 +9,7 @@ export const HIDE_TITLE_TYPES = new Set(['ACTIVITY', 'MORNING', 'AFTERNOON', 'NI
 export const ADD_SECTION_GROUPS = [
   { label: 'Travel', types: ['FLIGHT', 'TRAIN', 'DRIVE', 'RENTAL CAR', 'SUBWAY'] },
   { label: 'Plan',   types: ['ACTIVITY', 'MEAL'] },
-  { label: 'Stay',   types: ['HOTEL'] },
+  // Hotels are managed at the trip level (sidebar), not as per-day sections.
 ]
 export const ALL_SECTION_TYPES = ADD_SECTION_GROUPS.flatMap(g => g.types)
 
@@ -52,6 +52,14 @@ export function parseCoords(raw: string | undefined): { lat: number; lng: number
   const parts = raw.split(',').map(s => parseFloat(s.trim()))
   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return { lat: parts[0], lng: parts[1] }
   return null
+}
+
+// Extract a Google place ID from a stored Maps URL (query_place_id=… or
+// place_id:…). Identifies the real business listing for a richer embed/link.
+export function parsePlaceId(raw: string | undefined): string | null {
+  if (!raw) return null
+  const m = raw.match(/[?&]query_place_id=([^&]+)/) || raw.match(/place_id:([A-Za-z0-9_-]+)/)
+  return m ? decodeURIComponent(m[1]) : null
 }
 
 export const MOOD_OPTIONS: { emoji: string; label: string; value: string }[] = [

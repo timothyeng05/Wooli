@@ -2,7 +2,25 @@
 import { useState } from 'react'
 import DayLocationMap, { type LocationPoint } from './DayLocationMapClient'
 import type { SectionMeta } from '@/lib/trips/trip-sections'
-import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES, parseCoords } from '@/lib/trips/trip-utils'
+import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES, parseCoords, parsePlaceId } from '@/lib/trips/trip-utils'
+
+const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+// Build the best embed URL: the Maps Embed API place card (real listing) when
+// we have a place ID + key, otherwise a keyless coordinate pin.
+function mapEmbedUrl(coords: string | undefined, latLng: { lat: number; lng: number } | null): string | null {
+  const placeId = parsePlaceId(coords)
+  if (placeId && GMAPS_KEY) return `https://www.google.com/maps/embed/v1/place?key=${GMAPS_KEY}&q=place_id:${placeId}`
+  if (latLng) return `https://maps.google.com/maps?q=${latLng.lat},${latLng.lng}&z=16&output=embed`
+  return null
+}
+
+// Link that opens the real listing when we have a stored Maps URL, else a pin search.
+function mapLinkUrl(coords: string | undefined, latLng: { lat: number; lng: number } | null): string | null {
+  if (coords && /^https?:\/\//i.test(coords)) return coords
+  if (latLng) return `https://www.google.com/maps/search/?api=1&query=${latLng.lat},${latLng.lng}`
+  return null
+}
 
 export function SectionCard({ meta, lines, onEdit, title, type, place, coords, expanded, onToggleExpand, rating, skipped }: {
   meta: SectionMeta; lines: string[]
@@ -119,45 +137,58 @@ export function SectionCard({ meta, lines, onEdit, title, type, place, coords, e
               })}
             </ul>
           )}
-          {latLng && (
-            <div className="mt-2 rounded-lg overflow-hidden border border-gray-100">
-              <iframe
-                src={`https://maps.google.com/maps?q=${latLng.lat},${latLng.lng}&z=16&output=embed`}
-                className="w-full"
-                style={{ height: 200 }}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${latLng.lat},${latLng.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className={`block px-3 py-1.5 text-sm font-semibold ${meta.text} hover:underline ${meta.bg}`}
-              >
-                Open in Google Maps →
-              </a>
-            </div>
-          )}
+          {latLng && (() => {
+            const embed = mapEmbedUrl(coords, latLng)
+            const link = mapLinkUrl(coords, latLng)
+            return (
+              <div className="mt-2 rounded-lg overflow-hidden border border-gray-100">
+                {embed && (
+                  <iframe
+                    src={embed}
+                    className="w-full"
+                    style={{ height: 200, pointerEvents: 'none' }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                )}
+                {link && (
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className={`block px-3 py-1.5 text-sm font-semibold ${meta.text} hover:underline ${meta.bg}`}
+                  >
+                    Open in Google Maps →
+                  </a>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>
   )
 }
 
-export function HotelCard({ meta, lines, onEdit, skipped }: {
+export function HotelCard({ meta, lines, onEdit, skipped, coords, checkpoint, editLabel }: {
   meta: SectionMeta; lines: string[]
   onEdit?: () => void
   skipped?: boolean
+  coords?: string
+  checkpoint?: 'in' | 'out' | null
+  editLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const content = lines.map(l => l.trim()).filter(Boolean)
   const name = content[0]
   const location = content[1]
   if (!name) return null
+  const latLng = parseCoords(coords)
+  // Prefer the real listing (place ID) / precise coords; else fall back to a text query.
   const query = encodeURIComponent([name, location].filter(Boolean).join(', '))
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`
-  const embedUrl = `https://maps.google.com/maps?q=${query}&output=embed&z=15`
+  const mapsUrl = mapLinkUrl(coords, latLng) ?? `https://www.google.com/maps/search/?api=1&query=${query}`
+  const embedUrl = mapEmbedUrl(coords, latLng) ?? `https://maps.google.com/maps?q=${query}&output=embed&z=15`
   return (
     <div className={`rounded-xl border ${meta.bg} ${meta.border} overflow-hidden ${skipped ? 'opacity-50' : ''}`}>
       <div
@@ -169,12 +200,17 @@ export function HotelCard({ meta, lines, onEdit, skipped }: {
           <p className={`text-base font-semibold ${meta.text} ${skipped ? 'line-through' : ''}`}>{name}</p>
           {location && <p className="text-sm text-gray-500">{location}</p>}
         </div>
+        {checkpoint && (
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${checkpoint === 'in' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+            {checkpoint === 'in' ? 'Check-in' : 'Check-out'}
+          </span>
+        )}
         <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
         {skipped && (
           <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 bg-gray-200 text-gray-500">Skipped</span>
         )}
         {onEdit && (
-          <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0">Edit</button>
+          <button onClick={e => { e.stopPropagation(); onEdit() }} className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0">{editLabel ?? 'Edit'}</button>
         )}
       </div>
       {open && (
@@ -182,7 +218,7 @@ export function HotelCard({ meta, lines, onEdit, skipped }: {
           <iframe
             src={embedUrl}
             className="w-full border-t border-gray-100"
-            style={{ height: 220 }}
+            style={{ height: 220, pointerEvents: 'none' }}
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
           />

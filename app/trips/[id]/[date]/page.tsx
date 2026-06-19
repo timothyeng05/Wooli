@@ -8,6 +8,8 @@ import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parse
 import { SectionCard, HotelCard, DayMapCollapsible } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
+import TripHotels, { type TripHotel } from '@/app/components/trips/TripHotels'
+import { findMeta } from '@/lib/trips/trip-sections'
 
 type DayData = { title: string | null; notes: string | null; date: string }
 
@@ -40,6 +42,8 @@ export default function TripDayPage() {
   const [allDates, setAllDates] = useState<string[]>([])
   const [title, setTitle] = useState('')
   const [sectionItems, setSectionItems] = useState<EditorSection[]>([])
+  const [hotels, setHotels] = useState<TripHotel[]>([])
+  const [userId, setUserId] = useState<string>('')
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,14 +60,17 @@ export default function TripDayPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setUserId(user.id)
 
-      const [{ data: tripData }, { data: allDays }] = await Promise.all([
+      const [{ data: tripData }, { data: allDays }, { data: hotelData }] = await Promise.all([
         supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
         supabase.from('trip_days').select('date, title, notes').eq('trip_id', params.id).order('date'),
+        supabase.from('trip_hotels').select('*').eq('trip_id', params.id).order('check_in'),
       ])
 
       setTrip(tripData)
       setDays(allDays ?? [])
+      setHotels(hotelData ?? [])
 
       const generated: string[] = []
       if (tripData) {
@@ -268,6 +275,24 @@ export default function TripDayPage() {
     return locs
   }, [sectionItems])
 
+  const reloadHotels = async () => {
+    const supabase = createClient()
+    const { data } = await supabase.from('trip_hotels').select('*').eq('trip_id', params.id).order('check_in')
+    setHotels(data ?? [])
+  }
+
+  // Hotels covering the current day, with a check-in/check-out badge on boundaries.
+  const dayHotels = useMemo(() => {
+    return hotels
+      .filter(h => h.check_in <= params.date && params.date <= h.check_out)
+      .map(h => ({
+        hotel: h,
+        checkpoint: (params.date === h.check_in ? 'in' : params.date === h.check_out ? 'out' : null) as 'in' | 'out' | null,
+      }))
+  }, [hotels, params.date])
+
+  const hotelMeta = findMeta('HOTEL')
+
   const syncCalendar = async () => {
     if (saving) return
     setSaving(true)
@@ -331,6 +356,16 @@ export default function TripDayPage() {
           <p className="text-xs text-gray-400 mt-0.5">{allDates.length} days</p>
         </div>
         <nav className="flex-1 overflow-y-auto py-1">
+          {trip && userId && (
+            <TripHotels
+              tripId={params.id}
+              userId={userId}
+              hotels={hotels}
+              defaultStart={trip.start_date}
+              defaultEnd={trip.end_date}
+              onChange={reloadHotels}
+            />
+          )}
           {allDates.map((date, i) => {
             const isActive = date === params.date
             const isToday = date === todayLocal
@@ -414,6 +449,21 @@ export default function TripDayPage() {
             placeholder="Day title, e.g. Arrival in Tokyo"
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
+
+          {/* Hotels covering this day (managed in the sidebar) */}
+          {hotelMeta && dayHotels.length > 0 && (
+            <div className="space-y-2">
+              {dayHotels.map(({ hotel, checkpoint }) => (
+                <HotelCard
+                  key={hotel.id}
+                  meta={hotelMeta}
+                  lines={[hotel.name, hotel.location ?? ''].filter(Boolean)}
+                  coords={hotel.coords ?? undefined}
+                  checkpoint={checkpoint}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Collapsible day map */}
           {dayLocations.length > 0 && <DayMapCollapsible locations={dayLocations} />}
