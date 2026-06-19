@@ -120,7 +120,10 @@ export default function TripHotels({ tripId, userId, hotels, defaultStart, defau
           </div>
           <div>
             <label className={labelCls}>Location <span className="text-gray-400 font-normal">(optional)</span></label>
-            <CoordsInput value={editing.coords} onChange={v => setEditing({ ...editing, coords: v })} />
+            <CoordsInput
+              value={editing.coords}
+              onChange={(v, placeName) => setEditing({ ...editing, coords: v, name: (placeName && !editing.name.trim()) ? placeName : editing.name })}
+            />
           </div>
           <div className="flex items-center gap-2 pt-0.5">
             <button onClick={save} disabled={saving || !editing.name.trim() || !editing.check_in || !editing.check_out}

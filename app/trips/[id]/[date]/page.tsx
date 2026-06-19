@@ -5,10 +5,12 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
 import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords } from '@/lib/trips/trip-utils'
-import { SectionCard, HotelCard, DayMapCollapsible } from '@/app/components/trips/SectionCards'
+import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import TripHotels, { type TripHotel } from '@/app/components/trips/TripHotels'
+import TripSidebar, { type SidePanel } from '@/app/components/trips/TripSidebar'
+import EditPanel from '@/app/components/trips/EditPanel'
 import { findMeta } from '@/lib/trips/trip-sections'
 
 type DayData = { title: string | null; notes: string | null; date: string }
@@ -44,7 +46,7 @@ export default function TripDayPage() {
   const [sectionItems, setSectionItems] = useState<EditorSection[]>([])
   const [hotels, setHotels] = useState<TripHotel[]>([])
   const [userId, setUserId] = useState<string>('')
-  const [sidebarTab, setSidebarTab] = useState<'days' | 'hotels'>('days')
+  const [sidePanel, setSidePanel] = useState<SidePanel>(null)
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -282,6 +284,41 @@ export default function TripDayPage() {
     setHotels(data ?? [])
   }
 
+  // Swap two days' entire itinerary content (hotels are date-pinned, untouched).
+  const swapDays = async (dateA: string, dateB: string) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data: rows } = await supabase.from('trip_days')
+      .select('date, title, notes, confirmed_sections, location')
+      .eq('trip_id', params.id).in('date', [dateA, dateB])
+    const content = (d: string) => {
+      const r = rows?.find((x: any) => x.date === d) as any
+      return { title: r?.title ?? null, notes: r?.notes ?? null, confirmed_sections: r?.confirmed_sections ?? null, location: r?.location ?? null }
+    }
+    const cA = content(dateA), cB = content(dateB)
+    await supabase.from('trip_days').upsert([
+      { trip_id: params.id, user_id: user.id, date: dateA, ...cB },
+      { trip_id: params.id, user_id: user.id, date: dateB, ...cA },
+    ], { onConflict: 'trip_id,date' })
+    setDays(ds => ds.map(d =>
+      d.date === dateA ? { ...d, title: cB.title, notes: cB.notes } :
+      d.date === dateB ? { ...d, title: cA.title, notes: cA.notes } : d))
+    if (dateA === params.date || dateB === params.date) {
+      const nc = dateA === params.date ? cB : cA
+      setTitle(nc.title ?? '')
+      setSectionItems(notesToSectionData(nc.notes).map(s => ({ ...s, _id: newId() })))
+    }
+  }
+
+  // Save + close the edit panel (used by the panel's ✕/backdrop and Done).
+  const commitEdit = async () => {
+    setEditSnapshot(null)
+    const withTitles = await generateMissingTitles(sectionItems)
+    setSectionItems(withTitles)
+    await save(withTitles) // save() clears editingId
+  }
+
   // Hotels covering the current day, with a check-in/check-out badge on boundaries.
   const dayHotels = useMemo(() => {
     return hotels
@@ -293,6 +330,21 @@ export default function TripDayPage() {
   }, [hotels, params.date])
 
   const hotelMeta = findMeta('HOTEL')
+
+  // Past meals, ranked (for the "What we ate" panel)
+  const ate = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const out: { date: string; name: string; rating?: number }[] = []
+    for (const d of days) {
+      if (new Date(d.date + 'T00:00:00') >= today || !d.notes) continue
+      for (const s of notesToSectionData(d.notes)) {
+        if (!MEAL_TYPES.has(s.type.toUpperCase())) continue
+        const name = s.lines.find(l => l.trim() && !l.trim().startsWith('-'))?.trim()
+        if (name) out.push({ date: d.date, name, rating: s.rating })
+      }
+    }
+    return out.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.date.localeCompare(b.date))
+  }, [days])
 
   const syncCalendar = async () => {
     if (saving) return
@@ -349,69 +401,24 @@ export default function TripDayPage() {
     <div className="min-h-screen bg-white flex">
 
       {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-[49px] left-0 h-[calc(100vh-49px)] z-20">
-        <div className="px-5 py-4 border-b border-gray-200">
-          <Link href={`/trips/${params.id}`} className="text-sm font-semibold text-gray-500 hover:text-blue-600 transition flex items-center gap-1">
-            ← {trip?.name ?? 'Trip'}
-          </Link>
-          <p className="text-xs text-gray-400 mt-0.5">{allDates.length} days</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 px-3 pt-2 gap-1">
-          <button
-            onClick={() => setSidebarTab('days')}
-            className={`flex-1 text-sm font-semibold py-1.5 rounded-t-lg transition ${sidebarTab === 'days' ? 'bg-white text-blue-600 border border-gray-200 border-b-white -mb-px' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            Days
-          </button>
-          <button
-            onClick={() => setSidebarTab('hotels')}
-            className={`flex-1 text-sm font-semibold py-1.5 rounded-t-lg transition ${sidebarTab === 'hotels' ? 'bg-white text-blue-600 border border-gray-200 border-b-white -mb-px' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            🏨 Hotels{hotels.length > 0 ? ` (${hotels.length})` : ''}
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto py-1">
-          {sidebarTab === 'hotels' ? (
-            trip && userId && (
-              <TripHotels
-                tripId={params.id}
-                userId={userId}
-                hotels={hotels}
-                defaultStart={trip.start_date}
-                defaultEnd={trip.end_date}
-                onChange={reloadHotels}
-              />
-            )
-          ) : allDates.map((date, i) => {
-            const isActive = date === params.date
-            const isToday = date === todayLocal
-            const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-            const dayTitle = dayTitleMap.get(date) ?? null
-            return (
-              <Link
-                key={date}
-                href={`/trips/${params.id}/${date}`}
-                className={`flex items-center gap-3 px-5 py-3 transition ${isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
-              >
-                <span className={`text-xs font-bold flex-shrink-0 w-12 ${isActive ? 'text-blue-200' : isToday ? 'text-blue-500' : 'text-gray-400'}`}>
-                  Day {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-xs ${isActive ? 'text-blue-200' : isToday ? 'text-blue-400' : 'text-gray-400'}`}>
-                    {label}{isToday && !isActive ? ' · today' : ''}
-                  </p>
-                  <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : dayTitle ? 'text-gray-800' : 'text-gray-400'}`}>
-                    {dayTitle ?? '—'}
-                  </p>
-                </div>
-              </Link>
-            )
-          })}
-        </nav>
-      </aside>
+      {trip && (
+        <TripSidebar
+          tripId={params.id}
+          tripName={trip.name}
+          startDate={trip.start_date}
+          endDate={trip.end_date}
+          allDates={allDates}
+          days={days}
+          activeDate={params.date}
+          todayLocal={todayLocal}
+          shareUrl={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/share/${params.id}`}
+          onSwapDays={swapDays}
+          hotelCount={hotels.length}
+          ateCount={ate.length}
+          activePanel={sidePanel}
+          onOpenPanel={setSidePanel}
+        />
+      )}
 
       {/* Main content */}
       <div className="flex-1 lg:ml-72">
@@ -433,14 +440,6 @@ export default function TripDayPage() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              {sectionItems.length > 0 && (
-                <button
-                  onClick={toggleAllExpanded}
-                  className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs"
-                >
-                  {allExpanded ? 'Collapse all' : 'Expand all'}
-                </button>
-              )}
               {prevDate && (
                 <Link href={`/trips/${params.id}/${prevDate}`} className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs">
                   ← Prev
@@ -518,32 +517,9 @@ export default function TripDayPage() {
                           )}
                         </div>
                         <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-2'}`}>
-                          {editingId === item._id ? (
-                            <SectionEditorCard
-                              section={item}
-                              onChange={updates => updateSection(item._id, updates)}
-                              onDelete={async () => { const next = sectionItems.filter(s => s._id !== item._id); setSectionItems(next); setEditingId(null); await save(next) }}
-                              onMoveUp={i > 0 ? () => moveSection(i, -1) : undefined}
-                              onMoveDown={i < sectionItems.length - 1 ? () => moveSection(i, 1) : undefined}
-                              onCancel={cancelEdit}
-                              onDone={async () => {
-                                setEditSnapshot(null)
-                                const withTitles = await generateMissingTitles(sectionItems)
-                                setSectionItems(withTitles)
-                                await save(withTitles)
-                              }}
-                              dayOptions={dayOptions}
-                              currentDate={params.date}
-                              onMoveToDay={async (targetDate) => {
-                                setEditSnapshot(null)
-                                const withTitles = await generateMissingTitles(sectionItems)
-                                setSectionItems(withTitles)
-                                await handleMoveToDay(item._id, targetDate, withTitles)
-                              }}
-                            />
-                          ) : (s.meta.hotel || s.meta.car)
+                          {(s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} onOpen={() => startEdit(item._id)} />
                           }
                         </div>
                       </div>
@@ -593,6 +569,75 @@ export default function TripDayPage() {
 
         </div>
       </div>
+
+      {/* Hotels / What-we-ate detail — fills the area to the right of the sidebar */}
+      {sidePanel && (
+        <div className="fixed top-[49px] left-0 lg:left-72 right-0 bottom-0 bg-white z-30 overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
+            <h2 className="text-base font-bold text-gray-900">{sidePanel === 'hotels' ? '🏨 Hotels' : '🍴 What we ate'}</h2>
+            <button onClick={() => setSidePanel(null)} className="text-sm text-gray-400 hover:text-gray-700">✕ Close</button>
+          </div>
+          <div className="max-w-2xl mx-auto p-4">
+            {sidePanel === 'hotels' && trip && (
+              <TripHotels tripId={params.id} userId={userId} hotels={hotels} defaultStart={trip.start_date} defaultEnd={trip.end_date} onChange={reloadHotels} />
+            )}
+            {sidePanel === 'ate' && (
+              <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
+                {ate.length === 0 && <p className="text-sm text-gray-400 px-4 py-3">No meals logged yet.</p>}
+                {ate.map((m, i) => {
+                  const rc = m.rating == null ? '' : m.rating >= 8 ? 'bg-green-500 text-white' : m.rating >= 5 ? 'bg-amber-400 text-white' : 'bg-red-400 text-white'
+                  return (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 truncate">{m.name}</span>
+                      {m.rating != null && <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rc}`}>{m.rating}/10</span>}
+                      <span className="text-xs text-gray-400 flex-shrink-0">{new Date(m.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Slide-out edit panel */}
+      <EditPanel
+        open={!!editingId}
+        onClose={commitEdit}
+        title={(() => {
+          const it = sectionItems.find(s => s._id === editingId)
+          return it ? (it.title || it.lines.find(l => l.trim() && !l.trim().startsWith('-')) || findMeta(it.type)?.label || 'Edit') : 'Edit'
+        })()}
+      >
+        {(() => {
+          const it = sectionItems.find(s => s._id === editingId)
+          if (!it) return null
+          const idx = sectionItems.findIndex(s => s._id === it._id)
+          const name = it.title || it.lines.find(l => l.trim() && !l.trim().startsWith('-')) || undefined
+          return (
+            <div className="space-y-3">
+              <LocationPreview coords={it.coords} name={name} />
+              <SectionEditorCard
+                section={it}
+                onChange={updates => updateSection(it._id, updates)}
+                onDelete={async () => { const next = sectionItems.filter(s => s._id !== it._id); setSectionItems(next); setEditingId(null); setEditSnapshot(null); await save(next) }}
+                onMoveUp={idx > 0 ? () => moveSection(idx, -1) : undefined}
+                onMoveDown={idx < sectionItems.length - 1 ? () => moveSection(idx, 1) : undefined}
+                onCancel={cancelEdit}
+                onDone={commitEdit}
+                dayOptions={dayOptions}
+                currentDate={params.date}
+                onMoveToDay={async (targetDate) => {
+                  setEditSnapshot(null)
+                  const withTitles = await generateMissingTitles(sectionItems)
+                  setSectionItems(withTitles)
+                  await handleMoveToDay(it._id, targetDate, withTitles)
+                }}
+              />
+            </div>
+          )
+        })()}
+      </EditPanel>
     </div>
   )
 }

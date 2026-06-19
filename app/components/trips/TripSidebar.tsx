@@ -1,0 +1,170 @@
+'use client'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
+import {
+  DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import ShareButton from '@/app/components/ShareButton'
+import { TRIP_LEGS, LEG_COLORS } from '@/app/trips/legs-config'
+
+export type DayRow = { date: string; title: string | null; notes: string | null }
+export type SidePanel = 'hotels' | 'ate' | null
+
+function fmt(date: string, opts?: Intl.DateTimeFormatOptions) {
+  return new Date(date + 'T00:00:00').toLocaleDateString('en-US', opts ?? { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+function DayItem({ date, index, activeDate, todayLocal, title, tripId }: {
+  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; tripId: string
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: date })
+  const isActive = date === activeDate
+  const isToday = date === todayLocal
+  return (
+    <div
+      ref={setNodeRef}
+      data-day={date}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center ${isDragging ? 'opacity-60' : ''} ${isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
+    >
+      <button {...attributes} {...listeners} title="Drag to swap days"
+        className={`px-2 py-3 cursor-grab active:cursor-grabbing flex-shrink-0 ${isActive ? 'text-blue-200' : 'text-gray-300 hover:text-gray-500'}`}>⠿</button>
+      <Link href={`/trips/${tripId}/${date}`} className="flex items-center gap-2 flex-1 min-w-0 pr-4 py-2.5">
+        <span className={`text-xs font-bold flex-shrink-0 w-10 ${isActive ? 'text-blue-200' : isToday ? 'text-blue-500' : 'text-gray-400'}`}>Day {index + 1}</span>
+        <div className="min-w-0 flex-1">
+          <p className={`text-xs ${isActive ? 'text-blue-200' : isToday ? 'text-blue-400' : 'text-gray-400'}`}>{fmt(date)}{isToday && !isActive ? ' · today' : ''}</p>
+          <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : title ? 'text-gray-800' : 'text-gray-400'}`}>{title ?? '—'}</p>
+        </div>
+      </Link>
+    </div>
+  )
+}
+
+export default function TripSidebar({
+  tripId, tripName, startDate, endDate, allDates, days, activeDate, todayLocal, shareUrl,
+  onSwapDays, hotelCount, ateCount, activePanel, onOpenPanel,
+}: {
+  tripId: string; tripName: string; startDate: string; endDate: string
+  allDates: string[]; days: DayRow[]
+  activeDate: string; todayLocal: string; shareUrl: string
+  onSwapDays: (a: string, b: string) => void
+  hotelCount: number; ateCount: number
+  activePanel: SidePanel
+  onOpenPanel: (p: SidePanel) => void
+}) {
+  const titleMap = useMemo(() => new Map(days.map(d => [d.date, d.title])), [days])
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Center the active day in the sidebar so neighbours are easy to reach.
+  useEffect(() => {
+    const c = scrollRef.current
+    const el = c?.querySelector(`[data-day="${activeDate}"]`) as HTMLElement | null
+    if (c && el) {
+      const er = el.getBoundingClientRect(), cr = c.getBoundingClientRect()
+      c.scrollTop += (er.top - cr.top) - (c.clientHeight / 2 - el.clientHeight / 2)
+    }
+  }, [activeDate, collapsed])
+
+  const { label, progressPct } = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const s = new Date(startDate + 'T00:00:00'); const e = new Date(endDate + 'T00:00:00')
+    const day = 86400000
+    if (today < s) {
+      const d = Math.round((s.getTime() - today.getTime()) / day)
+      return { label: `${d} day${d !== 1 ? 's' : ''} until departure`, progressPct: 0 as number | null }
+    }
+    if (today <= e) {
+      const n = Math.round((today.getTime() - s.getTime()) / day) + 1
+      return { label: `In progress · Day ${n} of ${allDates.length}`, progressPct: Math.min(100, Math.round(((today.getTime() - s.getTime()) / (e.getTime() - s.getTime())) * 100)) }
+    }
+    const d = Math.round((today.getTime() - e.getTime()) / day)
+    return { label: `Completed · ${d} day${d !== 1 ? 's' : ''} ago`, progressPct: null as number | null }
+  }, [startDate, endDate, allDates.length])
+
+  const legs = TRIP_LEGS[tripId] ?? []
+  const groups = legs.length
+    ? legs.map(leg => ({ leg, dates: allDates.filter(d => d >= leg.from && d <= leg.to) })).filter(g => g.dates.length > 0)
+    : [{ leg: null as null | { name: string; emoji: string }, dates: allDates }]
+  const visibleDates = groups.flatMap((g, gi) => collapsed.has(gi) ? [] : g.dates)
+  const toggleLeg = (gi: number) => setCollapsed(prev => {
+    const next = new Set(prev); next.has(gi) ? next.delete(gi) : next.add(gi); return next
+  })
+
+  const onDragEnd = (e: DragEndEvent) => {
+    if (e.over && e.active.id !== e.over.id) onSwapDays(String(e.active.id), String(e.over.id))
+  }
+
+  const summaryCard = (key: 'hotels' | 'ate', icon: string, title: string, count: number) => (
+    <button
+      onClick={() => onOpenPanel(activePanel === key ? null : key)}
+      className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition ${activePanel === key ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+    >
+      <span className="text-base">{icon}</span>
+      <span className="flex-1 text-sm font-semibold text-gray-700">{title}</span>
+      <span className="text-xs font-semibold text-gray-400">{count}</span>
+      <span className="text-gray-300 text-xs">›</span>
+    </button>
+  )
+
+  return (
+    <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-[49px] left-0 h-[calc(100vh-49px)] z-20">
+      {/* Header: back, name, progress, share */}
+      <div className="px-5 py-3 border-b border-gray-200">
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/trips" className="text-xs font-semibold text-gray-400 hover:text-blue-600 transition">← Trips</Link>
+          <ShareButton url={shareUrl} />
+        </div>
+        <h1 className="text-base font-bold text-gray-900 mt-1 leading-tight">{tripName}</h1>
+        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+        {progressPct !== null && (
+          <div className="w-full h-1 bg-gray-200 rounded mt-1.5 overflow-hidden">
+            <div className="h-full bg-blue-500 rounded transition-all" style={{ width: `${progressPct}%` }} />
+          </div>
+        )}
+      </div>
+
+      {/* Hotels + What we ate cards */}
+      <div className="px-3 py-2.5 space-y-1.5 border-b border-gray-200">
+        {summaryCard('hotels', '🏨', 'Hotels', hotelCount)}
+        {summaryCard('ate', '🍴', 'What we ate', ateCount)}
+      </div>
+
+      {/* Days (legs-grouped & collapsible, drag to swap) */}
+      <div className="flex-1 overflow-y-auto" ref={scrollRef}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={visibleDates} strategy={verticalListSortingStrategy}>
+            {groups.map((g, gi) => {
+              const c = LEG_COLORS[gi % LEG_COLORS.length]
+              const isCollapsed = collapsed.has(gi)
+              return (
+                <div key={gi}>
+                  {g.leg && (
+                    <button
+                      onClick={() => toggleLeg(gi)}
+                      className={`w-full flex items-center gap-2 px-4 py-1.5 ${c.bg} border-y ${c.border} sticky top-0 z-10`}
+                    >
+                      <span className={`text-gray-400 text-[10px] transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▼</span>
+                      <span className="text-sm">{g.leg.emoji}</span>
+                      <span className={`text-xs font-bold ${c.text}`}>{g.leg.name}</span>
+                      <span className="text-[10px] text-gray-400 ml-auto">{g.dates.length}d</span>
+                    </button>
+                  )}
+                  {!isCollapsed && g.dates.map(date => (
+                    <DayItem key={date} date={date} index={allDates.indexOf(date)} activeDate={activeDate}
+                      todayLocal={todayLocal} title={titleMap.get(date) ?? null} tripId={tripId} />
+                  ))}
+                </div>
+              )
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </aside>
+  )
+}

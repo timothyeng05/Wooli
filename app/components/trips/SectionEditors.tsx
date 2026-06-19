@@ -232,6 +232,16 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
     const rest = nameIdx >= 0 ? section.lines.filter((_, i) => i !== nameIdx) : section.lines
     onChange({ lines: val ? [val, ...rest] : rest })
   }
+  // Picking a Google place sets the location and, when the name is blank, uses
+  // the place name as the meal title.
+  const setLocation = (v: string | undefined, placeName?: string) => {
+    const updates: Partial<SectionData> = { coords: v }
+    if (placeName && !nameLine.trim()) {
+      const rest = nameIdx >= 0 ? section.lines.filter((_, i) => i !== nameIdx) : section.lines
+      updates.lines = [placeName, ...rest]
+    }
+    onChange(updates)
+  }
   const setFood = (val: string) => {
     // Don't trim each line while typing — that strips the trailing space
     // mid-keystroke and makes spaces impossible to enter.
@@ -280,7 +290,7 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
       </div>
       <div>
         <label className={labelCls}>Location <span className="text-gray-400 font-normal">(optional — search a place or paste a link)</span></label>
-        <CoordsInput value={section.coords} onChange={v => onChange({ coords: v })} />
+        <CoordsInput value={section.coords} onChange={setLocation} />
       </div>
     </div>
   )

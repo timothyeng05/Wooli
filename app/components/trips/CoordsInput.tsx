@@ -8,7 +8,7 @@ const newSession = () => Math.random().toString(36).slice(2) + Date.now().toStri
 // Location field: type a place name for live Google Places suggestions, OR
 // paste a Google Maps link (short or long). Either way the stored value is a
 // coords-bearing Maps URL; the map derives the pin from it via parseCoords().
-export default function CoordsInput({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
+export default function CoordsInput({ value, onChange }: { value?: string; onChange: (v: string | undefined, name?: string) => void }) {
   const [raw, setRaw] = useState('')
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'fail'>('idle')
@@ -68,7 +68,7 @@ export default function CoordsInput({ value, onChange }: { value?: string; onCha
     try {
       const res = await fetch(`/api/trips/places?placeId=${encodeURIComponent(s.placeId)}&session=${sessionRef.current}`)
       const data = await res.json()
-      if (data.url && data.lat != null) onChange(data.url)
+      if (data.url && data.lat != null) onChange(data.url, data.name || s.main)
       else setStatus('fail')
     } catch { setStatus('fail') }
     sessionRef.current = newSession() // fresh session after a selection

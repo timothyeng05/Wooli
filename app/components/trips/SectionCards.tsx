@@ -25,16 +25,41 @@ function mapLinkUrl(coords: string | undefined, latLng: { lat: number; lng: numb
   return null
 }
 
-export function SectionCard({ meta, lines, onEdit, title, type, place, coords, expanded, onToggleExpand, rating, skipped }: {
+// Map preview with the location name as a caption (F1). Used in the edit panel.
+export function LocationPreview({ coords, name }: { coords?: string; name?: string }) {
+  const latLng = parseCoords(coords)
+  if (!latLng) return null
+  const embed = mapEmbedUrl(coords, latLng)
+  const link = mapLinkUrl(coords, latLng)
+  return (
+    <div className="rounded-lg overflow-hidden border border-gray-100">
+      {name && (
+        <div className="px-3 py-1.5 text-sm font-semibold text-gray-700 bg-gray-50 border-b border-gray-100 flex items-center gap-1">
+          <span className="text-xs">📍</span><span className="truncate">{name}</span>
+        </div>
+      )}
+      {embed && (
+        <iframe src={embed} className="w-full" style={{ height: 180, pointerEvents: 'none' }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+      )}
+      {link && (
+        <a href={link} target="_blank" rel="noopener noreferrer" className="block px-3 py-1.5 text-sm font-semibold text-blue-600 hover:underline bg-white">
+          Open in Google Maps →
+        </a>
+      )}
+    </div>
+  )
+}
+
+// Compact, clickable card. Tapping opens the edit panel; details + map live there.
+export function SectionCard({ meta, lines, onOpen, title, type, place, coords, rating, skipped }: {
   meta: SectionMeta; lines: string[]
-  onEdit?: () => void
+  onOpen?: () => void
   title?: string; type?: string; place?: string
   coords?: string
-  expanded: boolean; onToggleExpand: () => void
   rating?: number
   skipped?: boolean
 }) {
-  const latLng = parseCoords(coords)
+  const hasLocation = !!parseCoords(coords)
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   const t = type?.toUpperCase() ?? ''
   const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
@@ -42,134 +67,52 @@ export function SectionCard({ meta, lines, onEdit, title, type, place, coords, e
   let duration: string | null = null
   let content = allContent
   const dl = allContent.find(l => l.startsWith('~'))
-  if (dl) {
-    duration = dl.slice(1).trim()
-    content = allContent.filter(l => !l.startsWith('~'))
-  }
+  if (dl) { duration = dl.slice(1).trim(); content = allContent.filter(l => !l.startsWith('~')) }
 
-  // When an explicit title is set (e.g. from Mac app), use all lines as body.
-  // Otherwise extract the first non-bullet line as the display name.
   let displayName: string | null = null
   let body = content
   if (isActivityOrMeal && !title) {
     const nameIdx = content.findIndex(l => !l.startsWith('-'))
-    if (nameIdx >= 0) {
-      displayName = content[nameIdx]
-      body = content.filter((_, i) => i !== nameIdx)
-    }
+    if (nameIdx >= 0) { displayName = content[nameIdx]; body = content.filter((_, i) => i !== nameIdx) }
   }
 
+  const headerText = title || displayName || meta.label
+  const bodyPreview = body.map(l => l.replace(/^-\s*/, '')).filter(Boolean).join(' · ')
+
   if (!content.length && !duration && !title && !place) {
-    // Read-only contexts (e.g. share page) hide empty sections entirely.
-    if (!onEdit) return null
-    // In the editor, show a muted placeholder so the empty section stays
-    // visible and editable/deletable instead of rendering a blank card.
+    if (!onOpen) return null
     return (
-      <div className={`rounded-xl border ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''}`}>
+      <div onClick={onOpen} className={`rounded-xl border ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''} cursor-pointer`}>
         <div className="flex items-center gap-2 px-3 py-2.5">
           <span className="flex-shrink-0 text-base opacity-50">{meta.icon}</span>
-          <p className="flex-1 min-w-0 text-sm italic text-gray-400">
-            Empty {meta.label.toLowerCase()} — tap Edit to add details
-          </p>
-          <button
-            onClick={e => { e.stopPropagation(); onEdit() }}
-            className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0"
-          >
-            Edit
-          </button>
+          <p className="flex-1 min-w-0 text-sm italic text-gray-400">Empty {meta.label.toLowerCase()} — tap to add details</p>
         </div>
       </div>
     )
   }
-  const headerText = title || displayName || meta.label
-  const hasBody = body.length > 0 || !!place || !!latLng
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''}`}>
-      <div
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
-        onClick={onToggleExpand}
-      >
+    <div
+      onClick={onOpen}
+      className={`rounded-xl border ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''} ${onOpen ? 'cursor-pointer hover:brightness-[0.98] transition' : ''}`}
+    >
+      <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="flex-shrink-0 text-base">{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <p className={`text-base font-semibold leading-snug ${meta.text} ${skipped ? 'line-through' : ''}`}>{headerText}</p>
-          {duration && (
-            <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>
+          {(place || bodyPreview) && (
+            <p className="text-xs text-gray-500 truncate mt-0.5">{place ? `📍 ${place}` : bodyPreview}</p>
           )}
+          {duration && <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>}
         </div>
-        {hasBody && (
-          <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
-        )}
+        {hasLocation && <span className="text-xs flex-shrink-0" title="Location pinned">📍</span>}
         {rating != null && (
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>
-            {rating}/10
-          </span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>{rating}/10</span>
         )}
         {skipped && (
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 bg-gray-200 text-gray-500">
-            Skipped
-          </span>
-        )}
-        {onEdit && (
-          <button
-            onClick={e => { e.stopPropagation(); onEdit() }}
-            className="text-xs text-gray-400 hover:text-blue-600 transition flex-shrink-0"
-          >
-            Edit
-          </button>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 bg-gray-200 text-gray-500">Skipped</span>
         )}
       </div>
-      {expanded && hasBody && (
-        <div className={`px-3 pb-2.5 pt-2 border-t ${meta.border}`}>
-          {place && (
-            <p className="text-sm text-gray-500 mb-1.5 flex items-center gap-1">
-              <span className="text-xs">📍</span>{place}
-            </p>
-          )}
-          {body.length > 0 && (
-            <ul className="space-y-1">
-              {body.map((line, i) => {
-                const isBullet = line.startsWith('-')
-                const text = isBullet ? line.slice(1).trim() : line
-                return (
-                  <li key={i} className={`text-base text-gray-700 flex gap-2 ${isBullet ? 'items-start' : 'items-center'}`}>
-                    {isBullet && <span className="text-gray-300 mt-0.5 flex-shrink-0">•</span>}
-                    <span>{text}</span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {latLng && (() => {
-            const embed = mapEmbedUrl(coords, latLng)
-            const link = mapLinkUrl(coords, latLng)
-            return (
-              <div className="mt-2 rounded-lg overflow-hidden border border-gray-100">
-                {embed && (
-                  <iframe
-                    src={embed}
-                    className="w-full"
-                    style={{ height: 200, pointerEvents: 'none' }}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                )}
-                {link && (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className={`block px-3 py-1.5 text-sm font-semibold ${meta.text} hover:underline ${meta.bg}`}
-                  >
-                    Open in Google Maps →
-                  </a>
-                )}
-              </div>
-            )
-          })()}
-        </div>
-      )}
     </div>
   )
 }
