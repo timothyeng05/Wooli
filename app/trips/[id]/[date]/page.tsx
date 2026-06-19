@@ -474,7 +474,7 @@ export default function TripDayPage() {
                             />
                           ) : (s.meta.hotel || s.meta.car)
                             ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
-                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} rating={item.rating} skipped={item.skipped} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
+                            : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} onEdit={() => startEdit(item._id)} expanded={expandedSections.has(item._id)} onToggleExpand={() => toggleSectionExpanded(item._id)} />
                           }
                         </div>
                       </div>

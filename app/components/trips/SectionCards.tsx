@@ -2,16 +2,18 @@
 import { useState } from 'react'
 import DayLocationMap, { type LocationPoint } from './DayLocationMapClient'
 import type { SectionMeta } from '@/lib/trips/trip-sections'
-import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES } from '@/lib/trips/trip-utils'
+import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES, parseCoords } from '@/lib/trips/trip-utils'
 
-export function SectionCard({ meta, lines, onEdit, title, type, place, expanded, onToggleExpand, rating, skipped }: {
+export function SectionCard({ meta, lines, onEdit, title, type, place, coords, expanded, onToggleExpand, rating, skipped }: {
   meta: SectionMeta; lines: string[]
   onEdit?: () => void
   title?: string; type?: string; place?: string
+  coords?: string
   expanded: boolean; onToggleExpand: () => void
   rating?: number
   skipped?: boolean
 }) {
+  const latLng = parseCoords(coords)
   const allContent = lines.map(l => l.trim()).filter(Boolean)
   const t = type?.toUpperCase() ?? ''
   const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
@@ -59,7 +61,7 @@ export function SectionCard({ meta, lines, onEdit, title, type, place, expanded,
     )
   }
   const headerText = title || displayName || meta.label
-  const hasBody = body.length > 0 || !!place
+  const hasBody = body.length > 0 || !!place || !!latLng
 
   return (
     <div className={`rounded-xl border overflow-hidden ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''}`}>
@@ -116,6 +118,26 @@ export function SectionCard({ meta, lines, onEdit, title, type, place, expanded,
                 )
               })}
             </ul>
+          )}
+          {latLng && (
+            <div className="mt-2 rounded-lg overflow-hidden border border-gray-100">
+              <iframe
+                src={`https://maps.google.com/maps?q=${latLng.lat},${latLng.lng}&z=16&output=embed`}
+                className="w-full"
+                style={{ height: 200 }}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${latLng.lat},${latLng.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className={`block px-3 py-1.5 text-sm font-semibold ${meta.text} hover:underline ${meta.bg}`}
+              >
+                Open in Google Maps →
+              </a>
+            </div>
           )}
         </div>
       )}
