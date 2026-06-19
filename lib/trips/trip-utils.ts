@@ -7,8 +7,7 @@ export const MEAL_TYPES = new Set(['BREAKFAST', 'LUNCH', 'DINNER', 'MEAL'])
 export const HIDE_TITLE_TYPES = new Set(['ACTIVITY', 'MORNING', 'AFTERNOON', 'NIGHT', 'MEAL', 'BREAKFAST', 'LUNCH', 'DINNER', 'HOTEL'])
 
 export const ADD_SECTION_GROUPS = [
-  { label: 'Travel', types: ['FLIGHT', 'TRAIN', 'DRIVE', 'RENTAL CAR', 'SUBWAY'] },
-  { label: 'Plan',   types: ['ACTIVITY', 'MEAL'] },
+  { label: 'Add', types: ['TRANSIT', 'ACTIVITY', 'MEAL'] },
   // Hotels are managed at the trip level (sidebar), not as per-day sections.
 ]
 export const ALL_SECTION_TYPES = ADD_SECTION_GROUPS.flatMap(g => g.types)

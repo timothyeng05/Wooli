@@ -30,7 +30,8 @@ export const SECTIONS: SectionMeta[] = [
   { key: ['BREAKFAST', 'BREAKFAST OPTIONS'],            time: '8 AM',   icon: '🥐', label: 'Breakfast', bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
   { key: ['LUNCH', 'LUNCH OPTIONS'],                    time: '12 PM',  icon: '🍜', label: 'Lunch',     bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
   { key: ['DINNER', 'DINNER OPTIONS'],                  time: '7 PM',   icon: '🍽️', label: 'Dinner',    bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
-  // New canonical types
+  // New canonical types — the only four offered going forward
+  { key: ['TRANSIT'],                                   time: 'Transit',icon: '🚆', label: 'Transit',   bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', dotColor: '#4338ca', transit: true },
   { key: ['ACTIVITY'],                                  time: '',       icon: '📍', label: 'Activity',  bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  dotColor: '#94a3b8' },
   { key: ['MEAL'],                                      time: '',       icon: '🍴', label: 'Meal',      bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  dotColor: '#d97706' },
   { key: ['HOTEL'],                                     time: 'Stay',   icon: '🏨', label: 'Hotel',     bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dotColor: '#7c3aed', hotel: true },
@@ -62,11 +63,13 @@ export function findMeta(type: string): SectionMeta | undefined {
 }
 
 export function sectionDataToDisplay(data: SectionData): ParsedSection | null {
-  const meta = findMeta(data.type)
+  // Collapse any legacy/granular type into one of the four canonical types
+  const { type, timeOverride } = canonicalize(data.type, data.timeOverride)
+  const meta = findMeta(type)
   if (!meta) return null
   const lines = [...data.lines]
   if (data.duration) lines.push(`~${data.duration}`)
-  return { meta, lines, timeOverride: data.timeOverride, pinned: data.pinned }
+  return { meta, lines, timeOverride, pinned: data.pinned }
 }
 
 // Parses notes from DB — handles both JSON (new format) and legacy text format
@@ -108,7 +111,8 @@ function parseLegacyText(notes: string): ParsedSection[] {
   return sections
 }
 
-// Maps legacy section types to { canonical type, default time } for the editor
+// Maps every legacy/granular section type into one of the four canonical
+// types — TRANSIT, ACTIVITY, MEAL (HOTEL is managed at the trip level).
 const LEGACY_CANONICAL: Record<string, { type: string; defaultTime?: string }> = {
   MORNING:            { type: 'ACTIVITY', defaultTime: '8:00 AM' },
   AFTERNOON:          { type: 'ACTIVITY', defaultTime: '2:00 PM' },
@@ -119,6 +123,22 @@ const LEGACY_CANONICAL: Record<string, { type: string; defaultTime?: string }> =
   'LUNCH OPTIONS':    { type: 'MEAL',     defaultTime: '12:00 PM' },
   DINNER:             { type: 'MEAL',     defaultTime: '7:00 PM' },
   'DINNER OPTIONS':   { type: 'MEAL',     defaultTime: '7:00 PM' },
+  // All travel / transport variants collapse into TRANSIT
+  FLIGHT:             { type: 'TRANSIT' },
+  'FAMILY FLIGHT':    { type: 'TRANSIT' },
+  TRANSPORT:          { type: 'TRANSIT' },
+  TRANSPORTATION:     { type: 'TRANSIT' },
+  TRAIN:              { type: 'TRANSIT' },
+  RAIL:               { type: 'TRANSIT' },
+  SUBWAY:             { type: 'TRANSIT' },
+  METRO:              { type: 'TRANSIT' },
+  TUBE:               { type: 'TRANSIT' },
+  DRIVE:              { type: 'TRANSIT' },
+  DRIVING:            { type: 'TRANSIT' },
+  'RENTAL CAR':       { type: 'TRANSIT' },
+  'CAR RIDE':         { type: 'TRANSIT' },
+  TAXI:               { type: 'TRANSIT' },
+  UBER:               { type: 'TRANSIT' },
 }
 
 function canonicalize(type: string, existingTimeOverride?: string): { type: string; timeOverride?: string } {
