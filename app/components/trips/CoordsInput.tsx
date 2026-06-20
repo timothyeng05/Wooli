@@ -79,7 +79,7 @@ export default function CoordsInput({ value, onChange }: { value?: string; onCha
     try {
       const res = await fetch(`/api/trips/geocode?url=${encodeURIComponent(input)}`)
       const data = await res.json()
-      if (data.url && data.lat != null) onChange(data.url)
+      if (data.url && data.lat != null) onChange(data.url, data.name || undefined)
       else setStatus('fail')
     } catch { setStatus('fail') }
   }
@@ -95,6 +95,7 @@ export default function CoordsInput({ value, onChange }: { value?: string; onCha
         autoCorrect="off"
         spellCheck={false}
         onChange={e => onInput(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && looksLikeUrl(raw)) { e.preventDefault(); resolveUrl(raw.trim()) } }}
         onBlur={() => { if (looksLikeUrl(raw)) resolveUrl(raw.trim()) }}
         onPaste={e => {
           const t = e.clipboardData.getData('text')
