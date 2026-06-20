@@ -55,27 +55,45 @@ function getDayCount(start_date: string | null, end_date: string | null): number
   return Math.round((end.getTime() - start.getTime()) / 86400000) + 1
 }
 
+function tripStatus(start_date: string | null, end_date: string | null): { label: string; cls: string } | null {
+  if (!start_date) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const s = new Date(start_date + 'T00:00:00')
+  const e = new Date((end_date ?? start_date) + 'T00:00:00')
+  const day = 86400000
+  if (today < s) {
+    const d = Math.round((s.getTime() - today.getTime()) / day)
+    const label = d === 0 ? 'Starts today' : d === 1 ? 'Tomorrow' : `In ${d} days`
+    return { label, cls: 'bg-blue-50 text-blue-600 border-blue-200' }
+  }
+  if (today <= e) return { label: 'In progress', cls: 'bg-green-50 text-green-700 border-green-200' }
+  return { label: 'Completed', cls: 'bg-gray-100 text-gray-400 border-gray-200' }
+}
+
 function TripCard({ trip }: { trip: Trip }) {
   const days = getDayCount(trip.start_date, trip.end_date)
   const dateRange = formatDateRange(trip.start_date, trip.end_date)
+  const status = tripStatus(trip.start_date, trip.end_date)
 
   return (
-    <Link href={`/trips/${trip.id}`}>
-      <div className="p-4 rounded-lg border border-gray-200 hover:shadow-sm transition hover:border-blue-200 bg-white">
+    <Link href={`/trips/${trip.id}`} className="block">
+      <div className="p-4 rounded-xl border border-gray-200 hover:shadow-sm transition hover:border-blue-200 active:scale-[0.99] bg-white">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="font-semibold text-base text-gray-900">{trip.name}</h2>
+            <h2 className="font-semibold text-base text-gray-900 leading-snug">{trip.name}</h2>
             {trip.destination && (
               <p className="text-sm text-gray-500 mt-0.5">📍 {trip.destination}</p>
             )}
           </div>
-          {days !== null && (
-            <span className="text-sm text-gray-400 whitespace-nowrap flex-shrink-0">
-              {days}d
+          {status && (
+            <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 whitespace-nowrap flex-shrink-0 ${status.cls}`}>
+              {status.label}
             </span>
           )}
         </div>
-        <p className="text-sm text-gray-400 mt-1.5">{dateRange}</p>
+        <p className="text-sm text-gray-400 mt-1.5">
+          {dateRange}{days !== null ? ` · ${days} day${days !== 1 ? 's' : ''}` : ''}
+        </p>
         {trip.description && (
           <p className="text-sm text-gray-600 mt-1 line-clamp-2">{trip.description}</p>
         )}

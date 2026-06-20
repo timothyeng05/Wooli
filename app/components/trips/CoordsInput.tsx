@@ -89,6 +89,11 @@ export default function CoordsInput({ value, onChange }: { value?: string; onCha
       <input
         className={inputCls}
         value={raw}
+        inputMode="search"
+        enterKeyHint="search"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
         onChange={e => onInput(e.target.value)}
         onBlur={() => { if (looksLikeUrl(raw)) resolveUrl(raw.trim()) }}
         onPaste={e => {

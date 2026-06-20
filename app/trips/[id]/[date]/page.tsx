@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDraggable, closestCenter,
   type DragStartEvent, type DragOverEvent, type DragEndEvent,
@@ -15,13 +15,16 @@ import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import TripHotels, { type TripHotel } from '@/app/components/trips/TripHotels'
 import TripSidebar, { type SidePanel } from '@/app/components/trips/TripSidebar'
 import EditPanel from '@/app/components/trips/EditPanel'
-import MobileDayStrip from '@/app/components/trips/MobileDayStrip'
 import { findMeta } from '@/lib/trips/trip-sections'
 
 type DayData = { title: string | null; notes: string | null; date: string }
 
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
+
+function fmtDay(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
 
 // A timeline card you can drag (by its grip) onto another day in the sidebar.
 function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
@@ -59,6 +62,17 @@ export default function TripDayPage() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [insertAt, setInsertAt] = useState<number | null>(null)
   const [showAddPicker, setShowAddPicker] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const [showDayPicker, setShowDayPicker] = useState(false)
+  const router = useRouter()
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const dayPickerScroll = useRef<HTMLDivElement>(null)
+  const showToast = (msg: string) => {
+    setToast(msg)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2200)
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -126,8 +140,40 @@ export default function TripDayPage() {
     }
   }, [params.id, params.date])
 
-  // Close the mobile drawer after navigating to a day.
-  useEffect(() => { setSidebarOpen(false) }, [params.date])
+  // Reset scroll and close the mobile drawer after navigating to a day.
+  useEffect(() => { setSidebarOpen(false); window.scrollTo(0, 0) }, [params.date])
+
+  // Lock background scroll while any sheet / drawer / panel is open (mobile).
+  useEffect(() => {
+    const open = !!editingId || !!sidePanel || sidebarOpen || showAddSheet || showDayPicker
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [editingId, sidePanel, sidebarOpen, showAddSheet, showDayPicker])
+
+  // Center the current day when the day picker opens.
+  useEffect(() => {
+    if (!showDayPicker) return
+    const c = dayPickerScroll.current
+    const el = c?.querySelector(`[data-pd="${params.date}"]`) as HTMLElement | null
+    if (c && el) { const er = el.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTop += (er.top - cr.top) - 140 }
+  }, [showDayPicker, params.date])
+
+  // Swipe left/right on the day's content to move to the next / previous day.
+  const swipeNav = {
+    onTouchStart: (e: React.TouchEvent) => {
+      if (editingId || sidePanel || sidebarOpen || showAddSheet) { touchStart.current = null; return }
+      const t = e.touches[0]; touchStart.current = { x: t.clientX, y: t.clientY }
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      const s = touchStart.current; touchStart.current = null
+      if (!s) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - s.x, dy = t.clientY - s.y
+      if (Math.abs(dx) < 64 || Math.abs(dy) > Math.abs(dx) * 0.8) return
+      if (dx < 0 && nextDate) router.push(`/trips/${params.id}/${nextDate}`)
+      else if (dx > 0 && prevDate) router.push(`/trips/${params.id}/${prevDate}`)
+    },
+  }
 
   const save = async (overrideItems?: EditorSection[]) => {
     if (saving) return
@@ -241,6 +287,7 @@ export default function TripDayPage() {
 
     setSaving(false)
     setSaved(true)
+    showToast(`Moved to Day ${allDates.indexOf(targetDate) + 1}`)
     setTimeout(() => setSaved(false), 2000)
   }
 
@@ -302,6 +349,7 @@ export default function TripDayPage() {
       setTitle(nc.title ?? '')
       setSectionItems(notesToSectionData(nc.notes).map(s => ({ ...s, _id: newId() })))
     }
+    showToast('Days swapped')
   }
 
   // Save + close the edit panel (used by the panel's ✕/backdrop and Done).
@@ -417,9 +465,6 @@ export default function TripDayPage() {
           <div className="h-6 w-14 rounded-full bg-gray-100 animate-pulse" />
           <div className="h-5 w-40 rounded bg-gray-100 animate-pulse" />
         </div>
-        <div className="lg:hidden flex gap-1.5 px-3 py-2 border-b border-gray-100">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 w-14 rounded-xl bg-gray-100 animate-pulse flex-shrink-0" />)}
-        </div>
         <div className="max-w-2xl mx-auto px-5 py-6 space-y-4">
           <div className="h-11 w-full rounded-lg bg-gray-100 animate-pulse" />
           {Array.from({ length: 5 }).map((_, i) => (
@@ -442,6 +487,7 @@ export default function TripDayPage() {
     const d = String(t.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   })()
+  const todayInRange = allDates.includes(todayLocal)
 
   return (
    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={clearDrag}>
@@ -475,7 +521,7 @@ export default function TripDayPage() {
       <div className={`flex-1 lg:ml-72 transition-[margin] duration-300 ${editingId ? 'lg:mr-[460px]' : ''}`}>
 
         {/* Sticky header */}
-        <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
+        <div className="bg-white border-b border-gray-200 shadow-sm sticky top-[49px] z-10">
           <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <button
@@ -485,9 +531,13 @@ export default function TripDayPage() {
               >
                 <span className="block w-5 h-5 text-lg leading-none">☰</span>
               </button>
-              <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-2.5 py-1 whitespace-nowrap">
-                Day {dayNumber}
-              </span>
+              <button
+                onClick={() => setShowDayPicker(true)}
+                aria-label="Jump to day"
+                className="lg:pointer-events-none flex-shrink-0 inline-flex items-center gap-1 text-xs font-bold bg-blue-600 text-white rounded-full pl-2.5 pr-2 py-1 whitespace-nowrap active:scale-95 transition"
+              >
+                Day {dayNumber}<span className="lg:hidden text-blue-200 font-semibold">/{allDates.length} ▾</span>
+              </button>
               <div className="min-w-0">
                 <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
                   {title || 'Untitled day'}
@@ -512,11 +562,9 @@ export default function TripDayPage() {
               )}
             </div>
           </div>
-          {/* Mobile: quick day jumper */}
-          <MobileDayStrip tripId={params.id} allDates={allDates} activeDate={params.date} todayLocal={todayLocal} />
         </div>
 
-        <div className="max-w-2xl mx-auto px-5 sm:px-6 pt-4 sm:pt-6 pb-28 md:pb-10 space-y-3 sm:space-y-4">
+        <div {...swipeNav} className="max-w-2xl mx-auto px-5 sm:px-6 pt-4 sm:pt-6 pb-28 md:pb-10 space-y-3 sm:space-y-4">
 
           {/* Always-visible title edit */}
           <input
@@ -524,8 +572,10 @@ export default function TripDayPage() {
             value={title}
             onChange={e => setTitle(e.target.value)}
             onBlur={() => save()}
+            autoCapitalize="sentences"
+            enterKeyHint="done"
             placeholder="Day title, e.g. Arrival in Tokyo"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 sm:py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
 
           {/* Hotels covering this day (managed in the sidebar) */}
@@ -660,12 +710,59 @@ export default function TripDayPage() {
         </div>
       )}
 
+      {/* Mobile day picker — jump to any of the trip's days */}
+      {showDayPicker && (
+        <>
+          <div className="lg:hidden fixed inset-0 bg-black/30 z-40" onClick={() => setShowDayPicker(false)} />
+          <div className="lg:hidden fixed inset-x-0 bottom-0 top-[16vh] z-50 bg-white rounded-t-2xl shadow-2xl flex flex-col">
+            <div className="flex justify-center pt-2.5 pb-1"><div className="w-10 h-1.5 rounded-full bg-gray-300" /></div>
+            <div className="flex items-center justify-between px-4 pb-2 border-b border-gray-100">
+              <p className="text-sm font-semibold text-gray-700">Jump to day</p>
+              <div className="flex items-center gap-4">
+                {todayInRange && (
+                  <button onClick={() => { router.push(`/trips/${params.id}/${todayLocal}`); setShowDayPicker(false) }} className="text-xs font-semibold text-blue-600">Today</button>
+                )}
+                <button onClick={() => setShowDayPicker(false)} className="text-xs font-medium text-gray-400">Close</button>
+              </div>
+            </div>
+            <div ref={dayPickerScroll} className="flex-1 overflow-y-auto p-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {allDates.map((d, i) => {
+                const active = d === params.date
+                const today = d === todayLocal
+                const t = dayTitleMap.get(d)
+                return (
+                  <button
+                    key={d}
+                    data-pd={d}
+                    onClick={() => { router.push(`/trips/${params.id}/${d}`); setShowDayPicker(false) }}
+                    className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? 'bg-blue-600' : today ? 'bg-blue-50' : 'active:bg-gray-100'}`}
+                  >
+                    <span className={`text-xs font-bold w-12 flex-shrink-0 ${active ? 'text-blue-200' : today ? 'text-blue-500' : 'text-gray-400'}`}>Day {i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-[11px] ${active ? 'text-blue-200' : 'text-gray-400'}`}>{fmtDay(d)}{today && !active ? ' · today' : ''}</p>
+                      <p className={`text-sm font-medium truncate ${active ? 'text-white' : t ? 'text-gray-800' : 'text-gray-400'}`}>{t ?? '—'}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Transient toast */}
+      {toast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          {toast}
+        </div>
+      )}
+
       {/* Mobile FAB — add a section without scrolling to the bottom */}
-      {!editingId && !sidePanel && !sidebarOpen && !showAddSheet && (
+      {!editingId && !sidePanel && !sidebarOpen && !showAddSheet && !showDayPicker && (
         <button
           onClick={() => setShowAddSheet(true)}
           aria-label="Add section"
-          className="lg:hidden fixed right-4 bottom-20 z-40 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center active:scale-95 transition"
+          className="lg:hidden fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center active:scale-95 transition"
         >
           <span className="text-3xl leading-none -mt-0.5">+</span>
         </button>
@@ -728,7 +825,7 @@ export default function TripDayPage() {
               {/* Map preview lives at the bottom of the sheet */}
               <LocationPreview coords={it.coords} name={name} />
               <button
-                onClick={async () => { const next = sectionItems.filter(s => s._id !== it._id); setSectionItems(next); setEditingId(null); setEditSnapshot(null); await save(next) }}
+                onClick={async () => { if (!confirm('Delete this section?')) return; const next = sectionItems.filter(s => s._id !== it._id); setSectionItems(next); setEditingId(null); setEditSnapshot(null); await save(next); showToast('Section deleted') }}
                 className="w-full text-sm font-medium text-red-500 border border-red-200 rounded-lg py-2.5 hover:bg-red-50 active:bg-red-100 transition"
               >
                 Delete section

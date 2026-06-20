@@ -92,7 +92,7 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
   return (
     <div
       onClick={onOpen}
-      className={`rounded-xl border ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''} ${onOpen ? 'cursor-pointer hover:brightness-[0.98] transition' : ''}`}
+      className={`rounded-xl border ${meta.bg} ${meta.border} ${skipped ? 'opacity-50' : ''} ${onOpen ? 'cursor-pointer hover:brightness-[0.98] active:scale-[0.99] transition' : ''}`}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="flex-shrink-0 text-base">{meta.icon}</span>
@@ -103,10 +103,8 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
           )}
           {duration && <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>}
         </div>
-        {hasPin ? (
+        {hasPin && (
           <span title="Location pinned — map available" className="flex-shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">📍 Map</span>
-        ) : (
-          <span title="No location pinned" className="flex-shrink-0 inline-flex items-center text-[10px] font-medium text-gray-300 border border-gray-200 rounded-full px-1.5 py-0.5">No pin</span>
         )}
         {rating != null && (
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>{rating}/10</span>

@@ -71,6 +71,7 @@ export default function TripHotels({ tripId, userId, hotels, defaultStart, defau
   }
 
   const remove = async (id: string) => {
+    if (!confirm('Delete this hotel?')) return
     const supabase = createClient()
     await supabase.from('trip_hotels').delete().eq('id', id)
     onChange()

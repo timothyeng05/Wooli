@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { notesToSectionData, findMeta, SectionMeta } from '@/lib/trips/trip-sections'
 import { MEAL_TYPES } from '@/lib/trips/trip-utils'
 import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
+import ShareDayPicker from '@/app/components/trips/ShareDayPicker'
 
 function serviceClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -179,18 +180,27 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
           <div className="max-w-2xl mx-auto px-6 py-6 flex items-start justify-between gap-4">
             <div>
-              <span className="inline-block text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1 mb-2">Day {dayNumber}</span>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="hidden lg:inline-block text-xs font-bold bg-blue-600 text-white rounded-full px-3 py-1">Day {dayNumber}</span>
+                <ShareDayPicker
+                  id={id}
+                  days={allDates.map(d => ({ date: d, title: titleMap.get(d) ?? null }))}
+                  activeDate={date}
+                  dayNumber={dayNumber}
+                  total={allDates.length}
+                />
+              </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{dayData?.title || dateLabel}</h1>
               <p className="text-sm text-gray-400 mt-1">{dateLabel}</p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {prevDate && <Link href={`/share/${id}/${prevDate}`} className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm">←</Link>}
-              {nextDate && <Link href={`/share/${id}/${nextDate}`} className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm">→</Link>}
+              {prevDate && <Link href={`/share/${id}/${prevDate}`} aria-label="Previous day" className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm">←</Link>}
+              {nextDate && <Link href={`/share/${id}/${nextDate}`} aria-label="Next day" className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm">→</Link>}
             </div>
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-6 py-8">
+        <div className="max-w-2xl mx-auto px-5 sm:px-6 py-6 sm:py-8 pb-24 lg:pb-10">
           {sections.length > 0 ? (
             <div>
               {sections.map((s, i) => {

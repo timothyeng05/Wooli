@@ -271,7 +271,7 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
       </div>
       <div>
         <label className={labelCls}>Rating <span className="text-gray-400 font-normal">(optional)</span></label>
-        <div className="flex gap-1 flex-wrap">
+        <div className="grid grid-cols-5 gap-1.5">
           {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
             const active = section.rating === n
             const style = active ? ratingStyle(n) : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -280,7 +280,7 @@ export function MealEditor({ section, onChange }: { section: EditorSection; onCh
                 key={n}
                 type="button"
                 onClick={() => onChange({ rating: active ? undefined : n })}
-                className={`w-8 h-8 rounded-lg text-xs font-bold transition ${style}`}
+                className={`h-10 rounded-lg text-sm font-bold transition active:scale-95 ${style}`}
               >
                 {n}
               </button>
