@@ -5,9 +5,23 @@ import { notesToSectionData, findMeta, SectionMeta } from '@/lib/trips/trip-sect
 import { MEAL_TYPES } from '@/lib/trips/trip-utils'
 import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
 import ShareDayPicker from '@/app/components/trips/ShareDayPicker'
+import AiShareButton from '@/app/components/trips/AiShareButton'
 
 function serviceClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  // Advertise the machine-readable export so crawlers / agents can discover it.
+  return {
+    alternates: {
+      types: {
+        'application/json': `/share/${id}/export`,
+        'text/markdown': `/share/${id}/export?format=md`,
+      },
+    },
+  }
 }
 
 function generateDays(startDate: string, endDate: string): string[] {
@@ -192,6 +206,10 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{dayData?.title || dateLabel}</h1>
               <p className="text-sm text-gray-400 mt-1">{dateLabel}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <AiShareButton path={`/share/${id}/export?format=md`} />
+                <span className="text-xs text-gray-400">Machine-readable — paste into Claude to plan a similar trip</span>
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {prevDate && <Link href={`/share/${id}/${prevDate}`} aria-label="Previous day" className="border border-gray-300 text-gray-600 font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition text-sm">←</Link>}
