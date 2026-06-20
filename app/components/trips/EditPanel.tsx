@@ -1,10 +1,12 @@
 'use client'
 import type { ReactNode } from 'react'
 
-// Slide-out edit panel: right-side drawer on desktop, bottom sheet on mobile.
-export default function EditPanel({ open, onClose, title, children }: {
+// Edit surface: a native-feel bottom sheet on mobile (grab handle, sticky
+// Cancel/Save header, safe-area padding), a right-side drawer on desktop.
+export default function EditPanel({ open, onSave, onCancel, title, children }: {
   open: boolean
-  onClose: () => void
+  onSave: () => void
+  onCancel: () => void
   title?: string
   children: ReactNode
 }) {
@@ -13,22 +15,35 @@ export default function EditPanel({ open, onClose, title, children }: {
       {/* Backdrop — only on mobile (desktop stays non-modal so other cards remain clickable) */}
       <div
         className={`fixed inset-0 bg-black/30 z-40 lg:hidden transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={onClose}
+        onClick={onSave}
       />
-      {/* Panel */}
+      {/* Sheet / drawer */}
       <div
         className={`fixed z-50 bg-white shadow-2xl flex flex-col transition-transform duration-300
-          inset-x-0 bottom-0 max-h-[88vh] rounded-t-2xl
-          lg:inset-y-0 lg:right-0 lg:left-auto lg:w-[460px] lg:max-h-none lg:rounded-none
+          inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
+          lg:inset-y-0 lg:h-auto lg:right-0 lg:left-auto lg:w-[460px] lg:rounded-none
           ${open ? 'translate-y-0 lg:translate-x-0' : 'translate-y-full lg:translate-y-0 lg:translate-x-full'}`}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-gray-700 truncate">{title ?? 'Edit'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none px-1" aria-label="Close">✕</button>
+        {/* Grab handle (mobile) */}
+        <div className="lg:hidden flex justify-center pt-2.5 pb-1 flex-shrink-0">
+          <div className="w-10 h-1.5 rounded-full bg-gray-300" />
         </div>
-        <div className="flex-1 overflow-y-auto p-4">{open && children}</div>
+        {/* Sticky header: Cancel · title · Save */}
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-200 flex-shrink-0">
+          <button onClick={onCancel} className="text-sm font-medium text-gray-500 px-2 py-1.5 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition">
+            Cancel
+          </button>
+          <h2 className="text-sm font-semibold text-gray-800 truncate text-center flex-1">{title ?? 'Edit'}</h2>
+          <button onClick={onSave} className="text-sm font-semibold text-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition">
+            Save
+          </button>
+        </div>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          {open && children}
+        </div>
       </div>
     </>
   )

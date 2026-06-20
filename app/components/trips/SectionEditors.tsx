@@ -12,13 +12,13 @@ function DurationInput({ value, onChange }: { value?: string; onChange: (val: st
   const emit = (nh: number, nm: number) => { const s = formatDuration(nh, nm); onChange(s || undefined) }
   return (
     <div className="flex items-center gap-1.5">
-      <input type="number" min={0} max={99} value={h || ''} placeholder="0"
+      <input type="number" inputMode="numeric" min={0} max={99} value={h || ''} placeholder="0"
         onChange={e => { const v = Math.max(0, parseInt(e.target.value) || 0); setH(v); emit(v, m) }}
-        className="w-14 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
+        className="w-14 border border-gray-200 rounded-lg px-2 py-2.5 sm:py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
       <span className="text-xs text-gray-400 font-medium">h</span>
-      <input type="number" min={0} max={59} value={m || ''} placeholder="0"
+      <input type="number" inputMode="numeric" min={0} max={59} value={m || ''} placeholder="0"
         onChange={e => { const v = Math.max(0, Math.min(59, parseInt(e.target.value) || 0)); setM(v); emit(h, v) }}
-        className="w-14 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
+        className="w-14 border border-gray-200 rounded-lg px-2 py-2.5 sm:py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-center" />
       <span className="text-xs text-gray-400 font-medium">m</span>
     </div>
   )

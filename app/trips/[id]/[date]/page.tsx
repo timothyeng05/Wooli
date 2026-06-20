@@ -8,13 +8,14 @@ import {
   type DragStartEvent, type DragOverEvent, type DragEndEvent,
 } from '@dnd-kit/core'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
-import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, parseCoords } from '@/lib/trips/trip-utils'
+import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, ADD_SECTION_GROUPS, parseCoords } from '@/lib/trips/trip-utils'
 import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import TripHotels, { type TripHotel } from '@/app/components/trips/TripHotels'
 import TripSidebar, { type SidePanel } from '@/app/components/trips/TripSidebar'
 import EditPanel from '@/app/components/trips/EditPanel'
+import MobileDayStrip from '@/app/components/trips/MobileDayStrip'
 import { findMeta } from '@/lib/trips/trip-sections'
 
 type DayData = { title: string | null; notes: string | null; date: string }
@@ -26,9 +27,11 @@ function newId() { return `s${++_idCounter}` }
 function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, data: { type: 'card' } })
   return (
-    <div ref={setNodeRef} className={`flex items-stretch gap-1 ${isDragging ? 'opacity-50' : ''}`}>
+    <div ref={setNodeRef} className={`flex items-stretch gap-0 lg:gap-1 ${isDragging ? 'opacity-50' : ''}`}>
+      {/* Grip is desktop-only — moving a card to another day on mobile uses the
+          "Move to day" control in the edit sheet (the day list lives in a drawer). */}
       <button {...attributes} {...listeners} title="Drag to another day"
-        className="px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex items-center flex-shrink-0">⠿</button>
+        className="hidden lg:flex px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing items-center flex-shrink-0">⠿</button>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
   )
@@ -45,6 +48,7 @@ export default function TripDayPage() {
   const [userId, setUserId] = useState<string>('')
   const [sidePanel, setSidePanel] = useState<SidePanel>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showAddSheet, setShowAddSheet] = useState(false)
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -406,7 +410,27 @@ export default function TripDayPage() {
   })
 
   if (loading) {
-    return <div className="min-h-screen bg-white flex items-center justify-center text-gray-400 text-sm">Loading...</div>
+    return (
+      <div className="min-h-screen bg-white">
+        <div className="border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gray-100 animate-pulse lg:hidden" />
+          <div className="h-6 w-14 rounded-full bg-gray-100 animate-pulse" />
+          <div className="h-5 w-40 rounded bg-gray-100 animate-pulse" />
+        </div>
+        <div className="lg:hidden flex gap-1.5 px-3 py-2 border-b border-gray-100">
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 w-14 rounded-xl bg-gray-100 animate-pulse flex-shrink-0" />)}
+        </div>
+        <div className="max-w-2xl mx-auto px-5 py-6 space-y-4">
+          <div className="h-11 w-full rounded-lg bg-gray-100 animate-pulse" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex gap-3">
+              <div className="w-12 h-4 rounded bg-gray-100 animate-pulse mt-2.5 flex-shrink-0" />
+              <div className="flex-1 h-16 rounded-xl bg-gray-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   const dayTitleMap = new Map(days.map(d => [d.date, d.title]))
@@ -474,23 +498,25 @@ export default function TripDayPage() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              {saving && <span className="text-xs text-gray-400">Saving…</span>}
+              {saved && !saving && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
               {prevDate && (
-                <Link href={`/trips/${params.id}/${prevDate}`} className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs">
+                <Link href={`/trips/${params.id}/${prevDate}`} aria-label="Previous day" className="hidden sm:inline-block border border-gray-200 text-gray-500 font-medium px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition text-xs">
                   ← Prev
                 </Link>
               )}
               {nextDate && (
-                <Link href={`/trips/${params.id}/${nextDate}`} className="border border-gray-200 text-gray-500 font-medium px-2.5 py-1 rounded-lg hover:bg-gray-50 transition text-xs">
+                <Link href={`/trips/${params.id}/${nextDate}`} aria-label="Next day" className="hidden sm:inline-block border border-gray-200 text-gray-500 font-medium px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition text-xs">
                   Next →
                 </Link>
               )}
-              {saving && <span className="text-xs text-gray-400">Saving…</span>}
-              {saved && !saving && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
             </div>
           </div>
+          {/* Mobile: quick day jumper */}
+          <MobileDayStrip tripId={params.id} allDates={allDates} activeDate={params.date} todayLocal={todayLocal} />
         </div>
 
-        <div className="max-w-2xl mx-auto px-5 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
+        <div className="max-w-2xl mx-auto px-5 sm:px-6 pt-4 sm:pt-6 pb-28 md:pb-10 space-y-3 sm:space-y-4">
 
           {/* Always-visible title edit */}
           <input
@@ -531,7 +557,7 @@ export default function TripDayPage() {
                   return (
                     <div key={item._id}>
                       <div className="flex gap-2">
-                        <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3">
+                        <div className="flex flex-col items-end flex-shrink-0 w-12 sm:w-14 pt-3">
                           {s.pinned && <span className="text-xs leading-none mb-0.5">⭐</span>}
                           <span className="text-[11px] font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
                         </div>
@@ -561,13 +587,14 @@ export default function TripDayPage() {
                       </div>
                       {i < sectionItems.length - 1 && (
                         insertAt === i ? (
-                          <div className="my-1.5 ml-16">
+                          <div className="my-1.5 ml-14 sm:ml-16">
                             <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 ml-16" style={{ height: '16px' }}>
+                          <div className="flex items-center gap-2 ml-14 sm:ml-16 py-0.5">
                             <div className="flex-1 h-px bg-gray-100" />
-                            <button onClick={() => setInsertAt(i)} className="text-xs text-gray-300 hover:text-blue-500 transition px-1.5 rounded-full hover:bg-blue-50 leading-none">
+                            <button onClick={() => setInsertAt(i)} aria-label="Insert section here"
+                              className="flex items-center justify-center w-7 h-7 sm:w-5 sm:h-5 text-base sm:text-xs text-gray-300 hover:text-blue-500 rounded-full hover:bg-blue-50 transition leading-none">
                               +
                             </button>
                             <div className="flex-1 h-px bg-gray-100" />
@@ -579,7 +606,13 @@ export default function TripDayPage() {
                 })}
               </div>
             </>
-          ) : null}
+          ) : (
+            <div className="text-center py-10">
+              <div className="text-4xl mb-2">🗺️</div>
+              <p className="text-sm text-gray-500 font-medium">No plans yet for this day</p>
+              <p className="text-xs text-gray-400 mt-0.5">Tap the ＋ button to add transit, an activity, or a meal.</p>
+            </div>
+          )}
 
           {/* Add section */}
           {showAddPicker
@@ -604,7 +637,7 @@ export default function TripDayPage() {
             <h2 className="text-base font-bold text-gray-900">{sidePanel === 'hotels' ? '🏨 Hotels' : '🍴 What we ate'}</h2>
             <button onClick={() => setSidePanel(null)} className="text-sm text-gray-400 hover:text-gray-700">✕ Close</button>
           </div>
-          <div className="max-w-2xl mx-auto p-4">
+          <div className="max-w-2xl mx-auto p-4 pb-28 md:pb-8">
             {sidePanel === 'hotels' && trip && (
               <TripHotels tripId={params.id} userId={userId} hotels={hotels} defaultStart={trip.start_date} defaultEnd={trip.end_date} onChange={reloadHotels} />
             )}
@@ -627,31 +660,64 @@ export default function TripDayPage() {
         </div>
       )}
 
+      {/* Mobile FAB — add a section without scrolling to the bottom */}
+      {!editingId && !sidePanel && !sidebarOpen && !showAddSheet && (
+        <button
+          onClick={() => setShowAddSheet(true)}
+          aria-label="Add section"
+          className="lg:hidden fixed right-4 bottom-20 z-40 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center active:scale-95 transition"
+        >
+          <span className="text-3xl leading-none -mt-0.5">+</span>
+        </button>
+      )}
+      {showAddSheet && (
+        <>
+          <div className="lg:hidden fixed inset-0 bg-black/30 z-40" onClick={() => setShowAddSheet(false)} />
+          <div className="lg:hidden fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="flex justify-center pt-2.5 pb-1"><div className="w-10 h-1.5 rounded-full bg-gray-300" /></div>
+            <p className="px-5 pb-1 text-sm font-semibold text-gray-700">Add to this day</p>
+            <div className="px-3 py-2 space-y-1.5">
+              {ADD_SECTION_GROUPS.flatMap(g => g.types).map(type => {
+                const m = findMeta(type)
+                if (!m) return null
+                return (
+                  <button
+                    key={type}
+                    onClick={() => { addSection(type); setShowAddSheet(false) }}
+                    className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left active:scale-[0.99] transition ${m.bg} ${m.border}`}
+                  >
+                    <span className="text-2xl">{m.icon}</span>
+                    <span className={`text-base font-semibold ${m.text}`}>{m.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Slide-out edit panel */}
       <EditPanel
         open={!!editingId}
-        onClose={commitEdit}
+        onSave={commitEdit}
+        onCancel={cancelEdit}
         title={(() => {
           const it = sectionItems.find(s => s._id === editingId)
-          return it ? (it.title || it.lines.find(l => l.trim() && !l.trim().startsWith('-')) || findMeta(it.type)?.label || 'Edit') : 'Edit'
+          return it ? (it.lines.find(l => l.trim() && !l.trim().startsWith('-')) || findMeta(it.type)?.label || 'Edit') : 'Edit'
         })()}
       >
         {(() => {
           const it = sectionItems.find(s => s._id === editingId)
           if (!it) return null
           const idx = sectionItems.findIndex(s => s._id === it._id)
-          const name = it.title || it.lines.find(l => l.trim() && !l.trim().startsWith('-')) || undefined
+          const name = it.lines.find(l => l.trim() && !l.trim().startsWith('-')) || undefined
           return (
             <div className="space-y-3">
-              <LocationPreview coords={it.coords} name={name} />
               <SectionEditorCard
                 section={it}
                 onChange={updates => updateSection(it._id, updates)}
-                onDelete={async () => { const next = sectionItems.filter(s => s._id !== it._id); setSectionItems(next); setEditingId(null); setEditSnapshot(null); await save(next) }}
                 onMoveUp={idx > 0 ? () => moveSection(idx, -1) : undefined}
                 onMoveDown={idx < sectionItems.length - 1 ? () => moveSection(idx, 1) : undefined}
-                onCancel={cancelEdit}
-                onDone={commitEdit}
                 dayOptions={dayOptions}
                 currentDate={params.date}
                 onMoveToDay={async (targetDate) => {
@@ -659,6 +725,14 @@ export default function TripDayPage() {
                   await handleMoveToDay(it._id, targetDate, sectionItems)
                 }}
               />
+              {/* Map preview lives at the bottom of the sheet */}
+              <LocationPreview coords={it.coords} name={name} />
+              <button
+                onClick={async () => { const next = sectionItems.filter(s => s._id !== it._id); setSectionItems(next); setEditingId(null); setEditSnapshot(null); await save(next) }}
+                className="w-full text-sm font-medium text-red-500 border border-red-200 rounded-lg py-2.5 hover:bg-red-50 active:bg-red-100 transition"
+              >
+                Delete section
+              </button>
             </div>
           )
         })()}

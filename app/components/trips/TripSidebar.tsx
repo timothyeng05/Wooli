@@ -142,7 +142,7 @@ export default function TripSidebar({
       </div>
 
       {/* Days (legs-grouped & collapsible, drag to swap) */}
-      <div className="flex-1 overflow-y-auto" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto pb-24 lg:pb-3" ref={scrollRef}>
         <SortableContext items={visibleDates} strategy={verticalListSortingStrategy}>
           {groups.map((g, gi) => {
             const c = LEG_COLORS[gi % LEG_COLORS.length]

@@ -11,14 +11,11 @@ import {
   ActivityEditor, MealEditor, GeneralEditor,
 } from './SectionEditors'
 
-export function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMoveDown, onDone, onCancel, dayOptions, currentDate, onMoveToDay }: {
+export function SectionEditorCard({ section, onChange, onMoveUp, onMoveDown, dayOptions, currentDate, onMoveToDay }: {
   section: EditorSection
   onChange: (updates: Partial<SectionData>) => void
-  onDelete: () => void
   onMoveUp?: () => void
   onMoveDown?: () => void
-  onDone?: () => void
-  onCancel?: () => void
   dayOptions?: { date: string; label: string }[]
   currentDate?: string
   onMoveToDay?: (targetDate: string) => void
@@ -81,42 +78,27 @@ export function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMov
         ? <MealEditor section={section} onChange={onChange} />
         : <GeneralEditor section={section} onChange={onChange} />
       }
-      {onDone && (
-        <div className="mt-3 pt-3 border-t border-gray-200/60 space-y-2">
-          {dayOptions && dayOptions.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 whitespace-nowrap">Move to:</span>
-              <select
-                value={moveDayTarget}
-                onChange={e => setMoveDayTarget(e.target.value)}
-                className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
-              >
-                {dayOptions.map(opt => (
-                  <option key={opt.date} value={opt.date}>{opt.label}</option>
-                ))}
-              </select>
-              {moveDayTarget !== currentDate && onMoveToDay && (
-                <button
-                  onClick={() => onMoveToDay(moveDayTarget)}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition whitespace-nowrap"
-                >
-                  Move →
-                </button>
-              )}
-            </div>
-          )}
+      {onMoveToDay && dayOptions && dayOptions.length > 1 && (
+        <div className="mt-3 pt-3 border-t border-gray-200/60">
           <div className="flex items-center gap-2">
-            <button onClick={onDone} className="flex-1 bg-blue-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-blue-700 transition">
-              Save
-            </button>
-            {onCancel && (
-              <button onClick={onCancel} className="text-sm font-medium text-gray-500 px-3 py-2 rounded-lg hover:bg-gray-100 transition">
-                Cancel
+            <span className="text-xs text-gray-400 whitespace-nowrap">Move to:</span>
+            <select
+              value={moveDayTarget}
+              onChange={e => setMoveDayTarget(e.target.value)}
+              className="flex-1 text-xs border border-gray-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
+            >
+              {dayOptions.map(opt => (
+                <option key={opt.date} value={opt.date}>{opt.label}</option>
+              ))}
+            </select>
+            {moveDayTarget !== currentDate && (
+              <button
+                onClick={() => onMoveToDay(moveDayTarget)}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition whitespace-nowrap"
+              >
+                Move →
               </button>
             )}
-            <button onClick={onDelete} title="Delete" className="text-gray-300 hover:text-red-500 px-2.5 py-2 rounded-lg hover:bg-red-50 transition">
-              🗑
-            </button>
           </div>
         </div>
       )}
