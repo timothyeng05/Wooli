@@ -15,8 +15,8 @@ function fmt(date: string, opts?: Intl.DateTimeFormatOptions) {
   return new Date(date + 'T00:00:00').toLocaleDateString('en-US', opts ?? { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver }: {
-  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; tripId: string; cardOver: boolean
+function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver, dropLine }: {
+  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; tripId: string; cardOver: boolean; dropLine: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: date, data: { type: 'day' } })
   const isActive = date === activeDate
@@ -26,8 +26,9 @@ function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver 
       ref={setNodeRef}
       data-day={date}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center ${isDragging ? 'opacity-60' : ''} ${cardOver ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
+      className={`relative flex items-center ${isDragging ? 'opacity-60' : ''} ${cardOver ? 'ring-2 ring-inset ring-blue-500 bg-blue-50' : isActive ? 'bg-blue-600' : isToday ? 'bg-blue-50' : 'hover:bg-gray-100'}`}
     >
+      {dropLine && <div className="absolute left-0 right-0 -top-px h-0.5 bg-blue-500 z-10 rounded-full" />}
       <button {...attributes} {...listeners} title="Drag to swap days"
         className={`px-2 py-3 cursor-grab active:cursor-grabbing flex-shrink-0 ${isActive ? 'text-blue-200' : 'text-gray-300 hover:text-gray-500'}`}>⠿</button>
       <Link href={`/trips/${tripId}/${date}`} className="flex items-center gap-2 flex-1 min-w-0 pr-4 py-2.5">
@@ -43,7 +44,7 @@ function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver 
 
 export default function TripSidebar({
   tripId, tripName, startDate, endDate, allDates, days, activeDate, todayLocal, shareUrl,
-  hotelCount, ateCount, activePanel, onOpenPanel, dragType, overDate,
+  hotelCount, ateCount, activePanel, onOpenPanel, dragType, overDate, overDayDate, mobileOpen, onMobileClose,
 }: {
   tripId: string; tripName: string; startDate: string; endDate: string
   allDates: string[]; days: DayRow[]
@@ -53,6 +54,9 @@ export default function TripSidebar({
   onOpenPanel: (p: SidePanel) => void
   dragType: 'day' | 'card' | null
   overDate: string | null
+  overDayDate: string | null
+  mobileOpen: boolean
+  onMobileClose: () => void
 }) {
   const titleMap = useMemo(() => new Map(days.map(d => [d.date, d.title])), [days])
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
@@ -106,12 +110,21 @@ export default function TripSidebar({
   )
 
   return (
-    <aside className="hidden lg:flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-[49px] left-0 h-[calc(100vh-49px)] z-20">
+    <>
+    {/* Mobile backdrop */}
+    <div
+      className={`fixed inset-0 top-[49px] bg-black/30 z-30 lg:hidden transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      onClick={onMobileClose}
+    />
+    <aside className={`flex flex-col w-72 border-r border-gray-100 bg-gray-50 fixed top-[49px] left-0 h-[calc(100vh-49px)] z-40 lg:z-20 transition-transform duration-300 lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Header: back, name, progress, share */}
       <div className="px-5 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between gap-2">
           <Link href="/trips" className="text-xs font-semibold text-gray-400 hover:text-blue-600 transition">← Trips</Link>
-          <ShareButton url={shareUrl} />
+          <div className="flex items-center gap-2">
+            <ShareButton url={shareUrl} />
+            <button onClick={onMobileClose} className="lg:hidden text-gray-400 hover:text-gray-700 text-lg leading-none px-1" aria-label="Close menu">✕</button>
+          </div>
         </div>
         <h1 className="text-base font-bold text-gray-900 mt-1 leading-tight">{tripName}</h1>
         <p className="text-xs text-gray-500 mt-0.5">{label}</p>
@@ -150,7 +163,8 @@ export default function TripSidebar({
                 {!isCollapsed && g.dates.map(date => (
                   <DayItem key={date} date={date} index={allDates.indexOf(date)} activeDate={activeDate}
                     todayLocal={todayLocal} title={titleMap.get(date) ?? null} tripId={tripId}
-                    cardOver={dragType === 'card' && overDate === date} />
+                    cardOver={dragType === 'card' && overDate === date}
+                    dropLine={dragType === 'day' && overDayDate === date} />
                 ))}
               </div>
             )
@@ -158,5 +172,6 @@ export default function TripSidebar({
         </SortableContext>
       </div>
     </aside>
+    </>
   )
 }

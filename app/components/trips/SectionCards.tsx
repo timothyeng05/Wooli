@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import DayLocationMap, { type LocationPoint } from './DayLocationMapClient'
 import type { SectionMeta } from '@/lib/trips/trip-sections'
-import { ratingStyle, ACTIVITY_TYPES, MEAL_TYPES, parseCoords, parsePlaceId } from '@/lib/trips/trip-utils'
+import { ratingStyle, parseCoords, parsePlaceId } from '@/lib/trips/trip-utils'
 
 // Maps Embed API (place card with the real listing) only works when the
 // "Maps Embed API" is enabled on the key. Opt in by setting this flag once it is.
@@ -60,23 +60,22 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
   skipped?: boolean
 }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
-  const t = type?.toUpperCase() ?? ''
-  const isActivityOrMeal = ACTIVITY_TYPES.has(t) || MEAL_TYPES.has(t)
 
   let duration: string | null = null
   let content = allContent
   const dl = allContent.find(l => l.startsWith('~'))
   if (dl) { duration = dl.slice(1).trim(); content = allContent.filter(l => !l.startsWith('~')) }
 
+  // The card title is always the real content name (restaurant / activity /
+  // route) — no AI-generated titles. Falls back to the section label.
   let displayName: string | null = null
   let body = content
-  if (isActivityOrMeal && !title) {
-    const nameIdx = content.findIndex(l => !l.startsWith('-'))
-    if (nameIdx >= 0) { displayName = content[nameIdx]; body = content.filter((_, i) => i !== nameIdx) }
-  }
+  const nameIdx = content.findIndex(l => !l.startsWith('-'))
+  if (nameIdx >= 0) { displayName = content[nameIdx]; body = content.filter((_, i) => i !== nameIdx) }
 
-  const headerText = title || displayName || meta.label
+  const headerText = displayName || title || meta.label
   const bodyPreview = body.map(l => l.replace(/^-\s*/, '')).filter(Boolean).join(' · ')
+  const hasPin = !!parseCoords(coords)
 
   if (!content.length && !duration && !title && !place) {
     if (!onOpen) return null
@@ -104,6 +103,11 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
           )}
           {duration && <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>}
         </div>
+        {hasPin ? (
+          <span title="Location pinned — map available" className="flex-shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">📍 Map</span>
+        ) : (
+          <span title="No location pinned" className="flex-shrink-0 inline-flex items-center text-[10px] font-medium text-gray-300 border border-gray-200 rounded-full px-1.5 py-0.5">No pin</span>
+        )}
         {rating != null && (
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(rating)}`}>{rating}/10</span>
         )}
@@ -148,6 +152,9 @@ export function HotelCard({ meta, lines, onEdit, skipped, coords, checkpoint, ed
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${checkpoint === 'in' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
             {checkpoint === 'in' ? 'Check-in' : 'Check-out'}
           </span>
+        )}
+        {latLng && (
+          <span title="Location pinned — exact map" className="flex-shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">📍 Pinned</span>
         )}
         <span className={`text-gray-300 text-xs flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
         {skipped && (

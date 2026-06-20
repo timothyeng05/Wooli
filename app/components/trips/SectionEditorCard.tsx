@@ -4,7 +4,7 @@ import { findMeta } from '@/lib/trips/trip-sections'
 import type { SectionData } from '@/lib/trips/trip-sections'
 import {
   type EditorSection,
-  ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, ADD_SECTION_GROUPS, ALL_SECTION_TYPES,
+  ACTIVITY_TYPES, MEAL_TYPES, ADD_SECTION_GROUPS, ALL_SECTION_TYPES,
 } from '@/lib/trips/trip-utils'
 import {
   TravelEditor, HotelEditor, DriveEditor, CarEditor,
@@ -67,17 +67,6 @@ export function SectionEditorCard({ section, onChange, onDelete, onMoveUp, onMov
           </label>
         </div>
       </div>
-      {!HIDE_TITLE_TYPES.has(t) && (
-        <div className="mb-3">
-          <input
-            type="text"
-            value={section.title ?? ''}
-            onChange={e => onChange({ title: e.target.value || undefined })}
-            placeholder="Title (auto-generated if blank)"
-            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-          />
-        </div>
-      )}
       {(meta.banner || meta.travel) && !meta.car
         ? <TravelEditor section={section} onChange={onChange} />
         : meta.hotel

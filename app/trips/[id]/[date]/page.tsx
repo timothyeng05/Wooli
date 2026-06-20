@@ -4,11 +4,11 @@ import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
-  DndContext, PointerSensor, useSensor, useSensors, useDraggable, closestCenter,
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDraggable, closestCenter,
   type DragStartEvent, type DragOverEvent, type DragEndEvent,
 } from '@dnd-kit/core'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
-import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, HIDE_TITLE_TYPES, parseCoords } from '@/lib/trips/trip-utils'
+import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, parseCoords } from '@/lib/trips/trip-utils'
 import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
@@ -21,25 +21,6 @@ type DayData = { title: string | null; notes: string | null; date: string }
 
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
-
-async function generateMissingTitles(items: EditorSection[]): Promise<EditorSection[]> {
-  const candidates = items.filter(s => {
-    const t = s.type.toUpperCase()
-    return !HIDE_TITLE_TYPES.has(t) && !s.title && s.lines.filter(Boolean).some(l => l.trim())
-  })
-  if (!candidates.length) return items
-  try {
-    const res = await fetch('/api/trips/section-title', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(candidates.map(s => ({ type: s.type, lines: s.lines, timeOverride: s.timeOverride, duration: s.duration }))),
-    })
-    const { titles }: { titles: string[] } = await res.json()
-    if (!Array.isArray(titles)) return items
-    const titleMap = new Map(candidates.map((c, i) => [c._id, titles[i] || undefined]))
-    return items.map(item => titleMap.has(item._id) ? { ...item, title: titleMap.get(item._id) } : item)
-  } catch { return items }
-}
 
 // A timeline card you can drag (by its grip) onto another day in the sidebar.
 function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
@@ -63,6 +44,7 @@ export default function TripDayPage() {
   const [hotels, setHotels] = useState<TripHotel[]>([])
   const [userId, setUserId] = useState<string>('')
   const [sidePanel, setSidePanel] = useState<SidePanel>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [prevDate, setPrevDate] = useState<string | null>(null)
   const [nextDate, setNextDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -114,19 +96,9 @@ export default function TripDayPage() {
         setTitle(current.title ?? '')
         const sectionData = notesToSectionData(current.notes)
         const items = sectionData.map(s => ({ ...s, _id: newId() }))
-        const itemsWithTitles = await generateMissingTitles(items)
-        setSectionItems(itemsWithTitles)
+        setSectionItems(items)
         if (window.innerWidth >= 1024) {
-          setExpandedSections(new Set(itemsWithTitles.map(s => s._id)))
-        }
-
-        if (itemsWithTitles !== items) {
-          const notesJson = JSON.stringify(itemsWithTitles.map(({ _id, ...s }) => s))
-          await supabase.from('trip_days').upsert(
-            { trip_id: params.id, user_id: user.id, date: params.date,
-              title: current.title || null, notes: notesJson },
-            { onConflict: 'trip_id,date' }
-          )
+          setExpandedSections(new Set(items.map(s => s._id)))
         }
       }
       setLoading(false)
@@ -150,6 +122,9 @@ export default function TripDayPage() {
     }
   }, [params.id, params.date])
 
+  // Close the mobile drawer after navigating to a day.
+  useEffect(() => { setSidebarOpen(false) }, [params.date])
+
   const save = async (overrideItems?: EditorSection[]) => {
     if (saving) return
     setSaving(true)
@@ -171,9 +146,7 @@ export default function TripDayPage() {
   const startEdit = async (itemId: string) => {
     if (editingId && editingId !== itemId) {
       setEditSnapshot(null)
-      const withTitles = await generateMissingTitles(sectionItems)
-      setSectionItems(withTitles)
-      await save(withTitles)
+      await save()
     }
     const item = sectionItems.find(s => s._id === itemId)
     if (item) setEditSnapshot({ ...item, lines: [...item.lines] })
@@ -330,31 +303,43 @@ export default function TripDayPage() {
   // Save + close the edit panel (used by the panel's ✕/backdrop and Done).
   const commitEdit = async () => {
     setEditSnapshot(null)
-    const withTitles = await generateMissingTitles(sectionItems)
-    setSectionItems(withTitles)
-    await save(withTitles) // save() clears editingId
+    await save() // save() clears editingId
   }
 
   // Drag-and-drop: swap days, or drop a section card onto another day.
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [dragType, setDragType] = useState<'day' | 'card' | null>(null)
-  const [overDate, setOverDate] = useState<string | null>(null)
-  const onDragStart = (e: DragStartEvent) => setDragType((e.active.data.current?.type as 'day' | 'card') ?? null)
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const [overDate, setOverDate] = useState<string | null>(null)       // card → day target (highlight)
+  const [overDayDate, setOverDayDate] = useState<string | null>(null) // day → day target (blue line)
+  const onDragStart = (e: DragStartEvent) => {
+    setDragType((e.active.data.current?.type as 'day' | 'card') ?? null)
+    setActiveDragId(String(e.active.id))
+  }
   const onDragOver = (e: DragOverEvent) => {
-    if (e.active.data.current?.type === 'card') {
-      setOverDate(e.over?.data.current?.type === 'day' ? String(e.over.id) : null)
+    const t = e.active.data.current?.type
+    const overType = e.over?.data.current?.type
+    if (t === 'card') {
+      setOverDate(overType === 'day' ? String(e.over!.id) : null)
+    } else if (t === 'day') {
+      setOverDayDate(overType === 'day' && e.over && e.over.id !== e.active.id ? String(e.over.id) : null)
     }
   }
+  const clearDrag = () => { setDragType(null); setActiveDragId(null); setOverDate(null); setOverDayDate(null) }
   const onDragEnd = async (e: DragEndEvent) => {
     const t = e.active.data.current?.type
     const overType = e.over?.data.current?.type
-    setDragType(null); setOverDate(null)
+    clearDrag()
     if (t === 'day' && overType === 'day' && e.over && e.active.id !== e.over.id) {
       await swapDays(String(e.active.id), String(e.over.id))
     } else if (t === 'card' && overType === 'day' && e.over && String(e.over.id) !== params.date) {
       await handleMoveToDay(String(e.active.id), String(e.over.id), sectionItems)
     }
   }
+
+  // The card preview shown floating under the cursor while dragging.
+  const activeDragItem = activeDragId ? sectionItems.find(s => s._id === activeDragId) : null
+  const activeDragDisplay = activeDragItem ? sectionDataToDisplay(activeDragItem) : null
 
   // Hotels covering the current day, with a check-in/check-out badge on boundaries.
   const dayHotels = useMemo(() => {
@@ -435,7 +420,7 @@ export default function TripDayPage() {
   })()
 
   return (
-   <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDragType(null); setOverDate(null) }}>
+   <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={clearDrag}>
     <div className="min-h-screen bg-white flex">
 
       {/* Sidebar */}
@@ -453,9 +438,12 @@ export default function TripDayPage() {
           hotelCount={hotels.length}
           ateCount={ate.length}
           activePanel={sidePanel}
-          onOpenPanel={setSidePanel}
+          onOpenPanel={(p) => { setSidePanel(p); setSidebarOpen(false) }}
           dragType={dragType}
           overDate={overDate}
+          overDayDate={overDayDate}
+          mobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
         />
       )}
 
@@ -466,6 +454,13 @@ export default function TripDayPage() {
         <div className="bg-white border-b border-gray-200 sticky top-[49px] z-10">
           <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden flex-shrink-0 -ml-1 p-1.5 text-gray-500 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition"
+                aria-label="Open trip menu"
+              >
+                <span className="block w-5 h-5 text-lg leading-none">☰</span>
+              </button>
               <span className="flex-shrink-0 text-xs font-bold bg-blue-600 text-white rounded-full px-2.5 py-1 whitespace-nowrap">
                 Day {dayNumber}
               </span>
@@ -661,9 +656,7 @@ export default function TripDayPage() {
                 currentDate={params.date}
                 onMoveToDay={async (targetDate) => {
                   setEditSnapshot(null)
-                  const withTitles = await generateMissingTitles(sectionItems)
-                  setSectionItems(withTitles)
-                  await handleMoveToDay(it._id, targetDate, withTitles)
+                  await handleMoveToDay(it._id, targetDate, sectionItems)
                 }}
               />
             </div>
@@ -671,6 +664,18 @@ export default function TripDayPage() {
         })()}
       </EditPanel>
     </div>
+
+    {/* Floating preview of the card being dragged */}
+    <DragOverlay dropAnimation={null}>
+      {dragType === 'card' && activeDragItem && activeDragDisplay ? (
+        <div className="w-[320px] max-w-[80vw] rotate-1 cursor-grabbing shadow-2xl rounded-xl ring-2 ring-blue-400">
+          {(activeDragDisplay.meta.hotel || activeDragDisplay.meta.car)
+            ? <HotelCard meta={activeDragDisplay.meta} lines={activeDragDisplay.lines} skipped={activeDragItem.skipped} />
+            : <SectionCard meta={activeDragDisplay.meta} lines={activeDragDisplay.lines} title={activeDragItem.title} type={activeDragItem.type} place={activeDragItem.place} coords={activeDragItem.coords} rating={activeDragItem.rating} skipped={activeDragItem.skipped} />
+          }
+        </div>
+      ) : null}
+    </DragOverlay>
    </DndContext>
   )
 }
