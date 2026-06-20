@@ -68,6 +68,10 @@ export default function TripDayPage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
   const dayPickerScroll = useRef<HTMLDivElement>(null)
+  // True while an editor/sheet/drawer is open. The visibility re-fetch must not
+  // fire then — it reassigns section _ids and would orphan the open editor
+  // (blank panel) and clobber whatever the user is typing.
+  const busyRef = useRef(false)
   const showToast = (msg: string) => {
     setToast(msg)
     clearTimeout(toastTimer.current)
@@ -128,7 +132,7 @@ export default function TripDayPage() {
     let visibilityTimer: ReturnType<typeof setTimeout>
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        visibilityTimer = setTimeout(load, 1500)
+        visibilityTimer = setTimeout(() => { if (!busyRef.current) load() }, 1500)
       } else {
         clearTimeout(visibilityTimer)
       }
@@ -146,6 +150,7 @@ export default function TripDayPage() {
   // Lock background scroll while any sheet / drawer / panel is open (mobile).
   useEffect(() => {
     const open = !!editingId || !!sidePanel || sidebarOpen || showAddSheet || showDayPicker
+    busyRef.current = open
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [editingId, sidePanel, sidebarOpen, showAddSheet, showDayPicker])
