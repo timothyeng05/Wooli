@@ -518,7 +518,7 @@ export default function TripDayPage() {
       )}
 
       {/* Main content */}
-      <div className={`flex-1 lg:ml-72 transition-[margin] duration-300 ${editingId ? 'lg:mr-[460px]' : ''}`}>
+      <div className={`flex-1 min-w-0 lg:ml-72 transition-[margin] duration-300 ${editingId ? 'lg:mr-[460px]' : ''}`}>
 
         {/* Sticky header */}
         <div className="bg-white border-b border-gray-200 shadow-sm sticky top-[49px] z-10">
@@ -539,10 +539,10 @@ export default function TripDayPage() {
                 Day {dayNumber}<span className="lg:hidden text-blue-200 font-semibold">/{allDates.length} ▾</span>
               </button>
               <div className="min-w-0">
-                <h1 className="text-base font-bold text-gray-900 leading-tight truncate">
+                <h1 className="text-lg sm:text-base font-bold text-gray-900 leading-tight truncate">
                   {title || 'Untitled day'}
                 </h1>
-                <p className="text-xs text-gray-400 truncate">
+                <p className="text-xs sm:text-xs text-gray-500 truncate">
                   {dateLabel}
                 </p>
               </div>
@@ -606,10 +606,10 @@ export default function TripDayPage() {
                   const isLast = i === sectionItems.length - 1
                   return (
                     <div key={item._id}>
-                      <div className="flex gap-2">
-                        <div className="flex flex-col items-end flex-shrink-0 w-12 sm:w-14 pt-3">
-                          {s.pinned && <span className="text-xs leading-none mb-0.5">⭐</span>}
-                          <span className="text-[11px] font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
+                      <div className="flex gap-2.5 sm:gap-2">
+                        <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3">
+                          {s.pinned && <span className="text-sm leading-none mb-0.5">⭐</span>}
+                          <span className="text-xs font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
                         </div>
                         <div className="flex flex-col items-center flex-shrink-0">
                           <div className="w-2.5 h-2.5 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: s.meta.dotColor }} />

@@ -97,11 +97,11 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="flex-shrink-0 text-base">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-base font-semibold leading-snug ${meta.text} ${skipped ? 'line-through' : ''}`}>{headerText}</p>
+          <p className={`text-[17px] sm:text-base font-semibold leading-snug break-words ${meta.text} ${skipped ? 'line-through' : ''}`}>{headerText}</p>
           {(place || bodyPreview) && (
-            <p className="text-xs text-gray-500 truncate mt-0.5">{place ? `📍 ${place}` : bodyPreview}</p>
+            <p className="text-sm text-gray-500 truncate mt-0.5">{place ? `📍 ${place}` : bodyPreview}</p>
           )}
-          {duration && <p className="text-xs text-teal-600 font-medium leading-none mt-0.5">⏱ {duration}</p>}
+          {duration && <p className="text-sm text-teal-600 font-medium leading-none mt-1">⏱ {duration}</p>}
         </div>
         {hasPin && (
           <span title="Location pinned — map available" className="flex-shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">📍 Map</span>
@@ -143,8 +143,8 @@ export function HotelCard({ meta, lines, onEdit, skipped, coords, checkpoint, ed
       >
         <span className="text-base flex-shrink-0">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-base font-semibold ${meta.text} ${skipped ? 'line-through' : ''}`}>{name}</p>
-          {location && <p className="text-sm text-gray-500">{location}</p>}
+          <p className={`text-[17px] sm:text-base font-semibold break-words ${meta.text} ${skipped ? 'line-through' : ''}`}>{name}</p>
+          {location && <p className="text-sm text-gray-500 break-words">{location}</p>}
         </div>
         {checkpoint && (
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${checkpoint === 'in' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>

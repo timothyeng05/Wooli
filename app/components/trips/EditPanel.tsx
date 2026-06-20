@@ -32,11 +32,11 @@ export default function EditPanel({ open, onSave, onCancel, title, children }: {
         </div>
         {/* Sticky header: Cancel · title · Save */}
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-200 flex-shrink-0">
-          <button onClick={onCancel} className="text-sm font-medium text-gray-500 px-2 py-1.5 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition">
+          <button onClick={onCancel} className="text-base sm:text-sm font-medium text-gray-500 px-2 py-1.5 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition">
             Cancel
           </button>
-          <h2 className="text-sm font-semibold text-gray-800 truncate text-center flex-1">{title ?? 'Edit'}</h2>
-          <button onClick={onSave} className="text-sm font-semibold text-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition">
+          <h2 className="text-base sm:text-sm font-semibold text-gray-800 truncate text-center flex-1">{title ?? 'Edit'}</h2>
+          <button onClick={onSave} className="text-base sm:text-sm font-semibold text-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-50 active:bg-blue-100 transition">
             Save
           </button>
         </div>
