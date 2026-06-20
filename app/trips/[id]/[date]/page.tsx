@@ -291,12 +291,6 @@ export default function TripDayPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const dayOptions = allDates.map((date, i) => {
-    const t = days.find(d => d.date === date)?.title
-    const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    return { date, label: `Day ${i + 1} — ${dateLabel}${t ? ` · ${t}` : ''}` }
-  })
-
   const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
   const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
 
@@ -817,12 +811,6 @@ export default function TripDayPage() {
                 onChange={updates => updateSection(it._id, updates)}
                 onMoveUp={idx > 0 ? () => moveSection(idx, -1) : undefined}
                 onMoveDown={idx < sectionItems.length - 1 ? () => moveSection(idx, 1) : undefined}
-                dayOptions={dayOptions}
-                currentDate={params.date}
-                onMoveToDay={async (targetDate) => {
-                  setEditSnapshot(null)
-                  await handleMoveToDay(it._id, targetDate, sectionItems)
-                }}
               />
               {/* Map preview lives at the bottom of the sheet */}
               <LocationPreview coords={it.coords} name={name} />

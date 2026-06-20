@@ -1,5 +1,4 @@
 'use client'
-import { useState } from 'react'
 import { findMeta } from '@/lib/trips/trip-sections'
 import type { SectionData } from '@/lib/trips/trip-sections'
 import {
@@ -11,16 +10,12 @@ import {
   ActivityEditor, MealEditor, GeneralEditor,
 } from './SectionEditors'
 
-export function SectionEditorCard({ section, onChange, onMoveUp, onMoveDown, dayOptions, currentDate, onMoveToDay }: {
+export function SectionEditorCard({ section, onChange, onMoveUp, onMoveDown }: {
   section: EditorSection
   onChange: (updates: Partial<SectionData>) => void
   onMoveUp?: () => void
   onMoveDown?: () => void
-  dayOptions?: { date: string; label: string }[]
-  currentDate?: string
-  onMoveToDay?: (targetDate: string) => void
 }) {
-  const [moveDayTarget, setMoveDayTarget] = useState(currentDate ?? '')
   const meta = findMeta(section.type)
   if (!meta) return null
 
@@ -78,30 +73,6 @@ export function SectionEditorCard({ section, onChange, onMoveUp, onMoveDown, day
         ? <MealEditor section={section} onChange={onChange} />
         : <GeneralEditor section={section} onChange={onChange} />
       }
-      {onMoveToDay && dayOptions && dayOptions.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-gray-200/60">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 whitespace-nowrap">Move to:</span>
-            <select
-              value={moveDayTarget}
-              onChange={e => setMoveDayTarget(e.target.value)}
-              className="flex-1 text-xs border border-gray-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
-            >
-              {dayOptions.map(opt => (
-                <option key={opt.date} value={opt.date}>{opt.label}</option>
-              ))}
-            </select>
-            {moveDayTarget !== currentDate && (
-              <button
-                onClick={() => onMoveToDay(moveDayTarget)}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition whitespace-nowrap"
-              >
-                Move →
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
