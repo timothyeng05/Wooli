@@ -51,13 +51,14 @@ export function LocationPreview({ coords, name }: { coords?: string; name?: stri
 }
 
 // Compact, clickable card. Tapping opens the edit panel; details + map live there.
-export function SectionCard({ meta, lines, onOpen, title, type, place, coords, rating, skipped }: {
+export function SectionCard({ meta, lines, onOpen, title, type, place, coords, rating, skipped, pinned }: {
   meta: SectionMeta; lines: string[]
   onOpen?: () => void
   title?: string; type?: string; place?: string
   coords?: string
   rating?: number
   skipped?: boolean
+  pinned?: boolean
 }) {
   const allContent = lines.map(l => l.trim()).filter(Boolean)
 
@@ -97,7 +98,7 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="flex-shrink-0 text-base">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-[17px] sm:text-base font-semibold leading-snug break-words ${meta.text} ${skipped ? 'line-through' : ''}`}>{headerText}</p>
+          <p className={`text-[17px] sm:text-base font-semibold leading-snug break-words ${meta.text} ${skipped ? 'line-through' : ''}`}>{pinned && <span className="sm:hidden">⭐ </span>}{headerText}</p>
           {(place || bodyPreview) && (
             <p className="text-sm text-gray-500 truncate mt-0.5">{place ? `📍 ${place}` : bodyPreview}</p>
           )}
@@ -117,13 +118,14 @@ export function SectionCard({ meta, lines, onOpen, title, type, place, coords, r
   )
 }
 
-export function HotelCard({ meta, lines, onEdit, skipped, coords, checkpoint, editLabel }: {
+export function HotelCard({ meta, lines, onEdit, skipped, coords, checkpoint, editLabel, pinned }: {
   meta: SectionMeta; lines: string[]
   onEdit?: () => void
   skipped?: boolean
   coords?: string
   checkpoint?: 'in' | 'out' | null
   editLabel?: string
+  pinned?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const content = lines.map(l => l.trim()).filter(Boolean)
@@ -143,7 +145,7 @@ export function HotelCard({ meta, lines, onEdit, skipped, coords, checkpoint, ed
       >
         <span className="text-base flex-shrink-0">{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-[17px] sm:text-base font-semibold break-words ${meta.text} ${skipped ? 'line-through' : ''}`}>{name}</p>
+          <p className={`text-[17px] sm:text-base font-semibold break-words ${meta.text} ${skipped ? 'line-through' : ''}`}>{pinned && <span className="sm:hidden">⭐ </span>}{name}</p>
           {location && <p className="text-sm text-gray-500 break-words">{location}</p>}
         </div>
         {checkpoint && (

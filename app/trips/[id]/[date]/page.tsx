@@ -606,8 +606,10 @@ export default function TripDayPage() {
                   const isLast = i === sectionItems.length - 1
                   return (
                     <div key={item._id}>
-                      <div className="flex gap-2.5 sm:gap-2">
-                        <div className="flex flex-col items-end flex-shrink-0 w-14 pt-3">
+                      <div className="flex gap-3 sm:gap-2">
+                        {/* Time rail — desktop only; on mobile it wastes width, so
+                            the time/⭐ move inline into the card instead. */}
+                        <div className="hidden sm:flex flex-col items-end flex-shrink-0 w-14 pt-3">
                           {s.pinned && <span className="text-sm leading-none mb-0.5">⭐</span>}
                           <span className="text-xs font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
                         </div>
@@ -629,19 +631,19 @@ export default function TripDayPage() {
                         <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-2'}`}>
                           <DraggableCard id={item._id}>
                             {(s.meta.hotel || s.meta.car)
-                              ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} onEdit={() => startEdit(item._id)} />
-                              : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} onOpen={() => startEdit(item._id)} />
+                              ? <HotelCard meta={s.meta} lines={s.lines} skipped={item.skipped} pinned={s.pinned} onEdit={() => startEdit(item._id)} />
+                              : <SectionCard meta={s.meta} lines={s.lines} title={item.title} type={item.type} place={item.place} coords={item.coords} rating={item.rating} skipped={item.skipped} pinned={s.pinned} onOpen={() => startEdit(item._id)} />
                             }
                           </DraggableCard>
                         </div>
                       </div>
                       {i < sectionItems.length - 1 && (
                         insertAt === i ? (
-                          <div className="my-1.5 ml-14 sm:ml-16">
+                          <div className="my-1.5 ml-[22px] sm:ml-16">
                             <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 ml-14 sm:ml-16 py-0.5">
+                          <div className="flex items-center gap-2 ml-[22px] sm:ml-16 py-0.5">
                             <div className="flex-1 h-px bg-gray-100" />
                             <button onClick={() => setInsertAt(i)} aria-label="Insert section here"
                               className="flex items-center justify-center w-7 h-7 sm:w-5 sm:h-5 text-base sm:text-xs text-gray-300 hover:text-blue-500 rounded-full hover:bg-blue-50 transition leading-none">
