@@ -8,7 +8,7 @@ import {
   type DragStartEvent, type DragOverEvent, type DragEndEvent,
 } from '@dnd-kit/core'
 import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notesToSectionData } from '@/lib/trips/trip-sections'
-import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, ADD_SECTION_GROUPS, parseCoords } from '@/lib/trips/trip-utils'
+import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, ADD_SECTION_GROUPS, parseCoords, ratingStyle, ratingLabel, RATING_SCALE } from '@/lib/trips/trip-utils'
 import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
@@ -693,19 +693,36 @@ export default function TripDayPage() {
               <TripHotels tripId={params.id} userId={userId} hotels={hotels} defaultStart={trip.start_date} defaultEnd={trip.end_date} onChange={reloadHotels} />
             )}
             {sidePanel === 'ate' && (
-              <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
-                {ate.length === 0 && <p className="text-sm text-gray-400 px-4 py-3">No meals logged yet.</p>}
-                {ate.map((m, i) => {
-                  const rc = m.rating == null ? '' : m.rating >= 8 ? 'bg-green-500 text-white' : m.rating >= 5 ? 'bg-amber-400 text-white' : 'bg-red-400 text-white'
-                  return (
+              <>
+                {/* Rating scale legend */}
+                <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold text-gray-500 mb-2">Rating scale</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                    {RATING_SCALE.map(({ score, label }) => (
+                      <div key={score} className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${ratingStyle(score)}`}>{score}</span>
+                        <span className="text-xs text-gray-600">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
+                  {ate.length === 0 && <p className="text-sm text-gray-400 px-4 py-3">No meals logged yet.</p>}
+                  {ate.map((m, i) => (
                     <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 truncate">{m.name}</span>
-                      {m.rating != null && <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rc}`}>{m.rating}/10</span>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 font-medium truncate">{m.name}</p>
+                        {m.rating != null && ratingLabel(m.rating) && (
+                          <p className="text-[11px] text-gray-400">{ratingLabel(m.rating)}</p>
+                        )}
+                      </div>
+                      {m.rating != null && <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(m.rating)}`}>{m.rating}/10</span>}
                       <span className="text-xs text-gray-400 flex-shrink-0">{new Date(m.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     </div>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>

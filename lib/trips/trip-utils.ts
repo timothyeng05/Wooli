@@ -18,6 +18,25 @@ export function ratingStyle(r: number): string {
   return 'bg-red-400 text-white'
 }
 
+// Meal rating scale (10 → 1) with a short verdict for each score. Used by the
+// "What we ate" legend and per-meal labels.
+export const RATING_SCALE: { score: number; label: string }[] = [
+  { score: 10, label: 'Must try' },
+  { score: 9, label: 'Should try' },
+  { score: 8, label: 'Safe bet' },
+  { score: 7, label: 'Average' },
+  { score: 6, label: 'Plan B' },
+  { score: 5, label: 'Tolerable' },
+  { score: 4, label: 'Skip' },
+  { score: 3, label: 'Avoid' },
+  { score: 2, label: 'Danger' },
+  { score: 1, label: 'Do you even love yourself' },
+]
+
+export function ratingLabel(r: number): string | undefined {
+  return RATING_SCALE.find(s => s.score === Math.round(r))?.label
+}
+
 export function parseDuration(raw: string): { hours: number; minutes: number } {
   const h = raw.match(/(\d+)\s*h/i)
   const m = raw.match(/(\d+)\s*m(?:in)?/i)
