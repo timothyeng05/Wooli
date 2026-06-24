@@ -318,11 +318,6 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
       className="group flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition cursor-pointer"
       title="Click to edit"
     >
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-        isAsset ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-500'
-      }`}>
-        {account.name.trim()[0]?.toUpperCase() ?? '?'}
-      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-medium text-gray-900 truncate">
@@ -475,11 +470,6 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
       className="group w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition cursor-pointer"
       title="Click to edit"
     >
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-        isAsset ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-500'
-      }`}>
-        {account.name.trim()[0]?.toUpperCase() ?? '?'}
-      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-medium text-gray-900 truncate">{account.name}</p>
