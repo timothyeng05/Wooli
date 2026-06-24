@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, isAssetType, type AccountType } from '@/lib/budget/account-utils'
 import type { HouseholdMember } from './transaction-types'
-import { fmtSyncTime } from '@/lib/budget/format-utils'
+import { fmtSyncTime, fmtRelative } from '@/lib/budget/format-utils'
 import { PLAID_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
@@ -343,21 +343,23 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          {account.institution && <p className="text-xs text-gray-400">{account.institution}</p>}
-          <span className="text-[10px] text-gray-300 font-medium">Plaid</span>
+          {account.institution && <p className="text-xs text-gray-400 truncate">{account.institution}</p>}
+          <span className="text-[10px] text-gray-300 font-medium flex-shrink-0">Plaid</span>
         </div>
+      </div>
+      <div className="hidden md:block flex-shrink-0">
+        <Sparkline values={sparkValues} isAsset={isAsset} />
+      </div>
+      <div className="flex-shrink-0 text-right">
+        <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
+          isAsset ? 'text-gray-900' : 'text-red-600'
+        }`}>
+          {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
+        </p>
         {account.updatedAt && (
-          <p className="text-[10px] text-gray-300 mt-0.5">
-            Updated {new Date(account.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
+          <p className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{fmtRelative(account.updatedAt)}</p>
         )}
       </div>
-      <Sparkline values={sparkValues} isAsset={isAsset} />
-      <p className={`text-sm font-semibold tabular-nums flex-shrink-0 w-28 text-right ${
-        isAsset ? 'text-gray-900' : 'text-red-600'
-      }`}>
-        {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
-      </p>
     </div>
   )
 }
@@ -495,22 +497,22 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          {account.institution && <p className="text-xs text-gray-400">{account.institution}</p>}
-          <span className="text-[10px] text-amber-500 font-medium">Manual</span>
+          {account.institution && <p className="text-xs text-gray-400 truncate">{account.institution}</p>}
+          <span className="text-[10px] text-amber-500 font-medium flex-shrink-0">Manual</span>
         </div>
-        {account.updatedAt && (
-          <p className="text-[10px] text-gray-300 mt-0.5">
-            Updated {new Date(account.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-        )}
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="hidden md:block flex-shrink-0">
         <Sparkline values={sparkValues} isAsset={isAsset} />
-        <p className={`text-sm font-semibold tabular-nums w-28 text-right ${
+      </div>
+      <div className="flex-shrink-0 text-right">
+        <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
           isAsset ? 'text-gray-900' : 'text-red-600'
         }`}>
           {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
         </p>
+        {account.updatedAt && (
+          <p className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{fmtRelative(account.updatedAt)}</p>
+        )}
       </div>
     </div>
   )
@@ -662,23 +664,23 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
   return (
     <div className="mb-1">
       <div onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 rounded-lg transition cursor-pointer">
-        <div className="flex items-center gap-2">
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition cursor-pointer">
+        <div className="flex items-center gap-2 min-w-0">
           <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="9 18 15 12 9 6" />
           </svg>
-          <span className="text-sm font-semibold text-gray-900">{label}</span>
-          <span className="text-xs text-gray-400">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+          <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">{label}</span>
+          <span className="hidden sm:inline text-xs text-gray-400 flex-shrink-0">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <button
             onClick={e => { e.stopPropagation(); setAdding(true) }}
             className="text-xs text-blue-600 hover:text-blue-700 font-medium"
           >
             + Add
           </button>
-          <span className={`text-sm font-semibold ${isAsset ? 'text-gray-900' : 'text-red-600'}`}>
+          <span className={`text-sm font-semibold whitespace-nowrap ${isAsset ? 'text-gray-900' : 'text-red-600'}`}>
             {isAsset ? '' : '-'}${fmt(Math.abs(total))}
           </span>
         </div>
@@ -881,8 +883,8 @@ export default function AccountsPageClient({
             </button>
           )}
         </div>
-        <div className="flex items-baseline gap-3 mb-4">
-          <p className="text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>
+        <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-4">
+          <p className="text-3xl sm:text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>
           {changePct && (
             <span className={`text-sm font-semibold ${monthChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {fmtShort(monthChange)} ({changePct}%) 1 month
