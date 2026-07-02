@@ -76,8 +76,8 @@ function TripCard({ trip }: { trip: Trip }) {
   const status = tripStatus(trip.start_date, trip.end_date)
 
   return (
-    <Link href={`/trips/${trip.id}`} className="block">
-      <div className="p-4 rounded-xl border border-gray-200 hover:shadow-sm transition hover:border-blue-200 active:scale-[0.99] bg-white">
+    <Link href={`/trips/${trip.id}`} className="block h-full">
+      <div className="h-full p-4 rounded-xl border border-gray-200 hover:shadow-sm transition hover:border-blue-200 active:scale-[0.99] bg-white">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="font-semibold text-base text-gray-900 leading-snug">{trip.name}</h2>
@@ -143,7 +143,7 @@ export default async function TripsPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <Breadcrumbs items={[{ label: 'Trips' }]} />
           <div className="flex items-center justify-between mt-4 sm:mt-6">
             <div>
@@ -157,7 +157,7 @@ export default async function TripsPage() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-10">
+      <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-10">
         {totalTrips === 0 ? (
           <div>
             <div className="text-center py-6 mb-8">
@@ -192,7 +192,7 @@ export default async function TripsPage() {
                 Upcoming
               </h2>
               {upcoming.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
                   {upcoming.map(trip => (
                     <TripCard key={trip.id} trip={trip} />
                   ))}
@@ -213,7 +213,7 @@ export default async function TripsPage() {
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
                   Past trips
                 </h2>
-                <div className="space-y-3 opacity-75">
+                <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 opacity-75">
                   {past.map(trip => (
                     <TripCard key={trip.id} trip={trip} />
                   ))}

@@ -1,5 +1,5 @@
 'use client'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
 // Edit surface: a native-feel bottom sheet on mobile (grab handle, sticky
 // Cancel/Save header, safe-area padding), a right-side drawer on desktop.
@@ -10,21 +10,29 @@ export default function EditPanel({ open, onSave, onCancel, title, children }: {
   title?: string
   children: ReactNode
 }) {
+  // Escape dismisses the drawer without saving (desktop expectation).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onCancel])
+
   return (
     <>
-      {/* Backdrop — only on mobile (desktop stays non-modal so other cards remain clickable) */}
+      {/* Backdrop — below xl (at lg the drawer would crush the timeline; xl+ stays non-modal so other cards remain clickable) */}
       <div
-        className={`fixed inset-0 bg-black/30 z-40 lg:hidden transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-black/30 z-40 xl:hidden transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onSave}
       />
       {/* Sheet / drawer */}
       <div
-        className={`fixed z-50 bg-white shadow-2xl flex flex-col transition-transform duration-300
+        className={`fixed z-50 bg-white shadow-2xl flex flex-col transition-[transform,visibility] duration-300
           inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
           lg:inset-y-0 lg:h-auto lg:right-0 lg:left-auto lg:w-[460px] lg:rounded-none
-          ${open ? 'translate-y-0 lg:translate-x-0' : 'translate-y-full lg:translate-y-0 lg:translate-x-full'}`}
+          ${open ? 'translate-y-0 lg:translate-x-0' : 'translate-y-full lg:translate-y-0 lg:translate-x-full invisible pointer-events-none'}`}
         role="dialog"
-        aria-modal="true"
+        aria-hidden={!open}
       >
         {/* Grab handle (mobile) */}
         <div className="lg:hidden flex justify-center pt-2.5 pb-1 flex-shrink-0">
