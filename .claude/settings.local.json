@@ -86,7 +86,8 @@
       "Bash(echo \"TSC_EXIT:$?\")",
       "Bash(echo \"TSC exit: $?\")",
       "WebFetch(domain:developers.google.com)",
-      "Bash(grep -n \"type Suggestion = { placeId\\\\|^}$\" app/components/trips/SectionEditors.tsx)"
+      "Bash(grep -n \"type Suggestion = { placeId\\\\|^}$\" app/components/trips/SectionEditors.tsx)",
+      "Bash(mkdir -p /home/user/Wooli/.claude/hooks && echo ok)"
     ],
     "deny": [
       "Read(//Users/timothyeng/Desktop/Wooli/.env.local)",
