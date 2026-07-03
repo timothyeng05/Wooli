@@ -36,7 +36,8 @@ export default function NewTripPage() {
       .single()
 
     if (!error && data) {
-      router.push(`/trips/${data.id}`)
+      // Straight to Day 1 — skips the /trips/[id] redirect hop.
+      router.push(`/trips/${data.id}/${form.start_date}`)
     } else {
       setLoading(false)
     }

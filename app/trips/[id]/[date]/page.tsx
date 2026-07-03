@@ -13,11 +13,15 @@ import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/ap
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
 import DayLocationMap, { type LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import TripHotels, { type TripHotel } from '@/app/components/trips/TripHotels'
-import TripSidebar, { type SidePanel } from '@/app/components/trips/TripSidebar'
+import TripSidebar, { SidebarSearch, type SidePanel } from '@/app/components/trips/TripSidebar'
+import { resolveLegs, type Leg } from '@/lib/trips/trip-legs'
+import { searchDays, MIN_QUERY_LENGTH } from '@/lib/trips/trip-search'
 import EditPanel from '@/app/components/trips/EditPanel'
 import { findMeta } from '@/lib/trips/trip-sections'
 
-type DayData = { title: string | null; notes: string | null; date: string }
+// rating/journal are optional: the columns arrive with migration 035 and ride
+// along on the select('*') — absent before that.
+type DayData = { title: string | null; notes: string | null; date: string; rating?: number | null; journal?: string | null }
 
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
@@ -43,6 +47,7 @@ function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
 export default function TripDayPage() {
   const params = useParams<{ id: string; date: string }>()
   const [trip, setTrip] = useState<{ name: string; start_date: string; end_date: string } | null>(null)
+  const [tripLegs, setTripLegs] = useState<Leg[]>([])
   const [days, setDays] = useState<DayData[]>([])
   const [allDates, setAllDates] = useState<string[]>([])
   const [title, setTitle] = useState('')
@@ -64,6 +69,12 @@ export default function TripDayPage() {
   const [showAddPicker, setShowAddPicker] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [showDayPicker, setShowDayPicker] = useState(false)
+  const [dayPickerQuery, setDayPickerQuery] = useState('')
+  // "Looking back" retro state (past days only)
+  const [retroRating, setRetroRating] = useState<number | null>(null)
+  const [retroJournal, setRetroJournal] = useState('')
+  const [recap, setRecap] = useState<string | null>(null)
+  const [recapLoading, setRecapLoading] = useState(false)
   const router = useRouter()
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
@@ -85,13 +96,17 @@ export default function TripDayPage() {
       if (!user) return
       setUserId(user.id)
 
+      // select('*') on trips/trip_days: the optional columns from migrations 035
+      // (rating/journal) and 038 (legs) ride along once applied — naming them in
+      // the select would error before that.
       const [{ data: tripData }, { data: allDays }, { data: hotelData }] = await Promise.all([
-        supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
-        supabase.from('trip_days').select('date, title, notes').eq('trip_id', params.id).order('date'),
+        supabase.from('trips').select('*').eq('id', params.id).single(),
+        supabase.from('trip_days').select('*').eq('trip_id', params.id).order('date'),
         supabase.from('trip_hotels').select('*').eq('trip_id', params.id).order('check_in'),
       ])
 
       setTrip(tripData)
+      setTripLegs(resolveLegs(params.id, tripData))
       setDays(allDays ?? [])
       setHotels(hotelData ?? [])
 
@@ -113,7 +128,9 @@ export default function TripDayPage() {
       setPrevDate(currentIdx > 0 ? generated[currentIdx - 1] : null)
       setNextDate(currentIdx < generated.length - 1 ? generated[currentIdx + 1] : null)
 
-      const current = allDays?.find(d => d.date === params.date)
+      const current: DayData | undefined = allDays?.find((d: DayData) => d.date === params.date)
+      setRetroRating(current?.rating ?? null)
+      setRetroJournal(current?.journal ?? '')
       if (current) {
         setTitle(current.title ?? '')
         const sectionData = notesToSectionData(current.notes)
@@ -323,6 +340,43 @@ export default function TripDayPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  // Retro fields persist through their own targeted upsert — deliberately NOT
+  // part of save(): the columns may not exist pre-migration 035, and the section
+  // editor's save path must never fail because of them.
+  const saveRetro = async (rating: number | null, journal: string) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase.from('trip_days').upsert(
+      { trip_id: params.id, user_id: user.id, date: params.date, rating, journal: journal || null },
+      { onConflict: 'trip_id,date' }
+    )
+    if (error) return showToast('Retro fields need migration 035')
+    // Keep the sidebar rating chip in sync.
+    setDays(ds => ds.some(d => d.date === params.date)
+      ? ds.map(d => d.date === params.date ? { ...d, rating, journal: journal || null } : d)
+      : [...ds, { date: params.date, title: title || null, notes: null, rating, journal: journal || null }])
+  }
+
+  const generateRecap = async () => {
+    if (recapLoading) return
+    setRecapLoading(true)
+    try {
+      const res = await fetch('/api/trips/day-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: sectionItems.map(({ _id, ...s }) => s), isPast: true }),
+      })
+      const data = await res.json()
+      if (data.summary) setRecap(data.summary)
+      else showToast('Nothing to recap for this day')
+    } catch {
+      showToast('Recap failed — try again')
+    } finally {
+      setRecapLoading(false)
+    }
+  }
+
   const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
   const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
 
@@ -431,6 +485,20 @@ export default function TripDayPage() {
 
   const hotelMeta = findMeta('HOTEL')
 
+  // A brand-new trip: no sections on any day and no hotels. Drives the one-time
+  // "Set up your trip" checklist; derived, so it disappears on the first real content.
+  const tripUnfurnished = useMemo(
+    () => hotels.length === 0 && days.every(d => notesToSectionData(d.notes).length === 0),
+    [days, hotels],
+  )
+
+  // Mobile "Jump to day" sheet search — same matcher as the sidebar search.
+  const pickerSearching = dayPickerQuery.trim().length >= MIN_QUERY_LENGTH
+  const pickerSnippets = useMemo(
+    () => new Map(searchDays(days, dayPickerQuery).map(m => [m.date, m.snippet])),
+    [days, dayPickerQuery],
+  )
+
   // Past meals, ranked (for the "What we ate" panel)
   const ate = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -528,6 +596,7 @@ export default function TripDayPage() {
           endDate={trip.end_date}
           allDates={allDates}
           days={days}
+          legs={tripLegs}
           activeDate={params.date}
           todayLocal={todayLocal}
           shareUrl={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/share/${params.id}`}
@@ -558,7 +627,7 @@ export default function TripDayPage() {
                 <span className="block w-5 h-5 text-lg leading-none">☰</span>
               </button>
               <button
-                onClick={() => setShowDayPicker(true)}
+                onClick={() => { setDayPickerQuery(''); setShowDayPicker(true) }}
                 aria-label="Jump to day"
                 className="lg:pointer-events-none flex-shrink-0 inline-flex items-center gap-1 text-xs font-bold bg-blue-600 text-white rounded-full pl-2.5 pr-2 py-1 whitespace-nowrap active:scale-95 transition"
               >
@@ -691,6 +760,44 @@ export default function TripDayPage() {
                 })}
               </div>
             </>
+          ) : tripUnfurnished ? (
+            /* First-run: the whole trip is empty — point at the three setup actions */
+            <div className="py-4">
+              <p className="text-sm font-bold text-gray-900 mb-0.5">Set up your trip</p>
+              <p className="text-xs text-gray-400 mb-3">Three quick steps to make this trip useful.</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowAddPicker(true)}
+                  className="w-full flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:border-blue-200 hover:shadow-sm active:scale-[0.99] transition"
+                >
+                  <span className="text-xl">🗓️</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">Add your first plan</span>
+                    <span className="block text-xs text-gray-500">Transit, an activity, or a meal for this day</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSidePanel('hotels')}
+                  className="w-full flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:border-blue-200 hover:shadow-sm active:scale-[0.99] transition"
+                >
+                  <span className="text-xl">🏨</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">Add hotels</span>
+                    <span className="block text-xs text-gray-500">Each stay shows on every day it covers</span>
+                  </span>
+                </button>
+                <Link
+                  href={`/trips/${params.id}/settings`}
+                  className="w-full flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:border-blue-200 hover:shadow-sm active:scale-[0.99] transition"
+                >
+                  <span className="text-xl">🧭</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">Split into legs</span>
+                    <span className="block text-xs text-gray-500">Group days into stretches, e.g. Tokyo → Kyoto → Seoul</span>
+                  </span>
+                </Link>
+              </div>
+            </div>
           ) : (
             <div className="text-center py-10 cursor-pointer" onClick={() => setShowAddPicker(true)}>
               <div className="text-4xl mb-2">🗺️</div>
@@ -714,6 +821,66 @@ export default function TripDayPage() {
               </button>
             )
           }
+
+          {/* Looking back — day retrospective, past days only */}
+          {params.date < todayLocal && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <p className="text-sm font-bold text-gray-900">Looking back</p>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">How was this day?</p>
+                <div className="flex flex-wrap gap-1">
+                  {[...RATING_SCALE].reverse().map(({ score }) => (
+                    <button
+                      key={score}
+                      onClick={() => { const next = retroRating === score ? null : score; setRetroRating(next); saveRetro(next, retroJournal) }}
+                      aria-label={`Rate this day ${score} out of 10`}
+                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center transition ${retroRating === score ? ratingStyle(score) : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                    >
+                      {score}
+                    </button>
+                  ))}
+                </div>
+                {retroRating != null && ratingLabel(retroRating) && (
+                  <p className="text-[11px] text-gray-400 mt-1">{ratingLabel(retroRating)}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">Journal</p>
+                <textarea
+                  value={retroJournal}
+                  onChange={e => setRetroJournal(e.target.value)}
+                  onBlur={() => saveRetro(retroRating, retroJournal)}
+                  rows={3}
+                  placeholder="What made this day memorable?"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                />
+              </div>
+              {recap ? (
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-sm text-gray-700 italic">{recap}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      onClick={() => { const next = retroJournal.trim() ? `${retroJournal.trimEnd()}\n\n${recap}` : recap; setRetroJournal(next); setRecap(null); saveRetro(retroRating, next) }}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      Add to journal
+                    </button>
+                    <button onClick={() => setRecap(null)} className="text-xs font-medium text-gray-400 hover:text-gray-600">Dismiss</button>
+                  </div>
+                </div>
+              ) : (
+                sectionItems.length > 0 && (
+                  <button
+                    onClick={generateRecap}
+                    disabled={recapLoading}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition"
+                  >
+                    {recapLoading ? 'Writing recap…' : '✨ Recap this day'}
+                  </button>
+                )
+              )}
+            </div>
+          )}
 
          </div>
 
@@ -802,11 +969,18 @@ export default function TripDayPage() {
                 <button onClick={() => setShowDayPicker(false)} className="text-xs font-medium text-gray-400">Close</button>
               </div>
             </div>
+            <div className="px-3 py-2 border-b border-gray-100">
+              <SidebarSearch query={dayPickerQuery} onChange={setDayPickerQuery} />
+            </div>
             <div ref={dayPickerScroll} className="flex-1 overflow-y-auto p-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              {allDates.map((d, i) => {
+              {pickerSearching && !allDates.some(d => pickerSnippets.has(d)) && (
+                <p className="px-3 py-3 text-sm text-gray-400">No matches</p>
+              )}
+              {(pickerSearching ? allDates.filter(d => pickerSnippets.has(d)) : allDates).map(d => {
+                const i = allDates.indexOf(d)
                 const active = d === params.date
                 const today = d === todayLocal
-                const t = dayTitleMap.get(d)
+                const t = pickerSearching ? pickerSnippets.get(d) : dayTitleMap.get(d)
                 return (
                   <button
                     key={d}
