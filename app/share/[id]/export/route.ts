@@ -16,7 +16,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const supabase = serviceClient()
 
   const [{ data: trip }, { data: dayRows }, { data: hotels }] = await Promise.all([
-    supabase.from('trips').select('name, start_date, end_date').eq('id', id).single(),
+    // select('*') so trips.legs (migration 038) comes along when it exists —
+    // naming the column would error before the migration is applied.
+    supabase.from('trips').select('*').eq('id', id).single(),
     supabase.from('trip_days').select('date, title, notes').eq('trip_id', id).order('date'),
     supabase.from('trip_hotels').select('name, check_in, check_out, location').eq('trip_id', id).order('check_in'),
   ])

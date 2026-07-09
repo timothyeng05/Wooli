@@ -6,7 +6,7 @@ const BUDGET_FEATURES = [
   { icon: '🗂️', title: 'Smart categories', desc: 'Organise every transaction into income, spending, and transfers. Customise defaults or build your own.' },
   { icon: '💰', title: 'Monthly targets', desc: 'Set a spending limit per category and see at a glance whether you\'re on track, month by month.' },
   { icon: '👥', title: 'Household members', desc: 'Tag transactions to the right person. See who\'s spending what across the household.' },
-  { icon: '🏦', title: 'Bank sync via Plaid', desc: 'Connect up to 3 institutions and automatically sync transactions and balances. Read-only, always secure.' },
+  { icon: '🏦', title: 'Bank sync via Plaid', desc: 'Connect your institutions and automatically sync transactions and balances. Read-only, always secure.' },
   { icon: '📈', title: 'Spending trends', desc: 'Monthly and yearly views of income vs. expenses, category breakdowns, and net worth over time.' },
   { icon: '🎯', title: 'Goals & forecast', desc: 'Set savings goals and see projected cash flow based on your spending patterns.' },
 ]

@@ -1,5 +1,5 @@
 import { notesToSectionData, findMeta, type SectionData } from './trip-sections'
-import { TRIP_LEGS, type Leg } from '@/app/trips/legs-config'
+import { resolveLegs, type Leg } from './trip-legs'
 
 // Machine-readable export of a whole trip itinerary. Used by the share export
 // route so a shared link can be fed to an LLM (e.g. Claude) to understand the
@@ -103,7 +103,9 @@ export function buildTripItinerary(
   hotels: HotelRow[],
 ): TripItinerary {
   const allDates = generateDays(trip.start_date, trip.end_date)
-  const legs = TRIP_LEGS[tripId] ?? []
+  // The trip row is fetched with select('*'), so it carries `legs` when
+  // migration 038 has run; resolveLegs falls back to the hardcoded map otherwise.
+  const legs = resolveLegs(tripId, trip as Record<string, unknown>)
   const byDate = new Map(dayRows.map(d => [d.date, d]))
 
   const days: ItineraryDay[] = allDates.map((date, i) => {

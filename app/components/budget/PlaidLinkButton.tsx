@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 
-export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false, className, onError }: {
+export default function PlaidLinkButton({ onSuccess, onComplete, className, onError }: {
   onSuccess?: () => void
   onComplete?: () => void  // if provided, called instead of window.location.reload()
-  atLimit?: boolean
   className?: string
   onError?: (error: string) => void
 }) {
@@ -61,20 +60,6 @@ export default function PlaidLinkButton({ onSuccess, onComplete, atLimit = false
   })
 
   if (error) return <p className="text-sm text-red-500">Error: {error}</p>
-
-  if (atLimit) {
-    return (
-      <div className="text-right">
-        <button
-          disabled
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 text-sm font-medium rounded-lg cursor-not-allowed"
-        >
-          + Connect Bank
-        </button>
-        <p className="text-xs text-amber-600 mt-1">3/3 institution limit reached</p>
-      </div>
-    )
-  }
 
   return (
     <button

@@ -934,7 +934,7 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                 </div>
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5">
-                  <p className="text-sm font-semibold text-amber-800 mb-2">⚠️ Free tier: 3 institutions</p>
+                  <p className="text-sm font-semibold text-amber-800 mb-2">ℹ️ Good to know</p>
                   <div className="space-y-1 text-sm text-amber-700">
                     <p>• All accounts within a bank count as one institution</p>
                     <p>• Some banks unsupported (e.g. Fidelity) — add manually</p>

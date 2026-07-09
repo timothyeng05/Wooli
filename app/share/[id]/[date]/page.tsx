@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { notesToSectionData, findMeta, SectionMeta } from '@/lib/trips/trip-sections'
 import { MEAL_TYPES } from '@/lib/trips/trip-utils'
-import { TRIP_LEGS, LEG_COLORS, type Leg } from '@/app/trips/legs-config'
+import { resolveLegs, LEG_COLORS, type Leg } from '@/lib/trips/trip-legs'
 import ShareDayPicker from '@/app/components/trips/ShareDayPicker'
 import AiShareButton from '@/app/components/trips/AiShareButton'
 
@@ -95,16 +95,18 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
   const { id, date } = await params
   const supabase = serviceClient()
 
+  // select('*') on trips/trip_days: legs (038) and journal (035) ride along when
+  // their migrations have run; naming them would error before that.
   const [{ data: trip }, { data: dayRows }, { data: hotels }] = await Promise.all([
-    supabase.from('trips').select('name, start_date, end_date').eq('id', id).single(),
-    supabase.from('trip_days').select('date, title, notes').eq('trip_id', id).order('date'),
+    supabase.from('trips').select('*').eq('id', id).single(),
+    supabase.from('trip_days').select('*').eq('trip_id', id).order('date'),
     supabase.from('trip_hotels').select('name, check_in, check_out').eq('trip_id', id).order('check_in'),
   ])
   if (!trip) notFound()
 
   const allDates = generateDays(trip.start_date, trip.end_date)
   const titleMap = new Map((dayRows ?? []).map(d => [d.date, d.title]))
-  const groups = groupByLegs(allDates, TRIP_LEGS[id] ?? [])
+  const groups = groupByLegs(allDates, resolveLegs(id, trip))
   const dayData = (dayRows ?? []).find(d => d.date === date)
 
   const currentIdx = allDates.indexOf(date)
@@ -219,6 +221,12 @@ export default async function ShareDayPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="max-w-2xl mx-auto px-5 sm:px-6 py-6 sm:py-8 pb-24 lg:pb-10">
+          {/* Traveler's journal entry (migration 035; present only on select('*')) */}
+          {typeof dayData?.journal === 'string' && dayData.journal.trim() !== '' && (
+            <blockquote className="mb-6 border-l-2 border-gray-300 pl-4 text-sm text-gray-500 italic whitespace-pre-line">
+              {dayData.journal}
+            </blockquote>
+          )}
           {sections.length > 0 ? (
             <div>
               {sections.map((s, i) => {

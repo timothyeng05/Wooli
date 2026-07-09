@@ -11,13 +11,17 @@ import { type ParsedSection, sectionDataToDisplay, parseSectionsFromNotes, notes
 import { type EditorSection, ACTIVITY_TYPES, MEAL_TYPES, ADD_SECTION_GROUPS, parseCoords, ratingStyle, ratingLabel, RATING_SCALE } from '@/lib/trips/trip-utils'
 import { SectionCard, HotelCard, DayMapCollapsible, LocationPreview } from '@/app/components/trips/SectionCards'
 import { SectionEditorCard, AddSectionPicker } from '@/app/components/trips/SectionEditorCard'
-import type { LocationPoint } from '@/app/components/trips/DayLocationMapClient'
+import DayLocationMap, { type LocationPoint } from '@/app/components/trips/DayLocationMapClient'
 import TripHotels, { type TripHotel } from '@/app/components/trips/TripHotels'
-import TripSidebar, { type SidePanel } from '@/app/components/trips/TripSidebar'
+import TripSidebar, { SidebarSearch, type SidePanel } from '@/app/components/trips/TripSidebar'
+import { resolveLegs, type Leg } from '@/lib/trips/trip-legs'
+import { searchDays, MIN_QUERY_LENGTH } from '@/lib/trips/trip-search'
 import EditPanel from '@/app/components/trips/EditPanel'
 import { findMeta } from '@/lib/trips/trip-sections'
 
-type DayData = { title: string | null; notes: string | null; date: string }
+// rating/journal are optional: the columns arrive with migration 035 and ride
+// along on the select('*') — absent before that.
+type DayData = { title: string | null; notes: string | null; date: string; rating?: number | null; journal?: string | null }
 
 let _idCounter = 0
 function newId() { return `s${++_idCounter}` }
@@ -33,8 +37,8 @@ function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
     <div ref={setNodeRef} className={`flex items-stretch gap-0 lg:gap-1 ${isDragging ? 'opacity-50' : ''}`}>
       {/* Grip is desktop-only — moving a card to another day on mobile uses the
           "Move to day" control in the edit sheet (the day list lives in a drawer). */}
-      <button {...attributes} {...listeners} title="Drag to another day"
-        className="hidden lg:flex px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing items-center flex-shrink-0">⠿</button>
+      <button {...attributes} {...listeners} title="Drag onto a day in the sidebar to move"
+        className="hidden lg:flex px-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing items-center flex-shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">⠿</button>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
   )
@@ -43,6 +47,7 @@ function DraggableCard({ id, children }: { id: string; children: ReactNode }) {
 export default function TripDayPage() {
   const params = useParams<{ id: string; date: string }>()
   const [trip, setTrip] = useState<{ name: string; start_date: string; end_date: string } | null>(null)
+  const [tripLegs, setTripLegs] = useState<Leg[]>([])
   const [days, setDays] = useState<DayData[]>([])
   const [allDates, setAllDates] = useState<string[]>([])
   const [title, setTitle] = useState('')
@@ -64,6 +69,12 @@ export default function TripDayPage() {
   const [showAddPicker, setShowAddPicker] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [showDayPicker, setShowDayPicker] = useState(false)
+  const [dayPickerQuery, setDayPickerQuery] = useState('')
+  // "Looking back" retro state (past days only)
+  const [retroRating, setRetroRating] = useState<number | null>(null)
+  const [retroJournal, setRetroJournal] = useState('')
+  const [recap, setRecap] = useState<string | null>(null)
+  const [recapLoading, setRecapLoading] = useState(false)
   const router = useRouter()
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
@@ -85,13 +96,17 @@ export default function TripDayPage() {
       if (!user) return
       setUserId(user.id)
 
+      // select('*') on trips/trip_days: the optional columns from migrations 035
+      // (rating/journal) and 038 (legs) ride along once applied — naming them in
+      // the select would error before that.
       const [{ data: tripData }, { data: allDays }, { data: hotelData }] = await Promise.all([
-        supabase.from('trips').select('name, start_date, end_date').eq('id', params.id).single(),
-        supabase.from('trip_days').select('date, title, notes').eq('trip_id', params.id).order('date'),
+        supabase.from('trips').select('*').eq('id', params.id).single(),
+        supabase.from('trip_days').select('*').eq('trip_id', params.id).order('date'),
         supabase.from('trip_hotels').select('*').eq('trip_id', params.id).order('check_in'),
       ])
 
       setTrip(tripData)
+      setTripLegs(resolveLegs(params.id, tripData))
       setDays(allDays ?? [])
       setHotels(hotelData ?? [])
 
@@ -113,7 +128,9 @@ export default function TripDayPage() {
       setPrevDate(currentIdx > 0 ? generated[currentIdx - 1] : null)
       setNextDate(currentIdx < generated.length - 1 ? generated[currentIdx + 1] : null)
 
-      const current = allDays?.find(d => d.date === params.date)
+      const current: DayData | undefined = allDays?.find((d: DayData) => d.date === params.date)
+      setRetroRating(current?.rating ?? null)
+      setRetroJournal(current?.journal ?? '')
       if (current) {
         setTitle(current.title ?? '')
         const sectionData = notesToSectionData(current.notes)
@@ -162,6 +179,33 @@ export default function TripDayPage() {
     const el = c?.querySelector(`[data-pd="${params.date}"]`) as HTMLElement | null
     if (c && el) { const er = el.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTop += (er.top - cr.top) - 140 }
   }, [showDayPicker, params.date])
+
+  // xl-and-up flag for the right rail. Leaflet sizes itself once at mount, so the
+  // rail map must never mount inside a display:none container (gray tiles when it
+  // becomes visible) — mount it only when the rail is actually shown.
+  const [railXl, setRailXl] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)')
+    const update = () => setRailXl(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
+  // Desktop: ←/→ arrow keys page between days (the keyboard twin of swipe nav).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (editingId || sidePanel || sidebarOpen || showAddSheet || showDayPicker || insertAt !== null || showAddPicker) return
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      if (e.key === 'ArrowLeft' && prevDate) router.push(`/trips/${params.id}/${prevDate}`)
+      else if (e.key === 'ArrowRight' && nextDate) router.push(`/trips/${params.id}/${nextDate}`)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [prevDate, nextDate, editingId, sidePanel, sidebarOpen, showAddSheet, showDayPicker, insertAt, showAddPicker, params.id, router])
 
   // Swipe left/right on the day's content to move to the next / previous day.
   const swipeNav = {
@@ -296,6 +340,43 @@ export default function TripDayPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  // Retro fields persist through their own targeted upsert — deliberately NOT
+  // part of save(): the columns may not exist pre-migration 035, and the section
+  // editor's save path must never fail because of them.
+  const saveRetro = async (rating: number | null, journal: string) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase.from('trip_days').upsert(
+      { trip_id: params.id, user_id: user.id, date: params.date, rating, journal: journal || null },
+      { onConflict: 'trip_id,date' }
+    )
+    if (error) return showToast('Retro fields need migration 035')
+    // Keep the sidebar rating chip in sync.
+    setDays(ds => ds.some(d => d.date === params.date)
+      ? ds.map(d => d.date === params.date ? { ...d, rating, journal: journal || null } : d)
+      : [...ds, { date: params.date, title: title || null, notes: null, rating, journal: journal || null }])
+  }
+
+  const generateRecap = async () => {
+    if (recapLoading) return
+    setRecapLoading(true)
+    try {
+      const res = await fetch('/api/trips/day-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: sectionItems.map(({ _id, ...s }) => s), isPast: true }),
+      })
+      const data = await res.json()
+      if (data.summary) setRecap(data.summary)
+      else showToast('Nothing to recap for this day')
+    } catch {
+      showToast('Recap failed — try again')
+    } finally {
+      setRecapLoading(false)
+    }
+  }
+
   const displaySectionsRaw = sectionItems.map(item => sectionDataToDisplay(item))
   const displaySections = displaySectionsRaw.filter((x): x is ParsedSection => x !== null)
 
@@ -404,6 +485,20 @@ export default function TripDayPage() {
 
   const hotelMeta = findMeta('HOTEL')
 
+  // A brand-new trip: no sections on any day and no hotels. Drives the one-time
+  // "Set up your trip" checklist; derived, so it disappears on the first real content.
+  const tripUnfurnished = useMemo(
+    () => hotels.length === 0 && days.every(d => notesToSectionData(d.notes).length === 0),
+    [days, hotels],
+  )
+
+  // Mobile "Jump to day" sheet search — same matcher as the sidebar search.
+  const pickerSearching = dayPickerQuery.trim().length >= MIN_QUERY_LENGTH
+  const pickerSnippets = useMemo(
+    () => new Map(searchDays(days, dayPickerQuery).map(m => [m.date, m.snippet])),
+    [days, dayPickerQuery],
+  )
+
   // Past meals, ranked (for the "What we ate" panel)
   const ate = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -501,6 +596,7 @@ export default function TripDayPage() {
           endDate={trip.end_date}
           allDates={allDates}
           days={days}
+          legs={tripLegs}
           activeDate={params.date}
           todayLocal={todayLocal}
           shareUrl={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/share/${params.id}`}
@@ -517,7 +613,7 @@ export default function TripDayPage() {
       )}
 
       {/* Main content */}
-      <div className={`flex-1 min-w-0 lg:ml-72 transition-[margin] duration-300 ${editingId ? 'lg:mr-[460px]' : ''}`}>
+      <div className={`flex-1 min-w-0 lg:ml-72 transition-[margin] duration-300 ${editingId ? 'xl:mr-[460px]' : ''}`}>
 
         {/* Sticky header */}
         <div className="bg-white border-b border-gray-200 shadow-sm sticky top-[49px] z-10">
@@ -531,11 +627,11 @@ export default function TripDayPage() {
                 <span className="block w-5 h-5 text-lg leading-none">☰</span>
               </button>
               <button
-                onClick={() => setShowDayPicker(true)}
+                onClick={() => { setDayPickerQuery(''); setShowDayPicker(true) }}
                 aria-label="Jump to day"
                 className="lg:pointer-events-none flex-shrink-0 inline-flex items-center gap-1 text-xs font-bold bg-blue-600 text-white rounded-full pl-2.5 pr-2 py-1 whitespace-nowrap active:scale-95 transition"
               >
-                Day {dayNumber}<span className="lg:hidden text-blue-200 font-semibold">/{allDates.length} ▾</span>
+                Day {dayNumber}<span className="text-blue-200 font-semibold">/{allDates.length}</span><span className="lg:hidden text-blue-200 font-semibold"> ▾</span>
               </button>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-base font-bold text-gray-900 leading-tight truncate">
@@ -550,12 +646,12 @@ export default function TripDayPage() {
               {saving && <span className="text-xs text-gray-400">Saving…</span>}
               {saved && !saving && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
               {prevDate && (
-                <Link href={`/trips/${params.id}/${prevDate}`} aria-label="Previous day" className="hidden sm:inline-block border border-gray-200 text-gray-500 font-medium px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition text-xs">
+                <Link href={`/trips/${params.id}/${prevDate}`} aria-label="Previous day" title="Previous day (←)" className="hidden sm:inline-block border border-gray-200 text-gray-500 font-medium px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition text-xs">
                   ← Prev
                 </Link>
               )}
               {nextDate && (
-                <Link href={`/trips/${params.id}/${nextDate}`} aria-label="Next day" className="hidden sm:inline-block border border-gray-200 text-gray-500 font-medium px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition text-xs">
+                <Link href={`/trips/${params.id}/${nextDate}`} aria-label="Next day" title="Next day (→)" className="hidden sm:inline-block border border-gray-200 text-gray-500 font-medium px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition text-xs">
                   Next →
                 </Link>
               )}
@@ -563,7 +659,11 @@ export default function TripDayPage() {
           </div>
         </div>
 
-        <div {...swipeNav} className="max-w-2xl mx-auto px-5 sm:px-6 pt-4 sm:pt-6 pb-28 md:pb-10 space-y-3 sm:space-y-4">
+        {/* At xl the wrapper becomes a two-column grid (timeline + right rail). While the
+            edit drawer pushes the layout (xl:mr-[460px]) the grid must go too — a hidden
+            aside still reserves its ≥300px track and would crush the timeline. */}
+        <div {...swipeNav} className={`max-w-2xl mx-auto px-5 sm:px-6 pt-4 sm:pt-6 pb-28 md:pb-10 ${editingId ? '' : 'xl:max-w-[1160px] xl:grid xl:grid-cols-[minmax(0,42rem)_minmax(300px,380px)] xl:gap-8'}`}>
+         <div className="space-y-3 sm:space-y-4 min-w-0">
 
           {/* Always-visible title edit */}
           <input
@@ -577,9 +677,10 @@ export default function TripDayPage() {
             className="w-full border border-gray-200 rounded-lg px-3 py-2.5 sm:py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
 
-          {/* Hotels covering this day (managed in the sidebar) */}
+          {/* Hotels covering this day (managed in the sidebar) — moves to the right rail at xl.
+              While editing the rail is gone (layout falls back to the centered column), so show them here. */}
           {hotelMeta && dayHotels.length > 0 && (
-            <div className="space-y-2">
+            <div className={`space-y-2 ${editingId ? '' : 'xl:hidden'}`}>
               {dayHotels.map(({ hotel, checkpoint }) => (
                 <HotelCard
                   key={hotel.id}
@@ -592,8 +693,8 @@ export default function TripDayPage() {
             </div>
           )}
 
-          {/* Collapsible day map */}
-          {dayLocations.length > 0 && <DayMapCollapsible locations={dayLocations} />}
+          {/* Collapsible day map — the rail shows it always-open at xl (except while editing, when the rail is gone) */}
+          {dayLocations.length > 0 && <div className={editingId ? '' : 'xl:hidden'}><DayMapCollapsible locations={dayLocations} /></div>}
 
           {/* Sections */}
           {displaySections.length > 0 ? (
@@ -604,13 +705,15 @@ export default function TripDayPage() {
                   if (!s) return null
                   const isLast = i === sectionItems.length - 1
                   return (
-                    <div key={item._id}>
+                    <div key={item._id} className="group">
                       <div className="flex gap-3 sm:gap-2">
                         {/* Time rail — desktop only; on mobile it wastes width, so
                             the time/⭐ move inline into the card instead. */}
-                        <div className="hidden sm:flex flex-col items-end flex-shrink-0 w-14 pt-3">
-                          {s.pinned && <span className="text-sm leading-none mb-0.5">⭐</span>}
-                          <span className="text-xs font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
+                        <div className="hidden sm:flex flex-col items-end flex-shrink-0 w-16 pt-3">
+                          <div className="flex items-center justify-end gap-1">
+                            {s.pinned && <span className="text-[11px] leading-none">⭐</span>}
+                            <span className="text-xs font-semibold text-gray-400 leading-none whitespace-nowrap">{s.timeOverride ?? s.meta.time}</span>
+                          </div>
                         </div>
                         <div className="flex flex-col items-center flex-shrink-0">
                           <div className="w-2.5 h-2.5 rounded-full mt-3 flex-shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: s.meta.dotColor }} />
@@ -638,14 +741,14 @@ export default function TripDayPage() {
                       </div>
                       {i < sectionItems.length - 1 && (
                         insertAt === i ? (
-                          <div className="my-1.5 ml-[22px] sm:ml-16">
+                          <div className="my-1.5 ml-[22px] sm:ml-[4.5rem]">
                             <AddSectionPicker onAdd={type => addSection(type, i)} onCancel={() => setInsertAt(null)} />
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 ml-[22px] sm:ml-16 py-0.5">
+                          <div className="flex items-center gap-2 ml-[22px] sm:ml-[4.5rem] py-0.5">
                             <div className="flex-1 h-px bg-gray-100" />
-                            <button onClick={() => setInsertAt(i)} aria-label="Insert section here"
-                              className="flex items-center justify-center w-7 h-7 sm:w-5 sm:h-5 text-base sm:text-xs text-gray-300 hover:text-blue-500 rounded-full hover:bg-blue-50 transition leading-none">
+                            <button onClick={() => setInsertAt(i)} aria-label="Insert section here" title="Insert section here"
+                              className="flex items-center justify-center w-7 h-7 sm:w-6 sm:h-6 text-base sm:text-xs text-gray-300 hover:text-blue-500 rounded-full hover:bg-blue-50 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition leading-none">
                               +
                             </button>
                             <div className="flex-1 h-px bg-gray-100" />
@@ -657,11 +760,52 @@ export default function TripDayPage() {
                 })}
               </div>
             </>
+          ) : tripUnfurnished ? (
+            /* First-run: the whole trip is empty — point at the three setup actions */
+            <div className="py-4">
+              <p className="text-sm font-bold text-gray-900 mb-0.5">Set up your trip</p>
+              <p className="text-xs text-gray-400 mb-3">Three quick steps to make this trip useful.</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowAddPicker(true)}
+                  className="w-full flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:border-blue-200 hover:shadow-sm active:scale-[0.99] transition"
+                >
+                  <span className="text-xl">🗓️</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">Add your first plan</span>
+                    <span className="block text-xs text-gray-500">Transit, an activity, or a meal for this day</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSidePanel('hotels')}
+                  className="w-full flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:border-blue-200 hover:shadow-sm active:scale-[0.99] transition"
+                >
+                  <span className="text-xl">🏨</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">Add hotels</span>
+                    <span className="block text-xs text-gray-500">Each stay shows on every day it covers</span>
+                  </span>
+                </button>
+                <Link
+                  href={`/trips/${params.id}/settings`}
+                  className="w-full flex items-center gap-3 rounded-xl border border-gray-200 p-4 text-left hover:border-blue-200 hover:shadow-sm active:scale-[0.99] transition"
+                >
+                  <span className="text-xl">🧭</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">Split into legs</span>
+                    <span className="block text-xs text-gray-500">Group days into stretches, e.g. Tokyo → Kyoto → Seoul</span>
+                  </span>
+                </Link>
+              </div>
+            </div>
           ) : (
-            <div className="text-center py-10">
+            <div className="text-center py-10 cursor-pointer" onClick={() => setShowAddPicker(true)}>
               <div className="text-4xl mb-2">🗺️</div>
               <p className="text-sm text-gray-500 font-medium">No plans yet for this day</p>
-              <p className="text-xs text-gray-400 mt-0.5">Tap the ＋ button to add transit, an activity, or a meal.</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                <span className="lg:hidden">Tap the ＋ button to add transit, an activity, or a meal.</span>
+                <span className="hidden lg:inline">Use “+ Add section” below to add transit, an activity, or a meal.</span>
+              </p>
             </div>
           )}
 
@@ -677,6 +821,88 @@ export default function TripDayPage() {
               </button>
             )
           }
+
+          {/* Looking back — day retrospective, past days only */}
+          {params.date < todayLocal && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <p className="text-sm font-bold text-gray-900">Looking back</p>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">How was this day?</p>
+                <div className="flex flex-wrap gap-1">
+                  {[...RATING_SCALE].reverse().map(({ score }) => (
+                    <button
+                      key={score}
+                      onClick={() => { const next = retroRating === score ? null : score; setRetroRating(next); saveRetro(next, retroJournal) }}
+                      aria-label={`Rate this day ${score} out of 10`}
+                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center transition ${retroRating === score ? ratingStyle(score) : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-400'}`}
+                    >
+                      {score}
+                    </button>
+                  ))}
+                </div>
+                {retroRating != null && ratingLabel(retroRating) && (
+                  <p className="text-[11px] text-gray-400 mt-1">{ratingLabel(retroRating)}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">Journal</p>
+                <textarea
+                  value={retroJournal}
+                  onChange={e => setRetroJournal(e.target.value)}
+                  onBlur={() => saveRetro(retroRating, retroJournal)}
+                  rows={3}
+                  placeholder="What made this day memorable?"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                />
+              </div>
+              {recap ? (
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-sm text-gray-700 italic">{recap}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      onClick={() => { const next = retroJournal.trim() ? `${retroJournal.trimEnd()}\n\n${recap}` : recap; setRetroJournal(next); setRecap(null); saveRetro(retroRating, next) }}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      Add to journal
+                    </button>
+                    <button onClick={() => setRecap(null)} className="text-xs font-medium text-gray-400 hover:text-gray-600">Dismiss</button>
+                  </div>
+                </div>
+              ) : (
+                sectionItems.length > 0 && (
+                  <button
+                    onClick={generateRecap}
+                    disabled={recapLoading}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition"
+                  >
+                    {recapLoading ? 'Writing recap…' : '✨ Recap this day'}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+
+         </div>
+
+         {/* Right rail (xl) — day map always open + hotels; hidden while the edit drawer pushes the layout */}
+         <aside className={`hidden ${editingId ? '' : 'xl:block'}`}>
+           <div className="sticky top-[110px] space-y-3">
+             {railXl && !editingId && dayLocations.length > 0 && (
+               <div className="rounded-xl border border-gray-100 overflow-hidden">
+                 <DayLocationMap locations={dayLocations} />
+               </div>
+             )}
+             {hotelMeta && dayHotels.map(({ hotel, checkpoint }) => (
+               <HotelCard
+                 key={hotel.id}
+                 meta={hotelMeta}
+                 lines={[hotel.name, hotel.location ?? ''].filter(Boolean)}
+                 coords={hotel.coords ?? undefined}
+                 checkpoint={checkpoint}
+               />
+             ))}
+           </div>
+         </aside>
 
         </div>
       </div>
@@ -710,7 +936,7 @@ export default function TripDayPage() {
                 <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
                   {ate.length === 0 && <p className="text-sm text-gray-400 px-4 py-3">No meals logged yet.</p>}
                   {ate.map((m, i) => (
-                    <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <Link key={i} href={`/trips/${params.id}/${m.date}`} onClick={() => setSidePanel(null)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-800 font-medium truncate">{m.name}</p>
                         {m.rating != null && ratingLabel(m.rating) && (
@@ -719,7 +945,7 @@ export default function TripDayPage() {
                       </div>
                       {m.rating != null && <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${ratingStyle(m.rating)}`}>{m.rating}/10</span>}
                       <span className="text-xs text-gray-400 flex-shrink-0">{new Date(m.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </>
@@ -743,11 +969,18 @@ export default function TripDayPage() {
                 <button onClick={() => setShowDayPicker(false)} className="text-xs font-medium text-gray-400">Close</button>
               </div>
             </div>
+            <div className="px-3 py-2 border-b border-gray-100">
+              <SidebarSearch query={dayPickerQuery} onChange={setDayPickerQuery} />
+            </div>
             <div ref={dayPickerScroll} className="flex-1 overflow-y-auto p-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              {allDates.map((d, i) => {
+              {pickerSearching && !allDates.some(d => pickerSnippets.has(d)) && (
+                <p className="px-3 py-3 text-sm text-gray-400">No matches</p>
+              )}
+              {(pickerSearching ? allDates.filter(d => pickerSnippets.has(d)) : allDates).map(d => {
+                const i = allDates.indexOf(d)
                 const active = d === params.date
                 const today = d === todayLocal
-                const t = dayTitleMap.get(d)
+                const t = pickerSearching ? pickerSnippets.get(d) : dayTitleMap.get(d)
                 return (
                   <button
                     key={d}
@@ -770,7 +1003,7 @@ export default function TripDayPage() {
 
       {/* Transient toast */}
       {toast && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6 z-[60] bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
           {toast}
         </div>
       )}

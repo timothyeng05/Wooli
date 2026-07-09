@@ -9,20 +9,6 @@ export async function POST(request: Request) {
 
   const { public_token, institution_name, institution_id } = await request.json()
 
-  const INSTITUTION_LIMIT = 3
-
-  // Count existing linked institutions before allowing a new one
-  const { count: itemCount } = await supabase
-    .from('plaid_items')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-  if ((itemCount ?? 0) >= INSTITUTION_LIMIT) {
-    return NextResponse.json(
-      { error: `Free tier limit reached. You can link a maximum of ${INSTITUTION_LIMIT} institutions.` },
-      { status: 403 }
-    )
-  }
-
   const exchangeRes = await plaidClient.itemPublicTokenExchange({ public_token })
   const { access_token, item_id } = exchangeRes.data
 

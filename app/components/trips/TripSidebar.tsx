@@ -6,17 +6,45 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import ShareButton from '@/app/components/ShareButton'
-import { TRIP_LEGS, LEG_COLORS } from '@/app/trips/legs-config'
+import AiShareButton from '@/app/components/trips/AiShareButton'
+import { LEG_COLORS, type Leg } from '@/lib/trips/trip-legs'
+import { searchDays, MIN_QUERY_LENGTH } from '@/lib/trips/trip-search'
 
-export type DayRow = { date: string; title: string | null; notes: string | null }
+// rating is optional — the column arrives with migration 035 and callers read it off select('*').
+export type DayRow = { date: string; title: string | null; notes: string | null; rating?: number | null }
 export type SidePanel = 'hotels' | 'ate' | null
 
 function fmt(date: string, opts?: Intl.DateTimeFormatOptions) {
   return new Date(date + 'T00:00:00').toLocaleDateString('en-US', opts ?? { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver, dropLine }: {
-  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; tripId: string; cardOver: boolean; dropLine: boolean
+// Small search input with a clear (✕ / Esc) affordance, shared look for the
+// sidebar and the mobile day-picker sheet.
+export function SidebarSearch({ query, onChange, placeholder }: {
+  query: string; onChange: (q: string) => void; placeholder?: string
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">🔍</span>
+      <input
+        type="text"
+        value={query}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') onChange('') }}
+        placeholder={placeholder ?? 'Search this trip'}
+        aria-label="Search this trip"
+        className="w-full border border-gray-200 rounded-lg bg-white pl-8 pr-7 py-1.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+      />
+      {query && (
+        <button onClick={() => onChange('')} aria-label="Clear search"
+          className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 text-gray-400 hover:text-gray-700 text-sm leading-none">✕</button>
+      )}
+    </div>
+  )
+}
+
+function DayItem({ date, index, activeDate, todayLocal, title, rating, tripId, cardOver, dropLine }: {
+  date: string; index: number; activeDate: string; todayLocal: string; title: string | null; rating: number | null; tripId: string; cardOver: boolean; dropLine: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: date, data: { type: 'day' } })
   const isActive = date === activeDate
@@ -37,17 +65,20 @@ function DayItem({ date, index, activeDate, todayLocal, title, tripId, cardOver,
           <p className={`text-xs ${isActive ? 'text-blue-200' : isToday ? 'text-blue-400' : 'text-gray-400'}`}>{fmt(date)}{isToday && !isActive ? ' · today' : ''}</p>
           <p className={`text-sm font-medium leading-snug truncate ${isActive ? 'text-white' : title ? 'text-gray-800' : 'text-gray-400'}`}>{title ?? '—'}</p>
         </div>
+        {rating != null && (
+          <span className={`text-[10px] font-semibold flex-shrink-0 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>{rating}/10</span>
+        )}
       </Link>
     </div>
   )
 }
 
 export default function TripSidebar({
-  tripId, tripName, startDate, endDate, allDates, days, activeDate, todayLocal, shareUrl,
+  tripId, tripName, startDate, endDate, allDates, days, legs, activeDate, todayLocal, shareUrl,
   hotelCount, ateCount, activePanel, onOpenPanel, dragType, overDate, overDayDate, mobileOpen, onMobileClose,
 }: {
   tripId: string; tripName: string; startDate: string; endDate: string
-  allDates: string[]; days: DayRow[]
+  allDates: string[]; days: DayRow[]; legs: Leg[]
   activeDate: string; todayLocal: string; shareUrl: string
   hotelCount: number; ateCount: number
   activePanel: SidePanel
@@ -59,8 +90,17 @@ export default function TripSidebar({
   onMobileClose: () => void
 }) {
   const titleMap = useMemo(() => new Map(days.map(d => [d.date, d.title])), [days])
+  const ratingMap = useMemo(() => new Map(days.map(d => [d.date, d.rating ?? null])), [days])
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const [query, setQuery] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const searching = query.trim().length >= MIN_QUERY_LENGTH
+  const matches = useMemo(
+    // Guard against day rows outside the trip's date range (hidden by a date change).
+    () => searchDays(days, query).filter(m => allDates.includes(m.date)),
+    [days, query, allDates],
+  )
 
   // Center the active day in the sidebar so neighbours are easy to reach.
   useEffect(() => {
@@ -88,7 +128,6 @@ export default function TripSidebar({
     return { label: `Completed · ${d} day${d !== 1 ? 's' : ''} ago`, progressPct: null as number | null }
   }, [startDate, endDate, allDates.length])
 
-  const legs = TRIP_LEGS[tripId] ?? []
   const groups = legs.length
     ? legs.map(leg => ({ leg, dates: allDates.filter(d => d >= leg.from && d <= leg.to) })).filter(g => g.dates.length > 0)
     : [{ leg: null as null | { name: string; emoji: string }, dates: allDates }]
@@ -123,6 +162,8 @@ export default function TripSidebar({
           <Link href="/trips" className="text-xs font-semibold text-gray-400 hover:text-blue-600 transition">← Trips</Link>
           <div className="flex items-center gap-2">
             <ShareButton url={shareUrl} />
+            <Link href={`/trips/${tripId}/settings`} title="Trip settings" aria-label="Trip settings"
+              className="text-gray-400 hover:text-gray-700 text-base leading-none px-0.5 transition">⚙</Link>
             <button onClick={onMobileClose} className="lg:hidden text-gray-400 hover:text-gray-700 text-lg leading-none px-1" aria-label="Close menu">✕</button>
           </div>
         </div>
@@ -133,6 +174,10 @@ export default function TripSidebar({
             <div className="h-full bg-blue-500 rounded transition-all" style={{ width: `${progressPct}%` }} />
           </div>
         )}
+        {/* Own row — the header row is too tight for a second chip at w-72 */}
+        <div className="mt-2">
+          <AiShareButton path={`/share/${tripId}/export?format=md`} />
+        </div>
       </div>
 
       {/* Hotels + What we ate cards */}
@@ -141,8 +186,30 @@ export default function TripSidebar({
         {summaryCard('ate', '🍴', 'What we ate', ateCount)}
       </div>
 
+      {/* Trip-wide search over day titles + section content */}
+      <div className="px-3 py-2 border-b border-gray-200">
+        <SidebarSearch query={query} onChange={setQuery} />
+      </div>
+
       {/* Days (legs-grouped & collapsible, drag to swap) */}
       <div className="flex-1 overflow-y-auto pb-24 lg:pb-3" ref={scrollRef}>
+        {searching ? (
+          /* Flat results — plain links, deliberately outside the SortableContext
+             so an active search can't interfere with drag-to-swap. */
+          <div>
+            {matches.length === 0 && <p className="px-4 py-3 text-sm text-gray-400">No matches</p>}
+            {matches.map(m => (
+              <Link key={m.date} href={`/trips/${tripId}/${m.date}`} onClick={() => setQuery('')}
+                className={`flex items-center gap-2 px-4 py-2.5 ${m.date === activeDate ? 'bg-blue-600' : 'hover:bg-gray-100'}`}>
+                <span className={`text-xs font-bold w-10 flex-shrink-0 ${m.date === activeDate ? 'text-blue-200' : 'text-gray-400'}`}>Day {allDates.indexOf(m.date) + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-xs ${m.date === activeDate ? 'text-blue-200' : 'text-gray-400'}`}>{fmt(m.date)}</p>
+                  <p className={`text-sm font-medium leading-snug truncate ${m.date === activeDate ? 'text-white' : 'text-gray-800'}`}>{m.snippet}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
         <SortableContext items={visibleDates} strategy={verticalListSortingStrategy}>
           {groups.map((g, gi) => {
             const c = LEG_COLORS[gi % LEG_COLORS.length]
@@ -162,7 +229,7 @@ export default function TripSidebar({
                 )}
                 {!isCollapsed && g.dates.map(date => (
                   <DayItem key={date} date={date} index={allDates.indexOf(date)} activeDate={activeDate}
-                    todayLocal={todayLocal} title={titleMap.get(date) ?? null} tripId={tripId}
+                    todayLocal={todayLocal} title={titleMap.get(date) ?? null} rating={ratingMap.get(date) ?? null} tripId={tripId}
                     cardOver={dragType === 'card' && overDate === date}
                     dropLine={dragType === 'day' && overDayDate === date} />
                 ))}
@@ -170,6 +237,7 @@ export default function TripSidebar({
             )
           })}
         </SortableContext>
+        )}
       </div>
     </aside>
     </>
