@@ -161,6 +161,22 @@ create trigger set_card_benefits_updated_at
 
 ---
 
+## 2026-07 — Plaid item health
+
+### 039 — plaid_items health columns (`supabase/migrations/039_plaid_item_health.sql`)
+
+```sql
+alter table public.plaid_items add column if not exists status text not null default 'healthy'; -- healthy | error
+alter table public.plaid_items add column if not exists error_code text;                        -- e.g. ITEM_LOGIN_REQUIRED
+alter table public.plaid_items add column if not exists error_message text;
+alter table public.plaid_items add column if not exists last_successful_sync_at timestamptz;
+alter table public.plaid_items add column if not exists last_sync_attempt_at timestamptz;
+```
+
+**Why:** Plaid transaction sync is now the source of truth (Monarch CSV retired). Sync captures per-institution errors (e.g. ITEM_LOGIN_REQUIRED) instead of aborting the whole run, and the accounts page surfaces connection status with a Reconnect (update-mode Link) button.
+
+---
+
 ## Pending
 
 - `mood_entries` table (next: build mood module)

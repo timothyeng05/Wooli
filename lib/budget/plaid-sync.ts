@@ -19,9 +19,35 @@ export type ItemSyncResult = {
   added: number
   modified: number
   removed: number
+  error?: { code: string | null; message: string }
 }
 
 const transferKeywords = /payment|autopay|transfer|zelle|venmo|paypal|cashapp|wire|ach|direct dep/i
+
+/** Plaid SDK errors are axios errors carrying error_code/error_message in the response body. */
+function plaidErrorInfo(err: unknown): { code: string | null; message: string } {
+  const data = (err as { response?: { data?: { error_code?: string; error_message?: string } } })?.response?.data
+  if (data?.error_code || data?.error_message) {
+    return { code: data.error_code ?? null, message: data.error_message ?? 'Plaid error' }
+  }
+  return { code: null, message: err instanceof Error ? err.message : 'Unknown sync error' }
+}
+
+// Health-column updates are best-effort: if migration 039 hasn't run yet the
+// update fails silently (supabase-js returns the error, never throws) and sync
+// itself is unaffected.
+async function markItemHealthy(admin: SupabaseClient, itemId: string) {
+  const now = new Date().toISOString()
+  await admin.from('plaid_items')
+    .update({ status: 'healthy', error_code: null, error_message: null, last_successful_sync_at: now, last_sync_attempt_at: now })
+    .eq('item_id', itemId)
+}
+
+async function markItemError(admin: SupabaseClient, itemId: string, error: { code: string | null; message: string }) {
+  await admin.from('plaid_items')
+    .update({ status: 'error', error_code: error.code, error_message: error.message, last_sync_attempt_at: new Date().toISOString() })
+    .eq('item_id', itemId)
+}
 
 async function buildAccountMaps(admin: SupabaseClient, userId: string) {
   const { data: plaidAccounts } = await admin
@@ -51,112 +77,152 @@ export async function syncTransactionsForUser(
 ): Promise<ItemSyncResult[]> {
   const { nameMap, ownerMap } = await buildAccountMaps(admin, userId)
   const pipelineCtx = await buildPipelineContext(admin, userId, { enableGroq: false })
+  const ctx: SyncContext = { admin, userId, nameMap, ownerMap, pipelineCtx }
 
   const results: ItemSyncResult[] = []
 
   for (const item of items) {
     const result: ItemSyncResult = { itemId: item.item_id, added: 0, modified: 0, removed: 0 }
-    let cursor = item.cursor ?? undefined
-    let hasMore = true
-
-    while (hasMore) {
-      const res = await plaidClient.transactionsSync({
-        access_token: item.access_token,
-        cursor,
-        count: 500,
-      })
-      const { added, modified, removed, next_cursor, has_more } = res.data
-
-      if (added.length) {
-        const inputs: CategorizeInput[] = added.map(t => ({
-          raw_merchant: t.merchant_name ?? null,
-          description: t.name,
-          amount: -(t.amount),
-          account_name: nameMap.get(t.account_id) ?? null,
-          provider_category: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null,
-          provider_confidence: t.personal_finance_category?.confidence_level ?? null,
-        }))
-        const cat = await categorizeBatch(inputs, pipelineCtx)
-
-        const rows = added.map((t, i) => {
-          const r = cat[i]
-          const isTransfer = r.is_transfer || !!(
-            t.personal_finance_category?.primary?.includes('TRANSFER') ||
-            transferKeywords.test(t.name)
-          )
-          return {
-            user_id: userId,
-            plaid_transaction_id: t.transaction_id,
-            plaid_account_id: t.account_id,
-            account_name: nameMap.get(t.account_id) ?? null,
-            amount: -(t.amount),
-            description: t.name,
-            merchant: t.merchant_name ?? null,
-            transacted_at: t.date + 'T00:00:00',
-            category_id: isTransfer ? null : r.category_id,
-            is_transfer: isTransfer,
-            owner: ownerMap.get(t.account_id) ?? null,
-            normalized_merchant: r.normalized_merchant,
-            provider_category: inputs[i].provider_category,
-            categorization_source: isTransfer ? 'none' : r.source,
-            categorization_confidence: r.confidence,
-            needs_review: !isTransfer && r.needs_review,
-            groq_called: false,
-          }
-        })
-        const { error: upsertError } = await admin
-          .from('transactions')
-          .upsert(rows, { onConflict: 'plaid_transaction_id' })
-        if (upsertError) throw new Error(`Failed to save transactions: ${upsertError.message}`)
-        result.added += added.length
-      }
-
-      for (const t of modified) {
-        await admin
-          .from('transactions')
-          .update({
-            amount: -(t.amount),
-            description: t.name,
-            merchant: t.merchant_name ?? null,
-            transacted_at: t.date + 'T00:00:00',
-          })
-          .eq('plaid_transaction_id', t.transaction_id)
-        result.modified++
-      }
-
-      for (const t of removed) {
-        await admin.from('transactions').delete().eq('plaid_transaction_id', t.transaction_id)
-        result.removed++
-      }
-
-      cursor = next_cursor
-      hasMore = has_more
+    try {
+      await syncOneItem(ctx, item, result)
+      await markItemHealthy(admin, item.item_id)
+    } catch (err) {
+      // One broken institution (e.g. ITEM_LOGIN_REQUIRED) must not abort the
+      // others — record it and move on.
+      result.error = plaidErrorInfo(err)
+      await markItemError(admin, item.item_id, result.error)
     }
-
-    await admin.from('plaid_items').update({ cursor }).eq('item_id', item.item_id)
     results.push(result)
   }
 
   return results
 }
 
-/** Refresh current/available balances for every account under the given items. */
+type SyncContext = {
+  admin: SupabaseClient
+  userId: string
+  nameMap: Map<string, string>
+  ownerMap: Map<string, string | null>
+  pipelineCtx: Awaited<ReturnType<typeof buildPipelineContext>>
+}
+
+async function syncOneItem(
+  ctx: SyncContext,
+  item: Pick<PlaidItemRow, 'item_id' | 'access_token' | 'cursor'>,
+  result: ItemSyncResult,
+) {
+  const { admin, userId, nameMap, ownerMap, pipelineCtx } = ctx
+  let cursor = item.cursor ?? undefined
+  let hasMore = true
+
+  while (hasMore) {
+    const res = await plaidClient.transactionsSync({
+      access_token: item.access_token,
+      cursor,
+      count: 500,
+    })
+    const { added, modified, removed, next_cursor, has_more } = res.data
+
+    if (added.length) {
+      const inputs: CategorizeInput[] = added.map(t => ({
+        raw_merchant: t.merchant_name ?? null,
+        description: t.name,
+        amount: -(t.amount),
+        account_name: nameMap.get(t.account_id) ?? null,
+        provider_category: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null,
+        provider_confidence: t.personal_finance_category?.confidence_level ?? null,
+      }))
+      const cat = await categorizeBatch(inputs, pipelineCtx)
+
+      const rows = added.map((t, i) => {
+        const r = cat[i]
+        const isTransfer = r.is_transfer || !!(
+          t.personal_finance_category?.primary?.includes('TRANSFER') ||
+          transferKeywords.test(t.name)
+        )
+        return {
+          user_id: userId,
+          plaid_transaction_id: t.transaction_id,
+          plaid_account_id: t.account_id,
+          account_name: nameMap.get(t.account_id) ?? null,
+          amount: -(t.amount),
+          description: t.name,
+          merchant: t.merchant_name ?? null,
+          transacted_at: t.date + 'T00:00:00',
+          category_id: isTransfer ? null : r.category_id,
+          is_transfer: isTransfer,
+          owner: ownerMap.get(t.account_id) ?? null,
+          normalized_merchant: r.normalized_merchant,
+          provider_category: inputs[i].provider_category,
+          categorization_source: isTransfer ? 'none' : r.source,
+          categorization_confidence: r.confidence,
+          needs_review: !isTransfer && r.needs_review,
+          groq_called: false,
+        }
+      })
+      const { error: upsertError } = await admin
+        .from('transactions')
+        .upsert(rows, { onConflict: 'plaid_transaction_id' })
+      if (upsertError) throw new Error(`Failed to save transactions: ${upsertError.message}`)
+      result.added += added.length
+    }
+
+    for (const t of modified) {
+      await admin
+        .from('transactions')
+        .update({
+          amount: -(t.amount),
+          description: t.name,
+          merchant: t.merchant_name ?? null,
+          transacted_at: t.date + 'T00:00:00',
+        })
+        .eq('plaid_transaction_id', t.transaction_id)
+      result.modified++
+    }
+
+    for (const t of removed) {
+      await admin.from('transactions').delete().eq('plaid_transaction_id', t.transaction_id)
+      result.removed++
+    }
+
+    cursor = next_cursor
+    hasMore = has_more
+
+    // Persist the cursor after each fully-applied page so a later failure
+    // never rewinds behind writes we already made.
+    await admin.from('plaid_items').update({ cursor }).eq('item_id', item.item_id)
+  }
+}
+
+/**
+ * Refresh current/available balances for every account under the given items.
+ * A failing institution is recorded on its plaid_items row and skipped.
+ */
 export async function refreshBalancesForItems(
   admin: SupabaseClient,
   items: Pick<PlaidItemRow, 'item_id' | 'access_token'>[],
-): Promise<void> {
+): Promise<{ itemId: string; error?: { code: string | null; message: string } }[]> {
+  const results: { itemId: string; error?: { code: string | null; message: string } }[] = []
   for (const item of items) {
-    const res = await plaidClient.accountsGet({ access_token: item.access_token })
-    const updates = res.data.accounts.map(a => ({
-      account_id: a.account_id,
-      current_balance: a.balances.current ?? null,
-      available_balance: a.balances.available ?? null,
-      updated_at: new Date().toISOString(),
-    }))
-    await Promise.all(updates.map(u =>
-      admin.from('plaid_accounts').update(u).eq('account_id', u.account_id)
-    ))
+    try {
+      const res = await plaidClient.accountsGet({ access_token: item.access_token })
+      const updates = res.data.accounts.map(a => ({
+        account_id: a.account_id,
+        current_balance: a.balances.current ?? null,
+        available_balance: a.balances.available ?? null,
+        updated_at: new Date().toISOString(),
+      }))
+      await Promise.all(updates.map(u =>
+        admin.from('plaid_accounts').update(u).eq('account_id', u.account_id)
+      ))
+      results.push({ itemId: item.item_id })
+    } catch (err) {
+      const error = plaidErrorInfo(err)
+      await markItemError(admin, item.item_id, error)
+      results.push({ itemId: item.item_id, error })
+    }
   }
+  return results
 }
 
 /** Upsert today's net-worth snapshot from current manual + Plaid balances. */

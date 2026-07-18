@@ -81,31 +81,55 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, users: userIds.length })
   }
 
-  const summary: Record<string, { added: number; modified: number; removed: number }> = {}
+  const summary: Record<string, { added: number; modified: number; removed: number; errors?: string[] }> = {}
 
   for (const [userId, items] of byUser) {
     let totalAdded = 0, totalModified = 0, totalRemoved = 0
+    const errors: string[] = []
+
+    // Each step is isolated: a Plaid failure on one step (or one institution
+    // inside it) must never stop recurring generation or the net-worth snapshot.
 
     // ── 1. Sync transactions ──────────────────────────────────────────────────
     if (PLAID_TRANSACTION_SYNC_ENABLED) {
-      const results = await syncTransactionsForUser(supabase, userId, items)
-      for (const r of results) {
-        totalAdded += r.added; totalModified += r.modified; totalRemoved += r.removed
+      try {
+        const results = await syncTransactionsForUser(supabase, userId, items)
+        for (const r of results) {
+          totalAdded += r.added; totalModified += r.modified; totalRemoved += r.removed
+          if (r.error) errors.push(`sync ${r.itemId}: ${r.error.code ?? r.error.message}`)
+        }
+      } catch (e) {
+        errors.push(`sync: ${e instanceof Error ? e.message : 'failed'}`)
       }
     }
 
     // ── 2. Refresh balances (kept on for net worth) ───────────────────────────
     if (PLAID_BALANCE_SYNC_ENABLED) {
-      await refreshBalancesForItems(supabase, items)
+      try {
+        const balResults = await refreshBalancesForItems(supabase, items)
+        for (const r of balResults) {
+          if (r.error) errors.push(`balances ${r.itemId}: ${r.error.code ?? r.error.message}`)
+        }
+      } catch (e) {
+        errors.push(`balances: ${e instanceof Error ? e.message : 'failed'}`)
+      }
     }
 
     // ── 3. Generate due recurring transactions ────────────────────────────────
-    await generateRecurringForUser(supabase, userId)
+    try {
+      await generateRecurringForUser(supabase, userId)
+    } catch (e) {
+      errors.push(`recurring: ${e instanceof Error ? e.message : 'failed'}`)
+    }
 
     // ── 4. Snapshot net worth ─────────────────────────────────────────────────
-    await snapshotNetWorth(supabase, userId)
+    try {
+      await snapshotNetWorth(supabase, userId)
+    } catch (e) {
+      errors.push(`networth: ${e instanceof Error ? e.message : 'failed'}`)
+    }
 
-    summary[userId] = { added: totalAdded, modified: totalModified, removed: totalRemoved }
+    summary[userId] = { added: totalAdded, modified: totalModified, removed: totalRemoved, ...(errors.length ? { errors } : {}) }
   }
 
   return NextResponse.json({ ok: true, users: byUser.size, summary })
