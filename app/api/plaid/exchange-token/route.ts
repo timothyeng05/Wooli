@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { plaidClient } from '@/lib/budget/plaid-client'
+import { upsertItemAccounts } from '@/lib/budget/plaid-sync'
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient()
@@ -22,22 +23,7 @@ export async function POST(request: Request) {
   }, { onConflict: 'item_id' })
 
   // Fetch and store all accounts for this institution (no per-account cap)
-  const accountsRes = await plaidClient.accountsGet({ access_token })
-  const accounts = accountsRes.data.accounts.map(a => ({
-    item_id,
-    user_id: user.id,
-    account_id: a.account_id,
-    name: a.name,
-    official_name: a.official_name ?? null,
-    type: a.type,
-    subtype: a.subtype ?? null,
-    mask: a.mask ?? null,
-    current_balance: a.balances.current ?? null,
-    available_balance: a.balances.available ?? null,
-    currency: a.balances.iso_currency_code ?? 'USD',
-  }))
-
-  await supabase.from('plaid_accounts').upsert(accounts, { onConflict: 'account_id' })
+  await upsertItemAccounts(supabase, user.id, item_id, access_token)
 
   return NextResponse.json({ ok: true })
 }
