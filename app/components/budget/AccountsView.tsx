@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, TYPE_LABEL, isAssetType, netWorth, type Account, type AccountType } from '@/lib/budget/account-utils'
 import { useToast } from '@/app/components/ui/ToastProvider'
+import InstitutionLogo, { KNOWN_INSTITUTIONS } from './InstitutionLogo'
 
 interface HouseholdMember { id: string; full_name: string; display_name: string; color: string; sort_order: number; is_shared: boolean }
 
@@ -189,13 +190,17 @@ function AccountRow({
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Institution</label>
-            <input
-              type="text"
+            <select
               value={institution}
               onChange={e => setInstitution(e.target.value)}
-              placeholder="Chase, Apple, etc."
               className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
-            />
+            >
+              <option value="">—</option>
+              {institution && !KNOWN_INSTITUTIONS.includes(institution as typeof KNOWN_INSTITUTIONS[number]) && (
+                <option value={institution}>{institution}</option>
+              )}
+              {KNOWN_INSTITUTIONS.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -246,14 +251,14 @@ function AccountRow({
   return (
     <div className={`group flex items-center gap-4 p-4 rounded-lg border transition ${account.is_active ? 'border-gray-200 bg-white hover:border-blue-300' : 'border-gray-100 bg-gray-50'}`}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
+          <InstitutionLogo institution={account.institution} />
           <p className={`font-semibold truncate ${account.is_active ? 'text-gray-900' : 'text-gray-500'}`}>{account.name}</p>
           <span className={`text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${TYPE_BADGE_COLOR[account.type]}`}>
             {TYPE_LABEL[account.type]}
           </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          {account.institution && <p className="text-xs text-gray-500">{account.institution}</p>}
           {account.owner && (() => {
             const m = members.find(x => x.full_name === account.owner)
             return (
@@ -266,8 +271,8 @@ function AccountRow({
         </div>
       </div>
       <div className="text-right">
-        <p className={`font-bold ${account.is_asset ? 'text-gray-900' : 'text-red-600'}`}>
-          {formatMoney(account.current_balance, !account.is_asset)}
+        <p className={`font-bold ${account.is_asset || account.current_balance === 0 ? 'text-gray-900' : 'text-red-600'}`}>
+          {formatMoney(account.current_balance, !account.is_asset && account.current_balance !== 0)}
         </p>
       </div>
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
@@ -325,13 +330,14 @@ function AddAccountForm({
         </div>
         <div>
           <label className="text-xs text-gray-500 mb-1 block">Institution</label>
-          <input
-            type="text"
+          <select
             value={institution}
             onChange={e => setInstitution(e.target.value)}
-            placeholder="Chase, Apple, etc."
             className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
-          />
+          >
+            <option value="">—</option>
+            {KNOWN_INSTITUTIONS.map(i => <option key={i} value={i}>{i}</option>)}
+          </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">

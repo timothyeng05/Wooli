@@ -8,6 +8,7 @@ import type { HouseholdMember } from './transaction-types'
 import { fmtSyncTime, fmtRelative } from '@/lib/budget/format-utils'
 import { PLAID_BALANCE_SYNC_ENABLED, PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
 import PlaidLinkButton from './PlaidLinkButton'
+import InstitutionLogo, { KNOWN_INSTITUTIONS } from './InstitutionLogo'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
 export interface UnifiedAccount {
@@ -321,6 +322,7 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
+          <InstitutionLogo institution={account.institution} />
           <p className="text-sm font-medium text-gray-900 truncate">
             {displayName}
             {account.mask && <span className="text-gray-400 font-normal"> ···{account.mask}</span>}
@@ -339,7 +341,6 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          {account.institution && <p className="text-xs text-gray-400 truncate">{account.institution}</p>}
           <span className="text-[10px] text-gray-300 font-medium flex-shrink-0">Plaid</span>
         </div>
       </div>
@@ -348,9 +349,9 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
       </div>
       <div className="flex-shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
-          isAsset ? 'text-gray-900' : 'text-red-600'
+          isAsset || account.balance === 0 ? 'text-gray-900' : 'text-red-600'
         }`}>
-          {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
+          {!isAsset && account.balance !== 0 ? '-' : ''}${fmt(Math.abs(account.balance))}
         </p>
         {account.updatedAt && (
           <p className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{fmtRelative(account.updatedAt)}</p>
@@ -410,9 +411,14 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
           </div>
           <div>
             <label className="text-[10px] text-gray-500 mb-0.5 block">Institution</label>
-            <input type="text" value={institution} onChange={e => setInstitution(e.target.value)}
-              placeholder="Chase, Apple, etc."
-              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+            <select value={institution} onChange={e => setInstitution(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
+              <option value="">—</option>
+              {institution && !KNOWN_INSTITUTIONS.includes(institution as typeof KNOWN_INSTITUTIONS[number]) && (
+                <option value={institution}>{institution}</option>
+              )}
+              {KNOWN_INSTITUTIONS.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
@@ -473,6 +479,7 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
+          <InstitutionLogo institution={account.institution} />
           <p className="text-sm font-medium text-gray-900 truncate">{account.name}</p>
           {account.owner && (() => {
             const m = members.find(x => x.full_name === account.owner)
@@ -488,7 +495,6 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          {account.institution && <p className="text-xs text-gray-400 truncate">{account.institution}</p>}
           <span className="text-[10px] text-amber-500 font-medium flex-shrink-0">Manual</span>
         </div>
       </div>
@@ -497,9 +503,9 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
       </div>
       <div className="flex-shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
-          isAsset ? 'text-gray-900' : 'text-red-600'
+          isAsset || account.balance === 0 ? 'text-gray-900' : 'text-red-600'
         }`}>
-          {isAsset ? '' : '-'}${fmt(Math.abs(account.balance))}
+          {!isAsset && account.balance !== 0 ? '-' : ''}${fmt(Math.abs(account.balance))}
         </p>
         {account.updatedAt && (
           <p className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{fmtRelative(account.updatedAt)}</p>
@@ -563,9 +569,11 @@ function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
         </div>
         <div>
           <label className="text-[10px] text-gray-500 mb-0.5 block">Institution</label>
-          <input type="text" value={institution} onChange={e => setInstitution(e.target.value)}
-            placeholder="Chase, Apple, etc."
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+          <select value={institution} onChange={e => setInstitution(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
+            <option value="">—</option>
+            {KNOWN_INSTITUTIONS.map(i => <option key={i} value={i}>{i}</option>)}
+          </select>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -797,7 +805,6 @@ export default function AccountsPageClient({
   plaidItems?: {
     item_id: string
     institution_name: string | null
-    default_owner: string | null
     status: string
     error_code: string | null
     error_message: string | null

@@ -26,7 +26,7 @@ export default async function AccountsPage() {
       .eq('user_id', user.id),
     supabase
       .from('plaid_items')
-      .select('item_id, institution_name, default_owner, status, error_code, error_message, last_successful_sync_at')
+      .select('item_id, institution_name, status, error_code, error_message, last_successful_sync_at')
       .eq('user_id', user.id),
     supabase
       .from('accounts')
@@ -56,7 +56,7 @@ export default async function AccountsPage() {
   if (!plaidItems) {
     const { data } = await supabase
       .from('plaid_items')
-      .select('item_id, institution_name, default_owner')
+      .select('item_id, institution_name')
       .eq('user_id', user.id)
     plaidItems = (data ?? []).map(i => ({
       ...i, status: 'healthy', error_code: null, error_message: null, last_successful_sync_at: null,
@@ -174,7 +174,7 @@ export default async function AccountsPage() {
           userId={user.id}
           lastSynced={lastSynced}
           members={members ?? []}
-          plaidItems={(plaidItems ?? []) as { item_id: string; institution_name: string | null; default_owner: string | null; status: string; error_code: string | null; error_message: string | null; last_successful_sync_at: string | null }[]}
+          plaidItems={(plaidItems ?? []) as { item_id: string; institution_name: string | null; status: string; error_code: string | null; error_message: string | null; last_successful_sync_at: string | null }[]}
         />
       </div>
     </div>
