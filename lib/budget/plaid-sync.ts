@@ -124,47 +124,104 @@ async function syncOneItem(
     const { added, modified, removed, next_cursor, has_more } = res.data
 
     if (added.length) {
-      const inputs: CategorizeInput[] = added.map(t => ({
-        raw_merchant: t.merchant_name ?? null,
-        description: t.name,
-        amount: -(t.amount),
-        account_name: nameMap.get(t.account_id) ?? null,
-        provider_category: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null,
-        provider_confidence: t.personal_finance_category?.confidence_level ?? null,
-      }))
-      const cat = await categorizeBatch(inputs, pipelineCtx)
+      // Pending→posted: when a posted txn references the pending row we already
+      // hold (pending_transaction_id), update that row in place instead of
+      // relying on Plaid's delete+insert — this keeps the user's category/owner/
+      // trip edits. The later `removed` event for the old pending id then no-ops.
+      const pendingIds = added.map(t => t.pending_transaction_id).filter((id): id is string => !!id)
+      const { data: pendingRows } = pendingIds.length
+        ? await admin
+            .from('transactions')
+            .select('id, plaid_transaction_id')
+            .eq('user_id', userId)
+            .in('plaid_transaction_id', pendingIds)
+        : { data: [] as { id: string; plaid_transaction_id: string }[] }
+      const pendingMap = new Map((pendingRows ?? []).map(r => [r.plaid_transaction_id, r.id]))
 
-      const rows = added.map((t, i) => {
-        const r = cat[i]
-        const isTransfer = r.is_transfer || !!(
-          t.personal_finance_category?.primary?.includes('TRANSFER') ||
-          transferKeywords.test(t.name)
-        )
-        return {
-          user_id: userId,
-          plaid_transaction_id: t.transaction_id,
-          plaid_account_id: t.account_id,
-          account_name: nameMap.get(t.account_id) ?? null,
-          amount: -(t.amount),
-          description: t.name,
-          merchant: t.merchant_name ?? null,
-          transacted_at: t.date + 'T00:00:00',
-          category_id: isTransfer ? null : r.category_id,
-          is_transfer: isTransfer,
-          owner: ownerMap.get(t.account_id) ?? null,
-          normalized_merchant: r.normalized_merchant,
-          provider_category: inputs[i].provider_category,
-          categorization_source: isTransfer ? 'none' : r.source,
-          categorization_confidence: r.confidence,
-          needs_review: !isTransfer && r.needs_review,
-          groq_called: false,
+      const toInsert: typeof added = []
+      for (const t of added) {
+        const priorId = t.pending_transaction_id ? pendingMap.get(t.pending_transaction_id) : undefined
+        if (priorId) {
+          await admin
+            .from('transactions')
+            .update({
+              plaid_transaction_id: t.transaction_id,
+              plaid_account_id: t.account_id,
+              amount: -(t.amount),
+              description: t.name,
+              merchant: t.merchant_name ?? null,
+              transacted_at: t.date + 'T00:00:00',
+              is_pending: t.pending,
+            })
+            .eq('id', priorId)
+          result.modified++
+        } else {
+          toInsert.push(t)
         }
-      })
-      const { error: upsertError } = await admin
-        .from('transactions')
-        .upsert(rows, { onConflict: 'plaid_transaction_id' })
-      if (upsertError) throw new Error(`Failed to save transactions: ${upsertError.message}`)
-      result.added += added.length
+      }
+
+      if (toInsert.length) {
+        const inputs: CategorizeInput[] = toInsert.map(t => ({
+          raw_merchant: t.merchant_name ?? null,
+          description: t.name,
+          amount: -(t.amount),
+          account_name: nameMap.get(t.account_id) ?? null,
+          provider_category: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null,
+          provider_confidence: t.personal_finance_category?.confidence_level ?? null,
+        }))
+        const cat = await categorizeBatch(inputs, pipelineCtx)
+
+        const rows = toInsert.map((t, i) => {
+          const r = cat[i]
+          const isTransfer = r.is_transfer || !!(
+            t.personal_finance_category?.primary?.includes('TRANSFER') ||
+            transferKeywords.test(t.name)
+          )
+          return {
+            user_id: userId,
+            plaid_transaction_id: t.transaction_id,
+            plaid_account_id: t.account_id,
+            account_name: nameMap.get(t.account_id) ?? null,
+            amount: -(t.amount),
+            description: t.name,
+            merchant: t.merchant_name ?? null,
+            transacted_at: t.date + 'T00:00:00',
+            category_id: isTransfer ? null : r.category_id,
+            is_transfer: isTransfer,
+            is_pending: t.pending,
+            owner: ownerMap.get(t.account_id) ?? null,
+            normalized_merchant: r.normalized_merchant,
+            provider_category: inputs[i].provider_category,
+            categorization_source: isTransfer ? 'none' : r.source,
+            categorization_confidence: r.confidence,
+            needs_review: !isTransfer && r.needs_review,
+            groq_called: false,
+          }
+        })
+
+        // Clobber guard: if Plaid re-sends a txn we already hold (cursor reset),
+        // the upsert must not overwrite a category the user confirmed by hand.
+        const ids = rows.map(r => r.plaid_transaction_id)
+        const { data: existing } = await admin
+          .from('transactions')
+          .select('plaid_transaction_id, categorization_source')
+          .eq('user_id', userId)
+          .in('plaid_transaction_id', ids)
+        const confirmed = new Set(
+          (existing ?? [])
+            .filter(e => e.categorization_source === 'user_confirmed')
+            .map(e => e.plaid_transaction_id)
+        )
+        const safeRows = rows.filter(r => !confirmed.has(r.plaid_transaction_id))
+
+        if (safeRows.length) {
+          const { error: upsertError } = await admin
+            .from('transactions')
+            .upsert(safeRows, { onConflict: 'plaid_transaction_id' })
+          if (upsertError) throw new Error(`Failed to save transactions: ${upsertError.message}`)
+        }
+        result.added += safeRows.length
+      }
     }
 
     for (const t of modified) {
@@ -175,6 +232,7 @@ async function syncOneItem(
           description: t.name,
           merchant: t.merchant_name ?? null,
           transacted_at: t.date + 'T00:00:00',
+          is_pending: t.pending,
         })
         .eq('plaid_transaction_id', t.transaction_id)
       result.modified++
