@@ -18,11 +18,19 @@ export async function login(_prev: unknown, formData: FormData) {
   redirect('/')
 }
 
+const ALLOWED_SIGNUP_EMAILS = ['woolitravel@gmail.com']
+
 export async function signup(_prev: unknown, formData: FormData) {
+  const email = formData.get('email') as string
+
+  if (!ALLOWED_SIGNUP_EMAILS.includes(email.toLowerCase())) {
+    return { error: 'Signups are closed for this app.' }
+  }
+
   const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase.auth.signUp({
-    email: formData.get('email') as string,
+    email,
     password: formData.get('password') as string,
   })
 
