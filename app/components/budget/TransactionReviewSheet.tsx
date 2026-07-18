@@ -42,34 +42,11 @@ export default function TransactionReviewSheet({
   const [merchant, setMerchant] = useState(transaction.merchant ?? '')
   const [catPickerOpen, setCatPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [ruleSaving, setRuleSaving] = useState(false)
   const { toast } = useToast()
 
   const currentCat = categories.find(c => c.id === catId) ?? null
   const catEmoji = currentCat ? getCatEmoji(currentCat.name, currentCat.icon ?? null) : null
   const catBg = currentCat?.color ? `${currentCat.color}22` : '#f3f4f6'
-
-  // Create a "always categorize this merchant" rule from the current selection.
-  const createRule = async () => {
-    const norm = normalizeMerchant(merchant || description || null)
-    if (!norm) { toast.error('No merchant to make a rule from'); return }
-    if (!isTransfer && !catId) { toast.error('Pick a category first'); return }
-    setRuleSaving(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setRuleSaving(false); toast.error('Not signed in'); return }
-    const { error } = await supabase.from('categorization_rules').insert({
-      user_id: user.id,
-      name: `Always: ${norm}`,
-      match_normalized_merchant: norm,
-      category_id: isTransfer ? null : (catId || null),
-      is_transfer: isTransfer,
-      priority: 0,
-    })
-    setRuleSaving(false)
-    if (error) toast.error(error.message)
-    else toast.success(`Rule saved — "${norm}" will auto-categorize`)
-  }
 
   const handleCatPick = (picked: string) => {
     if (picked === '__transfer__') {
@@ -173,15 +150,6 @@ export default function TransactionReviewSheet({
                 <polyline points="9 18 15 12 9 6" />
               </svg>
             </button>
-            {(isTransfer || catId) && (merchant || description) && (
-              <button
-                onClick={createRule}
-                disabled={ruleSaving}
-                className="mt-1.5 text-xs text-violet-600 hover:text-violet-700 disabled:opacity-50"
-              >
-                {ruleSaving ? 'Saving rule…' : `✦ Always categorize "${normalizeMerchant(merchant || description || null)}" this way`}
-              </button>
-            )}
           </div>
 
           {/* Trip */}

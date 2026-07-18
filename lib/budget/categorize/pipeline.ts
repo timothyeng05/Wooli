@@ -1,7 +1,6 @@
 import type { SelectableCategory } from '@/lib/budget/groq-categorize'
 import { THRESHOLDS } from './config'
 import { normalizeMerchant } from './normalize-merchant'
-import { matchUserRule } from './rules'
 import { matchProvider } from './provider-map'
 import type { CategorizeInput, CategorizeResult, PipelineContext } from './types'
 
@@ -16,25 +15,12 @@ function nameById(categories: SelectableCategory[]): Map<string, string> {
 async function runDeterministicLayers(
   input: CategorizeInput,
   normalized: string,
-  ctx: Ctx,
+  ctx: PipelineContext,
   names: Map<string, string>,
 ): Promise<CategorizeResult | null> {
   const base = { normalized_merchant: normalized, groq_called: false, needs_review: false }
 
-  // 2. User rules — explicit, always win, never call Groq.
-  const rule = matchUserRule(input, normalized, ctx.rulesSorted)
-  if (rule) {
-    return {
-      ...base,
-      category_id: rule.is_transfer ? null : rule.category_id,
-      category_name: rule.category_id ? names.get(rule.category_id) ?? null : null,
-      source: 'user_rule',
-      confidence: 1.0,
-      is_transfer: rule.is_transfer,
-    }
-  }
-
-  // 3. Merchant memory — prior confirmed categorizations for this normalized merchant.
+  // 2. Merchant memory — prior confirmed categorizations for this normalized merchant.
   const mem = ctx.lookupMemory(normalized, input.account_name ?? null)
   if (mem && mem.confidence >= THRESHOLDS.merchant_memory) {
     return {
@@ -76,14 +62,6 @@ async function runDeterministicLayers(
   return null
 }
 
-type Ctx = PipelineContext & { rulesSorted: PipelineContext['rules'] }
-
-function withSortedRules(ctx: PipelineContext): Ctx {
-  // Rules apply by priority asc; assume caller sorts, but enforce here for safety.
-  const rulesSorted = [...ctx.rules].sort((a, b) => a.priority - b.priority)
-  return { ...ctx, rulesSorted }
-}
-
 /**
  * Categorize a batch of transactions through the layered pipeline.
  * Deterministic layers run per-row; only rows that fall through all of them are sent
@@ -91,9 +69,8 @@ function withSortedRules(ctx: PipelineContext): Ctx {
  */
 export async function categorizeBatch(
   inputs: CategorizeInput[],
-  rawCtx: PipelineContext,
+  ctx: PipelineContext,
 ): Promise<CategorizeResult[]> {
-  const ctx = withSortedRules(rawCtx)
   const names = nameById(ctx.categories)
   const results: (CategorizeResult | null)[] = new Array(inputs.length).fill(null)
   const fallThrough: { index: number; input: CategorizeInput; normalized: string }[] = []
@@ -122,7 +99,6 @@ export async function categorizeBatch(
         is_transfer: false,
         needs_review: !accepted,
         reasoning_short: g?.reasoning_short,
-        suggested_rule: accepted ? g!.suggested_rule ?? null : null,
       }
     }
   }
@@ -139,7 +115,6 @@ export async function categorizeBatch(
       confidence: 0,
       is_transfer: false,
       needs_review: true,
-      suggested_rule: null,
     }
   }
 

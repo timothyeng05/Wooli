@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { categorizeTransaction } from '../pipeline'
 import type { SelectableCategory } from '@/lib/budget/groq-categorize'
 import type {
-  CategorizeInput, GroqResult, MerchantMemoryEntry, PipelineContext, SimilarityMatch, UserRule,
+  CategorizeInput, GroqResult, MerchantMemoryEntry, PipelineContext, SimilarityMatch,
 } from '../types'
 
 const CATEGORIES: SelectableCategory[] = [
@@ -24,7 +24,6 @@ function makeCtx(over: Partial<PipelineContext> & { groqResult?: GroqResult }): 
 
   const ctx: PipelineContext = {
     categories: CATEGORIES,
-    rules: over.rules ?? [],
     lookupMemory: over.lookupMemory ?? (() => undefined),
     lookupSimilar: over.lookupSimilar ?? (async () => null),
     groqFallback: over.groqFallback ?? groqSpy,
@@ -38,22 +37,6 @@ const input = (raw: string, extra: Partial<CategorizeInput> = {}): CategorizeInp
 })
 
 describe('categorization pipeline — Groq is skipped when a deterministic layer is confident', () => {
-  it('user_rule: matches a rule and never calls Groq', async () => {
-    const rules: UserRule[] = [{
-      id: 'r1', priority: 0,
-      match_normalized_merchant: 'starbucks', match_raw_merchant: null, match_regex: null,
-      match_amount_min: null, match_amount_max: null, match_account_name: null,
-      match_mcc: null, match_notes: null, category_id: 'cat-coffee', is_transfer: false,
-    }]
-    const { ctx, groqSpy } = makeCtx({ rules })
-    const r = await categorizeTransaction(input('STARBUCKS #1234 SEATTLE WA'), ctx)
-
-    expect(r.source).toBe('user_rule')
-    expect(r.category_id).toBe('cat-coffee')
-    expect(r.groq_called).toBe(false)
-    expect(groqSpy).not.toHaveBeenCalled()
-  })
-
   it('merchant_memory: reuses a confirmed mapping (>=0.95) without Groq', async () => {
     const mem: MerchantMemoryEntry = {
       normalized_merchant: 'whole foods', account_name: null,

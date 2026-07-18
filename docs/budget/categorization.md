@@ -9,17 +9,18 @@ a last-resort fallback. Every transaction records which layer categorized it
 1. **Merchant normalization** — `lib/budget/categorize/normalize-merchant.ts`. Strips
    card/network noise, terminal/store IDs, dates, masked card numbers, and trailing
    location fragments; preserves brand words. Result stored in `transactions.normalized_merchant`.
-2. **User rules** — `categorization_rules` table + `rules.ts`. All non-null `match_*`
-   predicates must hold; first match (by `priority asc`) wins. Confidence 1.0, never calls Groq.
-3. **Merchant memory** — `merchant_memory` table. Prior user-confirmed categorizations for
+2. **Merchant memory** — `merchant_memory` table. Prior user-confirmed categorizations for
    the same normalized merchant (account-specific preferred). Accepted at ≥ 0.95.
-4. **Provider mapping** — `provider-map.ts`. Maps Plaid `personal_finance_category` to a
+3. **Provider mapping** — `provider-map.ts`. Maps Plaid `personal_finance_category` to a
    user category; confidence from Plaid's `confidence_level`. Accepted at ≥ 0.85.
-5. **Lexical similarity** — `match_similar_category` RPC (pg_trgm). Nearest previously
+4. **Lexical similarity** — `match_similar_category` RPC (pg_trgm). Nearest previously
    categorized transaction by trigram similarity. Accepted at ≥ 0.90.
-6. **Groq fallback** — `groq-fallback.ts`. Only the rows that miss every layer above.
-   Returns category + confidence + reasoning + suggested rule. Below 0.75 → Uncategorized +
+5. **Groq fallback** — `groq-fallback.ts`. Only the rows that miss every layer above.
+   Returns category + confidence + reasoning. Below 0.75 → Uncategorized +
    `needs_review = true`.
+
+_User-defined rules (the `categorization_rules` table) were removed 2026-07 — the deterministic
+pipeline no longer has a rules layer._
 
 Thresholds live in `lib/budget/categorize/config.ts`.
 
@@ -44,5 +45,5 @@ merchant categorize via layer 3 with no Groq call.
 
 ## Tests
 
-`lib/budget/categorize/__tests__/` — `npm test`. Proves Groq is skipped for rules, merchant
+`lib/budget/categorize/__tests__/` — `npm test`. Proves Groq is skipped for merchant
 memory, provider mapping, and high-confidence similarity.

@@ -8,7 +8,6 @@
 | Accounts & Plaid | Connect bank accounts via Plaid, sync transactions, view balance history | `app/budget/accounts/CLAUDE.md` |
 | Categories | Manage the income/expense/transfer category tree used for all transactions | `app/budget/categories/CLAUDE.md` |
 | Recurring rules | Define repeating transactions (rent, salary) that auto-generate each period | `app/budget/recurring/CLAUDE.md` |
-| Categorization rules | User-defined rules — the top deterministic layer of the categorization pipeline | `app/budget/rules/CLAUDE.md` |
 | CSV import | Bulk-import transactions from Monarch, Copilot, or generic CSV exports | `app/budget/import/CLAUDE.md` |
 | Cash flow | Month-by-month income vs expense charts with per-owner breakdown | `app/budget/cashflow/CLAUDE.md` |
 | Goals | Savings goals linked to account balances with target date and progress | `app/budget/goals/CLAUDE.md` |
@@ -28,7 +27,7 @@ For component quick-reference: `app/components/budget/CLAUDE.md`
 | Components | `app/components/budget/**` |
 | API | `app/api/budget/**`, `app/api/plaid/**`, `app/api/cron/sync/route.ts` |
 | Lib | `lib/budget/**` (`account-utils.ts`, `plaid-client.ts`, `groq-categorize.ts`, `categorize/**`) |
-| DB | `categories`, `transactions`, `accounts`, `net_worth_snapshots`, `account_balance_history`, `categorization_rules`, `merchant_memory` |
+| DB | `categories`, `transactions`, `accounts`, `net_worth_snapshots`, `account_balance_history`, `merchant_memory` |
 | Migrations | `supabase/migrations/008_*`, `014_*`, `017_*`–`030_*` |
 
 ## Shared infrastructure (read-only — do not modify)

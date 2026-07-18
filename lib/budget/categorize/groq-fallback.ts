@@ -20,7 +20,6 @@ interface RawGroqRow {
   c: number | null
   confidence?: number
   reason?: string
-  rule?: string
 }
 
 function buildPrompt(
@@ -48,7 +47,7 @@ ${categoryList}
 Transactions (index: details):
 ${txList}
 
-For each transaction return an object: {"i": <index>, "c": <category number or null>, "confidence": <0..1>, "reason": "<=6 words", "rule": "<optional: a reusable merchant keyword>"}.
+For each transaction return an object: {"i": <index>, "c": <category number or null>, "confidence": <0..1>, "reason": "<=6 words"}.
 Respond with ONLY JSON: {"results": [ ... ]} with one object per transaction in index order.`
 }
 
@@ -79,9 +78,6 @@ async function categorizeChunk(
       category_id: cat ? cat.id : null,
       confidence: typeof row.confidence === 'number' ? row.confidence : (cat ? 0.8 : 0),
       reasoning_short: row.reason,
-      suggested_rule: row.rule && cat
-        ? { match_normalized_merchant: String(row.rule).toLowerCase(), category_id: cat.id }
-        : null,
     })
   }
 }

@@ -26,11 +26,6 @@ export interface CategorizeInput {
   mcc?: string | null
 }
 
-export interface SuggestedRule {
-  match_normalized_merchant: string
-  category_id: string
-}
-
 export interface CategorizeResult {
   category_id: string | null
   category_name: string | null
@@ -41,23 +36,6 @@ export interface CategorizeResult {
   needs_review: boolean
   groq_called: boolean
   reasoning_short?: string
-  suggested_rule?: SuggestedRule | null
-}
-
-/** A row from the categorization_rules table. */
-export interface UserRule {
-  id: string
-  priority: number
-  match_normalized_merchant: string | null
-  match_raw_merchant: string | null
-  match_regex: string | null
-  match_amount_min: number | null
-  match_amount_max: number | null
-  match_account_name: string | null
-  match_mcc: string | null
-  match_notes: string | null
-  category_id: string | null
-  is_transfer: boolean
 }
 
 export interface MerchantMemoryEntry {
@@ -78,7 +56,6 @@ export interface GroqResult {
   category_id: string | null
   confidence: number
   reasoning_short?: string
-  suggested_rule?: SuggestedRule | null
 }
 
 /**
@@ -93,8 +70,6 @@ export type GroqFallbackFn = (
 /** Dependencies for the pipeline, injected by the caller (DB-backed in prod, stubbed in tests). */
 export interface PipelineContext {
   categories: SelectableCategory[]
-  /** User-defined rules. The pipeline re-sorts by priority, so order here is not required. */
-  rules: UserRule[]
   /** Exact merchant-memory lookup (prefer account-specific over account-agnostic). */
   lookupMemory: (normalized: string, accountName: string | null) => MerchantMemoryEntry | undefined
   /** Lexical-similarity lookup over previously categorized transactions (e.g. pg_trgm RPC). */
