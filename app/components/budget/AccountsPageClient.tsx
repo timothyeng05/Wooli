@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, isAssetType, type AccountType } from '@/lib/budget/account-utils'
 import type { HouseholdMember } from './transaction-types'
 import { fmtSyncTime, fmtRelative } from '@/lib/budget/format-utils'
-import { PLAID_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import { PLAID_BALANCE_SYNC_ENABLED, PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import PlaidLinkButton from './PlaidLinkButton'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
 export interface UnifiedAccount {
@@ -737,6 +738,46 @@ function HiddenAccountsSection({ accounts, sparkMap, onUpdate, onUnhide, members
   )
 }
 
+// ── Connection status strip ───────────────────────────────────────────────────
+function ConnectionStatusStrip({ items }: {
+  items: NonNullable<Parameters<typeof AccountsPageClient>[0]['plaidItems']>
+}) {
+  if (!items.length) return null
+  const broken = items.filter(i => i.status === 'error')
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {items.map(item => (
+          <div key={item.item_id} className="flex items-center gap-1.5 text-xs">
+            <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+              item.status === 'error' ? 'bg-red-500' : 'bg-green-500'
+            }`} />
+            <span className="font-medium text-gray-700">{item.institution_name ?? 'Unknown'}</span>
+            {item.status === 'error' ? (
+              <span className="text-red-500">{item.error_code ?? 'connection error'}</span>
+            ) : item.last_successful_sync_at ? (
+              <span className="text-gray-400">{fmtSyncTime(item.last_successful_sync_at)}</span>
+            ) : null}
+            {item.status === 'error' && (
+              <PlaidLinkButton
+                itemId={item.item_id}
+                label="Reconnect"
+                className="ml-1 px-2 py-0.5 bg-red-50 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition disabled:opacity-50"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      {broken.length > 0 && (
+        <p className="mt-2 text-[11px] text-gray-400">
+          A bank asked to be re-authenticated — transactions and balances for that institution pause until you reconnect.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AccountsPageClient({
   accounts,
@@ -753,7 +794,15 @@ export default function AccountsPageClient({
   userId: string
   lastSynced?: string | null
   members?: HouseholdMember[]
-  plaidItems?: { item_id: string; institution_name: string | null; default_owner: string | null }[]
+  plaidItems?: {
+    item_id: string
+    institution_name: string | null
+    default_owner: string | null
+    status: string
+    error_code: string | null
+    error_message: string | null
+    last_successful_sync_at: string | null
+  }[]
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -761,10 +810,26 @@ export default function AccountsPageClient({
   const [period, setPeriod] = useState(90)
   const [open, setOpen] = useState({ cash: true, investments: true, credit: true })
   const [syncing, setSyncing] = useState(false)
-  // Transactions come from Monarch CSV, so this only refreshes account balances.
+  // Pull transactions (when enabled) then refresh balances. Failures are
+  // per-institution — report how many failed instead of all-or-nothing.
   const handleSync = async () => {
     setSyncing(true)
     try {
+      if (PLAID_TRANSACTION_SYNC_ENABLED) {
+        const txRes = await fetch('/api/plaid/sync-transactions', { method: 'POST' })
+        const txBody = await txRes.json().catch(() => ({}))
+        if (!txRes.ok) {
+          toast.error(txBody.error ?? 'Transaction sync failed')
+        } else {
+          const failed = (txBody.items ?? []).filter((i: { error?: unknown }) => i.error).length
+          const total = (txBody.items ?? []).length
+          if (failed > 0) {
+            toast.error(`${failed} of ${total} institution${total !== 1 ? 's' : ''} failed to sync`)
+          } else if (txBody.added || txBody.merged || txBody.modified) {
+            toast.success(`Synced ${txBody.added} new transaction${txBody.added !== 1 ? 's' : ''}`)
+          }
+        }
+      }
       const balRes = await fetch('/api/plaid/refresh-balances', { method: 'POST' })
       if (!balRes.ok) {
         toast.error('Balance refresh failed')
@@ -883,6 +948,9 @@ export default function AccountsPageClient({
         </div>
         <NetWorthChart series={netWorthSeries} period={period} onPeriod={setPeriod} />
       </div>
+
+      {/* Bank connection health */}
+      <ConnectionStatusStrip items={plaidItems} />
 
       {/* Accounts + Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

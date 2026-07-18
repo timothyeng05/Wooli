@@ -12,7 +12,7 @@ export default async function AccountsPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  const [
+  let [
     { data: plaidAccounts },
     { data: plaidItems },
     { data: manualAccounts },
@@ -26,7 +26,7 @@ export default async function AccountsPage() {
       .eq('user_id', user.id),
     supabase
       .from('plaid_items')
-      .select('item_id, institution_name, default_owner')
+      .select('item_id, institution_name, default_owner, status, error_code, error_message, last_successful_sync_at')
       .eq('user_id', user.id),
     supabase
       .from('accounts')
@@ -50,6 +50,18 @@ export default async function AccountsPage() {
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }),
   ])
+
+  // Fallback while migration 039 (item health columns) hasn't run yet — the
+  // extended select errors on unknown columns, so retry with the base set.
+  if (!plaidItems) {
+    const { data } = await supabase
+      .from('plaid_items')
+      .select('item_id, institution_name, default_owner')
+      .eq('user_id', user.id)
+    plaidItems = (data ?? []).map(i => ({
+      ...i, status: 'healthy', error_code: null, error_message: null, last_successful_sync_at: null,
+    }))
+  }
 
   // ── Last synced timestamp (max updated_at across Plaid accounts) ──────────
   const lastSynced = (plaidAccounts ?? []).reduce<string | null>((max, a) => {
@@ -162,7 +174,7 @@ export default async function AccountsPage() {
           userId={user.id}
           lastSynced={lastSynced}
           members={members ?? []}
-          plaidItems={(plaidItems ?? []) as { item_id: string; institution_name: string | null; default_owner: string | null }[]}
+          plaidItems={(plaidItems ?? []) as { item_id: string; institution_name: string | null; default_owner: string | null; status: string; error_code: string | null; error_message: string | null; last_successful_sync_at: string | null }[]}
         />
       </div>
     </div>
