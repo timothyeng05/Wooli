@@ -32,8 +32,8 @@ export async function POST() {
   try {
     const results = await syncTransactionsForUser(admin, user.id, items)
     const totals = results.reduce(
-      (s, r) => ({ added: s.added + r.added, modified: s.modified + r.modified, removed: s.removed + r.removed }),
-      { added: 0, modified: 0, removed: 0 }
+      (s, r) => ({ added: s.added + r.added, modified: s.modified + r.modified, removed: s.removed + r.removed, merged: s.merged + r.merged }),
+      { added: 0, modified: 0, removed: 0, merged: 0 }
     )
     return NextResponse.json({ ...totals, items: results })
   } catch (e) {

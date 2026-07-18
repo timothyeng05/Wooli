@@ -6,6 +6,7 @@ import { plaidClient } from '@/lib/budget/plaid-client'
 import { buildPipelineContext } from '@/lib/budget/categorize/context'
 import { categorizeBatch } from '@/lib/budget/categorize/pipeline'
 import type { CategorizeInput } from '@/lib/budget/categorize/types'
+import { planCsvDedup, type LegacyCandidate } from '@/lib/budget/csv-dedup'
 
 export type PlaidItemRow = {
   item_id: string
@@ -19,6 +20,8 @@ export type ItemSyncResult = {
   added: number
   modified: number
   removed: number
+  /** Incoming rows merged into pre-Plaid (CSV-imported) rows instead of inserted. */
+  merged: number
   error?: { code: string | null; message: string }
 }
 
@@ -82,7 +85,7 @@ export async function syncTransactionsForUser(
   const results: ItemSyncResult[] = []
 
   for (const item of items) {
-    const result: ItemSyncResult = { itemId: item.item_id, added: 0, modified: 0, removed: 0 }
+    const result: ItemSyncResult = { itemId: item.item_id, added: 0, modified: 0, removed: 0, merged: 0 }
     try {
       await syncOneItem(ctx, item, result)
       await markItemHealthy(admin, item.item_id)
@@ -104,6 +107,37 @@ type SyncContext = {
   nameMap: Map<string, string>
   ownerMap: Map<string, string | null>
   pipelineCtx: Awaited<ReturnType<typeof buildPipelineContext>>
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(date + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+/** Pre-Plaid rows (CSV imports, manual entries) in the date span, paginated past the 1000-row cap. */
+async function fetchLegacyCandidates(
+  admin: SupabaseClient,
+  userId: string,
+  spanStart: string,
+  spanEnd: string,
+): Promise<LegacyCandidate[]> {
+  const PAGE = 1000
+  let all: LegacyCandidate[] = []
+  for (let page = 0; ; page++) {
+    const { data } = await admin
+      .from('transactions')
+      .select('id, transacted_at, amount, merchant, description, normalized_merchant')
+      .eq('user_id', userId)
+      .is('plaid_transaction_id', null)
+      .gte('transacted_at', spanStart)
+      .lte('transacted_at', spanEnd)
+      .range(page * PAGE, (page + 1) * PAGE - 1)
+    if (!data?.length) break
+    all = all.concat(data as LegacyCandidate[])
+    if (data.length < PAGE) break
+  }
+  return all
 }
 
 async function syncOneItem(
@@ -199,9 +233,39 @@ async function syncOneItem(
           }
         })
 
+        // Legacy-CSV dedup guard: the first sync backfills history that overlaps
+        // rows imported from Monarch CSV. Merge single matches into the CSV row
+        // (it keeps its user-curated category and gains the Plaid ids); insert
+        // ambiguous ones flagged needs_review. Self-disables once no legacy rows
+        // exist in the batch's date span.
+        let insertRows = rows
+        {
+          const dates = rows.map(r => r.transacted_at.slice(0, 10)).sort()
+          const spanStart = addDays(dates[0], -3) + 'T00:00:00'
+          const spanEnd = addDays(dates[dates.length - 1], 3) + 'T23:59:59'
+          const candidates = await fetchLegacyCandidates(admin, userId, spanStart, spanEnd)
+          if (candidates.length) {
+            const plan = planCsvDedup(rows, candidates)
+            for (const { index, legacyId } of plan.merges) {
+              await admin
+                .from('transactions')
+                .update({
+                  plaid_transaction_id: rows[index].plaid_transaction_id,
+                  plaid_account_id: rows[index].plaid_account_id,
+                  is_pending: rows[index].is_pending,
+                })
+                .eq('id', legacyId)
+              result.merged++
+            }
+            for (const index of plan.reviews) rows[index].needs_review = true
+            const keep = new Set([...plan.inserts, ...plan.reviews])
+            insertRows = rows.filter((_, i) => keep.has(i))
+          }
+        }
+
         // Clobber guard: if Plaid re-sends a txn we already hold (cursor reset),
         // the upsert must not overwrite a category the user confirmed by hand.
-        const ids = rows.map(r => r.plaid_transaction_id)
+        const ids = insertRows.map(r => r.plaid_transaction_id)
         const { data: existing } = await admin
           .from('transactions')
           .select('plaid_transaction_id, categorization_source')
@@ -212,7 +276,7 @@ async function syncOneItem(
             .filter(e => e.categorization_source === 'user_confirmed')
             .map(e => e.plaid_transaction_id)
         )
-        const safeRows = rows.filter(r => !confirmed.has(r.plaid_transaction_id))
+        const safeRows = insertRows.filter(r => !confirmed.has(r.plaid_transaction_id))
 
         if (safeRows.length) {
           const { error: upsertError } = await admin
