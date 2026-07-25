@@ -7,7 +7,7 @@ export const CAT_EMOJI: Record<string, string> = {
   'groceries': '🛒', 'supermarkets': '🛒',
   'shopping': '🛍️', 'clothing': '👗', 'amazon': '📦', 'online shopping': '🛍️',
   'entertainment': '🎬', 'movies': '🎬', 'music': '🎵', 'games': '🎮',
-  'transit': '🚇', 'transportation': '🚗', 'uber': '🚗', 'lyft': '🚗', 'parking': '🅿️',
+  'transit': '🚇', 'transportation': '🚗', 'uber': '🚗', 'lyft': '🚗', 'parking': '🅿️', 'parking & tolls': '🅿️',
   'travel': '✈️', 'flights': '✈️', 'hotels': '🏨', 'airbnb': '🏠',
   'health': '💊', 'healthcare': '💊', 'pharmacy': '💊', 'medical': '🏥', 'fitness': '💪',
   'utilities': '💡', 'electric': '💡', 'gas': '⛽', 'water': '💧', 'internet': '📶',

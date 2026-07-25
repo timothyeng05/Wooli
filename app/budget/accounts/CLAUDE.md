@@ -6,7 +6,6 @@
 
 - `app/budget/accounts/page.tsx` — server component, fetches accounts + history
 - `app/components/budget/AccountsPageClient.tsx`
-- `app/components/budget/AccountsView.tsx`
 - `app/components/budget/PlaidLinkButton.tsx`
 - `app/components/budget/SyncTransactionsButton.tsx`
 - `app/api/plaid/link-token/route.ts`

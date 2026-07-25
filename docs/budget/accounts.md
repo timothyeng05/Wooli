@@ -10,8 +10,7 @@
 
 | File | Purpose |
 |------|---------|
-| `AccountsPageClient.tsx` | Full accounts page — wraps AccountsView + balance history chart. Exports `UnifiedAccount` type (used by Goals + Forecast pages). |
-| `AccountsView.tsx` | Account list rows with balances, owner labels, active/inactive toggle |
+| `AccountsPageClient.tsx` | Full accounts page — account list rows, balances, owner labels. Exports `UnifiedAccount` type (used by Goals + Forecast pages). |
 | `PlaidLinkButton.tsx` | Opens Plaid Link modal via `/api/plaid/link-token` |
 | `SyncTransactionsButton.tsx` | Triggers Plaid sync via `/api/plaid/sync-transactions` |
 
@@ -44,8 +43,6 @@ plaid_accounts (account_id, item_id, user_id, name, official_name, type, subtype
                 is_hidden, exclude_from_net_worth, nickname)
 
 net_worth_history (user_id, recorded_on, assets, liabilities, net_worth)
-
-account_balance_history (id, user_id, account_id, date, balance)
 ```
 
 ## Lib

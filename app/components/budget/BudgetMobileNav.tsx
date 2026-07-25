@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase-client'
 
 const TABS = [
   {
-    href: '/budget',
-    label: 'Overview',
-    match: (p: string) => p === '/budget',
+    href: '/budget/dashboard',
+    label: 'Dashboard',
+    match: (p: string) => p.startsWith('/budget/dashboard'),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
         stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -43,7 +45,7 @@ const TABS = [
     label: 'Transactions',
     match: (p: string) =>
       p === '/budget/transactions' ||
-      (p.startsWith('/budget/') && !['accounts', 'categories', 'recurring', 'import', 'targets', 'networth', 'cashflow'].some(s => p.startsWith(`/budget/${s}`))),
+      (p.startsWith('/budget/') && !['accounts', 'settings', 'recurring', 'import', 'targets', 'networth', 'cashflow', 'dashboard'].some(s => p.startsWith(`/budget/${s}`))),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
         stroke="currentColor" strokeWidth={filled ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -62,9 +64,9 @@ const TABS = [
     ),
   },
   {
-    href: '/budget/cashflow',
+    href: '/budget',
     label: 'Cash Flow',
-    match: (p: string) => p.startsWith('/budget/cashflow'),
+    match: (p: string) => p === '/budget' || p.startsWith('/budget/cashflow'),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth={filled ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -77,7 +79,7 @@ const TABS = [
   {
     href: '/budget/targets',
     label: 'Budget',
-    match: (p: string) => p.startsWith('/budget/targets') || p.startsWith('/budget/categories') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import'),
+    match: (p: string) => p.startsWith('/budget/targets') || p.startsWith('/budget/settings') || p.startsWith('/budget/recurring') || p.startsWith('/budget/import'),
     icon: (filled: boolean) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth={filled ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -94,6 +96,23 @@ const TABS = [
 
 export default function BudgetMobileNav() {
   const pathname = usePathname()
+  const [reviewCount, setReviewCount] = useState<number | null>(null)
+
+  // Unreviewed-count badge on the Transactions tab — mirrors the desktop sidebar.
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const supabase = createClient()
+      const { count } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('needs_review', true)
+      if (!cancelled) setReviewCount(count ?? 0)
+    }
+    load()
+    window.addEventListener('budget:review-changed', load)
+    return () => { cancelled = true; window.removeEventListener('budget:review-changed', load) }
+  }, [pathname])
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-inset-bottom">
@@ -108,7 +127,14 @@ export default function BudgetMobileNav() {
                 active ? 'text-blue-600' : 'text-gray-400'
               }`}
             >
-              {icon(active)}
+              <span className="relative">
+                {icon(active)}
+                {href === '/budget/transactions' && reviewCount !== null && reviewCount > 0 && (
+                  <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 bg-violet-600 text-white text-[9px] font-bold rounded-full inline-flex items-center justify-center">
+                    {reviewCount > 99 ? '99+' : reviewCount}
+                  </span>
+                )}
+              </span>
               <span className={`text-[10px] font-medium ${active ? 'text-blue-600' : 'text-gray-400'}`}>
                 {label}
               </span>

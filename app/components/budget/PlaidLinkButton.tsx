@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 
-export default function PlaidLinkButton({ onSuccess, onComplete, className, onError, itemId, label }: {
+export default function PlaidLinkButton({ onSuccess, onComplete, className, onError, itemId, label, variant = 'button' }: {
   onSuccess?: () => void
   onComplete?: () => void  // if provided, called instead of window.location.reload()
   className?: string
@@ -12,6 +12,8 @@ export default function PlaidLinkButton({ onSuccess, onComplete, className, onEr
   itemId?: string
   /** Button label override (e.g. "Reconnect"). */
   label?: string
+  /** 'menu-item' renders as a plain full-width row for use inside a dropdown. */
+  variant?: 'button' | 'menu-item'
 }) {
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -77,12 +79,15 @@ export default function PlaidLinkButton({ onSuccess, onComplete, className, onEr
 
   if (error) return <p className="text-sm text-red-500">Error: {error}</p>
 
-  const idleLabel = label ?? '+ Connect Bank'
+  const idleLabel = label ?? (variant === 'menu-item' ? 'Connect a bank' : '+ Connect Bank')
+  const defaultClassName = variant === 'menu-item'
+    ? 'w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed'
   return (
     <button
       onClick={() => open()}
       disabled={!ready || loading}
-      className={className ?? 'inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed'}
+      className={className ?? defaultClassName}
     >
       {loading ? 'Connecting…' : !ready ? 'Loading…' : idleLabel}
     </button>

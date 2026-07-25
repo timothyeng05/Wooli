@@ -2,6 +2,12 @@
 
 Quick reference — one line per component. Load only what you need.
 
+## Dashboard
+
+| File | Notes |
+|------|-------|
+| `DashboardClient.tsx` | Budget progress, recent transactions, mini net worth chart, spending-vs-last-month chart |
+
 ## Shared / navigation
 
 | File | Used by | Notes |
@@ -30,16 +36,16 @@ Quick reference — one line per component. Load only what you need.
 | File | Notes |
 |------|-------|
 | `AccountsPageClient.tsx` | Full accounts page — exports `UnifiedAccount` type |
-| `AccountsView.tsx` | Account list rows |
 | `PlaidLinkButton.tsx` | Opens Plaid Link modal |
 | `SyncTransactionsButton.tsx` | Triggers Plaid sync |
 
-## Categories
+## Settings (Categories + Institutions)
 
 | File | Notes |
 |------|-------|
-| `CategoryManager.tsx` | Category tree editor (Expense / Income / Transfer sections) |
+| `CategoryManager.tsx` | Category tree editor (Expense / Income / Transfer sections) — page moved to `/budget/settings/categories` |
 | `CategoryDetailClient.tsx` | Transactions scoped to one category |
+| `InstitutionsManager.tsx` | Per-institution custom logo upload — `/budget/settings/institutions` |
 
 ## Recurring
 

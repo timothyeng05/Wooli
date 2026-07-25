@@ -3,12 +3,15 @@ export function fmtSyncTime(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
   const diffMins = Math.floor((now.getTime() - d.getTime()) / 60000)
-  const diffDays = Math.floor(diffMins / 1440)
   const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   if (diffMins < 2) return 'Just now'
   if (diffMins < 60) return `${diffMins}m ago`
-  if (diffDays === 0) return `Today at ${time}`
-  if (diffDays === 1) return `Yesterday at ${time}`
+  // Compare local calendar dates, not raw elapsed minutes — a sync from
+  // yesterday afternoon is only ~20 hours ago but must not read "Today".
+  const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime()
+  const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86400000)
+  if (dayDiff === 0) return `Today at ${time}`
+  if (dayDiff === 1) return `Yesterday at ${time}`
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` at ${time}`
 }
 

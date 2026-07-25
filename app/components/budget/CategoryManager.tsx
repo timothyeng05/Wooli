@@ -130,6 +130,21 @@ function SortableChildRow({
   )
 }
 
+function SortableParentCard({ parent, children }: { parent: Category; children: (dragHandle: React.ReactNode) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parent.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {children(<DragHandle {...attributes} {...listeners} />)}
+    </div>
+  )
+}
+
 export default function CategoryManager({
   userId,
   categories: initial,
@@ -165,12 +180,16 @@ export default function CategoryManager({
     const activeItem = categories.find(c => c.id === active.id)
     const overItem = categories.find(c => c.id === over.id)
     if (!activeItem || !overItem || activeItem.parent_id !== overItem.parent_id) return
+    // Top-level items are sectioned by type (Expense/Income/Transfer) — a drag
+    // must stay within the same section, not just "both top-level".
+    if (!activeItem.parent_id && (activeItem.is_income !== overItem.is_income || activeItem.is_transfer !== overItem.is_transfer)) return
 
-    const parentId = activeItem.parent_id!
-    const subs = childrenOf(parentId)
-    const oldIdx = subs.findIndex(c => c.id === active.id)
-    const newIdx = subs.findIndex(c => c.id === over.id)
-    const reordered = arrayMove(subs, oldIdx, newIdx)
+    const siblings = activeItem.parent_id
+      ? childrenOf(activeItem.parent_id)
+      : parents.filter(c => c.is_income === activeItem.is_income && c.is_transfer === activeItem.is_transfer)
+    const oldIdx = siblings.findIndex(c => c.id === active.id)
+    const newIdx = siblings.findIndex(c => c.id === over.id)
+    const reordered = arrayMove(siblings, oldIdx, newIdx)
 
     const updated = categories.map(c => {
       const idx = reordered.findIndex(r => r.id === c.id)
@@ -493,61 +512,71 @@ export default function CategoryManager({
             </div>
 
             <div className="space-y-3 mt-3">
-              {list.map(parent => {
-                const subs = childrenOf(parent.id)
-                return (
-                  <div key={parent.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    {/* Parent row */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <CatIcon icon={parent.icon} color={parent.color} size="md" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-900">{parent.name}</span>
-                        {parent.keywords && (
-                          <p className="text-[11px] text-gray-400 truncate">{parent.keywords}</p>
-                        )}
-                      </div>
-                      <button onClick={() => startEdit(parent)} className="text-xs text-gray-400 hover:text-blue-600 transition">Edit</button>
-                      <button
-                        onClick={() => { setAdding({ parentId: parent.id }); setEditing(null); setNewName(''); setNewIcon('') }}
-                        className="text-xs text-blue-600 hover:text-blue-700 ml-1"
-                      >+ Sub</button>
-                      <button
-                        onClick={() => handleDelete(parent.id)}
-                        disabled={deletingId === parent.id}
-                        className="text-xs text-gray-400 hover:text-red-500 transition ml-1"
-                      >✕</button>
-                    </div>
+              <SortableContext items={list.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                {list.map(parent => {
+                  const subs = childrenOf(parent.id)
+                  return (
+                    <SortableParentCard key={parent.id} parent={parent}>
+                      {dragHandle => (
+                        <>
+                          {/* Parent row */}
+                          <div className="flex items-center gap-3 px-4 py-3">
+                            {dragHandle}
+                            <CatIcon icon={parent.icon} color={parent.color} size="md" />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-gray-900">{parent.name}</span>
+                              {parent.keywords && (
+                                <p className="text-[11px] text-gray-400 truncate">{parent.keywords}</p>
+                              )}
+                            </div>
+                            <button onClick={() => startEdit(parent)} className="text-xs text-gray-400 hover:text-blue-600 transition">Edit</button>
+                            <button
+                              onClick={() => handleDelete(parent.id)}
+                              disabled={deletingId === parent.id}
+                              className="text-xs text-gray-400 hover:text-red-500 transition ml-1"
+                            >✕</button>
+                          </div>
 
-                    {editing === parent.id && renderEditForm(parent.id)}
+                          {editing === parent.id && renderEditForm(parent.id)}
 
-                    {/* Sortable children */}
-                    {subs.length > 0 && (
-                      <div className="border-t border-gray-100 divide-y divide-gray-100">
-                        <SortableContext items={subs.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                          {subs.map(child => (
-                            <SortableChildRow
-                              key={child.id}
-                              child={child}
-                              parentColor={parent.color}
-                              editing={editing}
-                              deletingId={deletingId}
-                              onEdit={startEdit}
-                              onDelete={handleDelete}
-                              editForm={renderEditForm}
-                            />
-                          ))}
-                        </SortableContext>
-                      </div>
-                    )}
+                          {/* Sortable children */}
+                          {subs.length > 0 && (
+                            <div className="border-t border-gray-100 divide-y divide-gray-100">
+                              <SortableContext items={subs.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                                {subs.map(child => (
+                                  <SortableChildRow
+                                    key={child.id}
+                                    child={child}
+                                    parentColor={parent.color}
+                                    editing={editing}
+                                    deletingId={deletingId}
+                                    onEdit={startEdit}
+                                    onDelete={handleDelete}
+                                    editForm={renderEditForm}
+                                  />
+                                ))}
+                              </SortableContext>
+                            </div>
+                          )}
 
-                    {adding?.parentId === parent.id && (
-                      <div className="border-t border-gray-100 px-4 py-2">
-                        {renderAddForm(parent.id)}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                          {adding?.parentId === parent.id ? (
+                            <div className="border-t border-gray-100 px-4 py-2">
+                              {renderAddForm(parent.id)}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setAdding({ parentId: parent.id }); setEditing(null); setNewName(''); setNewIcon('') }}
+                              className="w-full text-left border-t border-gray-100 px-4 py-2 text-xs text-gray-400 hover:text-blue-600 hover:bg-gray-50 transition"
+                            >
+                              Create Category
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </SortableParentCard>
+                  )
+                })}
+              </SortableContext>
 
               {adding?.parentId === null && newIsIncome === income && newIsTransfer === isTransfer
                 ? renderAddForm(null)

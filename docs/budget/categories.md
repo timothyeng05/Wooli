@@ -1,11 +1,16 @@
 # Budget — Categories
 
+**The category tree editor lives at `/budget/settings/categories`, not `/budget/categories`.**
+`app/budget/categories/page.tsx` is now a redirect stub to that route (same pattern as
+the Cash Flow / `/budget/cashflow` redirect — don't "fix" it back).
+
 ## Routes
 
 | Route | File | Notes |
 |-------|------|-------|
-| `/budget/categories` | `app/budget/categories/page.tsx` | Manage category tree |
-| `/budget/categories/[id]` | `app/budget/categories/[id]/page.tsx` | Category detail — transactions for this category |
+| `/budget/settings/categories` | `app/budget/settings/categories/page.tsx` | Manage category tree — inside the Settings hub, see `docs/budget/settings.md` |
+| `/budget/categories` | `app/budget/categories/page.tsx` | Redirect stub → `/budget/settings/categories` |
+| `/budget/categories/[id]` | `app/budget/categories/[id]/page.tsx` | Category detail — transactions for this category (unchanged, still at this path) |
 
 ## Components
 

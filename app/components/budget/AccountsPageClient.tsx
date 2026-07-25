@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
-import { ACCOUNT_TYPES, isAssetType, type AccountType } from '@/lib/budget/account-utils'
+import { ACCOUNT_TYPES, isAssetType, depreciatedValue, type AccountType } from '@/lib/budget/account-utils'
 import type { HouseholdMember } from './transaction-types'
 import { fmtSyncTime, fmtRelative } from '@/lib/budget/format-utils'
 import { PLAID_BALANCE_SYNC_ENABLED, PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
@@ -11,11 +12,80 @@ import PlaidLinkButton from './PlaidLinkButton'
 import InstitutionLogo, { KNOWN_INSTITUTIONS } from './InstitutionLogo'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
+// ── Vehicle depreciation ↔ recurring transaction sync ──────────────────────
+// A vehicle's monthly depreciation is a real cost even though no cash moves,
+// so it's represented as a normal (non-transfer) monthly recurring expense —
+// reusing the existing Recurring feature's own cron generation instead of
+// inventing a parallel mechanism. linked_account_id ties the rule back to the
+// vehicle so edits/archiving keep it in sync instead of creating duplicates.
+type SupabaseBrowserClient = ReturnType<typeof createClient>
+
+async function findOrCreateDepreciationCategory(supabase: SupabaseBrowserClient, userId: string): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('user_id', userId)
+    .is('parent_id', null)
+    .ilike('name', 'depreciation')
+    .maybeSingle()
+  if (existing) return existing.id
+
+  const { data: created, error } = await supabase
+    .from('categories')
+    .insert({ user_id: userId, name: 'Depreciation', color: '#64748b', icon: '📉', is_income: false, is_transfer: false, parent_id: null, sort_order: 999 })
+    .select('id')
+    .single()
+  if (error || !created) return null
+  return created.id
+}
+
+function nextMonthlyDate(dayOfMonth: number): string {
+  const today = new Date()
+  const candidate = new Date(today.getFullYear(), today.getMonth(), dayOfMonth)
+  if (candidate <= today) return new Date(today.getFullYear(), today.getMonth() + 1, dayOfMonth).toISOString().split('T')[0]
+  return candidate.toISOString().split('T')[0]
+}
+
+async function upsertDepreciationRecurring(
+  supabase: SupabaseBrowserClient, userId: string, accountId: string, vehicleName: string, monthlyAmount: number, purchaseDate: string
+) {
+  if (!(monthlyAmount > 0)) return
+  const categoryId = await findOrCreateDepreciationCategory(supabase, userId)
+  const dayOfMonth = new Date(purchaseDate + 'T12:00:00').getDate()
+
+  const { data: existing } = await supabase
+    .from('recurring_transactions')
+    .select('id')
+    .eq('linked_account_id', accountId)
+    .maybeSingle()
+
+  const payload = {
+    user_id: userId,
+    description: 'Depreciation',
+    merchant: vehicleName,
+    amount: -Math.abs(monthlyAmount),
+    category_id: categoryId,
+    frequency: 'monthly',
+    day_of_month: dayOfMonth,
+    is_active: true,
+    linked_account_id: accountId,
+  }
+  if (existing) {
+    await supabase.from('recurring_transactions').update(payload).eq('id', existing.id)
+  } else {
+    await supabase.from('recurring_transactions').insert({ ...payload, next_date: nextMonthlyDate(dayOfMonth) })
+  }
+}
+
+async function deactivateDepreciationRecurring(supabase: SupabaseBrowserClient, accountId: string) {
+  await supabase.from('recurring_transactions').update({ is_active: false }).eq('linked_account_id', accountId)
+}
+
 export interface UnifiedAccount {
   id: string
   name: string
   mask: string | null
-  type: 'cash' | 'investment' | 'credit' | 'loan'
+  type: 'cash' | 'investment' | 'credit' | 'loan' | 'vehicle'
   rawType?: string
   institution: string | null
   balance: number
@@ -25,7 +95,22 @@ export interface UnifiedAccount {
   is_hidden?: boolean
   exclude_from_net_worth?: boolean
   nickname?: string | null
+  sortOrder?: number
+  purchasePrice?: number | null
+  purchaseDate?: string | null
+  depreciationMonths?: number | null
+  residualValue?: number | null
+  logoUrl?: string | null
+  depreciationRecurringId?: string | null
 }
+
+const CATEGORY_OPTIONS: { value: '' | 'cash' | 'investment' | 'credit' | 'loan'; label: string }[] = [
+  { value: '', label: 'Auto (from Plaid)' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'investment', label: 'Investment' },
+  { value: 'credit', label: 'Credit' },
+  { value: 'loan', label: 'Loan' },
+]
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -46,29 +131,35 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
   )
 }
 
-export interface BalancePoint {
-  account_id: string
-  date: string
-  balance: number
-}
-
+// YTD's cutoff (Jan 1) moves with the calendar rather than a fixed day count,
+// so it's represented with the sentinel -1 and resolved in cutoffForPeriod().
+const YTD = -1
 const PERIODS = [
   { label: '1M', days: 30 },
   { label: '3M', days: 90 },
   { label: '6M', days: 180 },
+  { label: 'YTD', days: YTD },
   { label: '1Y', days: 365 },
   { label: 'All', days: Infinity },
 ]
+
+function cutoffForPeriod(period: number): string | null {
+  if (period === Infinity) return null
+  if (period === YTD) return new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]
+  return new Date(Date.now() - period * 86400000).toISOString().split('T')[0]
+}
 
 // Types allowed per group
 const GROUP_TYPES: Record<string, AccountType[]> = {
   cash: ['checking', 'savings', 'cash', 'other'],
   investment: ['investment'],
+  vehicle: ['vehicle'],
   credit: ['credit', 'loan'],
 }
 const GROUP_DEFAULT: Record<string, AccountType> = {
   cash: 'checking',
   investment: 'investment',
+  vehicle: 'vehicle',
   credit: 'credit',
 }
 
@@ -83,62 +174,36 @@ function fmtShort(n: number) {
   return `${sign}$${abs.toFixed(0)}`
 }
 
-// ── Sparkline ─────────────────────────────────────────────────────────────────
-function Sparkline({ values, isAsset }: { values: number[]; isAsset: boolean }) {
-  if (values.length < 2) {
-    return (
-      <div className="w-20 h-8 flex-shrink-0 flex items-center justify-center">
-        <div className="w-16 h-px bg-gray-200" />
-      </div>
-    )
-  }
-  const min = Math.min(...values), max = Math.max(...values)
-  const range = max - min || 1
-  const W = 80, H = 32
-  const pts = values.map((v, i) => {
-    const x = ((i / (values.length - 1)) * W).toFixed(1)
-    const y = (H - 4 - ((v - min) / range) * (H - 8)).toFixed(1)
-    return `${x},${y}`
-  }).join(' ')
-  const trend = values[values.length - 1] - values[0]
-  const color = isAsset ? (trend >= 0 ? '#22c55e' : '#ef4444') : (trend <= 0 ? '#22c55e' : '#ef4444')
+// ── Net worth chart ───────────────────────────────────────────────────────────
+const CW = 600, CH = 108, PL = 56, PR = 16, PT = 10, PB = 24
+const IW = CW - PL - PR, IH = CH - PT - PB
+
+function PeriodPicker({ period, onPeriod }: { period: number; onPeriod: (d: number) => void }) {
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="flex-shrink-0">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5"
-        strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="flex gap-1">
+      {PERIODS.map(p => (
+        <button key={p.label} onClick={() => onPeriod(p.days)}
+          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+            period === p.days ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800'
+          }`}>{p.label}</button>
+      ))}
+    </div>
   )
 }
 
-// ── Net worth chart ───────────────────────────────────────────────────────────
-const CW = 600, CH = 180, PL = 56, PR = 16, PT = 12, PB = 28
-const IW = CW - PL - PR, IH = CH - PT - PB
-
-function NetWorthChart({ series, period, onPeriod }: {
+function NetWorthChart({ series, period }: {
   series: { date: string; value: number }[]
   period: number
-  onPeriod: (d: number) => void
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
-  const cutoff = period === Infinity ? null
-    : new Date(Date.now() - period * 86400000).toISOString().split('T')[0]
+  const cutoff = cutoffForPeriod(period)
   const pts = cutoff ? series.filter(p => p.date >= cutoff) : series
 
   if (pts.length < 2) {
     return (
-      <div>
-        <div className="flex gap-1 mb-3">
-          {PERIODS.map(p => (
-            <button key={p.label} onClick={() => onPeriod(p.days)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
-                period === p.days ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800'
-              }`}>{p.label}</button>
-          ))}
-        </div>
-        <div className="h-40 flex items-center justify-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
-          Balance history builds automatically each time you visit — check back tomorrow to see a trend
-        </div>
+      <div className="h-24 flex items-center justify-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
+        Balance history builds automatically each time you visit — check back tomorrow to see a trend
       </div>
     )
   }
@@ -177,14 +242,6 @@ function NetWorthChart({ series, period, onPeriod }: {
 
   return (
     <div>
-      <div className="flex gap-1 mb-3">
-        {PERIODS.map(p => (
-          <button key={p.label} onClick={() => onPeriod(p.days)}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
-              period === p.days ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800'
-            }`}>{p.label}</button>
-        ))}
-      </div>
       <div className="relative w-full" style={{ aspectRatio: `${CW} / ${CH}` }}>
         <svg viewBox={`0 0 ${CW} ${CH}`} className="absolute inset-0 w-full h-full"
           onMouseLeave={() => setHover(null)}
@@ -233,9 +290,8 @@ function NetWorthChart({ series, period, onPeriod }: {
 }
 
 // ── Plaid account row (editable) ─────────────────────────────────────────────
-function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
+function PlaidAccountRow({ account, onUpdate, onHide, members }: {
   account: UnifiedAccount
-  sparkValues: number[]
   onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
   onHide: (id: string) => Promise<void>
   members: HouseholdMember[]
@@ -243,6 +299,11 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
   const [editing, setEditing] = useState(false)
   const [nickname, setNickname] = useState(account.nickname || '')
   const [owner, setOwner] = useState(account.owner || '')
+  // Plaid accounts never actually have type 'vehicle' (manual-only), but the
+  // shared UnifiedAccount union includes it — guard defensively.
+  const [category, setCategory] = useState<'' | 'cash' | 'investment' | 'credit' | 'loan'>(
+    account.type === 'vehicle' ? 'cash' : account.type
+  )
   const [hidden, setHidden] = useState(account.is_hidden ?? false)
   const [excludeNW, setExcludeNW] = useState(account.exclude_from_net_worth ?? false)
   const [saving, setSaving] = useState(false)
@@ -252,7 +313,10 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
   const save = async () => {
     setSaving(true)
     try {
-      await onUpdate(account.id, { nickname: nickname.trim() || null, owner: owner || null, is_hidden: hidden, exclude_from_net_worth: excludeNW })
+      await onUpdate(account.id, {
+        nickname: nickname.trim() || null, owner: owner || null, is_hidden: hidden, exclude_from_net_worth: excludeNW,
+        type_override: category || null,
+      })
       setEditing(false)
     } finally {
       setSaving(false)
@@ -263,6 +327,7 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
     return (
       <div className="mx-3 my-1 border border-blue-200 bg-blue-50/40 rounded-lg p-3 space-y-3">
         <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Plaid name</span>
           <p className="text-xs font-semibold text-gray-700">{account.name}</p>
           {account.mask && <span className="text-xs text-gray-400">···{account.mask}</span>}
           <span className="text-[10px] text-gray-400 ml-1">Balance synced from Plaid</span>
@@ -282,6 +347,14 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
               {members.map(m => <option key={m.id} value={m.full_name}>{m.display_name}</option>)}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 mb-0.5 block">Category</label>
+          <select value={category} onChange={e => setCategory(e.target.value as typeof category)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
+            {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <p className="text-[10px] text-gray-400 mt-0.5">Overrides which group (Cash/Investments/Credit Cards) this account sits under, independent of Plaid's own classification.</p>
         </div>
         <div className="border-t border-gray-100 pt-2.5 space-y-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Visibility</p>
@@ -317,12 +390,14 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
   return (
     <div
       onClick={() => setEditing(true)}
-      className="group flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition cursor-pointer"
+      className={`group flex items-center gap-3 px-3 py-3 rounded-lg transition cursor-pointer ${
+        account.is_hidden ? 'bg-gray-100 hover:bg-gray-200' : 'hover:bg-gray-50'
+      }`}
       title="Click to edit"
     >
+      <InstitutionLogo institution={account.institution} customUrl={account.logoUrl} size={36} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <InstitutionLogo institution={account.institution} />
           <p className="text-sm font-medium text-gray-900 truncate">
             {displayName}
             {account.mask && <span className="text-gray-400 font-normal"> ···{account.mask}</span>}
@@ -341,17 +416,15 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[10px] text-gray-300 font-medium flex-shrink-0">Plaid</span>
+          <span className="text-xs text-gray-400 font-medium flex-shrink-0">Plaid</span>
         </div>
-      </div>
-      <div className="hidden md:block flex-shrink-0">
-        <Sparkline values={sparkValues} isAsset={isAsset} />
       </div>
       <div className="flex-shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
-          isAsset || account.balance === 0 ? 'text-gray-900' : 'text-red-600'
+          isAsset || account.balance === 0 ? 'text-gray-900' : account.balance < 0 ? 'text-green-600' : 'text-red-600'
         }`}>
-          {!isAsset && account.balance !== 0 ? '-' : ''}${fmt(Math.abs(account.balance))}
+          {/* Credit/loan balance sign follows Plaid's convention: positive = owed, negative = credit in the cardholder's favor. */}
+          {!isAsset && account.balance !== 0 ? (account.balance < 0 ? '+' : '-') : ''}${fmt(Math.abs(account.balance))}
         </p>
         {account.updatedAt && (
           <p className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{fmtRelative(account.updatedAt)}</p>
@@ -362,9 +435,9 @@ function PlaidAccountRow({ account, sparkValues, onUpdate, onHide, members }: {
 }
 
 // ── Manual account row (editable) ─────────────────────────────────────────────
-function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }: {
+function ManualAccountRow({ account, userId, onUpdate, onArchive, members }: {
   account: UnifiedAccount
-  sparkValues: number[]
+  userId: string
   onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
   onArchive: (id: string) => Promise<void>
   members: HouseholdMember[]
@@ -377,23 +450,58 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
   const [owner, setOwner] = useState(account.owner || '')
   const [excludeNW, setExcludeNW] = useState(account.exclude_from_net_worth ?? false)
   const [saving, setSaving] = useState(false)
+  const isVehicle = type === 'vehicle'
+  const [purchasePrice, setPurchasePrice] = useState(String(account.purchasePrice ?? ''))
+  const [purchaseDate, setPurchaseDate] = useState(account.purchaseDate ?? new Date().toISOString().split('T')[0])
+  const [depreciationMonths, setDepreciationMonths] = useState(String(account.depreciationMonths ?? '60'))
+  const [residualValue, setResidualValue] = useState(String(account.residualValue ?? '0'))
 
   const isAsset = account.type !== 'credit' && account.type !== 'loan'
+  const monthlyDepreciation = account.rawType === 'vehicle' && account.purchasePrice && account.depreciationMonths
+    ? (account.purchasePrice - (account.residualValue ?? 0)) / account.depreciationMonths
+    : null
 
   const save = async () => {
     setSaving(true)
     try {
       const newIsAsset = isAssetType(type)
+      const vehicleFields = isVehicle
+        ? {
+            purchase_price: parseFloat(purchasePrice) || 0,
+            purchase_date: purchaseDate,
+            depreciation_months: parseInt(depreciationMonths, 10) || 1,
+            residual_value: parseFloat(residualValue) || 0,
+          }
+        : {}
+      const newBalance = isVehicle
+        ? depreciatedValue(
+            parseFloat(purchasePrice) || 0, purchaseDate,
+            parseInt(depreciationMonths, 10) || 1, parseFloat(residualValue) || 0,
+          )
+        : parseFloat(balance) || 0
       await onUpdate(account.id, {
         name: name.trim(),
         institution: institution.trim() || null,
-        current_balance: parseFloat(balance) || 0,
+        current_balance: newBalance,
         type,
         is_asset: newIsAsset,
         owner: owner || null,
         exclude_from_net_worth: excludeNW,
         updated_at: new Date().toISOString(),
+        ...vehicleFields,
       })
+
+      const supabase = createClient()
+      if (isVehicle) {
+        const price = parseFloat(purchasePrice) || 0
+        const months = parseInt(depreciationMonths, 10) || 1
+        const residual = parseFloat(residualValue) || 0
+        await upsertDepreciationRecurring(supabase, userId, account.id, name.trim(), (price - residual) / months, purchaseDate)
+      } else if (account.rawType === 'vehicle') {
+        // Type changed away from vehicle — stop generating depreciation expenses.
+        await deactivateDepreciationRecurring(supabase, account.id)
+      }
+
       setEditing(false)
     } finally {
       setSaving(false)
@@ -429,11 +537,13 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
               {ACCOUNT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
-          <div>
-            <label className="text-[10px] text-gray-500 mb-0.5 block">Balance</label>
-            <input type="number" step="0.01" value={balance} onChange={e => setBalance(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
-          </div>
+          {!isVehicle && (
+            <div>
+              <label className="text-[10px] text-gray-500 mb-0.5 block">Balance</label>
+              <input type="number" step="0.01" value={balance} onChange={e => setBalance(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+            </div>
+          )}
           <div>
             <label className="text-[10px] text-gray-500 mb-0.5 block">Owner</label>
             <select value={owner} onChange={e => setOwner(e.target.value)}
@@ -443,6 +553,37 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
             </select>
           </div>
         </div>
+        {institution && (
+          <p className="text-[10px] text-gray-400">
+            To set a custom logo for {institution}, use{' '}
+            <a href="/budget/settings/institutions" className="text-blue-600 hover:text-blue-700">Settings → Institutions</a>.
+          </p>
+        )}
+        {isVehicle && (
+          <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2.5">
+            <div>
+              <label className="text-[10px] text-gray-500 mb-0.5 block">Purchase price</label>
+              <input type="number" step="0.01" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 mb-0.5 block">Purchase date</label>
+              <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 mb-0.5 block">Depreciate over (months)</label>
+              <input type="number" step="1" min="1" value={depreciationMonths} onChange={e => setDepreciationMonths(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 mb-0.5 block">Residual value</label>
+              <input type="number" step="0.01" value={residualValue} onChange={e => setResidualValue(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+            </div>
+            <p className="text-[10px] text-gray-400 col-span-2">Current balance is computed automatically from these values.</p>
+          </div>
+        )}
         <div className="border-t border-gray-100 pt-2.5 space-y-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Visibility</p>
           <div className="flex items-center justify-between">
@@ -477,9 +618,9 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
       className="group w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition cursor-pointer"
       title="Click to edit"
     >
+      <InstitutionLogo institution={account.institution} customUrl={account.logoUrl} size={36} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <InstitutionLogo institution={account.institution} />
           <p className="text-sm font-medium text-gray-900 truncate">{account.name}</p>
           {account.owner && (() => {
             const m = members.find(x => x.full_name === account.owner)
@@ -495,17 +636,31 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[10px] text-amber-500 font-medium flex-shrink-0">Manual</span>
+          <span className="text-xs text-amber-500 font-medium flex-shrink-0">Manual</span>
+          {monthlyDepreciation !== null && monthlyDepreciation > 0 && (
+            <>
+              <span className="text-xs text-gray-300">·</span>
+              {account.depreciationRecurringId ? (
+                <Link
+                  href={`/budget/recurring/${account.depreciationRecurringId}`}
+                  onClick={e => e.stopPropagation()}
+                  className="text-xs text-gray-400 hover:text-amber-600 hover:underline"
+                >
+                  -${fmt(monthlyDepreciation)}/mo
+                </Link>
+              ) : (
+                <span className="text-xs text-gray-400">-${fmt(monthlyDepreciation)}/mo</span>
+              )}
+            </>
+          )}
         </div>
-      </div>
-      <div className="hidden md:block flex-shrink-0">
-        <Sparkline values={sparkValues} isAsset={isAsset} />
       </div>
       <div className="flex-shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
-          isAsset || account.balance === 0 ? 'text-gray-900' : 'text-red-600'
+          isAsset || account.balance === 0 ? 'text-gray-900' : account.balance < 0 ? 'text-green-600' : 'text-red-600'
         }`}>
-          {!isAsset && account.balance !== 0 ? '-' : ''}${fmt(Math.abs(account.balance))}
+          {/* Credit/loan balance sign follows Plaid's convention: positive = owed, negative = credit in the cardholder's favor. */}
+          {!isAsset && account.balance !== 0 ? (account.balance < 0 ? '+' : '-') : ''}${fmt(Math.abs(account.balance))}
         </p>
         {account.updatedAt && (
           <p className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{fmtRelative(account.updatedAt)}</p>
@@ -517,7 +672,7 @@ function ManualAccountRow({ account, sparkValues, onUpdate, onArchive, members }
 
 // ── Inline add form ───────────────────────────────────────────────────────────
 function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
-  groupKey: 'cash' | 'investment' | 'credit'
+  groupKey?: 'cash' | 'investment' | 'vehicle' | 'credit'
   userId: string
   onDone: () => void
   members: HouseholdMember[]
@@ -525,29 +680,57 @@ function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
-  const allowedTypes = GROUP_TYPES[groupKey]
+  const allowedTypes = groupKey ? GROUP_TYPES[groupKey] : ACCOUNT_TYPES.map(t => t.value)
   const [name, setName] = useState('')
   const [institution, setInstitution] = useState('')
-  const [type, setType] = useState<AccountType>(GROUP_DEFAULT[groupKey])
+  const [type, setType] = useState<AccountType>(groupKey ? GROUP_DEFAULT[groupKey] : 'checking')
   const [balance, setBalance] = useState('0')
   const [owner, setOwner] = useState('')
   const [saving, setSaving] = useState(false)
+  const isVehicle = type === 'vehicle'
+  const [purchasePrice, setPurchasePrice] = useState('')
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [depreciationMonths, setDepreciationMonths] = useState('60')
+  const [residualValue, setResidualValue] = useState('0')
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
     setSaving(true)
     try {
-      const { error } = await supabase.from('accounts').insert({
+      const vehicleFields = isVehicle
+        ? {
+            purchase_price: parseFloat(purchasePrice) || 0,
+            purchase_date: purchaseDate,
+            depreciation_months: parseInt(depreciationMonths, 10) || 1,
+            residual_value: parseFloat(residualValue) || 0,
+          }
+        : {}
+      const startingBalance = isVehicle
+        ? depreciatedValue(
+            parseFloat(purchasePrice) || 0, purchaseDate,
+            parseInt(depreciationMonths, 10) || 1, parseFloat(residualValue) || 0,
+          )
+        : parseFloat(balance) || 0
+      const { data: newAccount, error } = await supabase.from('accounts').insert({
         user_id: userId,
         name: name.trim(),
         type,
         institution: institution.trim() || null,
-        current_balance: parseFloat(balance) || 0,
+        current_balance: startingBalance,
         is_asset: isAssetType(type),
         owner: owner || null,
-      })
+        ...vehicleFields,
+      }).select('id').single()
       if (error) throw error
+
+      if (isVehicle && newAccount) {
+        const price = parseFloat(purchasePrice) || 0
+        const months = parseInt(depreciationMonths, 10) || 1
+        const residual = parseFloat(residualValue) || 0
+        await upsertDepreciationRecurring(supabase, userId, newAccount.id, name.trim(), (price - residual) / months, purchaseDate)
+      }
+
       onDone()
       router.refresh()
     } catch (err) {
@@ -558,8 +741,8 @@ function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
   }
 
   return (
-    <form onSubmit={submit} className="mx-3 my-2 border border-blue-200 bg-blue-50/40 rounded-lg p-3 space-y-2.5">
-      <p className="text-xs font-semibold text-gray-700">New account</p>
+    <form onSubmit={submit} className={groupKey ? 'mx-3 my-2 border border-blue-200 bg-blue-50/40 rounded-lg p-3 space-y-2.5' : 'space-y-2.5'}>
+      {groupKey && <p className="text-xs font-semibold text-gray-700">New account</p>}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[10px] text-gray-500 mb-0.5 block">Name *</label>
@@ -586,11 +769,13 @@ function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
             ))}
           </select>
         </div>
-        <div>
-          <label className="text-[10px] text-gray-500 mb-0.5 block">Balance</label>
-          <input type="number" step="0.01" value={balance} onChange={e => setBalance(e.target.value)}
-            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
-        </div>
+        {!isVehicle && (
+          <div>
+            <label className="text-[10px] text-gray-500 mb-0.5 block">Balance</label>
+            <input type="number" step="0.01" value={balance} onChange={e => setBalance(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+          </div>
+        )}
         <div>
           <label className="text-[10px] text-gray-500 mb-0.5 block">Owner</label>
           <select value={owner} onChange={e => setOwner(e.target.value)}
@@ -600,8 +785,36 @@ function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
           </select>
         </div>
       </div>
+      {isVehicle && (
+        <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2.5">
+          <div>
+            <label className="text-[10px] text-gray-500 mb-0.5 block">Purchase price</label>
+            <input type="number" step="0.01" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)}
+              placeholder="e.g. 32000" required
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-500 mb-0.5 block">Purchase date</label>
+            <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-500 mb-0.5 block">Depreciate over (months)</label>
+            <input type="number" step="1" min="1" value={depreciationMonths} onChange={e => setDepreciationMonths(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-500 mb-0.5 block">Residual value</label>
+            <input type="number" step="0.01" value={residualValue} onChange={e => setResidualValue(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white" />
+          </div>
+          <p className="text-[10px] text-gray-400 col-span-2">
+            Value declines straight-line from purchase price to residual value over the period. Current balance is computed automatically.
+          </p>
+        </div>
+      )}
       <div className="flex gap-2">
-        <button type="submit" disabled={saving || !name.trim()}
+        <button type="submit" disabled={saving || !name.trim() || (isVehicle && !purchasePrice)}
           className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50">
           Add
         </button>
@@ -614,12 +827,115 @@ function AddAccountInlineForm({ groupKey, userId, onDone, members }: {
   )
 }
 
+// ── Add account menu (Connect a bank / Add manually) ──────────────────────────
+export function AddAccountMenu({ userId, members }: { userId: string; members: HouseholdMember[] }) {
+  const [open, setOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+      >
+        + Add account
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg p-1.5 z-20">
+            <PlaidLinkButton variant="menu-item" />
+            <button
+              onClick={() => { setOpen(false); setManualOpen(true) }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition"
+            >
+              Add manually
+            </button>
+          </div>
+        </>
+      )}
+      {manualOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setManualOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-gray-900">Add manual account</p>
+              <button onClick={() => setManualOpen(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            </div>
+            <AddAccountInlineForm userId={userId} onDone={() => setManualOpen(false)} members={members} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Drag handle (grip dots) ────────────────────────────────────────────────
+function DragHandle({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`w-3.5 h-3.5 flex-shrink-0 text-gray-300 group-hover:text-gray-400 transition-colors ${className}`}
+      viewBox="0 0 16 16" fill="currentColor">
+      <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+      <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+      <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+    </svg>
+  )
+}
+
+// Thin highlighted line marking where a dragged item would land.
+function DropIndicator() {
+  return <div className="h-0.5 mx-2 my-0.5 rounded-full bg-blue-500" />
+}
+
 // ── Account group ─────────────────────────────────────────────────────────────
-function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, userId, onUpdateManual, onArchive, onUpdatePlaid, onHidePlaid, members }: {
+function HiddenAccountsReveal({ hiddenAccounts, onUpdatePlaid, onHidePlaid, members }: {
+  hiddenAccounts: UnifiedAccount[]
+  onUpdatePlaid: (id: string, patch: Record<string, unknown>) => Promise<void>
+  onHidePlaid: (id: string) => Promise<void>
+  members: HouseholdMember[]
+}) {
+  const [showHidden, setShowHidden] = useState(false)
+  if (hiddenAccounts.length === 0) return null
+  const label = `${hiddenAccounts.length} hidden account${hiddenAccounts.length !== 1 ? 's' : ''}`
+  const EyeIcon = () => (
+    <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+  return (
+    <div className="mt-1">
+      {!showHidden && (
+        <button
+          onClick={() => setShowHidden(true)}
+          className="w-full flex items-center gap-1.5 px-3 py-2 text-xs text-gray-400 hover:text-gray-600 transition"
+        >
+          <EyeIcon />
+          Show {label}
+        </button>
+      )}
+      {showHidden && (
+        <>
+          {hiddenAccounts.map(a => (
+            <PlaidAccountRow key={a.id} account={a} onUpdate={onUpdatePlaid} onHide={onHidePlaid} members={members} />
+          ))}
+          <button
+            onClick={() => setShowHidden(false)}
+            className="w-full flex items-center gap-1.5 px-3 py-2 text-xs text-gray-400 hover:text-gray-600 transition"
+          >
+            <EyeIcon />
+            Collapse {label}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, onToggle, userId, onUpdateManual, onArchive, onUpdatePlaid, onHidePlaid, onReorder, members }: {
   label: string
-  groupKey: 'cash' | 'investment' | 'credit'
+  groupKey: 'cash' | 'investment' | 'vehicle' | 'credit'
   accounts: UnifiedAccount[]
-  sparkMap: Map<string, number[]>
+  hiddenAccounts?: UnifiedAccount[]
   open: boolean
   onToggle: () => void
   userId: string
@@ -627,10 +943,29 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
   onArchive: (id: string) => Promise<void>
   onUpdatePlaid: (id: string, patch: Record<string, unknown>) => Promise<void>
   onHidePlaid: (id: string) => Promise<void>
+  onReorder: (orderedIds: string[]) => Promise<void>
   members: HouseholdMember[]
 }) {
-  const [adding, setAdding] = useState(false)
-  if (accounts.length === 0 && !adding) {
+  // Local order lets a drag re-render instantly; re-synced whenever the
+  // server-derived `accounts` prop changes (e.g. after the reorder persists).
+  const [order, setOrder] = useState<string[]>(accounts.map(a => a.id))
+  useEffect(() => { setOrder(accounts.map(a => a.id)) }, [accounts])
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const byId = new Map(accounts.map(a => [a.id, a]))
+  const orderedAccounts = order.map(id => byId.get(id)).filter((a): a is UnifiedAccount => !!a)
+
+  const handleDrop = (targetId: string) => {
+    if (!draggingId || draggingId === targetId) return
+    const next = order.filter(id => id !== draggingId)
+    const targetIndex = next.indexOf(targetId)
+    next.splice(targetIndex, 0, draggingId)
+    setOrder(next)
+    setDraggingId(null)
+    setDragOverId(null)
+    onReorder(next)
+  }
+  if (accounts.length === 0) {
     return (
       <div className="mb-1">
         <div onClick={onToggle}
@@ -643,15 +978,11 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
             <span className="text-sm font-semibold text-gray-900">{label}</span>
             <span className="text-xs text-gray-400">0 accounts</span>
           </div>
-          <button
-            onClick={e => { e.stopPropagation(); setAdding(true) }}
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium px-1"
-          >
-            + Add
-          </button>
         </div>
-        {adding && (
-          <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} members={members} />
+        {open && (
+          <div className="ml-2 mt-0.5">
+            <HiddenAccountsReveal hiddenAccounts={hiddenAccounts} onUpdatePlaid={onUpdatePlaid} onHidePlaid={onHidePlaid} members={members} />
+          </div>
         )}
       </div>
     )
@@ -673,73 +1004,30 @@ function AccountGroup({ label, groupKey, accounts, sparkMap, open, onToggle, use
           <span className="hidden sm:inline text-xs text-gray-400 flex-shrink-0">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          <button
-            onClick={e => { e.stopPropagation(); setAdding(true) }}
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-          >
-            + Add
-          </button>
-          <span className={`text-sm font-semibold whitespace-nowrap ${isAsset ? 'text-gray-900' : 'text-red-600'}`}>
-            {isAsset ? '' : '-'}${fmt(Math.abs(total))}
+          <span className={`text-sm font-semibold whitespace-nowrap ${
+            isAsset || total === 0 ? 'text-gray-900' : total < 0 ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {!isAsset && total !== 0 ? (total < 0 ? '+' : '-') : ''}${fmt(Math.abs(total))}
           </span>
         </div>
       </div>
       {open && (
         <div className="ml-2 mt-0.5">
-          {accounts.map(a =>
-            a.source === 'manual'
-              ? <ManualAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdateManual} onArchive={onArchive} members={members} />
-              : <PlaidAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdatePlaid} onHide={onHidePlaid} members={members} />
-          )}
-          {adding && (
-            <AddAccountInlineForm groupKey={groupKey} userId={userId} onDone={() => setAdding(false)} members={members} />
-          )}
-          {!adding && (
-            <button
-              onClick={() => setAdding(true)}
-              className="w-full mt-1 py-2 text-xs text-gray-400 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition text-center"
+          {orderedAccounts.map(a => (
+            <div
+              key={a.id}
+              draggable
+              onDragStart={() => setDraggingId(a.id)}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => handleDrop(a.id)}
+              className={`cursor-grab active:cursor-grabbing ${draggingId === a.id ? 'opacity-40' : ''}`}
             >
-              + Add manual account
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Hidden accounts section ───────────────────────────────────────────────────
-function HiddenAccountsSection({ accounts, sparkMap, onUpdate, onUnhide, members }: {
-  accounts: UnifiedAccount[]
-  sparkMap: Map<string, number[]>
-  onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
-  onUnhide: (id: string) => Promise<void>
-  members: HouseholdMember[]
-}) {
-  const [open, setOpen] = useState(false)
-  const total = accounts.reduce((s, a) => s + a.balance, 0)
-
-  return (
-    <div className="mt-3 pt-3 border-t border-gray-100">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-lg transition"
-      >
-        <div className="flex items-center gap-2">
-          <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`}
-            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Hidden</span>
-          <span className="text-xs text-gray-400">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
-        </div>
-        <span className="text-xs text-gray-400">${fmt(Math.abs(total))}</span>
-      </button>
-      {open && (
-        <div className="ml-2 mt-0.5">
-          {accounts.map(a => (
-            <PlaidAccountRow key={a.id} account={a} sparkValues={sparkMap.get(a.id) ?? []} onUpdate={onUpdate} onHide={onUnhide} members={members} />
+              {a.source === 'manual'
+                ? <ManualAccountRow account={a} userId={userId} onUpdate={onUpdateManual} onArchive={onArchive} members={members} />
+                : <PlaidAccountRow account={a} onUpdate={onUpdatePlaid} onHide={onHidePlaid} members={members} />}
+            </div>
           ))}
+          <HiddenAccountsReveal hiddenAccounts={hiddenAccounts} onUpdatePlaid={onUpdatePlaid} onHidePlaid={onHidePlaid} members={members} />
         </div>
       )}
     </div>
@@ -789,7 +1077,6 @@ function ConnectionStatusStrip({ items }: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AccountsPageClient({
   accounts,
-  history,
   netWorthHistory,
   userId,
   lastSynced,
@@ -797,7 +1084,6 @@ export default function AccountsPageClient({
   plaidItems = [],
 }: {
   accounts: UnifiedAccount[]
-  history: BalancePoint[]
   netWorthHistory: { recorded_on: string; net_worth: number }[]
   userId: string
   lastSynced?: string | null
@@ -815,8 +1101,9 @@ export default function AccountsPageClient({
   const { toast } = useToast()
   const supabase = createClient()
   const [period, setPeriod] = useState(90)
-  const [open, setOpen] = useState({ cash: true, investments: true, credit: true })
+  const [open, setOpen] = useState({ cash: true, investments: true, vehicles: true, credit: true })
   const [syncing, setSyncing] = useState(false)
+  const [summaryMode, setSummaryMode] = useState<'totals' | 'percent'>('totals')
   // Pull transactions (when enabled) then refresh balances. Failures are
   // per-institution — report how many failed instead of all-or-nothing.
   const handleSync = async () => {
@@ -854,19 +1141,14 @@ export default function AccountsPageClient({
   const handleUpdate = async (id: string, patch: Record<string, unknown>) => {
     const { error } = await supabase.from('accounts').update(patch).eq('id', id)
     if (error) { toast.error('Failed to update: ' + error.message); return }
-    if ('current_balance' in patch && typeof patch.current_balance === 'number') {
-      const today = new Date().toISOString().split('T')[0]
-      const accountName = accounts.find(a => a.id === id)?.name ?? ''
-      await supabase.from('account_balance_history').upsert(
-        { user_id: userId, account_id: id, account_name: accountName, date: today, balance: patch.current_balance },
-        { onConflict: 'user_id,account_id,date' }
-      )
-    }
     router.refresh()
   }
 
   const handleArchive = async (id: string) => {
     await handleUpdate(id, { is_active: false })
+    if (accounts.find(a => a.id === id)?.rawType === 'vehicle') {
+      await deactivateDepreciationRecurring(supabase, id)
+    }
   }
 
   const handleUpdatePlaid = async (id: string, patch: Record<string, unknown>) => {
@@ -875,29 +1157,56 @@ export default function AccountsPageClient({
     router.refresh()
   }
 
+  // Persist a new drag-and-drop order for one group. Manual and Plaid rows
+  // share one visual list but live in separate tables, so split by source.
+  const handleReorder = async (orderedIds: string[]) => {
+    const bySource = new Map(accounts.map(a => [a.id, a.source]))
+    await Promise.all(orderedIds.map((id, index) => {
+      const source = bySource.get(id)
+      return source === 'manual'
+        ? supabase.from('accounts').update({ sort_order: index }).eq('id', id)
+        : supabase.from('plaid_accounts').update({ sort_order: index }).eq('account_id', id)
+    }))
+    router.refresh()
+  }
+
   const handleHidePlaid = async (id: string) => {
     await handleUpdatePlaid(id, { is_hidden: true })
   }
 
-  const handleUnhidePlaid = async (id: string) => {
-    await handleUpdatePlaid(id, { is_hidden: false })
+  const handleDownloadCsv = () => {
+    const rows = [['Name', 'Type', 'Institution', 'Owner', 'Balance']]
+    for (const a of accounts) {
+      rows.push([
+        a.nickname || a.name,
+        a.type,
+        a.institution ?? '',
+        a.owner ?? '',
+        a.balance.toFixed(2),
+      ])
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `accounts-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
-  const { cash, investments, credit, hiddenAccounts, netWorthSeries, sparkMap, summary, currentNW, monthChange } = useMemo(() => {
+  const { cash, investments, vehicles, credit, hiddenAccounts, hiddenCash, hiddenInvestments, hiddenVehicles, hiddenCredit, netWorthSeries, summary, currentNW, monthChange } = useMemo(() => {
+    const bySortOrder = (a: UnifiedAccount, b: UnifiedAccount) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
     const active = accounts.filter(a => !a.is_hidden)
     const hiddenAccounts = accounts.filter(a => a.is_hidden)
-    const cash = active.filter(a => a.type === 'cash')
-    const investments = active.filter(a => a.type === 'investment')
-    const credit = active.filter(a => a.type === 'credit' || a.type === 'loan')
-
-    const sparkMap = new Map<string, number[]>()
-    for (const a of accounts) {
-      const pts = history
-        .filter(h => h.account_id === a.id)
-        .sort((x, y) => x.date.localeCompare(y.date))
-        .map(h => h.balance)
-      sparkMap.set(a.id, pts)
-    }
+    const cash = active.filter(a => a.type === 'cash').sort(bySortOrder)
+    const investments = active.filter(a => a.type === 'investment').sort(bySortOrder)
+    const vehicles = active.filter(a => a.type === 'vehicle').sort(bySortOrder)
+    const credit = active.filter(a => a.type === 'credit' || a.type === 'loan').sort(bySortOrder)
+    const hiddenCash = hiddenAccounts.filter(a => a.type === 'cash')
+    const hiddenInvestments = hiddenAccounts.filter(a => a.type === 'investment')
+    const hiddenVehicles = hiddenAccounts.filter(a => a.type === 'vehicle')
+    const hiddenCredit = hiddenAccounts.filter(a => a.type === 'credit' || a.type === 'loan')
 
     // Net worth series from the dedicated net_worth_history table (assets - liabilities already computed)
     const netWorthSeries = netWorthHistory.map(r => ({ date: r.recorded_on, value: Number(r.net_worth) }))
@@ -905,20 +1214,24 @@ export default function AccountsPageClient({
     // Hidden accounts still count toward net worth — only exclude_from_net_worth removes them
     const counted = accounts.filter(a => !a.exclude_from_net_worth)
     const assets = counted.filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + a.balance, 0)
-    const liabilities = counted.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + Math.abs(a.balance), 0)
+    // No Math.abs: a negative Plaid credit balance means the cardholder is in
+    // credit (e.g. overpaid), which should reduce liabilities, not inflate them.
+    const liabilities = counted.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + a.balance, 0)
     const investTotal = [...investments, ...hiddenAccounts.filter(a => a.type === 'investment')]
       .filter(a => !a.exclude_from_net_worth).reduce((s, a) => s + a.balance, 0)
     const cashTotal = [...cash, ...hiddenAccounts.filter(a => a.type === 'cash')]
       .filter(a => !a.exclude_from_net_worth).reduce((s, a) => s + a.balance, 0)
+    const vehicleTotal = [...vehicles, ...hiddenAccounts.filter(a => a.type === 'vehicle')]
+      .filter(a => !a.exclude_from_net_worth).reduce((s, a) => s + a.balance, 0)
     const currentNW = assets - liabilities
 
     const oneMonthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
-    const pastPt = [...netWorthSeries].reverse().find(p => p.date <= oneMonthAgo)
-    const monthChange = pastPt ? currentNW - pastPt.value : 0
+    const nwPastPt = [...netWorthSeries].reverse().find(p => p.date <= oneMonthAgo)
+    const monthChange = nwPastPt ? currentNW - nwPastPt.value : 0
 
-    return { cash, investments, credit, hiddenAccounts, netWorthSeries, sparkMap, currentNW, monthChange,
-      summary: { assets, liabilities, investTotal, cashTotal, creditTotal: liabilities } }
-  }, [accounts, history, netWorthHistory])
+    return { cash, investments, vehicles, credit, hiddenAccounts, hiddenCash, hiddenInvestments, hiddenVehicles, hiddenCredit, netWorthSeries, currentNW, monthChange,
+      summary: { assets, liabilities, investTotal, cashTotal, vehicleTotal, creditTotal: liabilities } }
+  }, [accounts, netWorthHistory])
 
   const changePct = monthChange !== 0 && (currentNW - monthChange) !== 0
     ? Math.abs(monthChange / Math.abs(currentNW - monthChange) * 100).toFixed(1)
@@ -928,32 +1241,37 @@ export default function AccountsPageClient({
     <div className="space-y-6">
       {/* Net worth header + chart */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Net Worth</p>
-          {PLAID_BALANCE_SYNC_ENABLED && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              title="Refresh balances"
-              className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 transition disabled:opacity-50 group"
-            >
-              <svg className={`w-3 h-3 transition-transform ${syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-300'}`}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-              </svg>
-              {syncing ? 'Syncing…' : lastSynced ? fmtSyncTime(lastSynced) : 'Sync now'}
-            </button>
-          )}
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Net Worth</p>
+            <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
+              <p className="text-3xl sm:text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>
+              {changePct && (
+                <span className={`text-sm font-semibold ${monthChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {fmtShort(monthChange)} ({changePct}%) 1 month
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            {PLAID_BALANCE_SYNC_ENABLED && (
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                title="Refresh balances"
+                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 transition disabled:opacity-50 group"
+              >
+                <svg className={`w-3 h-3 transition-transform ${syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-300'}`}
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
+                {syncing ? 'Syncing…' : lastSynced ? fmtSyncTime(lastSynced) : 'Sync now'}
+              </button>
+            )}
+            <PeriodPicker period={period} onPeriod={setPeriod} />
+          </div>
         </div>
-        <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap mb-4">
-          <p className="text-3xl sm:text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>
-          {changePct && (
-            <span className={`text-sm font-semibold ${monthChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {fmtShort(monthChange)} ({changePct}%) 1 month
-            </span>
-          )}
-        </div>
-        <NetWorthChart series={netWorthSeries} period={period} onPeriod={setPeriod} />
+        <NetWorthChart series={netWorthSeries} period={period} />
       </div>
 
       {/* Bank connection health */}
@@ -962,53 +1280,80 @@ export default function AccountsPageClient({
       {/* Accounts + Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <AccountGroup label="Cash" groupKey="cash" accounts={cash} sparkMap={sparkMap}
+          <AccountGroup label="Cash" groupKey="cash" accounts={cash} hiddenAccounts={hiddenCash}
             open={open.cash} onToggle={() => setOpen(o => ({ ...o, cash: !o.cash }))}
-            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive}
+            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
             onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
-          <AccountGroup label="Investments" groupKey="investment" accounts={investments} sparkMap={sparkMap}
+          <AccountGroup label="Investments" groupKey="investment" accounts={investments} hiddenAccounts={hiddenInvestments}
             open={open.investments} onToggle={() => setOpen(o => ({ ...o, investments: !o.investments }))}
-            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive}
+            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
             onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
-          <AccountGroup label="Credit Cards" groupKey="credit" accounts={credit} sparkMap={sparkMap}
+          <AccountGroup label="Vehicles" groupKey="vehicle" accounts={vehicles} hiddenAccounts={hiddenVehicles}
+            open={open.vehicles} onToggle={() => setOpen(o => ({ ...o, vehicles: !o.vehicles }))}
+            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
+            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
+          <AccountGroup label="Credit Cards" groupKey="credit" accounts={credit} hiddenAccounts={hiddenCredit}
             open={open.credit} onToggle={() => setOpen(o => ({ ...o, credit: !o.credit }))}
-            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive}
+            userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
             onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
           {accounts.length === 0 && (
             <p className="text-center text-gray-400 text-sm py-10">No accounts connected yet</p>
-          )}
-          {hiddenAccounts.length > 0 && (
-            <HiddenAccountsSection
-              accounts={hiddenAccounts}
-              sparkMap={sparkMap}
-              onUpdate={handleUpdatePlaid}
-              onUnhide={handleUnhidePlaid}
-              members={members}
-            />
           )}
         </div>
 
         {/* Summary */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <p className="text-sm font-semibold text-gray-900 mb-4">Summary</p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold text-gray-900">Summary</p>
+            <div className="flex bg-gray-100 rounded-md p-0.5">
+              {(['totals', 'percent'] as const).map(mode => (
+                <button key={mode} onClick={() => setSummaryMode(mode)}
+                  className={`px-2 py-0.5 text-xs font-semibold rounded transition capitalize ${
+                    summaryMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-baseline mb-1.5">
                 <span className="text-sm font-semibold text-gray-700">Assets</span>
                 <span className="text-sm font-bold text-gray-900">${fmt(summary.assets)}</span>
               </div>
-              <div className="w-full bg-blue-50 rounded-full h-1.5 mb-3">
-                <div className="h-1.5 rounded-full bg-blue-500 w-full" />
+              <div className="w-full flex bg-gray-100 rounded-full h-1.5 mb-3 overflow-hidden">
+                <div className="h-1.5 bg-blue-500" style={{ width: `${(summary.investTotal / (summary.assets || 1) * 100).toFixed(1)}%` }} />
+                <div className="h-1.5 bg-green-500" style={{ width: `${(summary.cashTotal / (summary.assets || 1) * 100).toFixed(1)}%` }} />
+                <div className="h-1.5 bg-amber-500" style={{ width: `${(summary.vehicleTotal / (summary.assets || 1) * 100).toFixed(1)}%` }} />
               </div>
               <div className="ml-3 space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Investments</span>
-                  <span className="font-medium text-gray-700">${fmt(summary.investTotal)}</span>
+                  <span className="text-gray-500 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-500" /> Investments
+                  </span>
+                  <span className="font-medium text-gray-700">
+                    {summaryMode === 'totals' ? `$${fmt(summary.investTotal)}` : `${(summary.investTotal / (summary.assets || 1) * 100).toFixed(1)}%`}
+                  </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Cash</span>
-                  <span className="font-medium text-gray-700">${fmt(summary.cashTotal)}</span>
+                  <span className="text-gray-500 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" /> Cash
+                  </span>
+                  <span className="font-medium text-gray-700">
+                    {summaryMode === 'totals' ? `$${fmt(summary.cashTotal)}` : `${(summary.cashTotal / (summary.assets || 1) * 100).toFixed(1)}%`}
+                  </span>
                 </div>
+                {summary.vehicleTotal > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500 flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-amber-500" /> Vehicles
+                    </span>
+                    <span className="font-medium text-gray-700">
+                      {summaryMode === 'totals' ? `$${fmt(summary.vehicleTotal)}` : `${(summary.vehicleTotal / (summary.assets || 1) * 100).toFixed(1)}%`}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="border-t border-gray-100 pt-4">
@@ -1023,12 +1368,20 @@ export default function AccountsPageClient({
               <div className="ml-3">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">Credit Cards</span>
-                  <span className="font-medium text-gray-700">-${fmt(summary.creditTotal)}</span>
+                  <span className="font-medium text-gray-700">
+                    {summaryMode === 'totals' ? `-$${fmt(summary.creditTotal)}` : `${(summary.creditTotal / (summary.liabilities || 1) * 100).toFixed(1)}%`}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
+          <button
+            onClick={handleDownloadCsv}
+            className="mt-4 pt-4 border-t border-gray-100 w-full text-xs font-medium text-blue-600 hover:text-blue-700 text-left"
+          >
+            Download CSV
+          </button>
         </div>
       </div>
     </div>

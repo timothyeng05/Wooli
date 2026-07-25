@@ -8,6 +8,8 @@ export const KNOWN_INSTITUTIONS = [
   'Fidelity',
   'Health Equity',
   'Alight',
+  'Hyundai',
+  'Other',
 ] as const
 
 const LOGO_MAP: { match: RegExp; src: string }[] = [
@@ -18,17 +20,22 @@ const LOGO_MAP: { match: RegExp; src: string }[] = [
   { match: /fidelity/i,          src: '/logos/fidelity.jpeg' },
   { match: /health ?equity/i,    src: '/logos/healthequity.svg' },
   { match: /alight/i,            src: '/logos/alight.png' },
+  { match: /hyundai/i,           src: '/logos/hyundai.png' },
 ]
 
-export default function InstitutionLogo({ institution, size = 28 }: { institution: string | null | undefined; size?: number }) {
-  if (!institution) return null
-  const logo = LOGO_MAP.find(l => l.match.test(institution))
-  if (!logo) return null
+export default function InstitutionLogo({ institution, customUrl, size = 28 }: {
+  institution: string | null | undefined
+  /** User-supplied logo URL — takes priority over the built-in institution match. */
+  customUrl?: string | null
+  size?: number
+}) {
+  const src = customUrl || LOGO_MAP.find(l => institution && l.match.test(institution))?.src
+  if (!src) return null
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={logo.src}
-      alt={institution}
+      src={src}
+      alt={institution ?? 'Account logo'}
       width={size}
       height={size}
       className="rounded-full flex-shrink-0 object-cover"

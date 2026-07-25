@@ -4,9 +4,11 @@
 
 | Sub-feature | What it does | Start here |
 |-------------|-------------|-----------|
+| Dashboard | Budget progress, recent transactions, net worth, spending comparison — top of the sidebar | `app/budget/dashboard/CLAUDE.md` |
 | Transactions / monthly overview | List, search, filter, edit transactions; monthly income vs spend by category | `app/budget/transactions/CLAUDE.md` |
 | Accounts & Plaid | Connect bank accounts via Plaid, sync transactions, view balance history | `app/budget/accounts/CLAUDE.md` |
-| Categories | Manage the income/expense/transfer category tree used for all transactions | `app/budget/categories/CLAUDE.md` |
+| Settings | Centralized hub: category tree editor + per-institution custom logos | `app/budget/settings/CLAUDE.md` |
+| Categories | Manage the income/expense/transfer category tree used for all transactions (now lives inside Settings — see above) | `app/budget/categories/CLAUDE.md` |
 | Recurring rules | Define repeating transactions (rent, salary) that auto-generate each period | `app/budget/recurring/CLAUDE.md` |
 | CSV import | Bulk-import transactions from Monarch, Copilot, or generic CSV exports | `app/budget/import/CLAUDE.md` |
 | Cash flow | Month-by-month income vs expense charts with per-owner breakdown | `app/budget/cashflow/CLAUDE.md` |
