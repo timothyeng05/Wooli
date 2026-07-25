@@ -54,7 +54,7 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 
 - `TransactionList` has a **Review** toggle in the toolbar. It's a **global, all-time** queue (`fetchUnreviewed`) — not scoped to the month the page loaded — so it can be cleared to zero.
 - In review mode: each row gets a one-click ✓ ("accept as-is" → marks reviewed + `user_confirmed`), a **Mark all N reviewed** button (respects any active search/filter), and row-click still opens the review sheet. Standard filters (owner, account, category) narrow the queue.
-- Any reviewed-state change dispatches a `budget:review-changed` window event (`REVIEW_CHANGED_EVENT`). `BudgetSidebar` and `BudgetMobileNav` listen for it (and refetch on navigation) to keep the **unreviewed-count badge** on the Transactions nav item current.
+- Any reviewed-state change dispatches a `budget:review-changed` window event (`REVIEW_CHANGED_EVENT`). `BudgetSidebar` and `BudgetMobileDrawer` listen for it (and refetch on navigation) to keep the **unreviewed-count badge** on the Transactions nav item current.
 
 ## Key notes
 

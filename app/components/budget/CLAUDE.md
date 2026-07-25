@@ -13,8 +13,7 @@ Quick reference — one line per component. Load only what you need.
 | File | Used by | Notes |
 |------|---------|-------|
 | `BudgetSidebar.tsx` | All budget pages | Sticky left nav — read-only for feature work |
-| `BudgetMobileNav.tsx` | Mobile layout | Mobile bottom nav |
-| `BudgetMobileDrawer.tsx` | Mobile layout | Mobile drawer overlay |
+| `BudgetMobileDrawer.tsx` | Mobile layout | Mobile nav (hamburger drawer) + unreviewed-count badge — mirrors `BudgetSidebar` |
 | `MonthNav.tsx` | Overview, Transactions, Targets | Prev/next month navigation |
 | `CategoryPicker.tsx` | Transactions, Forms, Recurring | Inline category selector — shared, wide blast radius |
 | `catEmoji.ts` | Categories, TransactionList | `getCatEmoji()` + `CAT_EMOJI` map |

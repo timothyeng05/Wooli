@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase-client'
 
 const NAV_GROUPS = [
   {
@@ -141,6 +142,24 @@ function getCurrentLabel(pathname: string): string {
 export default function BudgetMobileDrawer() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const [reviewCount, setReviewCount] = useState<number | null>(null)
+
+  // Unreviewed-count badge, mirroring BudgetSidebar. Refetches on navigation and
+  // whenever TransactionList reports a change via the budget:review-changed event.
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const supabase = createClient()
+      const { count } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('needs_review', true)
+      if (!cancelled) setReviewCount(count ?? 0)
+    }
+    load()
+    window.addEventListener('budget:review-changed', load)
+    return () => { cancelled = true; window.removeEventListener('budget:review-changed', load) }
+  }, [pathname])
 
   return (
     <>
@@ -148,7 +167,7 @@ export default function BudgetMobileDrawer() {
       <div className="md:hidden sticky top-[53px] z-30 bg-white border-b border-gray-100 flex items-center gap-3 px-4 h-11">
         <button
           onClick={() => setOpen(true)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition"
+          className="relative w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition"
           aria-label="Open budget menu"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -156,6 +175,9 @@ export default function BudgetMobileDrawer() {
             <line x1="3" y1="12" x2="21" y2="12"/>
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
+          {reviewCount !== null && reviewCount > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 bg-violet-500 rounded-full" />
+          )}
         </button>
         <span className="text-sm font-semibold text-gray-800">{getCurrentLabel(pathname)}</span>
       </div>
@@ -209,6 +231,11 @@ export default function BudgetMobileDrawer() {
                         {icon}
                       </span>
                       {label}
+                      {href === '/budget/transactions' && reviewCount !== null && reviewCount > 0 && (
+                        <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-violet-100 text-violet-700 text-[11px] font-bold rounded-full inline-flex items-center justify-center">
+                          {reviewCount > 99 ? '99+' : reviewCount}
+                        </span>
+                      )}
                     </Link>
                   )
                 })}
