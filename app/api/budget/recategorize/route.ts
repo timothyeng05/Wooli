@@ -74,7 +74,8 @@ export async function POST() {
               normalized_merchant: r.normalized_merchant,
               categorization_source: r.source,
               categorization_confidence: r.confidence,
-              needs_review: r.needs_review,
+              // Re-categorizing is an AI action, not a human review — leave the
+              // reviewed/unreviewed state untouched so it still awaits confirmation.
               groq_called: r.groq_called,
             }).eq('id', chunk[j].id)
           }))

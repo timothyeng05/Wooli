@@ -177,6 +177,37 @@ alter table public.plaid_items add column if not exists last_sync_attempt_at tim
 
 ---
 
+## 2026-07-19 — Plaid account overrides
+
+### 040 — plaid_accounts type_override + sort_order (`supabase/migrations/040_plaid_accounts_overrides.sql`)
+
+```sql
+alter table public.plaid_accounts add column if not exists type_override text
+  check (type_override in ('cash', 'investment', 'credit', 'loan'));
+alter table public.plaid_accounts add column if not exists sort_order integer not null default 0;
+```
+
+**Why:** Plaid's own `type`/`subtype` classification isn't always how the user wants an account grouped (e.g. a credit-type account they want under Investments) — `type_override` lets the app's own grouping win without fighting Plaid on every sync. `sort_order` backs manual drag-to-reorder within a group, mirroring the existing `accounts.sort_order` column manual accounts already had.
+
+---
+
+## 2026-07-25 — Review defaults
+
+### 045 — transactions.needs_review defaults to unreviewed (`supabase/migrations/045_review_defaults.sql`)
+
+```sql
+alter table public.transactions alter column needs_review set default true;
+
+update public.transactions
+set needs_review = true
+where needs_review = false
+  and coalesce(categorization_source, '') <> 'user_confirmed';
+```
+
+**Why:** `needs_review` used to mean "the categorizer was unsure" and defaulted to `false`, so confidently auto-categorized transactions were silently treated as reviewed without a human ever verifying them. Now `needs_review` means "a human hasn't verified this yet": every transaction starts unreviewed and only an explicit user confirmation clears it. The backfill flips all existing non-`user_confirmed` rows to unreviewed so the queue reflects everything actually awaiting verification.
+
+---
+
 ## Pending
 
 - `mood_entries` table (next: build mood module)

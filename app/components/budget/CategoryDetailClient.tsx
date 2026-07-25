@@ -296,7 +296,7 @@ export default function CategoryDetailClient({
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {new Date(t.transacted_at + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {new Date(t.transacted_at.split('T')[0] + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       {t.account_name && ` · ${t.account_name}`}
                     </p>
                   </div>

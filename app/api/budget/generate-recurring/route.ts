@@ -42,6 +42,8 @@ export async function POST() {
       merchant: item.merchant,
       category_id: item.category_id,
       transacted_at: item.next_date + 'T12:00:00',
+      // Generated from a user-defined recurring rule → already confirmed, skip review.
+      needs_review: false,
     })
 
     if (!error) {

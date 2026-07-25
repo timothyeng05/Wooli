@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
 import { useConfirm } from '@/app/components/ui/ToastProvider'
 import { type Transaction, type Category, type Trip, type SortOrder, type HouseholdMember } from './transaction-types'
@@ -15,6 +16,39 @@ import TransactionReviewSheet from './TransactionReviewSheet'
 // instant client-side search/filter; we just cap what's painted.
 const WINDOW_INITIAL = 150
 const WINDOW_STEP = 150
+
+// Fires whenever a transaction's reviewed state changes, so the sidebar count
+// badge (and any other listener) can refresh without prop-drilling.
+export const REVIEW_CHANGED_EVENT = 'budget:review-changed'
+function emitReviewChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(REVIEW_CHANGED_EVENT))
+}
+
+const REVIEW_SELECT = `
+  id, amount, description, merchant, transacted_at, plaid_transaction_id,
+  is_transfer, is_pending, needs_review, owner, account_name, trip_id,
+  categories ( id, name, color, icon ),
+  trips ( id, name )
+`
+
+// The review queue is global (all time), not month-scoped like the page's main
+// query — so it can be cleared to zero the way Monarch's queue works.
+async function fetchUnreviewed(supabase: SupabaseClient): Promise<Transaction[]> {
+  const PAGE = 1000
+  let all: Transaction[] = []
+  for (let page = 0; ; page++) {
+    const { data } = await supabase
+      .from('transactions')
+      .select(REVIEW_SELECT)
+      .eq('needs_review', true)
+      .order('transacted_at', { ascending: false })
+      .range(page * PAGE, (page + 1) * PAGE - 1)
+    if (!data || data.length === 0) break
+    all = all.concat(data as unknown as Transaction[])
+    if (data.length < PAGE) break
+  }
+  return all
+}
 
 function groupByDate(txns: Transaction[], asc = false) {
   const groups = new Map<string, Transaction[]>()
@@ -80,6 +114,77 @@ export default function TransactionList({
   const [catPickerTx, setCatPickerTx] = useState<Transaction | null>(null)
   const [reviewTxn, setReviewTxn] = useState<Transaction | null>(null)
 
+  // ── Review queue (global, all-time) ───────────────────────────────────────
+  const [reviewMode, setReviewMode] = useState(false)
+  const [reviewItems, setReviewItems] = useState<Transaction[]>([])
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [unreviewedCount, setUnreviewedCount] = useState<number | null>(null)
+
+  const refreshUnreviewedCount = useCallback(async () => {
+    const supabase = createClient()
+    const { count } = await supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('needs_review', true)
+    setUnreviewedCount(count ?? 0)
+  }, [])
+
+  useEffect(() => { refreshUnreviewedCount() }, [refreshUnreviewedCount])
+
+  const enterReviewMode = async () => {
+    setReviewMode(true)
+    setReviewLoading(true)
+    const supabase = createClient()
+    const rows = await fetchUnreviewed(supabase)
+    setReviewItems(rows)
+    setUnreviewedCount(rows.length)
+    setReviewLoading(false)
+  }
+
+  const exitReviewMode = () => { setReviewMode(false); setReviewItems([]) }
+
+  // Drop rows from the queue after they've been reviewed and keep the month
+  // list in sync. DB writes are done by the caller; count is re-read from the
+  // source of truth so re-confirming an already-reviewed row can't miscount.
+  const dropFromQueue = (ids: string[]) => {
+    const idSet = new Set(ids)
+    setReviewItems(prev => prev.filter(t => !idSet.has(t.id)))
+    setItems(prev => prev.map(t => (idSet.has(t.id) ? { ...t, needs_review: false } : t)))
+    emitReviewChanged()
+    refreshUnreviewedCount()
+  }
+
+  // One-click "accept as-is": confirm the current categorization without opening
+  // the sheet. Seeds merchant memory via the user_confirmed trigger.
+  const markReviewed = async (id: string) => {
+    const supabase = createClient()
+    await supabase.from('transactions').update({
+      needs_review: false,
+      categorization_source: 'user_confirmed',
+      categorization_confidence: 1,
+    }).eq('id', id)
+    dropFromQueue([id])
+  }
+
+  const markAllReviewed = async () => {
+    const ids = filtered.map(t => t.id)
+    if (ids.length === 0) return
+    if (!await confirm(`Mark ${ids.length} transaction${ids.length > 1 ? 's' : ''} as reviewed?`)) return
+    setReviewLoading(true)
+    const supabase = createClient()
+    // Chunk to stay well under URL/statement limits on large queues.
+    for (let i = 0; i < ids.length; i += 500) {
+      const slice = ids.slice(i, i + 500)
+      await supabase.from('transactions').update({
+        needs_review: false,
+        categorization_source: 'user_confirmed',
+        categorization_confidence: 1,
+      }).in('id', slice)
+    }
+    dropFromQueue(ids)
+    setReviewLoading(false)
+  }
+
   // ── Category inline change ────────────────────────────────────────────────
   const handleCategoryChange = async (txId: string, catId: string) => {
     const supabase = createClient()
@@ -99,6 +204,7 @@ export default function TransactionList({
         ? { ...t, is_transfer: makeTransfer, categories: found && !makeTransfer ? { id: found.id, name: found.name, color: found.color, icon: found.icon } : null }
         : t
     ))
+    dropFromQueue([txId])
   }
 
   const handleCatPick = async (catId: string) => {
@@ -109,6 +215,7 @@ export default function TransactionList({
       const supabase = createClient()
       await supabase.from('transactions').update({ is_transfer: true, category_id: null, categorization_source: 'user_confirmed', categorization_confidence: 1, needs_review: false }).eq('id', txId)
       setItems(prev => prev.map(t => t.id === txId ? { ...t, is_transfer: true, categories: null } : t))
+      dropFromQueue([txId])
     } else {
       await handleCategoryChange(txId, catId)
     }
@@ -139,6 +246,7 @@ export default function TransactionList({
     await supabase.from('transactions').update({ category_id: catId, is_transfer: false, categorization_source: 'user_confirmed', categorization_confidence: 1, needs_review: false }).in('id', ids)
     const found = categories.find(c => c.id === catId) ?? null
     setItems(prev => prev.map(t => ids.includes(t.id) ? { ...t, categories: found ? { id: found.id, name: found.name, color: found.color } : null } : t))
+    dropFromQueue(ids)
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
   const bulkMarkTransfer = async () => {
@@ -147,6 +255,7 @@ export default function TransactionList({
     const ids = [...selectedIds]
     await supabase.from('transactions').update({ is_transfer: true, category_id: null, categorization_source: 'user_confirmed', categorization_confidence: 1, needs_review: false }).in('id', ids)
     setItems(prev => prev.map(t => ids.includes(t.id) ? { ...t, is_transfer: true, categories: null } : t))
+    dropFromQueue(ids)
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
   const bulkDelete = async () => {
@@ -174,14 +283,18 @@ export default function TransactionList({
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
+  // In review mode the list is driven by the global unreviewed queue rather than
+  // the month the page loaded; all search/filter/sort logic runs on top of it.
+  const base = reviewMode ? reviewItems : items
+
   const uniqueAccounts = useMemo(
-    () => [...new Set(items.map(t => t.account_name).filter(Boolean) as string[])].sort(),
-    [items]
+    () => [...new Set(base.map(t => t.account_name).filter(Boolean) as string[])].sort(),
+    [base]
   )
   const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size + (typeFilter ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0)
 
   const filtered = useMemo(() => {
-    const result = items.filter(t => {
+    const result = base.filter(t => {
       if (selectedAccounts.size > 0 && !selectedAccounts.has(t.account_name ?? '')) return false
       if (selectedCatIds.size > 0) {
         const isUncategorized = !t.categories && !t.is_transfer
@@ -212,7 +325,7 @@ export default function TransactionList({
     if (sortOrder === 'amount-desc') return [...result].sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
     if (sortOrder === 'amount-asc')  return [...result].sort((a, b) => Math.abs(Number(a.amount)) - Math.abs(Number(b.amount)))
     return result
-  }, [items, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
+  }, [base, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
 
   // ── Render windowing ────────────────────────────────────────────────────────
   const [visibleCount, setVisibleCount] = useState(WINDOW_INITIAL)
@@ -221,7 +334,7 @@ export default function TransactionList({
   // top window so we don't render thousands of now-irrelevant rows.
   useEffect(() => {
     setVisibleCount(WINDOW_INITIAL)
-  }, [search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
+  }, [search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder, reviewMode])
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
   const hasMore = filtered.length > visible.length
@@ -260,7 +373,7 @@ export default function TransactionList({
   const removeOwnerFilter  = (o: string)  => { const n = new Set(selectedOwners);    n.delete(o);  setSelectedOwners(n) }
   const removeTripFilter   = (id: string) => { const n = new Set(selectedTripIds);   n.delete(id); setSelectedTripIds(n) }
 
-  if (items.length === 0) {
+  if (!reviewMode && items.length === 0) {
     return (
       <div className="text-center py-16">
         <p className="text-gray-400 mb-3">No transactions this month</p>
@@ -299,6 +412,25 @@ export default function TransactionList({
             </button>
           )}
         </div>
+
+        <button
+          onClick={() => reviewMode ? exitReviewMode() : enterReviewMode()}
+          className={`relative px-3 py-2.5 border rounded-xl transition flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${
+            reviewMode
+              ? 'border-violet-400 bg-violet-50 text-violet-700'
+              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+          </svg>
+          <span className="hidden sm:inline">{reviewMode ? 'Reviewing' : 'Review'}</span>
+          {unreviewedCount !== null && unreviewedCount > 0 && (
+            <span className="ml-0.5 min-w-[18px] h-[18px] px-1 bg-violet-600 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center">
+              {unreviewedCount}
+            </span>
+          )}
+        </button>
 
         <button
           onClick={() => setFilterOpen(true)}
@@ -415,6 +547,23 @@ export default function TransactionList({
         )
       })()}
 
+      {/* ── Review queue banner ────────────────────────────────────────────── */}
+      {reviewMode && (
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 mb-2 bg-violet-50 border border-violet-200 rounded-xl">
+          <div className="text-sm text-violet-800">
+            {reviewLoading ? 'Loading review queue…'
+              : filtered.length === 0 ? 'All caught up — nothing to review 🎉'
+              : <><span className="font-semibold">{filtered.length.toLocaleString()}</span> to review{activeFilterCount > 0 ? ' (filtered)' : ''}</>}
+          </div>
+          {!reviewLoading && filtered.length > 0 && (
+            <button onClick={markAllReviewed} disabled={reviewLoading}
+              className="px-3 py-1.5 bg-violet-600 text-white text-sm font-semibold rounded-lg hover:bg-violet-700 transition disabled:opacity-50 whitespace-nowrap">
+              Mark all {filtered.length.toLocaleString()} reviewed
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Select-all row ─────────────────────────────────────────────────── */}
       {selectMode && (
         <div className="flex items-center gap-3 px-2 py-2 mb-1 bg-gray-50 rounded-lg text-sm text-gray-600">
@@ -428,9 +577,11 @@ export default function TransactionList({
 
       {/* ── Transaction groups ─────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <p className="text-center text-gray-400 py-12 text-sm">
-          {search ? `No results for "${search}"` : 'No transactions match your filters'}
-        </p>
+        reviewMode && !search ? null : (
+          <p className="text-center text-gray-400 py-12 text-sm">
+            {search ? `No results for "${search}"` : 'No transactions match your filters'}
+          </p>
+        )
       ) : (
         (sortOrder === 'amount-desc' || sortOrder === 'amount-asc' ? [['', visible] as [string, Transaction[]]] : grouped).map(([date, txns]) => {
           const dayTotal = (txns as Transaction[])
@@ -479,6 +630,18 @@ export default function TransactionList({
                           className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-blue-600" />
                       )}
 
+                      {reviewMode && !selectMode && (
+                        <button
+                          onClick={e => { e.stopPropagation(); markReviewed(t.id) }}
+                          className="w-7 h-7 flex-shrink-0 rounded-full border-2 border-violet-300 text-violet-500 flex items-center justify-center hover:bg-violet-600 hover:border-violet-600 hover:text-white transition"
+                          title="Mark reviewed"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                      )}
+
                       {!selectMode && (
                         <button
                           onClick={e => { e.stopPropagation(); setCatPickerTx(t) }}
@@ -501,7 +664,7 @@ export default function TransactionList({
                               Pending
                             </span>
                           )}
-                          {t.needs_review && !t.is_transfer && (
+                          {t.needs_review && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 flex-shrink-0">
                               Review
                             </span>
@@ -513,6 +676,12 @@ export default function TransactionList({
                           )}
                           {t.is_transfer && (
                             <p className="text-xs text-gray-400">Transfer</p>
+                          )}
+                          {t.account_name && (
+                            <>
+                              <span className="text-xs text-gray-300">·</span>
+                              <p className="text-xs text-gray-400 truncate">{t.account_name}</p>
+                            </>
                           )}
                           {t.trips && (
                             <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
@@ -609,6 +778,7 @@ export default function TransactionList({
           onClose={() => setReviewTxn(null)}
           onSaved={(txId, updates) => {
             setItems(prev => prev.map(t => t.id === txId ? { ...t, ...updates } : t))
+            dropFromQueue([txId])
             setReviewTxn(null)
           }}
           onDelete={handleDelete}

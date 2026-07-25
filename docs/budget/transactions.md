@@ -41,6 +41,21 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
             sort_order, keywords, icon, budget_level)
 ```
 
+## Review model (`needs_review`)
+
+- `needs_review` means **a human hasn't verified this transaction yet** — not "the AI was unsure".
+- Every new transaction starts **unreviewed** (`needs_review = true`), transfers included, regardless of how confidently it was auto-categorized. The column defaults to `true` (migration `045`).
+- Only an explicit user confirmation clears it: the review sheet, inline category pick, inline transfer toggle, and bulk category/transfer actions all set `needs_review = false` with `categorization_source = 'user_confirmed'`.
+- Exceptions that start reviewed: manual adds (`TransactionForm`), CSV imports (curated from Monarch/Copilot), and recurring-rule-generated transactions.
+- AI re-categorization (`/api/budget/recategorize`) does **not** change review state — it's not a human review.
+- The list shows a violet `Review` badge on any `needs_review` row.
+
+### Review queue (Monarch-style)
+
+- `TransactionList` has a **Review** toggle in the toolbar. It's a **global, all-time** queue (`fetchUnreviewed`) — not scoped to the month the page loaded — so it can be cleared to zero.
+- In review mode: each row gets a one-click ✓ ("accept as-is" → marks reviewed + `user_confirmed`), a **Mark all N reviewed** button (respects any active search/filter), and row-click still opens the review sheet. Standard filters (owner, account, category) narrow the queue.
+- Any reviewed-state change dispatches a `budget:review-changed` window event (`REVIEW_CHANGED_EVENT`). `BudgetSidebar` and `BudgetMobileNav` listen for it (and refetch on navigation) to keep the **unreviewed-count badge** on the Transactions nav item current.
+
 ## Key notes
 
 - `amount` positive = income, negative = expense.

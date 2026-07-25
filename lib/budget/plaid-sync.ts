@@ -55,11 +55,17 @@ async function markItemError(admin: SupabaseClient, itemId: string, error: { cod
 async function buildAccountMaps(admin: SupabaseClient, userId: string) {
   const { data: plaidAccounts } = await admin
     .from('plaid_accounts')
-    .select('account_id, name, mask, owner')
+    .select('account_id, name, mask, owner, nickname')
     .eq('user_id', userId)
   return {
+    // Honor the account nickname so a renamed card (e.g. a Custom Cash that
+    // became a Double Cash, which Plaid still reports under the old name)
+    // stamps the user's label onto every synced transaction.
     nameMap: new Map<string, string>(
-      (plaidAccounts ?? []).map(a => [a.account_id, a.mask ? `${a.name} ···${a.mask}` : a.name])
+      (plaidAccounts ?? []).map(a => {
+        const label = a.nickname || a.name
+        return [a.account_id, a.mask ? `${label} ···${a.mask}` : label]
+      })
     ),
     ownerMap: new Map<string, string | null>(
       (plaidAccounts ?? []).map(a => [a.account_id, a.owner ?? null])
@@ -228,7 +234,9 @@ async function syncOneItem(
             provider_category: inputs[i].provider_category,
             categorization_source: isTransfer ? 'none' : r.source,
             categorization_confidence: r.confidence,
-            needs_review: !isTransfer && r.needs_review,
+            // Every synced transaction starts unreviewed — a human confirms it later.
+            // Applies to transfers too, so auto-transfer-detection gets verified.
+            needs_review: true,
             groq_called: false,
           }
         })
