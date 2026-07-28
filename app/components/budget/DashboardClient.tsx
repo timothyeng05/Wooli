@@ -288,7 +288,7 @@ export default function DashboardClient({
         owner: t.owner ?? null,
         categoryName: t.categories?.name ?? null,
         categoryIcon: t.categories?.icon ?? null,
-        isIncome: t.categories?.is_income ?? Number(t.amount) >= 0,
+        isIncome: Number(t.amount) >= 0,
       })))
     } finally {
       setLoadingTxns(false)

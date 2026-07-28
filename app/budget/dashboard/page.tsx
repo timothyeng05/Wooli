@@ -107,7 +107,7 @@ export default async function BudgetDashboardPage() {
     owner: t.owner ?? null,
     categoryName: (t.categories as any)?.name ?? null,
     categoryIcon: (t.categories as any)?.icon ?? null,
-    isIncome: (t.categories as any)?.is_income ?? Number(t.amount) >= 0,
+    isIncome: Number(t.amount) >= 0,
   }))
 
   return (
