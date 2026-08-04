@@ -51,3 +51,4 @@ For component quick-reference: `app/components/budget/CLAUDE.md`
 - Plaid sync writes to `transactions` and `accounts`; never write directly to `net_worth_snapshots` outside the API route.
 - Category hierarchy: `categories.parent_id` is null for top-level, non-null for sub-categories.
 - `is_transfer = true` on a transaction means it is excluded from income/expense calculations.
+- `is_reimbursement = true` on a transaction keeps its `category_id` but subtracts (not adds) its magnitude from that category's spend total everywhere totals are computed — never floored at $0.

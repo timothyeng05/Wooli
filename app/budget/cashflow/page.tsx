@@ -6,6 +6,7 @@ export interface CashFlowTransaction {
   merchant: string | null
   transacted_at: string
   is_transfer: boolean
+  is_reimbursement: boolean
   owner: string | null
   category: {
     id: string

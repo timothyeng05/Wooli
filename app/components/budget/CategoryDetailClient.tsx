@@ -20,8 +20,13 @@ interface Transaction {
   description: string | null
   transacted_at: string
   is_pending: boolean | null
+  is_reimbursement: boolean | null
   owner: string | null
   account_name: string | null
+}
+
+function netMagnitude(t: Transaction) {
+  return t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
 }
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -146,7 +151,7 @@ export default function CategoryDetailClient({
       const tots = ps.map(({ year, month }) =>
         transactions
           .filter(t => { const d = new Date(t.transacted_at); return d.getFullYear() === year && d.getMonth() === month })
-          .reduce((s, t) => s + Math.abs(t.amount), 0)
+          .reduce((s, t) => s + netMagnitude(t), 0)
       )
       return { periods: ps, totals: tots, labels: ps.map(p => MONTH_ABBR[p.month].toUpperCase()) }
     } else {
@@ -155,7 +160,7 @@ export default function CategoryDetailClient({
       const tots = years.map(yr =>
         transactions
           .filter(t => new Date(t.transacted_at).getFullYear() === yr)
-          .reduce((s, t) => s + Math.abs(t.amount), 0)
+          .reduce((s, t) => s + netMagnitude(t), 0)
       )
       return { periods: ps, totals: tots, labels: years.map(yr => String(yr)) }
     }
@@ -181,7 +186,7 @@ export default function CategoryDetailClient({
   )
 
   // ── Stats ────────────────────────────────────────────────────────────────────
-  const allTimeTotal = transactions.reduce((s, t) => s + Math.abs(t.amount), 0)
+  const allTimeTotal = transactions.reduce((s, t) => s + netMagnitude(t), 0)
   const avgTxn = transactions.length > 0 ? allTimeTotal / transactions.length : 0
   const periodsWithData = totals.filter(v => v > 0)
   const avgPerPeriod = periodsWithData.length > 0
@@ -324,7 +329,7 @@ export default function CategoryDetailClient({
           <p className="text-center text-sm text-gray-400 py-10">No transactions yet</p>
         ) : (
           grouped.map(([date, txns]) => {
-            const dayTotal = txns.reduce((s, t) => s + Math.abs(t.amount), 0)
+            const dayTotal = txns.reduce((s, t) => s + netMagnitude(t), 0)
             return (
               <div key={date}>
                 <div className="flex items-center justify-between px-5 py-2 bg-gray-50 border-y border-gray-100">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
@@ -1137,6 +1137,20 @@ export default function AccountsPageClient({
       setSyncing(false)
     }
   }
+
+  // Auto-sync once per page load if the last sync is stale — avoids making
+  // people remember to hit the manual button after a bank hasn't pushed data.
+  const autoSyncTriggered = useRef(false)
+  useEffect(() => {
+    if (autoSyncTriggered.current) return
+    if (plaidItems.length === 0) return
+    const STALE_MS = 30 * 60 * 1000
+    const isStale = !lastSynced || Date.now() - new Date(lastSynced).getTime() > STALE_MS
+    if (!isStale) return
+    autoSyncTriggered.current = true
+    handleSync()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleUpdate = async (id: string, patch: Record<string, unknown>) => {
     const { error } = await supabase.from('accounts').update(patch).eq('id', id)

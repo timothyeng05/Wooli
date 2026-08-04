@@ -7,7 +7,7 @@ import WooliLogo from '@/app/components/WooliLogo'
 export default async function HomePage() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/budget')
+  if (user) redirect('/budget/accounts')
 
   return (
     <div className="bg-white">

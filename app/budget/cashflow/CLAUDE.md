@@ -18,3 +18,4 @@ just re-exports the shared types and redirects to `/budget`. The sidebar nav ite
 
 - Transactions, accounts, categories, recurring, import, goals/forecast routes
 - `is_transfer` logic — always filter `is_transfer = false` in cash flow queries
+- `is_reimbursement` logic — every aggregation loop must subtract reimbursement magnitude, not exclude or add it (mirrors Dashboard/Targets/Transactions)

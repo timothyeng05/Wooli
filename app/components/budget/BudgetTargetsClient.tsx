@@ -171,12 +171,14 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
     const level = localLevels[parent.id] ?? 'parent'
     const hasChildren = parent.children.length > 0
     const rawActual = (actuals[parent.id] ?? 0) + parent.children.reduce((s, c) => s + (actuals[c.id] ?? 0), 0)
-    const displayActual = Math.abs(rawActual)
+    // Expense actuals are already signed (negative = net gain from a reimbursement) —
+    // only income actuals need abs() since raw signed income is already positive.
+    const displayActual = isIncome ? Math.abs(rawActual) : rawActual
     const planned = !hasChildren || level === 'parent'
       ? localBudgets[parent.id] ?? 0
       : parent.children.reduce((s, c) => s + (localBudgets[c.id] ?? 0), 0)
     const remaining = planned - displayActual
-    const pct = planned > 0 ? Math.min(100, (displayActual / planned) * 100) : 0
+    const pct = planned > 0 ? Math.max(0, Math.min(100, (displayActual / planned) * 100)) : 0
     const isOver = !isIncome && displayActual > planned && planned > 0
     return { level, hasChildren, displayActual, planned, remaining, pct, isOver }
   }
@@ -199,7 +201,7 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
         ? localBudgets[g.id] ?? 0
         : g.children.reduce((s, c) => s + (localBudgets[c.id] ?? 0), 0)
       expensePlanned += planned
-      expenseActual += Math.abs(rawActual)
+      expenseActual += rawActual   // already signed — negative means net gain from a reimbursement
     }
     return { incomePlanned, incomeActual, expensePlanned, expenseActual }
   }, [incomeGroups, expenseGroups, localBudgets, localLevels, actuals])

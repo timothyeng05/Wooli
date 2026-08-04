@@ -39,7 +39,7 @@ export async function proxy(request: NextRequest) {
       !path.startsWith('/trips') &&
       !path.startsWith('/api/trips') &&
       !path.startsWith('/api/budget')) {
-    return NextResponse.redirect(new URL('/budget', request.url))
+    return NextResponse.redirect(new URL('/budget/accounts', request.url))
   }
 
   // Pass pathname to server components via header

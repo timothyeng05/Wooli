@@ -50,7 +50,7 @@ export default async function CategoryDetailPage({
   for (let page = 0; ; page++) {
     const { data } = await supabase
       .from('transactions')
-      .select('id, amount, merchant, description, transacted_at, is_pending, owner, account_name')
+      .select('id, amount, merchant, description, transacted_at, is_pending, is_reimbursement, owner, account_name')
       .eq('user_id', user.id)
       .in('category_id', catIds)
       .order('transacted_at', { ascending: false })

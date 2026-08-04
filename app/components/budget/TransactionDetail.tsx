@@ -40,6 +40,7 @@ interface Transaction {
   plaid_account_id: string | null
   transacted_at: string
   is_transfer: boolean | null
+  is_reimbursement: boolean | null
   is_pending: boolean | null
   owner: string | null
   notes: string | null
@@ -83,6 +84,7 @@ export default function TransactionDetail({
   const [amount, setAmount]       = useState(Math.abs(transaction.amount).toFixed(2))
   const [merchant, setMerchant]   = useState(transaction.merchant ?? '')
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? '')
+  const [isReimbursement, setIsReimbursement] = useState(!!transaction.is_reimbursement)
   const [accountId, setAccountId] = useState(transaction.account_id ?? '')
   const [date, setDate]           = useState(transaction.transacted_at.split('T')[0])
   const [owner, setOwner]         = useState(transaction.owner ?? '')
@@ -108,6 +110,7 @@ export default function TransactionDetail({
         account_id: accountId || null,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
         is_transfer: mode === 'transfer',
+        is_reimbursement: mode === 'expense' ? isReimbursement : false,
         owner: owner || null,
         notes: notes.trim() || null,
       }).eq('id', transaction.id)
@@ -192,7 +195,7 @@ export default function TransactionDetail({
               {(['expense', 'income', 'transfer'] as const).map(t => (
                 <button
                   key={t}
-                  onClick={() => setMode(t)}
+                  onClick={() => { setMode(t); if (t !== 'expense') setIsReimbursement(false) }}
                   className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition ${
                     mode === t
                       ? t === 'income' ? 'bg-green-600 text-white'
@@ -293,6 +296,21 @@ export default function TransactionDetail({
                   })}
                 </select>
               </div>
+            </Row>
+          )}
+
+          {/* Reimbursement — expense-only; keeps the category but nets against its spend */}
+          {mode === 'expense' && (
+            <Row label="Reimbursement">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-sm text-gray-900">Reimbursed to me</span>
+                <input
+                  type="checkbox"
+                  checked={isReimbursement}
+                  onChange={e => setIsReimbursement(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </label>
             </Row>
           )}
 

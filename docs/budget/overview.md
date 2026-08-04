@@ -56,6 +56,7 @@ recurring_transactions (id, user_id, description, merchant, amount, frequency,
 
 - `amount` — positive = income, negative = expense. Sum directly; no sign flip needed.
 - `is_transfer = true` — excluded from income/expense calculations (CC payments, transfers).
+- `is_reimbursement = true` — keeps `category_id`, but every aggregation contributes `-Math.abs(amount)` instead of `+Math.abs(amount)`; category net can go negative (net gain).
 - `categories.parent_id` — null = top-level parent; non-null = sub-category.
 - `categories.is_transfer = true` — assigning this category auto-marks transaction as `is_transfer`.
 - `categories.keywords` — comma-separated hints for AI auto-categorization.

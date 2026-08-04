@@ -30,6 +30,7 @@ interface ExistingTransaction {
   account_name: string | null
   transacted_at: string
   is_transfer: boolean | null
+  is_reimbursement: boolean | null
   owner: string | null
   notes: string | null
 }
@@ -68,6 +69,7 @@ export default function TransactionForm({
   const [description, setDescription] = useState(isEdit ? (transaction.description || '') : '')
   const [merchant, setMerchant] = useState(isEdit ? (transaction.merchant || '') : '')
   const [categoryId, setCategoryId] = useState(isEdit ? (transaction.category_id || '') : '')
+  const [isReimbursement, setIsReimbursement] = useState(isEdit ? !!transaction.is_reimbursement : false)
   const [accountId, setAccountId] = useState(isEdit ? (transaction.account_id || '') : '')
   const [accountName, setAccountName] = useState(isEdit ? (transaction.account_name || '') : '')
   const [date, setDate] = useState(
@@ -105,6 +107,7 @@ export default function TransactionForm({
         account_name: resolvedAccountName,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
         is_transfer: isTransfer,
+        is_reimbursement: mode === 'expense' ? isReimbursement : false,
         owner: owner || null,
         notes: notes || null,
         // Manually entered → treat as user-confirmed so it seeds merchant memory.
@@ -145,7 +148,7 @@ export default function TransactionForm({
         </button>
         <button
           type="button"
-          onClick={() => { setMode('income'); setCategoryId('') }}
+          onClick={() => { setMode('income'); setCategoryId(''); setIsReimbursement(false) }}
           className={`flex-1 py-2.5 text-sm font-medium transition ${
             mode === 'income' ? 'bg-green-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
@@ -154,7 +157,7 @@ export default function TransactionForm({
         </button>
         <button
           type="button"
-          onClick={() => { setMode('transfer'); setCategoryId('') }}
+          onClick={() => { setMode('transfer'); setCategoryId(''); setIsReimbursement(false) }}
           className={`flex-1 py-2.5 text-sm font-medium transition ${
             mode === 'transfer' ? 'bg-gray-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
@@ -229,6 +232,22 @@ export default function TransactionForm({
           })}
         </select>
       </div>}
+
+      {/* Reimbursement — expense-only; keeps the category but nets against its spend */}
+      {mode === 'expense' && (
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isReimbursement}
+            onChange={e => setIsReimbursement(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">
+            This was reimbursed to me
+            <span className="block text-xs text-gray-400">Keeps this category — subtracts from spend instead of adding to it.</span>
+          </span>
+        </label>
+      )}
 
       {/* Account */}
       <div>

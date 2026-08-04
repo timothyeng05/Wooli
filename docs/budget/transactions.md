@@ -60,5 +60,6 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 
 - `amount` positive = income, negative = expense.
 - `is_transfer = true` excludes from income/expense totals — always filter this out in summaries.
+- `is_reimbursement = true` keeps the transaction's category but nets its magnitude against that category's spend instead of excluding it or adding to it — a category can show negative (net gain) spend.
 - Monthly overview groups by `category.parent_id` (top-level categories), respecting `budget_level`.
 - Inline category edit in `TransactionList` triggers Supabase update directly — no API route needed.

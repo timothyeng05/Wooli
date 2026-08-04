@@ -44,3 +44,4 @@ accounts (id, user_id, name, type, subtype, balance, is_active, owner,
 - `categories.budget_level` controls whether Targets shows the parent row or each sub-category row.
 - `forecast_settings` is a single row per user (user_id is PK) — upsert, never insert.
 - `ForecastClient` reads recent transactions to estimate `expense_monthly` baseline if no settings exist.
+- Targets' `actuals` (in `app/budget/targets/page.tsx`) are net of any `is_reimbursement` transactions — an expense category's actual can be negative (net gain). `BudgetTargetsClient`'s `displayActual` only `Math.abs()`s income categories now, not expense ones.

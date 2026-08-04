@@ -25,6 +25,7 @@ export default function TransactionReviewSheet({
   onClose: () => void
   onSaved: (txId: string, updates: {
     is_transfer: boolean
+    is_reimbursement: boolean
     categories: { id: string; name: string; color: string } | null
     owner: string | null
     trip_id: string | null
@@ -35,6 +36,7 @@ export default function TransactionReviewSheet({
   onDelete: (id: string) => void
 }) {
   const [isTransfer, setIsTransfer] = useState(!!transaction.is_transfer)
+  const [isReimbursement, setIsReimbursement] = useState(!!transaction.is_reimbursement)
   const [catId, setCatId] = useState(transaction.categories?.id ?? '')
   const [owner, setOwner] = useState(transaction.owner ?? '')
   const [tripId, setTripId] = useState(transaction.trip_id ?? '')
@@ -52,9 +54,12 @@ export default function TransactionReviewSheet({
     if (picked === '__transfer__') {
       setIsTransfer(true)
       setCatId('')
+      setIsReimbursement(false)
     } else {
       setIsTransfer(false)
       setCatId(picked)
+      const pickedCat = categories.find(c => c.id === picked)
+      if (pickedCat?.is_income) setIsReimbursement(false)
     }
     setCatPickerOpen(false)
   }
@@ -64,8 +69,10 @@ export default function TransactionReviewSheet({
     const supabase = createClient()
     const resolvedCatId = isTransfer ? null : (catId || null)
     const resolvedTripId = tripId || null
+    const resolvedReimbursement = !isTransfer && !currentCat?.is_income ? isReimbursement : false
     await supabase.from('transactions').update({
       is_transfer: isTransfer,
+      is_reimbursement: resolvedReimbursement,
       category_id: resolvedCatId,
       owner: owner || null,
       trip_id: resolvedTripId,
@@ -82,6 +89,7 @@ export default function TransactionReviewSheet({
     setSaving(false)
     onSaved(transaction.id, {
       is_transfer: isTransfer,
+      is_reimbursement: resolvedReimbursement,
       categories: found ? { id: found.id, name: found.name, color: found.color } : null,
       owner: owner || null,
       trip_id: resolvedTripId,
@@ -151,6 +159,22 @@ export default function TransactionReviewSheet({
               </svg>
             </button>
           </div>
+
+          {/* Reimbursement — only meaningful for a transaction still tied to an expense category */}
+          {!isTransfer && currentCat && !currentCat.is_income && (
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isReimbursement}
+                onChange={e => setIsReimbursement(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">
+                This was reimbursed to me
+                <span className="block text-xs text-gray-400">Keeps this category — subtracts from spend instead of adding to it.</span>
+              </span>
+            </label>
+          )}
 
           {/* Trip */}
           {trips.length > 0 && (

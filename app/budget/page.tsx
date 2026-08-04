@@ -27,7 +27,7 @@ export default async function BudgetDashboard() {
       const { data } = await supabase
         .from('transactions')
         .select(`
-          id, amount, merchant, description, transacted_at, is_transfer, is_pending, owner,
+          id, amount, merchant, description, transacted_at, is_transfer, is_reimbursement, is_pending, owner,
           categories ( id, name, color, icon, is_income, is_transfer, parent_id )
         `)
         .eq('user_id', user.id)
@@ -66,6 +66,7 @@ export default async function BudgetDashboard() {
     merchant: t.merchant ?? null,
     transacted_at: t.transacted_at,
     is_transfer: t.is_transfer ?? false,
+    is_reimbursement: t.is_reimbursement ?? false,
     owner: t.owner ?? null,
     category: t.categories ?? null,
   }))

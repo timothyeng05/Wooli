@@ -42,8 +42,8 @@ export default async function TransactionsPage({
         .from('transactions')
         .select(`
           id, amount, description, merchant, transacted_at, plaid_transaction_id,
-          is_transfer, is_pending, needs_review, owner, account_name, trip_id,
-          categories ( id, name, color, icon ),
+          is_transfer, is_reimbursement, is_pending, needs_review, owner, account_name, trip_id,
+          categories ( id, name, color, icon, is_income ),
           trips ( id, name )
         `)
         .eq('user_id', user.id)

@@ -11,7 +11,7 @@ export default async function EditTransactionPage({ params }: { params: Promise<
   const [txnResult, catResult, acctResult, memberResult, plaidAcctResult] = await Promise.all([
     supabase
       .from('transactions')
-      .select('id, amount, description, merchant, category_id, account_id, account_name, plaid_account_id, transacted_at, is_transfer, is_pending, owner, notes')
+      .select('id, amount, description, merchant, category_id, account_id, account_name, plaid_account_id, transacted_at, is_transfer, is_reimbursement, is_pending, owner, notes')
       .eq('id', id)
       .eq('user_id', user.id)
       .single(),

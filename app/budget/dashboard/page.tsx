@@ -35,7 +35,7 @@ export default async function BudgetDashboardPage() {
     supabase.from('profiles').select('full_name').eq('id', user.id).single(),
     supabase
       .from('transactions')
-      .select('amount, transacted_at, is_transfer, categories(is_income)')
+      .select('amount, transacted_at, is_transfer, is_reimbursement, categories(is_income)')
       .eq('user_id', user.id)
       .gte('transacted_at', farStart.toISOString())
       .lte('transacted_at', curEnd.toISOString()),
@@ -80,12 +80,14 @@ export default async function BudgetDashboardPage() {
     const isIncome = (t.categories as any)?.is_income ?? t.amount >= 0
     const amt = Number(t.amount)
 
+    const magnitude = t.is_reimbursement ? -Math.abs(amt) : Math.abs(amt)
+
     if (monthKey === curMonthKey) {
       if (isIncome) incomeActual += amt
-      else expenseActual += Math.abs(amt)
+      else expenseActual += magnitude
     }
     if (!isIncome) {
-      dailyExpense[day] = (dailyExpense[day] ?? 0) + Math.abs(amt)
+      dailyExpense[day] = (dailyExpense[day] ?? 0) + magnitude
     }
   }
 

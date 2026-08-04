@@ -257,7 +257,7 @@ function BreakdownSection({
         if (match) { pi = i; break }
       }
       if (pi < 0) continue
-      const amt = Math.abs(t.amount)
+      const amt = t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
       const cat = t.category
       if (cat) {
         const parent = cat.parent_id ? catMap.get(cat.parent_id) : null
@@ -284,7 +284,7 @@ function BreakdownSection({
 
     if (transactions.length > 0) {
       for (const t of transactions) {
-        const amt = Math.abs(t.amount)
+        const amt = t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
         grandTotal += amt
         if (tab === 'Category') {
           const cat = t.category
@@ -392,7 +392,8 @@ function OwnerBreakdown({ transactions, members }: { transactions: CashFlowTrans
     for (const t of transactions) {
       const key = t.owner ?? 'Unknown'
       const entry = map.get(key) ?? { expenses: 0, income: 0 }
-      if (t.amount < 0) entry.expenses += Math.abs(t.amount)
+      const isExpense = t.category ? !t.category.is_income : t.amount < 0
+      if (isExpense) entry.expenses += t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
       else entry.income += t.amount
       map.set(key, entry)
     }
@@ -404,7 +405,7 @@ function OwnerBreakdown({ transactions, members }: { transactions: CashFlowTrans
         const bOrder = members.find(m => m.full_name === b[0])?.sort_order ?? 98
         return aOrder - bOrder
       })
-      .filter(([, v]) => v.expenses > 0 || v.income > 0)
+      .filter(([, v]) => v.expenses !== 0 || v.income !== 0)
   }, [transactions, members])
 
   if (rows.length === 0 && members.length === 0) return null
@@ -480,7 +481,7 @@ function CategoryTrends({
       const { year, month } = months[i]
       for (const t of transactions) {
         if (t.is_transfer || t.category?.is_transfer) continue
-        if (t.amount >= 0) continue
+        if (t.amount >= 0 && !t.is_reimbursement) continue
         const d = new Date(t.transacted_at)
         if (periodicMode === 'yearly' ? d.getFullYear() !== year : (d.getFullYear() !== year || d.getMonth() !== month)) continue
         const cat = t.category
@@ -493,7 +494,7 @@ function CategoryTrends({
           catId: effective?.id ?? '',
           monthly: new Array(months.length).fill(0),
         })
-        map.get(key)!.monthly[i] += Math.abs(t.amount)
+        map.get(key)!.monthly[i] += t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
       }
     }
     return [...map.values()]
@@ -655,7 +656,8 @@ export default function CashFlowClient({
         if (t.is_transfer || t.category?.is_transfer) continue
         const d = new Date(t.transacted_at)
         if (d.getFullYear() !== year || d.getMonth() !== month) continue
-        if (t.amount >= 0) income += t.amount
+        if (t.is_reimbursement) expenses -= Math.abs(t.amount)
+        else if (t.amount >= 0) income += t.amount
         else expenses += Math.abs(t.amount)
       }
       return { year, month, income, expenses, savings: income - expenses }
@@ -673,7 +675,8 @@ export default function CashFlowClient({
         if (t.is_transfer || t.category?.is_transfer) continue
         const d = new Date(t.transacted_at)
         if (d.getFullYear() !== yr) continue
-        if (t.amount >= 0) income += t.amount
+        if (t.is_reimbursement) expenses -= Math.abs(t.amount)
+        else if (t.amount >= 0) income += t.amount
         else expenses += Math.abs(t.amount)
       }
       return { year: yr, month: 0, income, expenses, savings: income - expenses, label: String(yr) }
@@ -727,7 +730,7 @@ export default function CashFlowClient({
     for (let page = 0; ; page++) {
       const { data } = await supabase
         .from('transactions')
-        .select('id, amount, merchant, transacted_at, is_transfer, owner, categories(id, name, color, icon, is_income, is_transfer, parent_id)')
+        .select('id, amount, merchant, transacted_at, is_transfer, is_reimbursement, owner, categories(id, name, color, icon, is_income, is_transfer, parent_id)')
         .order('transacted_at', { ascending: false })
         .range(page * PAGE, (page + 1) * PAGE - 1) as any
       if (!data || data.length === 0) break
@@ -737,6 +740,7 @@ export default function CashFlowClient({
         merchant: t.merchant ?? null,
         transacted_at: t.transacted_at,
         is_transfer: t.is_transfer ?? false,
+        is_reimbursement: t.is_reimbursement ?? false,
         owner: t.owner ?? null,
         category: t.categories ?? null,
       })))

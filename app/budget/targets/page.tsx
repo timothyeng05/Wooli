@@ -34,7 +34,7 @@ export default async function BudgetTargetsPage({
       .order('sort_order'),
     supabase
       .from('transactions')
-      .select('category_id, amount')
+      .select('category_id, amount, is_reimbursement')
       .eq('user_id', user.id)
       .eq('is_transfer', false)
       .gte('transacted_at', monthStart)
@@ -49,6 +49,9 @@ export default async function BudgetTargetsPage({
   const transferCategoryIds = new Set(
     (categoriesResult.data ?? []).filter(c => c.is_transfer).map(c => c.id)
   )
+  const incomeCategoryIds = new Set(
+    (categoriesResult.data ?? []).filter(c => c.is_income).map(c => c.id)
+  )
 
   const actuals: Record<string, number> = {}
   let uncategorizedIncome = 0
@@ -58,10 +61,15 @@ export default async function BudgetTargetsPage({
     const amt = Number(t.amount)
     if (!t.category_id) {
       if (amt >= 0) uncategorizedIncome += amt
-      else uncategorizedExpenses += Math.abs(amt)
+      else uncategorizedExpenses += t.is_reimbursement ? -Math.abs(amt) : Math.abs(amt)
       continue
     }
-    actuals[t.category_id] = (actuals[t.category_id] ?? 0) + amt
+    if (incomeCategoryIds.has(t.category_id)) {
+      actuals[t.category_id] = (actuals[t.category_id] ?? 0) + amt
+    } else {
+      const magnitude = Math.abs(amt)
+      actuals[t.category_id] = (actuals[t.category_id] ?? 0) + (t.is_reimbursement ? -magnitude : magnitude)
+    }
   }
 
   const budgets: Record<string, number> = {}

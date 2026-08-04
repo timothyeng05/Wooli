@@ -27,3 +27,4 @@ Sits at the top of the sidebar; `/budget` itself is the Cash Flow page (see `doc
 - Income has no "planned" figure — Wooli has no planned-income concept (Monarch's dashboard shows one, but there's nothing to source it from), so `ProgressRow` renders actual-only when `planned === 0`.
 - Day-of-month bucketing (`curDaily`/`prevDaily`) assumes both months are compared by calendar day number, not aligned by weekday — same simplification Monarch's own comparison chart uses.
 - `is_transfer` transactions are excluded from all totals, matching the budget-wide convention.
+- `is_reimbursement` transactions keep their category but subtract from `expenseActual`/`dailyExpense` instead of adding — a day or month can net negative.
