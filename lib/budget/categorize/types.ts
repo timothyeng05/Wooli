@@ -8,6 +8,8 @@ export type CategorizationSource =
   | 'similarity_match'
   | 'groq'
   | 'user_confirmed'
+  /** Matched the transfer keyword rule at sync — a classification, not a failure to classify. */
+  | 'transfer_rule'
   | 'none'
 
 /** Raw inputs the pipeline needs to categorize one transaction. */
@@ -18,9 +20,9 @@ export interface CategorizeInput {
   description: string | null
   amount?: number | null
   account_name?: string | null
-  /** Plaid personal_finance_category.detailed (or primary). */
+  /** Plaid personal_finance_category.detailed (or primary). Always null for SimpleFin rows — it has no equivalent taxonomy. */
   provider_category?: string | null
-  /** Plaid personal_finance_category.confidence_level. */
+  /** Plaid personal_finance_category.confidence_level. Always null for SimpleFin rows. */
   provider_confidence?: string | null
   notes?: string | null
   mcc?: string | null

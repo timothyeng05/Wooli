@@ -1,17 +1,20 @@
 import { redirect, notFound } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import RecurringForm from '@/app/components/budget/RecurringForm'
 
 export default async function EditRecurringPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
-  const [{ data: item }, { data: allCategories }] = await Promise.all([
+  const [{ data: item }, { data: allCategories }, { data: memberRows }] = await Promise.all([
     supabase.from('recurring_transactions').select('*').eq('id', id).eq('user_id', user.id).single(),
     supabase.from('categories').select('id, name, parent_id').eq('user_id', user.id),
+    supabase.from('household_members').select('id, full_name, display_name, color')
+      .eq('user_id', user.id).order('sort_order', { ascending: true }),
   ])
+  const members = memberRows ?? []
 
   if (!item) notFound()
 
@@ -32,7 +35,7 @@ export default async function EditRecurringPage({ params }: { params: Promise<{ 
         </div>
       </div>
       <div className="max-w-lg mx-auto px-6 py-8">
-        <RecurringForm userId={user.id} categories={categories} item={item} />
+        <RecurringForm userId={user.id} categories={categories} members={members} item={item} />
       </div>
     </div>
   )

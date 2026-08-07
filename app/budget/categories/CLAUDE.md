@@ -23,4 +23,4 @@
 
 ## Do not touch
 
-- Transaction, recurring, import, accounts, goals/forecast routes
+- Transaction, recurring, import, accounts, goals routes

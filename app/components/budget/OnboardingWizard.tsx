@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
-import PlaidLinkButton from '@/app/components/budget/PlaidLinkButton'
+import SimplefinConnectButton from '@/app/components/budget/SimplefinConnectButton'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -163,8 +163,8 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
   const [budgetLevels, setBudgetLevels] = useState<Record<string, 'parent' | 'sub'>>({})
   const [savingBudgets, setSavingBudgets] = useState(false)
 
-  // Step 5 — Plaid
-  const [plaidError, setPlaidError] = useState('')
+  // Step 5 — SimpleFin
+  const [connectError, setConnectError] = useState('')
 
   const supabase = createClient()
 
@@ -898,36 +898,19 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
               )
             })()}
 
-            {/* PlaidLinkButton mounted from step 4 to preload token; hidden until step 5 */}
-            {step >= 4 && (
-              <div className={step === 5 ? 'mb-3' : 'hidden'}>
-                <PlaidLinkButton
-                  className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  onComplete={async () => {
-                    await markComplete()
-                    router.push('/budget')
-                  }}
-                  onError={msg => setPlaidError(msg)}
-                />
-                {plaidError && (
-                  <p className="text-xs text-red-500 mt-2">Could not connect to Plaid. You can skip for now and connect later from the Accounts page.</p>
-                )}
-              </div>
-            )}
-
             {/* Step 5 — Link accounts */}
             {step === 5 && (
               <div>
                 <div className="text-4xl mb-4">🏦</div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">Link a bank account</h1>
                 <p className="text-gray-500 text-sm mb-5">
-                  Sync transactions and account balances automatically via <strong>Plaid</strong> — used by Venmo, Robinhood, and thousands of apps.
+                  Sync transactions and account balances automatically via <strong>SimpleFin</strong> — paste a setup token from your bank's SimpleFin bridge to connect.
                 </p>
 
                 <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 mb-3">
                   <p className="text-sm font-semibold text-green-800 mb-2">🔒 How you're protected</p>
                   <div className="space-y-1 text-sm text-green-700">
-                    <p>• We never see your bank password — you enter it directly on your bank's website</p>
+                    <p>• We never see your bank password — the setup token comes from your bank's own SimpleFin bridge</p>
                     <p>• We can only view your transactions — no ability to move or access your money</p>
                     <p>• Changed your mind? Remove the connection anytime from the Accounts page</p>
                   </div>
@@ -937,8 +920,22 @@ export default function OnboardingWizard({ userId, hasExistingSetup = false }: {
                   <p className="text-sm font-semibold text-amber-800 mb-2">ℹ️ Good to know</p>
                   <div className="space-y-1 text-sm text-amber-700">
                     <p>• All accounts within a bank count as one institution</p>
-                    <p>• Some banks unsupported (e.g. Fidelity) — add manually</p>
+                    <p>• Newly-synced accounts default to "Cash" until you set their type on the Accounts page</p>
                   </div>
+                </div>
+
+                <div className="mb-3">
+                  <SimplefinConnectButton
+                    className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    onComplete={async () => {
+                      await markComplete()
+                      router.push('/budget')
+                    }}
+                    onError={msg => setConnectError(msg)}
+                  />
+                  {connectError && (
+                    <p className="text-xs text-red-500 mt-2">Could not connect via SimpleFin. You can skip for now and connect later from the Accounts page.</p>
+                  )}
                 </div>
 
                 <button

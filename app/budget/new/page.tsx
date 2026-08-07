@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import TransactionForm from '@/app/components/budget/TransactionForm'
 
 export default async function NewTransactionPage({
@@ -10,10 +10,10 @@ export default async function NewTransactionPage({
 }) {
   const { date } = await searchParams
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
-  const [{ data: categories }, { data: accounts }, { data: txnAccounts }, { data: plaidAccountRows }, { data: members }] = await Promise.all([
+  const [{ data: categories }, { data: accounts }, { data: txnAccounts }, { data: syncedAccountRows }, { data: members }] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, is_income, parent_id, sort_order')
@@ -31,8 +31,8 @@ export default async function NewTransactionPage({
       .eq('user_id', user.id)
       .not('account_name', 'is', null) as any,
     supabase
-      .from('plaid_accounts')
-      .select('account_id, name, mask, type')
+      .from('synced_accounts')
+      .select('provider_account_id, name, mask, type')
       .eq('user_id', user.id)
       .order('name') as any,
     supabase
@@ -42,9 +42,9 @@ export default async function NewTransactionPage({
       .order('sort_order', { ascending: true }),
   ])
 
-  // Plaid accounts formatted for the dropdown — prefixed so the form can distinguish them
-  const plaidForDropdown = (plaidAccountRows ?? []).map((a: { account_id: string; name: string; mask: string | null; type: string }) => ({
-    id: `plaid:${a.account_id}`,
+  // Synced accounts formatted for the dropdown — prefixed so the form can distinguish them
+  const syncedForDropdown = (syncedAccountRows ?? []).map((a: { provider_account_id: string; name: string; mask: string | null; type: string }) => ({
+    id: `synced:${a.provider_account_id}`,
     name: a.mask ? `${a.name} ···${a.mask}` : a.name,
     type: a.type ?? 'checking',
   }))
@@ -78,7 +78,7 @@ export default async function NewTransactionPage({
             userId={user.id}
             categories={categories || []}
             accounts={accounts || []}
-            plaidAccounts={plaidForDropdown}
+            syncedAccounts={syncedForDropdown}
             accountNames={accountNames}
             defaultDate={date}
             members={members || []}

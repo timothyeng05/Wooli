@@ -1,14 +1,14 @@
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import InstitutionsManager from '@/app/components/budget/InstitutionsManager'
 
 export default async function InstitutionsSettingsPage() {
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
-  const [{ data: plaidItems }, { data: manualAccounts }, logosResult] = await Promise.all([
-    supabase.from('plaid_items').select('institution_name').eq('user_id', user.id),
+  const [{ data: connections }, { data: manualAccounts }, logosResult] = await Promise.all([
+    supabase.from('bank_connections').select('institution_name').eq('user_id', user.id),
     supabase.from('accounts').select('institution').eq('user_id', user.id).eq('is_active', true),
     supabase.from('institution_logos').select('institution_name, logo_url').eq('user_id', user.id),
   ])
@@ -17,7 +17,7 @@ export default async function InstitutionsSettingsPage() {
   const logos = logosResult.data ?? []
 
   const names = new Set<string>()
-  for (const i of plaidItems ?? []) { if (i.institution_name) names.add(i.institution_name) }
+  for (const c of connections ?? []) { if (c.institution_name) names.add(c.institution_name) }
   for (const a of manualAccounts ?? []) { if (a.institution) names.add(a.institution) }
 
   const institutions = [...names].sort().map(name => ({

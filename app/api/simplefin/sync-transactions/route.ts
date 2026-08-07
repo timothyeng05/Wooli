@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
-import { PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
-import { syncTransactionsForUser } from '@/lib/budget/plaid-sync'
+import { SIMPLEFIN_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import { syncTransactionsForUser } from '@/lib/budget/simplefin-sync'
 
 // Pull + deterministic categorization. At sync we run only the fast deterministic
 // layers (rules, merchant memory, provider mapping, similarity) — never Groq — so
 // the pull stays quick and can't be aborted mid-write. Rows that no deterministic
 // layer can place are left needs_review for the explicit "Auto-categorize" (Groq) pass.
 export async function POST() {
-  if (!PLAID_TRANSACTION_SYNC_ENABLED) return NextResponse.json({ added: 0, modified: 0, removed: 0, disabled: true })
+  if (!SIMPLEFIN_TRANSACTION_SYNC_ENABLED) return NextResponse.json({ added: 0, modified: 0, removed: 0, disabled: true })
 
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,20 +22,20 @@ export async function POST() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: items } = await admin
-    .from('plaid_items')
-    .select('item_id, access_token, cursor')
+  const { data: connections } = await admin
+    .from('bank_connections')
+    .select('id, access_url, last_successful_sync_at')
     .eq('user_id', user.id)
 
-  if (!items?.length) return NextResponse.json({ added: 0, modified: 0, removed: 0 })
+  if (!connections?.length) return NextResponse.json({ added: 0, modified: 0, removed: 0 })
 
   try {
-    const results = await syncTransactionsForUser(admin, user.id, items)
+    const results = await syncTransactionsForUser(admin, user.id, connections)
     const totals = results.reduce(
       (s, r) => ({ added: s.added + r.added, modified: s.modified + r.modified, removed: s.removed + r.removed, merged: s.merged + r.merged }),
       { added: 0, modified: 0, removed: 0, merged: 0 }
     )
-    return NextResponse.json({ ...totals, items: results })
+    return NextResponse.json({ ...totals, connections: results })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Sync failed' }, { status: 500 })
   }

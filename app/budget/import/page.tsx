@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import CsvImportClient from '@/app/components/budget/CsvImportClient'
 
 export default async function ImportPage() {
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const { data: members } = await supabase

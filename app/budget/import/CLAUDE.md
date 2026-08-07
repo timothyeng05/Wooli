@@ -11,4 +11,4 @@
 
 ## Do not touch
 
-- Transaction list, Plaid routes, accounts, categories, recurring routes
+- Transaction list, SimpleFin routes, accounts, categories, recurring routes

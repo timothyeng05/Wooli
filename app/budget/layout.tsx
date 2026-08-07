@@ -1,9 +1,10 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import BudgetSidebar from '@/app/components/budget/BudgetSidebar'
 import BudgetMobileDrawer from '@/app/components/budget/BudgetMobileDrawer'
 import ResetOnboardingButton from '@/app/components/budget/ResetOnboardingButton'
+import RecurringCatchUp from '@/app/components/budget/RecurringCatchUp'
 
 const OWNER_EMAIL = 'woolitravel@gmail.com'
 
@@ -13,7 +14,7 @@ export default async function BudgetLayout({ children }: { children: React.React
   const isOnboardingPage = pathname === '/budget/onboarding'
 
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
 
   // Onboarding page — render wizard fullscreen, no sidebar
   if (isOnboardingPage) {
@@ -37,6 +38,9 @@ export default async function BudgetLayout({ children }: { children: React.React
 
   return (
     <div className="flex">
+      {/* Generates overdue recurring transactions on open, so the schedule
+          doesn't depend solely on the Vercel cron firing. */}
+      <RecurringCatchUp />
       <BudgetSidebar />
       <div className="flex-1 min-w-0 pb-16 md:pb-0">
         <BudgetMobileDrawer />

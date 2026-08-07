@@ -34,6 +34,7 @@ async function runDeterministicLayers(
   }
 
   // 4. Provider / MCC mapping — Plaid personal_finance_category → our taxonomy.
+  // Dormant for SimpleFin rows (provider_category always null there).
   const prov = matchProvider(input.provider_category, input.provider_confidence, ctx.categories)
   if (prov && prov.confidence >= THRESHOLDS.mcc_mapping) {
     return {

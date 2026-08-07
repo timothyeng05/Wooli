@@ -15,7 +15,7 @@ export const KNOWN_INSTITUTIONS = [
 const LOGO_MAP: { match: RegExp; src: string }[] = [
   { match: /chase/i,             src: '/logos/chase.png' },
   { match: /citi/i,              src: '/logos/citi.png' },
-  { match: /american express/i,  src: '/logos/amex.jpeg' },
+  { match: /american express|amex/i, src: '/logos/amex.jpeg' },
   { match: /schwab/i,            src: '/logos/schwab.png' },
   { match: /fidelity/i,          src: '/logos/fidelity.jpeg' },
   { match: /health ?equity/i,    src: '/logos/healthequity.svg' },
@@ -30,7 +30,10 @@ export default function InstitutionLogo({ institution, customUrl, size = 28 }: {
   size?: number
 }) {
   const src = customUrl || LOGO_MAP.find(l => institution && l.match.test(institution))?.src
-  if (!src) return null
+  // Hold the slot when there's no logo. Returning null collapsed it, so rows
+  // with a known institution were indented and rows without were not, leaving
+  // the account list with a ragged left edge.
+  if (!src) return <div style={{ width: size, height: size }} className="flex-shrink-0" aria-hidden />
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img

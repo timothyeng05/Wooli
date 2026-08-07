@@ -4,6 +4,10 @@ import type { SelectableCategory } from '@/lib/budget/groq-categorize'
 // the user's own category names. Detailed keys are checked first, then the primary key.
 // Each value is an ordered list of keywords (most specific first); the first keyword that
 // appears in a user category name wins.
+//
+// SimpleFin has no equivalent taxonomy, so provider_category is always null for
+// new (SimpleFin-sourced) transactions and this layer never fires for them —
+// it's kept only so re-running the pipeline over old Plaid-tagged history still works.
 const PFC_KEYWORDS: Record<string, string[]> = {
   // Food & drink
   FOOD_AND_DRINK_GROCERIES: ['groceries', 'grocery'],

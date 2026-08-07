@@ -1,3 +1,25 @@
+/**
+ * Absolute money magnitude with thousands separators and exactly 2 decimals.
+ * Callers supply their own sign and currency symbol, since the budget UI shows
+ * the same figure as "-$1,200.00", "+$1,200.00" or "$1,200.00" depending on
+ * context. Use this anywhere money is *displayed* — `toFixed(2)` drops the
+ * separators and renders "$6240.15" next to a summary line reading "$6,240.15".
+ * Not for CSV export or form inputs, which need the raw unformatted number.
+ */
+export function fmtMoney(n: number): string {
+  return Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/**
+ * Money with an explicit direction sign: "-$1,234.56" out, "+$1,234.56" in.
+ * Every amount the budget UI shows should carry its direction — an unsigned
+ * "$142.88" sitting next to a "+$6,240.15" reads as a credit at a glance.
+ * Zero is rendered as "+$0.00"; it has no direction to convey either way.
+ */
+export function fmtSignedMoney(n: number): string {
+  return `${n < 0 ? '-' : '+'}$${fmtMoney(n)}`
+}
+
 /** Format a UTC ISO timestamp as a human-readable "last synced" string. */
 export function fmtSyncTime(iso: string): string {
   const d = new Date(iso)

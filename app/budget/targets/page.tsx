@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import BudgetTargetsClient from '@/app/components/budget/BudgetTargetsClient'
 import MonthNav from '@/app/components/budget/MonthNav'
 
@@ -20,7 +20,7 @@ export default async function BudgetTargetsPage({
   const month = `${year}-${String(resolvedMonth + 1).padStart(2, '0')}`
 
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const monthStart = new Date(year, resolvedMonth, 1).toISOString()
@@ -34,7 +34,7 @@ export default async function BudgetTargetsPage({
       .order('sort_order'),
     supabase
       .from('transactions')
-      .select('category_id, amount, is_reimbursement')
+      .select('category_id, amount')
       .eq('user_id', user.id)
       .eq('is_transfer', false)
       .gte('transacted_at', monthStart)
@@ -61,14 +61,15 @@ export default async function BudgetTargetsPage({
     const amt = Number(t.amount)
     if (!t.category_id) {
       if (amt >= 0) uncategorizedIncome += amt
-      else uncategorizedExpenses += t.is_reimbursement ? -Math.abs(amt) : Math.abs(amt)
+      else uncategorizedExpenses += Math.abs(amt)
       continue
     }
     if (incomeCategoryIds.has(t.category_id)) {
       actuals[t.category_id] = (actuals[t.category_id] ?? 0) + amt
     } else {
-      const magnitude = Math.abs(amt)
-      actuals[t.category_id] = (actuals[t.category_id] ?? 0) + (t.is_reimbursement ? -magnitude : magnitude)
+      // Expense category: -amount, so a refund or repayment nets against the
+      // category's actual rather than adding to it. Can go negative.
+      actuals[t.category_id] = (actuals[t.category_id] ?? 0) - amt
     }
   }
 

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import CategoryDetailClient from '@/app/components/budget/CategoryDetailClient'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
 
@@ -13,7 +13,7 @@ export default async function CategoryDetailPage({
 }) {
   const { id } = await params
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const { data: category } = await supabase
@@ -50,7 +50,7 @@ export default async function CategoryDetailPage({
   for (let page = 0; ; page++) {
     const { data } = await supabase
       .from('transactions')
-      .select('id, amount, merchant, description, transacted_at, is_pending, is_reimbursement, owner, account_name')
+      .select('id, amount, merchant, description, transacted_at, is_pending, owner, account_name')
       .eq('user_id', user.id)
       .in('category_id', catIds)
       .order('transacted_at', { ascending: false })

@@ -21,14 +21,18 @@ export interface Transaction {
   description: string | null
   merchant: string | null
   transacted_at: string
-  plaid_transaction_id: string | null
+  provider_transaction_id: string | null
   is_transfer: boolean | null
-  is_reimbursement: boolean | null
   is_pending: boolean | null
   needs_review: boolean | null
   owner: string | null
   account_name: string | null
   trip_id: string | null
+  account_id: string | null
+  notes: string | null
+  is_recurring: boolean | null
+  /** recurring_transactions row this transaction was marked as an occurrence of. */
+  recurring_id: string | null
   categories: { id: string; name: string; color: string; icon?: string | null; is_income?: boolean } | null
   trips: { id: string; name: string } | null
 }

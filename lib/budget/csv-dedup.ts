@@ -1,7 +1,7 @@
-// First-sync dedup guard: the initial Plaid transactionsSync backfills months of
-// history that overlaps rows imported from Monarch CSV (plaid_transaction_id NULL).
+// First-sync dedup guard: the initial bank sync backfills months of history
+// that overlaps rows imported from Monarch CSV (provider_transaction_id NULL).
 // Rather than inserting twins, we merge: the CSV row keeps its user-curated
-// category and gains the Plaid ids, so future modified/removed events land on it.
+// category and gains the synced-provider ids, so future modified events land on it.
 //
 // Pure planning logic lives here so it can be unit-tested without a DB.
 import { normalizeMerchant } from '@/lib/budget/categorize/normalize-merchant'

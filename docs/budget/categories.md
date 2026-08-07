@@ -39,7 +39,6 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 - `parent_id = null` → top-level parent category.
 - `is_income = true` → income category (shown in Income section).
 - `is_transfer = true` → assigning this category auto-marks the transaction as `is_transfer`, excluding it from income/expense totals.
-- A transaction's own `is_reimbursement = true` flag (not a category flag) keeps it in its expense category but nets its magnitude against that category's spend on Category Detail, Targets, Dashboard, Cash Flow, and the Transactions list.
 - `keywords` — comma-separated strings used by Groq to auto-assign categories.
 - `icon` — emoji override; falls back to `CAT_EMOJI[name]` in `catEmoji.ts`.
 - `budget_level` — `'parent'` (target set on group) or `'sub'` (target set per sub-category); used by Targets page.

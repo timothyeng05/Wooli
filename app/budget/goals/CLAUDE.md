@@ -10,7 +10,7 @@
 ## Dependencies to know
 
 - Imports `UnifiedAccount` from `AccountsPageClient.tsx` — do not change that type
-- Exports `Goal` type — imported by `ForecastClient.tsx`
+- Exports `Goal` type
 
 ## Do not touch
 

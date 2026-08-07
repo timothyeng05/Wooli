@@ -8,6 +8,18 @@ Quick reference — one line per component. Load only what you need.
 |------|-------|
 | `DashboardClient.tsx` | Budget progress, recent transactions, mini net worth chart, spending-vs-last-month chart |
 
+## Household Map
+
+| File | Notes |
+|------|-------|
+| `HouseholdMapClient.tsx` | Hub-and-spoke net worth diagram, risk Signals grid, per-owner zone panels — exports `MapAccount` type |
+
+## Investments
+
+| File | Notes |
+|------|-------|
+| `InvestmentsClient.tsx` | P&L summary stats + per-account fund holdings tables — exports `InvestmentAccount`/`InvestmentHolding` types |
+
 ## Shared / navigation
 
 | File | Used by | Notes |
@@ -35,8 +47,8 @@ Quick reference — one line per component. Load only what you need.
 | File | Notes |
 |------|-------|
 | `AccountsPageClient.tsx` | Full accounts page — exports `UnifiedAccount` type |
-| `PlaidLinkButton.tsx` | Opens Plaid Link modal |
-| `SyncTransactionsButton.tsx` | Triggers Plaid sync |
+| `SimplefinConnectButton.tsx` | Paste-a-setup-token form to connect/reconnect a bank via SimpleFin |
+| `SyncTransactionsButton.tsx` | Triggers SimpleFin sync |
 
 ## Settings (Categories + Institutions)
 
@@ -65,13 +77,12 @@ Quick reference — one line per component. Load only what you need.
 |------|-------|
 | `CashFlowClient.tsx` | Cash flow charts by month + owner (~816 lines) |
 
-## Goals, Targets, Forecast
+## Goals, Targets
 
 | File | Notes |
 |------|-------|
 | `GoalsPageClient.tsx` | Savings goals CRUD — exports `Goal` type |
 | `BudgetTargetsClient.tsx` | Monthly category spend targets |
-| `ForecastClient.tsx` | Net worth / retirement projection (~870 lines) |
 
 ## Onboarding
 

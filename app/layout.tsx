@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Nav from "@/app/components/Nav";
 import ToastProvider from '@/app/components/ui/ToastProvider';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,14 +33,16 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   const fullAccess = !user || user.email === OWNER_EMAIL
   const isLoggedIn = !!user
 
   // Trips unlocks for non-owners after budget onboarding is complete
   let tripsEnabled = fullAccess
   if (user && !fullAccess) {
+    // Client created inside the branch — owners never reach this query, and
+    // createServerSupabaseClient is cache()d so the budget layout reuses it.
+    const supabase = await createServerSupabaseClient()
     const { data: profile } = await supabase
       .from('profiles')
       .select('onboarding_completed_at')

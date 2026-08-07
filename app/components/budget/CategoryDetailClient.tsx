@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
+import { fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
 
 interface Category {
   id: string
@@ -20,13 +21,15 @@ interface Transaction {
   description: string | null
   transacted_at: string
   is_pending: boolean | null
-  is_reimbursement: boolean | null
   owner: string | null
   account_name: string | null
 }
 
+// This page is always scoped to one expense category, so -amount is the
+// contribution: charges add, credits (refunds, repayments) subtract. A
+// category's net can legitimately go below zero.
 function netMagnitude(t: Transaction) {
-  return t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
+  return -t.amount
 }
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -52,7 +55,11 @@ function PeriodBarChart({
   onSelect: (i: number) => void
 }) {
   const n = totals.length
-  const W = 600, H = 150, LABEL_H = 20
+  // W tracks the rendered box aspect (~1100x144). At 600 the default
+  // preserveAspectRatio="meet" fit by height and centred, leaving ~260px
+  // dead either side. Height stays the binding constraint, so label sizes
+  // are unchanged.
+  const W = 1140, H = 150, LABEL_H = 20
   const chartH = H - LABEL_H
   const GAP = n > 8 ? 3 : 6
   const barW = (W - GAP * (n - 1)) / n
@@ -291,7 +298,7 @@ export default function CategoryDetailClient({
             {top10.map(t => {
               const name = t.merchant || t.description || 'Unknown'
               return (
-                <Link key={t.id} href={`/budget/${t.id}`}
+                <div key={t.id}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -308,9 +315,9 @@ export default function CategoryDetailClient({
                   <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
                     t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
                   }`}>
-                    {t.amount >= 0 ? '+' : '−'}${Math.abs(t.amount).toFixed(2)}
+                    {fmtSignedMoney(t.amount)}
                   </span>
-                </Link>
+                </div>
               )
             })}
           </div>
@@ -344,7 +351,7 @@ export default function CategoryDetailClient({
                   {txns.map(t => {
                     const name = t.merchant || t.description || 'Unknown'
                     return (
-                      <Link key={t.id} href={`/budget/${t.id}`}
+                      <div key={t.id}
                         className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -360,9 +367,9 @@ export default function CategoryDetailClient({
                         <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
                           t.amount >= 0 ? 'text-green-600' : 'text-gray-900'
                         }`}>
-                          {t.amount >= 0 ? '+' : '−'}${Math.abs(t.amount).toFixed(2)}
+                          {fmtSignedMoney(t.amount)}
                         </span>
-                      </Link>
+                      </div>
                     )
                   })}
                 </div>

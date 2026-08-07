@@ -12,7 +12,11 @@ a last-resort fallback. Every transaction records which layer categorized it
 2. **Merchant memory** — `merchant_memory` table. Prior user-confirmed categorizations for
    the same normalized merchant (account-specific preferred). Accepted at ≥ 0.95.
 3. **Provider mapping** — `provider-map.ts`. Maps Plaid `personal_finance_category` to a
-   user category; confidence from Plaid's `confidence_level`. Accepted at ≥ 0.85.
+   user category; confidence from Plaid's `confidence_level`. Accepted at ≥ 0.85. Dormant for
+   new transactions since the Plaid→SimpleFin migration — SimpleFin has no category taxonomy,
+   so `provider_category` is always null for synced rows and this layer never fires for them
+   (same as CSV-imported rows always have). Kept only so re-running the pipeline over old
+   Plaid-tagged history still works.
 4. **Lexical similarity** — `match_similar_category` RPC (pg_trgm). Nearest previously
    categorized transaction by trigram similarity. Accepted at ≥ 0.90.
 5. **Groq fallback** — `groq-fallback.ts`. Only the rows that miss every layer above.
@@ -29,7 +33,7 @@ Thresholds live in `lib/budget/categorize/config.ts`.
 `lib/budget/categorize/pipeline.ts` — `categorizeBatch(inputs, ctx)` / `categorizeTransaction`.
 Context is built by `lib/budget/categorize/context.ts#buildPipelineContext(admin, userId, { enableGroq })`.
 
-- **Sync** (`/api/plaid/sync-transactions`, `/api/cron/sync`): `enableGroq: false` —
+- **Sync** (`/api/simplefin/sync-transactions`, `/api/cron/sync`): `enableGroq: false` —
   deterministic layers only, fast. Misses become `needs_review`.
 - **Auto-categorize** (`/api/budget/recategorize`): `enableGroq: true` — runs Groq for the
   remainder, streams progress + per-source counts.

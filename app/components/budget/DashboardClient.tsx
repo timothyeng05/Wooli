@@ -88,7 +88,10 @@ function MiniNetWorthChart({ series }: { series: { date: string; value: number }
   }).join(' ')
   const trendUp = series[series.length - 1].value >= series[0].value
   return (
-    <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-24" preserveAspectRatio="none">
+    // h-32 rather than h-24: at 96px a 120-point series compressed slope changes
+    // into near-flat noise. More vertical resolution is what makes a sparkline
+    // readable, and it also evens out the two dashboard columns.
+    <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-32" preserveAspectRatio="none">
       <polyline points={pts} fill="none" stroke={trendUp ? '#3b82f6' : '#ef4444'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   )
@@ -112,11 +115,21 @@ function SpendingCompareChart({ cur, prev, curLength }: { cur: number[]; prev: n
   const curPath = curTrimmed.map((v, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(' ')
   const curArea = `${curPath} L${xAt(curTrimmed.length - 1).toFixed(1)},${CH} L0,${CH} Z`
 
+  // Where the current period stops — early in a month this is a short stub next
+  // to a full-width comparison line, which reads as a broken chart unless the
+  // cutoff is marked. A vertical rule survives preserveAspectRatio="none"
+  // undistorted (circles and text would not).
+  const todayX = xAt(curTrimmed.length - 1)
+
   return (
-    <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-28" preserveAspectRatio="none">
-      <polyline points={pointsFor(prev)} fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-40" preserveAspectRatio="none">
+      {/* gray-400, not gray-300: the comparison series is data, not grid furniture,
+          and at gray-300 it was barely visible on white. */}
+      <polyline points={pointsFor(prev)} fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       <path d={curArea} fill="#f97316" fillOpacity="0.25" stroke="none" />
       <polyline points={curLine} fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <line x1={todayX} y1="0" x2={todayX} y2={CH} stroke="#f97316" strokeWidth="1" strokeDasharray="3 3"
+        vectorEffect="non-scaling-stroke" opacity="0.5" />
     </svg>
   )
 }

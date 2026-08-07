@@ -1,5 +1,40 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { fmtSyncTime } from '@/lib/budget/format-utils'
+import { fmtSyncTime, fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
+
+describe('fmtSignedMoney', () => {
+  it('marks money out with a minus', () => {
+    expect(fmtSignedMoney(-142.88)).toBe('-$142.88')
+    expect(fmtSignedMoney(-1200)).toBe('-$1,200.00')
+  })
+
+  it('marks money in with a plus', () => {
+    expect(fmtSignedMoney(6240.15)).toBe('+$6,240.15')
+    expect(fmtSignedMoney(0)).toBe('+$0.00')
+  })
+})
+
+describe('fmtMoney', () => {
+  it('adds thousands separators', () => {
+    expect(fmtMoney(6240.15)).toBe('6,240.15')
+    expect(fmtMoney(1200)).toBe('1,200.00')
+    expect(fmtMoney(1234567.5)).toBe('1,234,567.50')
+  })
+
+  it('always shows exactly two decimals', () => {
+    expect(fmtMoney(8.7)).toBe('8.70')
+    expect(fmtMoney(0)).toBe('0.00')
+    expect(fmtMoney(99.999)).toBe('100.00')
+  })
+
+  it('returns magnitude only — callers own the sign', () => {
+    expect(fmtMoney(-388400)).toBe('388,400.00')
+    expect(fmtMoney(-0.5)).toBe('0.50')
+  })
+
+  it('leaves sub-thousand values unseparated', () => {
+    expect(fmtMoney(142.88)).toBe('142.88')
+  })
+})
 
 describe('fmtSyncTime', () => {
   beforeEach(() => {

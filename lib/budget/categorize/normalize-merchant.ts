@@ -1,6 +1,6 @@
 // Deterministic merchant-name normalization.
 //
-// Bank/Plaid merchant strings are noisy: "SQ *BLUE BOTTLE COFFEE 0123 NEW YORK NY",
+// Bank merchant strings are noisy: "SQ *BLUE BOTTLE COFFEE 0123 NEW YORK NY",
 // "TST* JOE'S PIZZA", "AMZN MKTP US*2X4AB", "POS DEBIT 04/12 WHOLEFDS NYC". We strip
 // the noise so the same real-world merchant collapses to one stable key that rules,
 // merchant memory, and similarity can all match on — while preserving the brand words.

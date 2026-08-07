@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
-// Categories present in Monarch/CSV exports that aren't in the default Wooli setup
+// Categories present in Monarch/CSV exports that aren't in the default Wooli setup.
+// Names here must track the live category names — a name that drifts out of sync is
+// treated as missing and re-inserted, which silently duplicates the renamed category.
 const EXTRA_CATEGORIES: { parent: string; name: string }[] = [
-  { parent: 'Travel',  name: 'Transit & Rideshare' },
-  { parent: 'Travel',  name: 'Trip' },
-  { parent: 'Home',    name: 'Housing' },
-  { parent: 'Home',    name: 'Home Insurance' },
-  { parent: 'Other',   name: 'Credit Card Payment' },
-  { parent: 'Other',   name: 'Credit Card Annual Fees' },
-  { parent: 'Other',   name: 'Balance Adjustments' },
+  { parent: 'Travel',    name: 'Transit & Rideshare' },
+  { parent: 'Travel',    name: 'Flights & Hotels' },
+  { parent: 'Household', name: 'Shelter' },
+  { parent: 'Household', name: 'Property Insurance' },
+  { parent: 'Transfer',  name: 'Card Autopay' },
+  { parent: 'General',   name: 'Annual Fees' },
+  { parent: 'Transfer',  name: 'Balance Adjustments' },
 ]
 
 export async function POST() {

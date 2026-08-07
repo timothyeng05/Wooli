@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase-client'
 import { ACCOUNT_TYPES, isAssetType, depreciatedValue, type AccountType } from '@/lib/budget/account-utils'
 import type { HouseholdMember } from './transaction-types'
 import { fmtSyncTime, fmtRelative } from '@/lib/budget/format-utils'
-import { PLAID_BALANCE_SYNC_ENABLED, PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
-import PlaidLinkButton from './PlaidLinkButton'
+import { SIMPLEFIN_BALANCE_SYNC_ENABLED, SIMPLEFIN_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import SimplefinConnectButton from './SimplefinConnectButton'
 import InstitutionLogo, { KNOWN_INSTITUTIONS } from './InstitutionLogo'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
@@ -91,7 +91,7 @@ export interface UnifiedAccount {
   balance: number
   owner: string | null
   updatedAt?: string | null
-  source: 'plaid' | 'manual'
+  source: 'synced' | 'manual'
   is_hidden?: boolean
   exclude_from_net_worth?: boolean
   nickname?: string | null
@@ -102,10 +102,11 @@ export interface UnifiedAccount {
   residualValue?: number | null
   logoUrl?: string | null
   depreciationRecurringId?: string | null
+  holdings?: { fundName: string; mixPct: number | null; returnPct: number | null; statementEnd: string }[]
 }
 
 const CATEGORY_OPTIONS: { value: '' | 'cash' | 'investment' | 'credit' | 'loan'; label: string }[] = [
-  { value: '', label: 'Auto (from Plaid)' },
+  { value: '', label: 'Auto (from bank)' },
   { value: 'cash', label: 'Cash' },
   { value: 'investment', label: 'Investment' },
   { value: 'credit', label: 'Credit' },
@@ -289,8 +290,8 @@ function NetWorthChart({ series, period }: {
   )
 }
 
-// ── Plaid account row (editable) ─────────────────────────────────────────────
-function PlaidAccountRow({ account, onUpdate, onHide, members }: {
+// ── Synced account row (editable) ────────────────────────────────────────────
+function SyncedAccountRow({ account, onUpdate, onHide, members }: {
   account: UnifiedAccount
   onUpdate: (id: string, patch: Record<string, unknown>) => Promise<void>
   onHide: (id: string) => Promise<void>
@@ -299,7 +300,7 @@ function PlaidAccountRow({ account, onUpdate, onHide, members }: {
   const [editing, setEditing] = useState(false)
   const [nickname, setNickname] = useState(account.nickname || '')
   const [owner, setOwner] = useState(account.owner || '')
-  // Plaid accounts never actually have type 'vehicle' (manual-only), but the
+  // Synced accounts never actually have type 'vehicle' (manual-only), but the
   // shared UnifiedAccount union includes it — guard defensively.
   const [category, setCategory] = useState<'' | 'cash' | 'investment' | 'credit' | 'loan'>(
     account.type === 'vehicle' ? 'cash' : account.type
@@ -327,10 +328,10 @@ function PlaidAccountRow({ account, onUpdate, onHide, members }: {
     return (
       <div className="mx-3 my-1 border border-blue-200 bg-blue-50/40 rounded-lg p-3 space-y-3">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Plaid name</span>
+          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Bank name</span>
           <p className="text-xs font-semibold text-gray-700">{account.name}</p>
           {account.mask && <span className="text-xs text-gray-400">···{account.mask}</span>}
-          <span className="text-[10px] text-gray-400 ml-1">Balance synced from Plaid</span>
+          <span className="text-[10px] text-gray-400 ml-1">Balance synced from your bank</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -354,7 +355,7 @@ function PlaidAccountRow({ account, onUpdate, onHide, members }: {
             className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white">
             {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <p className="text-[10px] text-gray-400 mt-0.5">Overrides which group (Cash/Investments/Credit Cards) this account sits under, independent of Plaid's own classification.</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Overrides which group (Cash/Investments/Credit Cards) this account sits under. SimpleFin doesn't report an account type, so set this to classify the account correctly.</p>
         </div>
         <div className="border-t border-gray-100 pt-2.5 space-y-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Visibility</p>
@@ -400,7 +401,7 @@ function PlaidAccountRow({ account, onUpdate, onHide, members }: {
         <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-medium text-gray-900 truncate">
             {displayName}
-            {account.mask && <span className="text-gray-400 font-normal"> ···{account.mask}</span>}
+            {account.mask && <span className="hidden sm:inline text-gray-400 font-normal"> ···{account.mask}</span>}
           </p>
           {account.owner && (() => {
             const m = members.find(x => x.full_name === account.owner)
@@ -416,14 +417,27 @@ function PlaidAccountRow({ account, onUpdate, onHide, members }: {
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-xs text-gray-400 font-medium flex-shrink-0">Plaid</span>
+          <span className="text-xs text-gray-400 font-medium flex-shrink-0">Synced</span>
+          {account.mask && <span className="text-xs text-gray-400 sm:hidden">···{account.mask}</span>}
         </div>
+        {account.holdings && account.holdings.length > 0 && (
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+            {account.holdings.map((h, i) => (
+              <span key={h.fundName}>
+                {i > 0 && ' · '}
+                {h.fundName}
+                {h.mixPct !== null && ` (${h.mixPct}%)`}
+                {h.returnPct !== null && <span className={h.returnPct >= 0 ? 'text-green-500' : 'text-red-500'}> {h.returnPct >= 0 ? '+' : ''}{h.returnPct}%</span>}
+              </span>
+            ))}
+          </p>
+        )}
       </div>
       <div className="flex-shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
           isAsset || account.balance === 0 ? 'text-gray-900' : account.balance < 0 ? 'text-green-600' : 'text-red-600'
         }`}>
-          {/* Credit/loan balance sign follows Plaid's convention: positive = owed, negative = credit in the cardholder's favor. */}
+          {/* Credit/loan balance sign follows the synced convention: positive = owed, negative = credit in the cardholder's favor. */}
           {!isAsset && account.balance !== 0 ? (account.balance < 0 ? '+' : '-') : ''}${fmt(Math.abs(account.balance))}
         </p>
         {account.updatedAt && (
@@ -654,12 +668,24 @@ function ManualAccountRow({ account, userId, onUpdate, onArchive, members }: {
             </>
           )}
         </div>
+        {account.holdings && account.holdings.length > 0 && (
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+            {account.holdings.map((h, i) => (
+              <span key={h.fundName}>
+                {i > 0 && ' · '}
+                {h.fundName}
+                {h.mixPct !== null && ` (${h.mixPct}%)`}
+                {h.returnPct !== null && <span className={h.returnPct >= 0 ? 'text-green-500' : 'text-red-500'}> {h.returnPct >= 0 ? '+' : ''}{h.returnPct}%</span>}
+              </span>
+            ))}
+          </p>
+        )}
       </div>
       <div className="flex-shrink-0 text-right">
         <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
           isAsset || account.balance === 0 ? 'text-gray-900' : account.balance < 0 ? 'text-green-600' : 'text-red-600'
         }`}>
-          {/* Credit/loan balance sign follows Plaid's convention: positive = owed, negative = credit in the cardholder's favor. */}
+          {/* Credit/loan balance sign follows the synced convention: positive = owed, negative = credit in the cardholder's favor. */}
           {!isAsset && account.balance !== 0 ? (account.balance < 0 ? '+' : '-') : ''}${fmt(Math.abs(account.balance))}
         </p>
         {account.updatedAt && (
@@ -844,7 +870,7 @@ export function AddAccountMenu({ userId, members }: { userId: string; members: H
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg p-1.5 z-20">
-            <PlaidLinkButton variant="menu-item" />
+            <SimplefinConnectButton variant="menu-item" />
             <button
               onClick={() => { setOpen(false); setManualOpen(true) }}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition"
@@ -887,10 +913,10 @@ function DropIndicator() {
 }
 
 // ── Account group ─────────────────────────────────────────────────────────────
-function HiddenAccountsReveal({ hiddenAccounts, onUpdatePlaid, onHidePlaid, members }: {
+function HiddenAccountsReveal({ hiddenAccounts, onUpdateSynced, onHideSynced, members }: {
   hiddenAccounts: UnifiedAccount[]
-  onUpdatePlaid: (id: string, patch: Record<string, unknown>) => Promise<void>
-  onHidePlaid: (id: string) => Promise<void>
+  onUpdateSynced: (id: string, patch: Record<string, unknown>) => Promise<void>
+  onHideSynced: (id: string) => Promise<void>
   members: HouseholdMember[]
 }) {
   const [showHidden, setShowHidden] = useState(false)
@@ -916,7 +942,7 @@ function HiddenAccountsReveal({ hiddenAccounts, onUpdatePlaid, onHidePlaid, memb
       {showHidden && (
         <>
           {hiddenAccounts.map(a => (
-            <PlaidAccountRow key={a.id} account={a} onUpdate={onUpdatePlaid} onHide={onHidePlaid} members={members} />
+            <SyncedAccountRow key={a.id} account={a} onUpdate={onUpdateSynced} onHide={onHideSynced} members={members} />
           ))}
           <button
             onClick={() => setShowHidden(false)}
@@ -931,7 +957,7 @@ function HiddenAccountsReveal({ hiddenAccounts, onUpdatePlaid, onHidePlaid, memb
   )
 }
 
-function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, onToggle, userId, onUpdateManual, onArchive, onUpdatePlaid, onHidePlaid, onReorder, members }: {
+function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, onToggle, userId, onUpdateManual, onArchive, onUpdateSynced, onHideSynced, onReorder, members }: {
   label: string
   groupKey: 'cash' | 'investment' | 'vehicle' | 'credit'
   accounts: UnifiedAccount[]
@@ -941,8 +967,8 @@ function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, on
   userId: string
   onUpdateManual: (id: string, patch: Record<string, unknown>) => Promise<void>
   onArchive: (id: string) => Promise<void>
-  onUpdatePlaid: (id: string, patch: Record<string, unknown>) => Promise<void>
-  onHidePlaid: (id: string) => Promise<void>
+  onUpdateSynced: (id: string, patch: Record<string, unknown>) => Promise<void>
+  onHideSynced: (id: string) => Promise<void>
   onReorder: (orderedIds: string[]) => Promise<void>
   members: HouseholdMember[]
 }) {
@@ -981,7 +1007,7 @@ function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, on
         </div>
         {open && (
           <div className="ml-2 mt-0.5">
-            <HiddenAccountsReveal hiddenAccounts={hiddenAccounts} onUpdatePlaid={onUpdatePlaid} onHidePlaid={onHidePlaid} members={members} />
+            <HiddenAccountsReveal hiddenAccounts={hiddenAccounts} onUpdateSynced={onUpdateSynced} onHideSynced={onHideSynced} members={members} />
           </div>
         )}
       </div>
@@ -1024,10 +1050,10 @@ function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, on
             >
               {a.source === 'manual'
                 ? <ManualAccountRow account={a} userId={userId} onUpdate={onUpdateManual} onArchive={onArchive} members={members} />
-                : <PlaidAccountRow account={a} onUpdate={onUpdatePlaid} onHide={onHidePlaid} members={members} />}
+                : <SyncedAccountRow account={a} onUpdate={onUpdateSynced} onHide={onHideSynced} members={members} />}
             </div>
           ))}
-          <HiddenAccountsReveal hiddenAccounts={hiddenAccounts} onUpdatePlaid={onUpdatePlaid} onHidePlaid={onHidePlaid} members={members} />
+          <HiddenAccountsReveal hiddenAccounts={hiddenAccounts} onUpdateSynced={onUpdateSynced} onHideSynced={onHideSynced} members={members} />
         </div>
       )}
     </div>
@@ -1035,33 +1061,35 @@ function AccountGroup({ label, groupKey, accounts, hiddenAccounts = [], open, on
 }
 
 // ── Connection status strip ───────────────────────────────────────────────────
-function ConnectionStatusStrip({ items }: {
-  items: NonNullable<Parameters<typeof AccountsPageClient>[0]['plaidItems']>
+function ConnectionStatusStrip({ connections }: {
+  connections: NonNullable<Parameters<typeof AccountsPageClient>[0]['connections']>
 }) {
-  if (!items.length) return null
-  const broken = items.filter(i => i.status === 'error')
+  if (!connections.length) return null
+  const broken = connections.filter(c => c.status === 'error')
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        {items.map(item => (
-          <div key={item.item_id} className="flex items-center gap-1.5 text-xs">
-            <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
-              item.status === 'error' ? 'bg-red-500' : 'bg-green-500'
+        {connections.map(connection => (
+          <div key={connection.id} className="flex items-start sm:items-center gap-1.5 text-xs">
+            <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 mt-1 sm:mt-0 ${
+              connection.status === 'error' ? 'bg-red-500' : 'bg-green-500'
             }`} />
-            <span className="font-medium text-gray-700">{item.institution_name ?? 'Unknown'}</span>
-            {item.status === 'error' ? (
-              <span className="text-red-500">{item.error_code ?? 'connection error'}</span>
-            ) : item.last_successful_sync_at ? (
-              <span className="text-gray-400">{fmtSyncTime(item.last_successful_sync_at)}</span>
-            ) : null}
-            {item.status === 'error' && (
-              <PlaidLinkButton
-                itemId={item.item_id}
-                label="Reconnect"
-                className="ml-1 px-2 py-0.5 bg-red-50 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition disabled:opacity-50"
-              />
-            )}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5 min-w-0">
+              <span className="font-medium text-gray-700">{connection.institution_name ?? 'Unknown'}</span>
+              {connection.status === 'error' ? (
+                <span className="text-red-500">{connection.error_code ?? 'connection error'}</span>
+              ) : connection.last_successful_sync_at ? (
+                <span className="text-gray-400">{fmtSyncTime(connection.last_successful_sync_at)}</span>
+              ) : null}
+              {connection.status === 'error' && (
+                <SimplefinConnectButton
+                  connectionId={connection.id}
+                  label="Reconnect"
+                  className="sm:ml-1 self-start px-2 py-0.5 bg-red-50 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition disabled:opacity-50"
+                />
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -1081,15 +1109,15 @@ export default function AccountsPageClient({
   userId,
   lastSynced,
   members = [],
-  plaidItems = [],
+  connections = [],
 }: {
   accounts: UnifiedAccount[]
   netWorthHistory: { recorded_on: string; net_worth: number }[]
   userId: string
   lastSynced?: string | null
   members?: HouseholdMember[]
-  plaidItems?: {
-    item_id: string
+  connections?: {
+    id: string
     institution_name: string | null
     status: string
     error_code: string | null
@@ -1109,14 +1137,14 @@ export default function AccountsPageClient({
   const handleSync = async () => {
     setSyncing(true)
     try {
-      if (PLAID_TRANSACTION_SYNC_ENABLED) {
-        const txRes = await fetch('/api/plaid/sync-transactions', { method: 'POST' })
+      if (SIMPLEFIN_TRANSACTION_SYNC_ENABLED) {
+        const txRes = await fetch('/api/simplefin/sync-transactions', { method: 'POST' })
         const txBody = await txRes.json().catch(() => ({}))
         if (!txRes.ok) {
           toast.error(txBody.error ?? 'Transaction sync failed')
         } else {
-          const failed = (txBody.items ?? []).filter((i: { error?: unknown }) => i.error).length
-          const total = (txBody.items ?? []).length
+          const failed = (txBody.connections ?? []).filter((i: { error?: unknown }) => i.error).length
+          const total = (txBody.connections ?? []).length
           if (failed > 0) {
             toast.error(`${failed} of ${total} institution${total !== 1 ? 's' : ''} failed to sync`)
           } else if (txBody.added || txBody.merged || txBody.modified) {
@@ -1124,7 +1152,7 @@ export default function AccountsPageClient({
           }
         }
       }
-      const balRes = await fetch('/api/plaid/refresh-balances', { method: 'POST' })
+      const balRes = await fetch('/api/simplefin/refresh-balances', { method: 'POST' })
       if (!balRes.ok) {
         toast.error('Balance refresh failed')
       } else {
@@ -1138,13 +1166,16 @@ export default function AccountsPageClient({
     }
   }
 
-  // Auto-sync once per page load if the last sync is stale — avoids making
-  // people remember to hit the manual button after a bank hasn't pushed data.
+  // Auto-sync once per page load if the last successful pull is over 4 hours
+  // old. Nothing else pulls from SimpleFin on a schedule — the daily cron only
+  // generates recurring transactions — so without this, balances sit stale
+  // until someone remembers the Sync button. Once per visit, not a timer: a
+  // page left open all day won't keep re-pulling.
   const autoSyncTriggered = useRef(false)
   useEffect(() => {
     if (autoSyncTriggered.current) return
-    if (plaidItems.length === 0) return
-    const STALE_MS = 30 * 60 * 1000
+    if (connections.length === 0) return
+    const STALE_MS = 4 * 60 * 60 * 1000
     const isStale = !lastSynced || Date.now() - new Date(lastSynced).getTime() > STALE_MS
     if (!isStale) return
     autoSyncTriggered.current = true
@@ -1165,13 +1196,13 @@ export default function AccountsPageClient({
     }
   }
 
-  const handleUpdatePlaid = async (id: string, patch: Record<string, unknown>) => {
-    const { error } = await supabase.from('plaid_accounts').update(patch).eq('account_id', id)
+  const handleUpdateSynced = async (id: string, patch: Record<string, unknown>) => {
+    const { error } = await supabase.from('synced_accounts').update(patch).eq('provider_account_id', id)
     if (error) { toast.error('Failed to update: ' + error.message); return }
     router.refresh()
   }
 
-  // Persist a new drag-and-drop order for one group. Manual and Plaid rows
+  // Persist a new drag-and-drop order for one group. Manual and synced rows
   // share one visual list but live in separate tables, so split by source.
   const handleReorder = async (orderedIds: string[]) => {
     const bySource = new Map(accounts.map(a => [a.id, a.source]))
@@ -1179,13 +1210,13 @@ export default function AccountsPageClient({
       const source = bySource.get(id)
       return source === 'manual'
         ? supabase.from('accounts').update({ sort_order: index }).eq('id', id)
-        : supabase.from('plaid_accounts').update({ sort_order: index }).eq('account_id', id)
+        : supabase.from('synced_accounts').update({ sort_order: index }).eq('provider_account_id', id)
     }))
     router.refresh()
   }
 
-  const handleHidePlaid = async (id: string) => {
-    await handleUpdatePlaid(id, { is_hidden: true })
+  const handleHideSynced = async (id: string) => {
+    await handleUpdateSynced(id, { is_hidden: true })
   }
 
   const handleDownloadCsv = () => {
@@ -1228,7 +1259,7 @@ export default function AccountsPageClient({
     // Hidden accounts still count toward net worth — only exclude_from_net_worth removes them
     const counted = accounts.filter(a => !a.exclude_from_net_worth)
     const assets = counted.filter(a => a.type !== 'credit' && a.type !== 'loan').reduce((s, a) => s + a.balance, 0)
-    // No Math.abs: a negative Plaid credit balance means the cardholder is in
+    // No Math.abs: a negative synced credit balance means the cardholder is in
     // credit (e.g. overpaid), which should reduce liabilities, not inflate them.
     const liabilities = counted.filter(a => a.type === 'credit' || a.type === 'loan').reduce((s, a) => s + a.balance, 0)
     const investTotal = [...investments, ...hiddenAccounts.filter(a => a.type === 'investment')]
@@ -1255,11 +1286,11 @@ export default function AccountsPageClient({
     <div className="space-y-6">
       {/* Net worth header + chart */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:justify-between gap-2 sm:gap-0 mb-4">
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Net Worth</p>
             <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
-              <p className="text-3xl sm:text-4xl font-bold text-gray-900">${fmt(currentNW)}</p>
+              <p className="text-3xl sm:text-4xl font-bold text-gray-900">{currentNW < 0 ? '-' : ''}${fmt(currentNW)}</p>
               {changePct && (
                 <span className={`text-sm font-semibold ${monthChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {fmtShort(monthChange)} ({changePct}%) 1 month
@@ -1267,8 +1298,8 @@ export default function AccountsPageClient({
               )}
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
-            {PLAID_BALANCE_SYNC_ENABLED && (
+          <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-1.5">
+            {SIMPLEFIN_BALANCE_SYNC_ENABLED && (
               <button
                 onClick={handleSync}
                 disabled={syncing}
@@ -1289,7 +1320,7 @@ export default function AccountsPageClient({
       </div>
 
       {/* Bank connection health */}
-      <ConnectionStatusStrip items={plaidItems} />
+      <ConnectionStatusStrip connections={connections} />
 
       {/* Accounts + Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -1297,19 +1328,19 @@ export default function AccountsPageClient({
           <AccountGroup label="Cash" groupKey="cash" accounts={cash} hiddenAccounts={hiddenCash}
             open={open.cash} onToggle={() => setOpen(o => ({ ...o, cash: !o.cash }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
+            onUpdateSynced={handleUpdateSynced} onHideSynced={handleHideSynced} members={members} />
           <AccountGroup label="Investments" groupKey="investment" accounts={investments} hiddenAccounts={hiddenInvestments}
             open={open.investments} onToggle={() => setOpen(o => ({ ...o, investments: !o.investments }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
+            onUpdateSynced={handleUpdateSynced} onHideSynced={handleHideSynced} members={members} />
           <AccountGroup label="Vehicles" groupKey="vehicle" accounts={vehicles} hiddenAccounts={hiddenVehicles}
             open={open.vehicles} onToggle={() => setOpen(o => ({ ...o, vehicles: !o.vehicles }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
-          <AccountGroup label="Credit Cards" groupKey="credit" accounts={credit} hiddenAccounts={hiddenCredit}
+            onUpdateSynced={handleUpdateSynced} onHideSynced={handleHideSynced} members={members} />
+          <AccountGroup label="Credit & Loans" groupKey="credit" accounts={credit} hiddenAccounts={hiddenCredit}
             open={open.credit} onToggle={() => setOpen(o => ({ ...o, credit: !o.credit }))}
             userId={userId} onUpdateManual={handleUpdate} onArchive={handleArchive} onReorder={handleReorder}
-            onUpdatePlaid={handleUpdatePlaid} onHidePlaid={handleHidePlaid} members={members} />
+            onUpdateSynced={handleUpdateSynced} onHideSynced={handleHideSynced} members={members} />
           {accounts.length === 0 && (
             <p className="text-center text-gray-400 text-sm py-10">No accounts connected yet</p>
           )}
@@ -1381,7 +1412,7 @@ export default function AccountsPageClient({
               </div>
               <div className="ml-3">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Credit Cards</span>
+                  <span className="text-gray-500">Credit & Loans</span>
                   <span className="font-medium text-gray-700">
                     {summaryMode === 'totals' ? `-$${fmt(summary.creditTotal)}` : `${(summary.creditTotal / (summary.liabilities || 1) * 100).toFixed(1)}%`}
                   </span>

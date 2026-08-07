@@ -14,4 +14,4 @@
 ## Do not touch
 
 - `CategoryPicker.tsx` unless the change is explicitly about category selection in recurring forms
-- Transaction, accounts, import, categories, goals/forecast routes
+- Transaction, accounts, import, categories, goals routes

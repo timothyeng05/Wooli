@@ -17,13 +17,6 @@ const CTA_ITEMS = [
     description: 'Define what you\'re saving for — vacation, emergency fund, a big purchase — and track progress.',
     href: '/budget/goals',
   },
-  {
-    key: 'forecast',
-    icon: '📈',
-    title: 'Explore your forecast',
-    description: 'See projected cash flow based on your spending patterns and recurring transactions.',
-    href: '/budget/forecast',
-  },
 ]
 
 // Per-user CTA: dismissal lives on profiles.setup_cta_dismissed (server-side) so it
@@ -89,7 +82,11 @@ function CashFlowChart({
   selectedIdx: number
   onSelect: (i: number) => void
 }) {
-  const W = 320
+  // The viewBox aspect has to track the rendered box (roughly 1100×180 on
+  // desktop). At 320×160 the default preserveAspectRatio="meet" scaled the
+  // chart to fit the *height* and centred it, so six bars sat in a ~360px
+  // island with ~370px of dead space either side.
+  const W = 1000
   const H = 160
   const pad = { top: 12, bottom: 24, left: 8, right: 8 }
   const chartH = H - pad.top - pad.bottom
@@ -100,8 +97,10 @@ function CashFlowChart({
 
   const maxVal = Math.max(...months.map(m => Math.max(m.income, m.expenses)), 1)
 
-  const barX = (i: number) => pad.left + i * colW + colW * 0.15
-  const barW = colW * 0.7
+  // Half-column bars, centred in their slot — at full width a 0.7 fill reads as
+  // slabs rather than marks.
+  const barX = (i: number) => pad.left + i * colW + colW * 0.25
+  const barW = colW * 0.5
   const r = 4
 
   return (
@@ -122,7 +121,7 @@ function CashFlowChart({
             {/* Income $ label */}
             {iH >= 20 && (
               <text x={x + barW / 2} y={centerY - iH / 2 + 4}
-                textAnchor="middle" fontSize="10" fontWeight="700"
+                textAnchor="middle" fontSize="13" fontWeight="700"
                 fill={selected ? 'white' : '#166534'}>
                 {fmtShort(m.income)}
               </text>
@@ -133,14 +132,14 @@ function CashFlowChart({
             {/* Expense $ label */}
             {eH >= 20 && (
               <text x={x + barW / 2} y={centerY + eH / 2 + 4}
-                textAnchor="middle" fontSize="10" fontWeight="700"
+                textAnchor="middle" fontSize="13" fontWeight="700"
                 fill={selected ? 'white' : '#991b1b'}>
                 {fmtShort(m.expenses)}
               </text>
             )}
             {/* Month label */}
             <text x={x + barW / 2} y={H - 4}
-              textAnchor="middle" fontSize="9"
+              textAnchor="middle" fontSize="12"
               fill={selected ? '#111827' : '#9ca3af'}
               fontWeight={selected ? '700' : '400'}>
               {m.label ?? MONTH_LABELS[m.month].toUpperCase()}
@@ -257,7 +256,9 @@ function BreakdownSection({
         if (match) { pi = i; break }
       }
       if (pi < 0) continue
-      const amt = t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
+      // Income sections take the amount as-is; expense sections take -amount so a
+      // credit filed against an expense category nets down that category.
+      const amt = isIncome ? t.amount : -t.amount
       const cat = t.category
       if (cat) {
         const parent = cat.parent_id ? catMap.get(cat.parent_id) : null
@@ -284,7 +285,7 @@ function BreakdownSection({
 
     if (transactions.length > 0) {
       for (const t of transactions) {
-        const amt = t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
+        const amt = isIncome ? t.amount : -t.amount
         grandTotal += amt
         if (tab === 'Category') {
           const cat = t.category
@@ -393,7 +394,7 @@ function OwnerBreakdown({ transactions, members }: { transactions: CashFlowTrans
       const key = t.owner ?? 'Unknown'
       const entry = map.get(key) ?? { expenses: 0, income: 0 }
       const isExpense = t.category ? !t.category.is_income : t.amount < 0
-      if (isExpense) entry.expenses += t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
+      if (isExpense) entry.expenses += -t.amount
       else entry.income += t.amount
       map.set(key, entry)
     }
@@ -481,7 +482,9 @@ function CategoryTrends({
       const { year, month } = months[i]
       for (const t of transactions) {
         if (t.is_transfer || t.category?.is_transfer) continue
-        if (t.amount >= 0 && !t.is_reimbursement) continue
+        // Drop income-category rows, not every positive amount — a positive row in
+        // an expense category is a credit against it and must still be counted.
+        if (t.category ? t.category.is_income : t.amount >= 0) continue
         const d = new Date(t.transacted_at)
         if (periodicMode === 'yearly' ? d.getFullYear() !== year : (d.getFullYear() !== year || d.getMonth() !== month)) continue
         const cat = t.category
@@ -494,7 +497,7 @@ function CategoryTrends({
           catId: effective?.id ?? '',
           monthly: new Array(months.length).fill(0),
         })
-        map.get(key)!.monthly[i] += t.is_reimbursement ? -Math.abs(t.amount) : Math.abs(t.amount)
+        map.get(key)!.monthly[i] += -t.amount
       }
     }
     return [...map.values()]
@@ -515,7 +518,8 @@ function CategoryTrends({
       .map(r => ({ ...r, amount: r.monthly[selectedIdx], pct: total > 0 ? (r.monthly[selectedIdx] / total) * 100 : 0 }))
   }, [data, selectedIdx, monthlyTotals])
 
-  const W = 320
+  // Same aspect-ratio fix as IncomeExpenseChart above — see the note there.
+  const W = 1000
   const H = 160
   const pad = { top: 20, bottom: 24, left: 8, right: 8 }
   const chartH = H - pad.top - pad.bottom
@@ -523,7 +527,7 @@ function CategoryTrends({
   const maxVal = Math.max(...monthlyTotals, 1)
   const n = months.length
   const colW = (W - pad.left - pad.right) / n
-  const barW = colW * 0.7
+  const barW = colW * 0.5
 
   return (
     <div className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -536,7 +540,7 @@ function CategoryTrends({
           {months.map((m, i) => {
             const total = monthlyTotals[i]
             const totalBarH = total > 0 ? (total / maxVal) * chartH : 0
-            const barX = pad.left + i * colW + colW * 0.15
+            const barX = pad.left + i * colW + colW * 0.25
             const selected = i === selectedIdx
 
             // Pre-compute segment positions for this month
@@ -567,7 +571,7 @@ function CategoryTrends({
                 {/* Total above every bar */}
                 {total > 0 && totalBarH >= 8 && (
                   <text x={barX + barW / 2} y={bottomY - totalBarH - 5}
-                    textAnchor="middle" fontSize={selected ? '10' : '9'}
+                    textAnchor="middle" fontSize={selected ? '13' : '12'}
                     fill={selected ? '#111827' : '#9ca3af'}
                     fontWeight={selected ? '700' : '500'}>
                     {fmtShort(total)}
@@ -575,7 +579,7 @@ function CategoryTrends({
                 )}
                 {/* Month label */}
                 <text x={barX + barW / 2} y={H - 4}
-                  textAnchor="middle" fontSize="9"
+                  textAnchor="middle" fontSize="12"
                   fill={selected ? '#111827' : '#9ca3af'}
                   fontWeight={selected ? '700' : '400'}>
                   {periodicMode === 'yearly' ? String(m.year) : MONTH_LABELS[m.month].toUpperCase()}
@@ -656,9 +660,9 @@ export default function CashFlowClient({
         if (t.is_transfer || t.category?.is_transfer) continue
         const d = new Date(t.transacted_at)
         if (d.getFullYear() !== year || d.getMonth() !== month) continue
-        if (t.is_reimbursement) expenses -= Math.abs(t.amount)
-        else if (t.amount >= 0) income += t.amount
-        else expenses += Math.abs(t.amount)
+        // Category decides the bucket; the sign decides the direction within it.
+        if (t.category ? !t.category.is_income : t.amount < 0) expenses += -t.amount
+        else income += t.amount
       }
       return { year, month, income, expenses, savings: income - expenses }
     })
@@ -675,9 +679,8 @@ export default function CashFlowClient({
         if (t.is_transfer || t.category?.is_transfer) continue
         const d = new Date(t.transacted_at)
         if (d.getFullYear() !== yr) continue
-        if (t.is_reimbursement) expenses -= Math.abs(t.amount)
-        else if (t.amount >= 0) income += t.amount
-        else expenses += Math.abs(t.amount)
+        if (t.category ? !t.category.is_income : t.amount < 0) expenses += -t.amount
+        else income += t.amount
       }
       return { year: yr, month: 0, income, expenses, savings: income - expenses, label: String(yr) }
     })
@@ -730,7 +733,7 @@ export default function CashFlowClient({
     for (let page = 0; ; page++) {
       const { data } = await supabase
         .from('transactions')
-        .select('id, amount, merchant, transacted_at, is_transfer, is_reimbursement, owner, categories(id, name, color, icon, is_income, is_transfer, parent_id)')
+        .select('id, amount, merchant, transacted_at, is_transfer, owner, categories(id, name, color, icon, is_income, is_transfer, parent_id)')
         .order('transacted_at', { ascending: false })
         .range(page * PAGE, (page + 1) * PAGE - 1) as any
       if (!data || data.length === 0) break
@@ -740,7 +743,6 @@ export default function CashFlowClient({
         merchant: t.merchant ?? null,
         transacted_at: t.transacted_at,
         is_transfer: t.is_transfer ?? false,
-        is_reimbursement: t.is_reimbursement ?? false,
         owner: t.owner ?? null,
         category: t.categories ?? null,
       })))

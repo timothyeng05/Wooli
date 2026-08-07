@@ -97,7 +97,7 @@ Show as a 1-line insight strip above the calendar, rotating weekly. Computing th
 
 - **Calendar module** — referenced in `docs/modules/CALENDAR.md` but unbuilt. Skip it. Native calendars are a solved problem; another tab in Wooli adds clutter without an integration story.
 - **Goals tracking** — referenced in `~/.claude/knowledge/goals.md` but the file is empty. If the user can't fill in their own goals manually, the app can't help. Revisit after Feature 3.
-- ~~**Bank connection (Plaid)** — too much complexity, regulatory exposure, and Plaid isn't free. CSV import is enough.~~ **Reversed 2026-07:** Plaid is now live (4 institutions) and is the transaction source of truth; Monarch CSV imports are retired. See `lib/budget/sync-config.ts`.
+- ~~**Bank connection (Plaid)** — too much complexity, regulatory exposure, and Plaid isn't free. CSV import is enough.~~ **Reversed 2026-07:** live (4 institutions), transaction source of truth; Monarch CSV imports retired. **Switched 2026-08:** Plaid replaced with SimpleFin (no app-level API credentials, simpler read-only protocol) — existing institutions need manual reconnect. See `lib/budget/sync-config.ts`.
 - **Social / sharing features** — wrong persona. This user wants privacy.
 - **More mood data types** (sleep, weight, exercise duration) — Apple Health / Garmin / Strava own this. Don't compete.
 - **AI summaries / coaching** — tempting but premature. Get the data layer right first.

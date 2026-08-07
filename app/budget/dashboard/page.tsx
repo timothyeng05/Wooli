@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import DashboardClient from '@/app/components/budget/DashboardClient'
 
 function monthBounds(d: Date) {
@@ -16,7 +16,7 @@ const EXPENSE_WINDOW_DAYS = 400
 
 export default async function BudgetDashboardPage() {
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const now = new Date()
@@ -35,7 +35,7 @@ export default async function BudgetDashboardPage() {
     supabase.from('profiles').select('full_name').eq('id', user.id).single(),
     supabase
       .from('transactions')
-      .select('amount, transacted_at, is_transfer, is_reimbursement, categories(is_income)')
+      .select('amount, transacted_at, is_transfer, categories(is_income)')
       .eq('user_id', user.id)
       .gte('transacted_at', farStart.toISOString())
       .lte('transacted_at', curEnd.toISOString()),
@@ -80,7 +80,12 @@ export default async function BudgetDashboardPage() {
     const isIncome = (t.categories as any)?.is_income ?? t.amount >= 0
     const amt = Number(t.amount)
 
-    const magnitude = t.is_reimbursement ? -Math.abs(amt) : Math.abs(amt)
+    // Expense-category rows contribute -amount, not |amount|: a negative
+    // charge becomes positive spend, and a positive credit sitting in an
+    // expense category (a refund, someone paying you back) subtracts from
+    // that category instead of inflating it. Direction comes from the
+    // category being an expense one, so a genuine income row is unaffected.
+    const magnitude = -amt
 
     if (monthKey === curMonthKey) {
       if (isIncome) incomeActual += amt

@@ -208,6 +208,55 @@ where needs_review = false
 
 ---
 
+## 2026-08-04 — Replace Plaid with SimpleFin
+
+### 047 — Plaid → SimpleFin rename (`supabase/migrations/047_simplefin_migration.sql`)
+
+```sql
+alter table public.plaid_items rename to bank_connections;
+alter table public.bank_connections rename column access_token to access_url;
+alter table public.bank_connections alter column access_url drop not null;
+alter table public.bank_connections add column if not exists org_domain text;
+alter table public.bank_connections drop column if exists cursor;
+alter table public.bank_connections drop column if exists institution_id;
+
+alter table public.plaid_accounts rename to synced_accounts;
+alter table public.synced_accounts rename column account_id to provider_account_id;
+alter table public.synced_accounts drop column if exists official_name;
+alter table public.synced_accounts add column connection_id uuid references public.bank_connections(id);
+-- (connection_id backfilled from the old item_id fk, then item_id dropped from both tables)
+
+alter table public.transactions rename column plaid_transaction_id to provider_transaction_id;
+alter table public.transactions rename column plaid_account_id to provider_account_id;
+
+update public.bank_connections
+  set access_url = null, status = 'error', error_code = 'NEEDS_RECONNECT'
+  where access_url is not null;
+```
+
+**Why:** Full replacement of Plaid with SimpleFin for bank sync (personal-app cost/complexity tradeoff — SimpleFin needs no app-level API credentials and has a much simpler read-only protocol). Tables/columns renamed in place rather than recreated, to preserve history and RLS policies. SimpleFin's access tokens are fundamentally different from Plaid's (a Basic-Auth access URL vs. an opaque token) and it issues new account ids on reconnect, so the 4 existing Plaid-origin connections can't carry over — this migration freezes them (`access_url = null`, `status = 'error'`) so the accounts page immediately prompts reconnection, while their historical transactions keep their (renamed) ids and denormalized `account_name` for reporting continuity.
+
+### 048 — synced_accounts org columns (`supabase/migrations/048_synced_accounts_org.sql`)
+
+```sql
+alter table public.synced_accounts add column if not exists org_name text;
+alter table public.synced_accounts add column if not exists org_domain text;
+```
+
+**Why:** Discovered once a real SimpleFin setup token was used — a single token covers the user's whole bridge account, which can span multiple institutions in one `bank_connections` row (one token → Citibank + Chase + Schwab accounts all under one connection). Each account needs its own institution identity instead of inheriting one label from the connection.
+
+### 049 — drop Forecast tables (`supabase/migrations/049_drop_forecast.sql`)
+
+```sql
+drop table if exists public.forecast_income_streams;
+drop table if exists public.forecast_settings;
+drop table if exists public.forecast_member_settings;
+```
+
+**Why:** Forecast (net worth / retirement projection) feature removed. `household_members` and `budget_goals` are shared with other features (Accounts owner labels, Goals) and were not touched.
+
+---
+
 ## Pending
 
 - `mood_entries` table (next: build mood module)

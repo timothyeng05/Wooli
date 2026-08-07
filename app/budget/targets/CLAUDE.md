@@ -14,4 +14,4 @@
 
 ## Do not touch
 
-- Goals, forecast, accounts, transactions, recurring, import, categories routes
+- Goals, accounts, transactions, recurring, import, categories routes

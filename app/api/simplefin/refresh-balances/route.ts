@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
-import { PLAID_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
-import { refreshBalancesForItems, snapshotNetWorth } from '@/lib/budget/plaid-sync'
+import { SIMPLEFIN_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import { refreshBalancesForConnections, snapshotNetWorth } from '@/lib/budget/simplefin-sync'
 
 export async function POST() {
   // Balance sync stays on (used for net worth) — see lib/budget/sync-config.ts
-  if (!PLAID_BALANCE_SYNC_ENABLED) return NextResponse.json({ updated: 0, disabled: true })
+  if (!SIMPLEFIN_BALANCE_SYNC_ENABLED) return NextResponse.json({ updated: 0, disabled: true })
 
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -18,14 +18,14 @@ export async function POST() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: items } = await supabase
-    .from('plaid_items')
-    .select('item_id, access_token')
+  const { data: connections } = await supabase
+    .from('bank_connections')
+    .select('id, access_url')
     .eq('user_id', user.id)
 
-  if (!items?.length) return NextResponse.json({ ok: true })
+  if (!connections?.length) return NextResponse.json({ ok: true })
 
-  await refreshBalancesForItems(admin, items)
+  await refreshBalancesForConnections(admin, connections)
 
   // Capture a net worth snapshot with the freshly-updated balances
   await snapshotNetWorth(admin, user.id)

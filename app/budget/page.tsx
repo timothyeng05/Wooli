@@ -1,13 +1,13 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import CashFlowClient from '@/app/components/budget/CashFlowClient'
 import type { CashFlowTransaction, CashFlowCategory } from '@/app/budget/cashflow/page'
 
 export default async function BudgetDashboard() {
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const now = new Date()
@@ -27,7 +27,7 @@ export default async function BudgetDashboard() {
       const { data } = await supabase
         .from('transactions')
         .select(`
-          id, amount, merchant, description, transacted_at, is_transfer, is_reimbursement, is_pending, owner,
+          id, amount, merchant, description, transacted_at, is_transfer, is_pending, owner,
           categories ( id, name, color, icon, is_income, is_transfer, parent_id )
         `)
         .eq('user_id', user.id)
@@ -66,7 +66,6 @@ export default async function BudgetDashboard() {
     merchant: t.merchant ?? null,
     transacted_at: t.transacted_at,
     is_transfer: t.is_transfer ?? false,
-    is_reimbursement: t.is_reimbursement ?? false,
     owner: t.owner ?? null,
     category: t.categories ?? null,
   }))

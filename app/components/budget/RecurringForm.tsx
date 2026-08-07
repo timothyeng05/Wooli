@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-client'
 import { useToast } from '@/app/components/ui/ToastProvider'
 
 interface Category { id: string; name: string }
+interface Member { id: string; full_name: string; display_name: string; color: string }
 
 function nextDateFor(frequency: string, dayOfMonth: number): string {
   const today = new Date()
@@ -30,10 +31,12 @@ function nextDateFor(frequency: string, dayOfMonth: number): string {
 export default function RecurringForm({
   userId,
   categories,
+  members = [],
   item,
 }: {
   userId: string
   categories: Category[]
+  members?: Member[]
   item?: {
     id: string
     description: string | null
@@ -44,6 +47,7 @@ export default function RecurringForm({
     day_of_month: number | null
     next_date: string
     is_active: boolean
+    owner: string | null
   }
 }) {
   const router = useRouter()
@@ -53,6 +57,9 @@ export default function RecurringForm({
   const [isIncome, setIsIncome] = useState(isEdit ? item.amount > 0 : false)
   const [amount, setAmount] = useState(isEdit ? Math.abs(item.amount).toString() : '')
   const [description, setDescription] = useState(isEdit ? (item.description ?? '') : '')
+  // Stored as household_members.full_name to match transactions.owner, which the
+  // generators copy straight across.
+  const [owner, setOwner] = useState(isEdit ? (item.owner ?? '') : '')
   const [merchant, setMerchant] = useState(isEdit ? (item.merchant ?? '') : '')
   const [categoryId, setCategoryId] = useState(isEdit ? (item.category_id ?? '') : '')
   const [frequency, setFrequency] = useState(isEdit ? item.frequency : 'monthly')
@@ -75,6 +82,7 @@ export default function RecurringForm({
       frequency,
       day_of_month: dayOfMonth,
       next_date: computedNextDate,
+      owner: owner || null,
       is_active: true,
     }
 
@@ -145,6 +153,34 @@ export default function RecurringForm({
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+
+      {/* Owner — generated transactions inherit this, so it only has to be set once */}
+      {members.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-1.5">Owner</label>
+          <div className="flex gap-2">
+            {[{ id: '__none__', full_name: '', display_name: 'None', color: '' }, ...members].map(m => {
+              const selected = owner === m.full_name
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setOwner(m.full_name)}
+                  style={selected && m.color ? { backgroundColor: m.color, borderColor: m.color, color: 'white' } : undefined}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+                    selected && !m.color ? 'bg-gray-100 text-gray-700 border-gray-300'
+                    : selected ? ''
+                    : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {m.display_name}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5">Every transaction this rule generates is assigned to this person.</p>
+        </div>
+      )}
 
       {/* Frequency + day */}
       <div className="grid grid-cols-2 gap-4">

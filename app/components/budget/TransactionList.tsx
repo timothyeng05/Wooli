@@ -10,6 +10,7 @@ import { type Transaction, type Category, type Trip, type SortOrder, type Househ
 import CategoryPicker from './CategoryPicker'
 import FilterPanel from './FilterPanel'
 import TransactionReviewSheet from './TransactionReviewSheet'
+import { fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
 
 // Render rows in windows so the full (possibly 1000+ row) dataset isn't all
 // committed to the DOM at once — the entire set still lives in memory for
@@ -25,8 +26,8 @@ function emitReviewChanged() {
 }
 
 const REVIEW_SELECT = `
-  id, amount, description, merchant, transacted_at, plaid_transaction_id,
-  is_transfer, is_reimbursement, is_pending, needs_review, owner, account_name, trip_id,
+  id, amount, description, merchant, transacted_at, provider_transaction_id,
+  is_transfer, is_pending, needs_review, owner, account_name, trip_id, account_id, notes,
   categories ( id, name, color, icon, is_income ),
   trips ( id, name )
 `
@@ -63,7 +64,11 @@ function groupByDate(txns: Transaction[], asc = false) {
 }
 
 function OwnerAvatar({ owner, members }: { owner: string | null; members: HouseholdMember[] }) {
-  if (!owner) return null
+  // Hold the slot when a transaction has no owner — returning null collapsed it
+  // and let the amount column jitter right on those rows, breaking the
+  // alignment of an otherwise tabular-nums column of figures.
+  if (!owner) return <div className="w-7 flex-shrink-0" aria-hidden />
+
   const member = members.find(m => m.full_name === owner)
   const initial = (member?.display_name ?? owner)[0].toUpperCase()
   const color = member?.color ?? '#6b7280'
@@ -80,6 +85,8 @@ export default function TransactionList({
   categories = [],
   trips = [],
   members = [],
+  accounts = [],
+  syncedAccounts = [],
   initialOwner,
   initialType,
 }: {
@@ -87,6 +94,8 @@ export default function TransactionList({
   categories?: Category[]
   trips?: Trip[]
   members?: HouseholdMember[]
+  accounts?: { id: string; name: string; type: string }[]
+  syncedAccounts?: { id: string; name: string; mask: string | null }[]
   initialOwner?: string
   initialType?: 'income' | 'expense'
 }) {
@@ -221,17 +230,6 @@ export default function TransactionList({
     }
   }
 
-  // Toggles is_reimbursement without touching category_id/is_transfer — keeps
-  // the transaction tied to its current category so it nets against that
-  // category's spend instead of being excluded or added like a transfer.
-  const toggleReimbursement = async (txId: string) => {
-    const t = items.find(x => x.id === txId)
-    if (!t) return
-    const next = !t.is_reimbursement
-    setItems(prev => prev.map(x => x.id === txId ? { ...x, is_reimbursement: next } : x))
-    await createClient().from('transactions').update({ is_reimbursement: next }).eq('id', txId)
-  }
-
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!await confirm('Delete this transaction?')) return
@@ -269,14 +267,24 @@ export default function TransactionList({
     dropFromQueue(ids)
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
-  const bulkMarkReimbursement = async () => {
+  // Same write as the review queue's per-row confirm, applied to the selection.
+  // Chunked for the same reason markAllReviewed is — large selections would
+  // otherwise blow the URL length on the .in() filter.
+  const bulkMarkReviewed = async () => {
     setBulkLoading(true)
     const supabase = createClient()
     const ids = [...selectedIds]
-    await supabase.from('transactions').update({ is_reimbursement: true }).in('id', ids)
-    setItems(prev => prev.map(t => ids.includes(t.id) ? { ...t, is_reimbursement: true } : t))
+    for (let i = 0; i < ids.length; i += 500) {
+      await supabase.from('transactions').update({
+        needs_review: false,
+        categorization_source: 'user_confirmed',
+        categorization_confidence: 1,
+      }).in('id', ids.slice(i, i + 500))
+    }
+    dropFromQueue(ids)
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
+
   const bulkDelete = async () => {
     if (!await confirm(`Delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`)) return
     setBulkLoading(true)
@@ -417,10 +425,17 @@ export default function TransactionList({
           </svg>
           <input
             type="text"
+            placeholder="Search…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent sm:hidden"
+          />
+          <input
+            type="text"
             placeholder="Search transactions…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
+            className="hidden sm:block w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
           />
           {search && (
             <button onClick={() => setSearch('')}
@@ -434,7 +449,7 @@ export default function TransactionList({
 
         <button
           onClick={() => reviewMode ? exitReviewMode() : enterReviewMode()}
-          className={`relative px-3 py-2.5 border rounded-xl transition flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${
+          className={`relative min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-3 py-2.5 border rounded-xl transition flex items-center justify-center sm:justify-start gap-1.5 text-sm font-medium whitespace-nowrap ${
             reviewMode
               ? 'border-violet-400 bg-violet-50 text-violet-700'
               : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -453,7 +468,7 @@ export default function TransactionList({
 
         <button
           onClick={() => setFilterOpen(true)}
-          className={`relative px-3 py-2.5 border rounded-xl transition flex items-center gap-1.5 text-sm font-medium ${
+          className={`relative min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-3 py-2.5 border rounded-xl transition flex items-center justify-center sm:justify-start gap-1.5 text-sm font-medium ${
             activeFilterCount > 0
               ? 'border-blue-400 bg-blue-50 text-blue-700'
               : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -549,11 +564,13 @@ export default function TransactionList({
       {/* ── Filter summary bar ─────────────────────────────────────────────── */}
       {filtered.length > 0 && (() => {
         const nonTransfer = filtered.filter(t => !t.is_transfer)
-        const reimbursed = nonTransfer.filter(t => t.is_reimbursement)
-          .reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
-        const spent = nonTransfer.filter(t => t.amount < 0 && !t.is_reimbursement)
-          .reduce((s, t) => s + Math.abs(Number(t.amount)), 0) - reimbursed
-        const income = nonTransfer.filter(t => t.amount > 0 && !t.is_reimbursement)
+        // Bucket by category, not by sign: a credit filed against an expense
+        // category is a refund and nets down "spent", it isn't income.
+        const isExpenseRow = (t: Transaction) =>
+          t.categories ? t.categories.is_income === false : t.amount < 0
+        const spent = nonTransfer.filter(isExpenseRow)
+          .reduce((s, t) => s - Number(t.amount), 0)
+        const income = nonTransfer.filter(t => !isExpenseRow(t))
           .reduce((s, t) => s + Number(t.amount), 0)
         return (
           <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 pb-2 text-xs text-gray-500">
@@ -609,9 +626,7 @@ export default function TransactionList({
         (sortOrder === 'amount-desc' || sortOrder === 'amount-asc' ? [['', visible] as [string, Transaction[]]] : grouped).map(([date, txns]) => {
           const dayTotal = (txns as Transaction[])
             .filter(t => !t.is_transfer && !t.is_pending && !transferCatIds.has(t.categories?.id ?? ''))
-            .reduce((s, t) => s + (t.is_reimbursement
-              ? -Math.abs(Number(t.amount))
-              : (t.amount < 0 ? Math.abs(Number(t.amount)) : 0)), 0)
+            .reduce((s, t) => s + ((t.categories ? t.categories.is_income === false : t.amount < 0) ? -Number(t.amount) : 0), 0)
 
           return (
             <div key={date || 'flat'}>
@@ -624,7 +639,7 @@ export default function TransactionList({
                   </span>
                   {dayTotal !== 0 && (
                     <span className="text-sm text-gray-400">
-                      {dayTotal < 0 ? '−' : ''}${Math.abs(dayTotal).toFixed(2)}
+                      {dayTotal < 0 ? '−' : ''}${fmtMoney(dayTotal)}
                     </span>
                   )}
                 </div>
@@ -683,37 +698,33 @@ export default function TransactionList({
                         </button>
                       )}
 
-                      {!selectMode && !t.is_transfer && t.categories && t.categories.is_income === false && (
-                        <button
-                          onClick={e => { e.stopPropagation(); toggleReimbursement(t.id) }}
-                          className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs transition ${
-                            t.is_reimbursement
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-500'
-                          }`}
-                          title={t.is_reimbursement ? 'Unmark as reimbursed' : 'Mark as reimbursed'}
-                        >
-                          ↩
-                        </button>
-                      )}
-
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
+                        <div className="flex items-center flex-wrap gap-1.5 sm:flex-nowrap">
+                          <p className="text-sm font-medium text-gray-900 truncate min-w-0 basis-full sm:basis-auto">{name}</p>
                           {t.is_pending && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
                               Pending
                             </span>
                           )}
                           {t.needs_review && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 flex-shrink-0">
-                              Review
-                            </span>
-                          )}
-                          {t.is_reimbursement && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex-shrink-0">
-                              ↩ Reimbursed
-                            </span>
+                            selectMode ? (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 flex-shrink-0">
+                                Review
+                              </span>
+                            ) : (
+                              // Clicking the badge confirms the row in place — the same write
+                              // the review queue makes — so clearing a stray flag doesn't
+                              // require entering review mode first.
+                              <button
+                                onClick={e => { e.stopPropagation(); markReviewed(t.id) }}
+                                title="Mark as reviewed"
+                                aria-label={`Mark ${name} as reviewed`}
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 hover:bg-violet-200 active:bg-violet-300 flex-shrink-0 transition inline-flex items-center gap-1"
+                              >
+                                Review
+                                <span className="opacity-40 hover:opacity-100">✓</span>
+                              </button>
+                            )
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -725,7 +736,12 @@ export default function TransactionList({
                           )}
                           {t.account_name && (
                             <>
-                              <span className="text-xs text-gray-300">·</span>
+                              {/* Only a separator when something actually precedes it —
+                                  uncategorized rows were rendering a leading orphan
+                                  "· Amex Gold ···3007". */}
+                              {(t.is_transfer || !!catName) && (
+                                <span className="text-xs text-gray-300">·</span>
+                              )}
                               <p className="text-xs text-gray-400 truncate">{t.account_name}</p>
                             </>
                           )}
@@ -743,7 +759,7 @@ export default function TransactionList({
                         : t.amount >= 0 ? 'text-green-600'
                         : 'text-gray-900'
                       }`}>
-                        {t.amount >= 0 && !t.is_transfer ? '+' : ''}${Math.abs(t.amount).toFixed(2)}
+                        {fmtSignedMoney(t.amount)}
                       </span>
 
                       <OwnerAvatar owner={t.owner} members={members} />
@@ -822,6 +838,8 @@ export default function TransactionList({
           trips={trips}
           members={members}
           onClose={() => setReviewTxn(null)}
+          accounts={accounts}
+          syncedAccounts={syncedAccounts}
           onSaved={(txId, updates) => {
             setItems(prev => prev.map(t => t.id === txId ? { ...t, ...updates } : t))
             dropFromQueue([txId])
@@ -855,9 +873,9 @@ export default function TransactionList({
               className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition">
               Mark Transfer
             </button>
-            <button onClick={bulkMarkReimbursement} disabled={bulkLoading}
+            <button onClick={bulkMarkReviewed} disabled={bulkLoading}
               className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition">
-              Mark Reimbursed
+              Mark Reviewed
             </button>
             {trips.length > 0 && (
               <select

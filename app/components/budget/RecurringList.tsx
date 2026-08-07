@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import { useConfirm } from '@/app/components/ui/ToastProvider'
+import { fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
 
 interface RecurringItem {
   id: string
@@ -115,7 +116,7 @@ export default function RecurringList({
         </p>
       </div>
       <span className={`text-sm font-semibold flex-shrink-0 ${item.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
-        {item.amount >= 0 ? '+' : ''}${Math.abs(item.amount).toFixed(2)}
+        {fmtSignedMoney(item.amount)}
       </span>
       {(() => {
         const today = new Date()
@@ -146,13 +147,17 @@ export default function RecurringList({
     </div>
   )
 
+  // A negative amount is money leaving the account and a positive one is money
+  // arriving — these two filters were the wrong way round, so "Monthly out"
+  // reported income, "In" reported expenses, and the net came out negated (a
+  // household running a healthy surplus saw it printed in red).
   const activeItems = items.filter(i => i.is_active)
   const monthlyOut = activeItems
-    .filter(i => i.amount > 0)
-    .reduce((sum, i) => sum + toMonthlyAmount(i.amount, i.frequency), 0)
-  const monthlyIn = activeItems
     .filter(i => i.amount < 0)
     .reduce((sum, i) => sum + toMonthlyAmount(Math.abs(i.amount), i.frequency), 0)
+  const monthlyIn = activeItems
+    .filter(i => i.amount > 0)
+    .reduce((sum, i) => sum + toMonthlyAmount(i.amount, i.frequency), 0)
   const monthlyNet = monthlyIn - monthlyOut
 
   return (
@@ -171,10 +176,10 @@ export default function RecurringList({
         )}
       </div>
       <div className="sticky bottom-0 border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600 mt-4">
-        Monthly out: ${monthlyOut.toFixed(2)} · In: ${monthlyIn.toFixed(2)} ·{' '}
+        Monthly out: ${fmtMoney(monthlyOut)} · In: ${fmtMoney(monthlyIn)} ·{' '}
         Net:{' '}
         <span className={monthlyNet >= 0 ? 'text-green-600' : 'text-red-600'}>
-          ${Math.abs(monthlyNet).toFixed(2)}
+          {monthlyNet < 0 ? '-' : ''}${fmtMoney(monthlyNet)}
         </span>
       </div>
     </div>

@@ -30,7 +30,6 @@ interface ExistingTransaction {
   account_name: string | null
   transacted_at: string
   is_transfer: boolean | null
-  is_reimbursement: boolean | null
   owner: string | null
   notes: string | null
 }
@@ -41,7 +40,7 @@ export default function TransactionForm({
   userId,
   categories,
   accounts = [],
-  plaidAccounts = [],
+  syncedAccounts = [],
   accountNames = [],
   defaultDate,
   transaction,
@@ -50,7 +49,7 @@ export default function TransactionForm({
   userId: string
   categories: Category[]
   accounts?: Account[]
-  plaidAccounts?: Account[]
+  syncedAccounts?: Account[]
   accountNames?: string[]
   defaultDate?: string
   transaction?: ExistingTransaction
@@ -69,7 +68,6 @@ export default function TransactionForm({
   const [description, setDescription] = useState(isEdit ? (transaction.description || '') : '')
   const [merchant, setMerchant] = useState(isEdit ? (transaction.merchant || '') : '')
   const [categoryId, setCategoryId] = useState(isEdit ? (transaction.category_id || '') : '')
-  const [isReimbursement, setIsReimbursement] = useState(isEdit ? !!transaction.is_reimbursement : false)
   const [accountId, setAccountId] = useState(isEdit ? (transaction.account_id || '') : '')
   const [accountName, setAccountName] = useState(isEdit ? (transaction.account_name || '') : '')
   const [date, setDate] = useState(
@@ -91,11 +89,11 @@ export default function TransactionForm({
     try {
       const supabase = createClient()
       const signedAmount = isIncome ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount))
-      const isPlaidAccount = accountId.startsWith('plaid:')
-      const resolvedAccountId = isPlaidAccount ? null : (accountId || null)
-      const resolvedPlaidAccountId = isPlaidAccount ? accountId.replace('plaid:', '') : null
-      const resolvedAccountName = isPlaidAccount
-        ? ([...plaidAccounts, ...accounts].find(a => a.id === accountId)?.name ?? null)
+      const isSyncedAccount = accountId.startsWith('synced:')
+      const resolvedAccountId = isSyncedAccount ? null : (accountId || null)
+      const resolvedProviderAccountId = isSyncedAccount ? accountId.replace('synced:', '') : null
+      const resolvedAccountName = isSyncedAccount
+        ? ([...syncedAccounts, ...accounts].find(a => a.id === accountId)?.name ?? null)
         : (accountName || null)
       const payload = {
         amount: signedAmount,
@@ -103,11 +101,10 @@ export default function TransactionForm({
         merchant: merchant || null,
         category_id: isTransfer ? null : (categoryId || null),
         account_id: resolvedAccountId,
-        plaid_account_id: resolvedPlaidAccountId,
+        provider_account_id: resolvedProviderAccountId,
         account_name: resolvedAccountName,
         transacted_at: new Date(date + 'T12:00:00').toISOString(),
         is_transfer: isTransfer,
-        is_reimbursement: mode === 'expense' ? isReimbursement : false,
         owner: owner || null,
         notes: notes || null,
         // Manually entered → treat as user-confirmed so it seeds merchant memory.
@@ -148,7 +145,7 @@ export default function TransactionForm({
         </button>
         <button
           type="button"
-          onClick={() => { setMode('income'); setCategoryId(''); setIsReimbursement(false) }}
+          onClick={() => { setMode('income'); setCategoryId('') }}
           className={`flex-1 py-2.5 text-sm font-medium transition ${
             mode === 'income' ? 'bg-green-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
@@ -157,7 +154,7 @@ export default function TransactionForm({
         </button>
         <button
           type="button"
-          onClick={() => { setMode('transfer'); setCategoryId(''); setIsReimbursement(false) }}
+          onClick={() => { setMode('transfer'); setCategoryId('') }}
           className={`flex-1 py-2.5 text-sm font-medium transition ${
             mode === 'transfer' ? 'bg-gray-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
@@ -233,36 +230,20 @@ export default function TransactionForm({
         </select>
       </div>}
 
-      {/* Reimbursement — expense-only; keeps the category but nets against its spend */}
-      {mode === 'expense' && (
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isReimbursement}
-            onChange={e => setIsReimbursement(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <span className="text-sm text-gray-700">
-            This was reimbursed to me
-            <span className="block text-xs text-gray-400">Keeps this category — subtracts from spend instead of adding to it.</span>
-          </span>
-        </label>
-      )}
-
       {/* Account */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-1.5">Account <span className="text-gray-400 font-normal">(optional)</span></label>
-        {(accounts.length > 0 || plaidAccounts.length > 0) ? (
+        {(accounts.length > 0 || syncedAccounts.length > 0) ? (
           <select
             value={accountId}
             onChange={e => setAccountId(e.target.value)}
             className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">No account</option>
-            {plaidAccounts.length > 0 && accounts.length > 0 ? (
+            {syncedAccounts.length > 0 && accounts.length > 0 ? (
               <>
-                <optgroup label="Connected (Plaid)">
-                  {plaidAccounts.map(a => (
+                <optgroup label="Connected accounts">
+                  {syncedAccounts.map(a => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </optgroup>
@@ -274,7 +255,7 @@ export default function TransactionForm({
               </>
             ) : (
               <>
-                {plaidAccounts.map(a => (
+                {syncedAccounts.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
                 {accounts.map(a => (

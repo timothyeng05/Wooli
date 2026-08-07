@@ -25,7 +25,6 @@ categories (id, name, color, is_income, is_transfer, parent_id)
 
 - Queries transactions directly — no separate cashflow table.
 - Always filter `is_transfer = false` to exclude CC payments and inter-account transfers.
-- `is_reimbursement` rows must also subtract from expense totals here — don't let Cash Flow disagree with Dashboard/Targets/Transactions.
 - `owner` field enables per-person breakdown in multi-member households.
 - The `CashFlowTransaction` interface is defined in `app/budget/cashflow/page.tsx` (the server page, not the client component) — it's the shape passed as props.
 - No API routes — all data fetched server-side in the page component.

@@ -5,8 +5,10 @@
 | Sub-feature | What it does | Start here |
 |-------------|-------------|-----------|
 | Dashboard | Budget progress, recent transactions, net worth, spending comparison — top of the sidebar | `app/budget/dashboard/CLAUDE.md` |
+| Household Map | Net worth split by owner — hub diagram, risk signals, per-owner account zones | `app/budget/household-map/CLAUDE.md` |
 | Transactions / monthly overview | List, search, filter, edit transactions; monthly income vs spend by category | `app/budget/transactions/CLAUDE.md` |
-| Accounts & Plaid | Connect bank accounts via Plaid, sync transactions, view balance history | `app/budget/accounts/CLAUDE.md` |
+| Accounts & SimpleFin | Connect bank accounts via SimpleFin, sync transactions, view balance history | `app/budget/accounts/CLAUDE.md` |
+| Investments | Gain/loss across investment accounts, from uploaded statement data | `app/budget/investments/CLAUDE.md` |
 | Settings | Centralized hub: category tree editor + per-institution custom logos | `app/budget/settings/CLAUDE.md` |
 | Categories | Manage the income/expense/transfer category tree used for all transactions (now lives inside Settings — see above) | `app/budget/categories/CLAUDE.md` |
 | Recurring rules | Define repeating transactions (rent, salary) that auto-generate each period | `app/budget/recurring/CLAUDE.md` |
@@ -14,7 +16,6 @@
 | Cash flow | Month-by-month income vs expense charts with per-owner breakdown | `app/budget/cashflow/CLAUDE.md` |
 | Goals | Savings goals linked to account balances with target date and progress | `app/budget/goals/CLAUDE.md` |
 | Spend targets | Set monthly spend budgets per category and track actuals vs target | `app/budget/targets/CLAUDE.md` |
-| Forecast | Net worth / retirement projection based on income streams and growth rates | `app/budget/forecast/CLAUDE.md` |
 
 For schema and shared conventions: `docs/budget/overview.md`
 For component quick-reference: `app/components/budget/CLAUDE.md`
@@ -27,10 +28,10 @@ For component quick-reference: `app/components/budget/CLAUDE.md`
 |------|-------|
 | Routes | `app/budget/**` |
 | Components | `app/components/budget/**` |
-| API | `app/api/budget/**`, `app/api/plaid/**`, `app/api/cron/sync/route.ts` |
-| Lib | `lib/budget/**` (`account-utils.ts`, `plaid-client.ts`, `groq-categorize.ts`, `categorize/**`) |
-| DB | `categories`, `transactions`, `accounts`, `net_worth_snapshots`, `account_balance_history`, `merchant_memory` |
-| Migrations | `supabase/migrations/008_*`, `014_*`, `017_*`–`030_*` |
+| API | `app/api/budget/**`, `app/api/simplefin/**`, `app/api/cron/sync/route.ts` |
+| Lib | `lib/budget/**` (`account-utils.ts`, `simplefin-client.ts`, `groq-categorize.ts`, `categorize/**`) |
+| DB | `categories`, `transactions`, `accounts`, `bank_connections`, `synced_accounts`, `net_worth_snapshots`, `account_balance_history`, `merchant_memory`, `account_holdings`, `household_members` |
+| Migrations | `supabase/migrations/008_*`, `014_*`, `017_*`–`030_*`, `047_*`, `050_*`–`051_*` |
 
 ## Shared infrastructure (read-only — do not modify)
 
@@ -48,7 +49,6 @@ For component quick-reference: `app/components/budget/CLAUDE.md`
 ## Key conventions
 
 - Server components use `lib/supabase-server.ts`; client components use `lib/supabase-client.ts`. Never mix.
-- Plaid sync writes to `transactions` and `accounts`; never write directly to `net_worth_snapshots` outside the API route.
+- SimpleFin sync writes to `transactions` and `accounts`; never write directly to `net_worth_snapshots` outside the API route.
 - Category hierarchy: `categories.parent_id` is null for top-level, non-null for sub-categories.
 - `is_transfer = true` on a transaction means it is excluded from income/expense calculations.
-- `is_reimbursement = true` on a transaction keeps its `category_id` but subtracts (not adds) its magnitude from that category's spend total everywhere totals are computed — never floored at $0.

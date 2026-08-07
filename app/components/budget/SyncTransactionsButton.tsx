@@ -14,8 +14,8 @@ export default function SyncTransactionsButton({ lastSynced }: { lastSynced?: st
     setSyncCount(null)
     try {
       const [txnRes, balRes] = await Promise.all([
-        fetch('/api/plaid/sync-transactions', { method: 'POST' }),
-        fetch('/api/plaid/refresh-balances', { method: 'POST' }),
+        fetch('/api/simplefin/sync-transactions', { method: 'POST' }),
+        fetch('/api/simplefin/refresh-balances', { method: 'POST' }),
       ])
       const txnData = await txnRes.json().catch(() => ({}))
       if (txnRes.ok && balRes.ok) {
@@ -46,7 +46,7 @@ export default function SyncTransactionsButton({ lastSynced }: { lastSynced?: st
       onClick={sync}
       disabled={state === 'syncing'}
       title={title}
-      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition disabled:opacity-50 ${
+      className={`flex items-center justify-center sm:justify-start gap-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 py-1.5 rounded-lg border transition disabled:opacity-50 ${
         state === 'done'  ? 'border-green-300 bg-green-50 text-green-600' :
         state === 'error' ? 'border-red-300 bg-red-50 text-red-500' :
         'border-gray-300 text-gray-600 hover:bg-gray-50'

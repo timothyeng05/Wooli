@@ -481,7 +481,10 @@ export default function CategoryManager({
   const transferParents = parents.filter(c => c.is_transfer)
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    // Explicit id: without one, dnd-kit derives the aria-describedby ids from an
+    // internal counter that starts fresh on the client, so the SSR and client
+    // markup disagree and React logs a hydration mismatch on this page.
+    <DndContext id="budget-category-manager" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="space-y-6">
         {[
           { label: 'Expense Categories', list: expenseParents, income: false, isTransfer: false },

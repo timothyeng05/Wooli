@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { PLAID_TRANSACTION_SYNC_ENABLED, PLAID_BALANCE_SYNC_ENABLED } from '@/lib/budget/sync-config'
-import { syncTransactionsForUser, refreshBalancesForItems, snapshotNetWorth, type PlaidItemRow } from '@/lib/budget/plaid-sync'
 
-export const maxDuration = 300 // 5 min — long enough for multi-user sync
+// Daily job — recurring-transaction generation only.
+//
+// Transaction sync, balance refresh and the net-worth snapshot used to run here
+// too. They're now driven from the UI: the sync button and the accounts page hit
+// /api/simplefin/sync-transactions and /api/simplefin/refresh-balances, and the
+// latter takes the net-worth snapshot. Recurring generation has no such trigger,
+// so it stays on a schedule.
+export const maxDuration = 60
 
 function adminClient() {
   return createClient(
@@ -14,123 +19,97 @@ function adminClient() {
 
 type Admin = ReturnType<typeof adminClient>
 
+function ymd(year: number, monthIndex: number, day: number): string {
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+// Step next_date forward one period. Month arithmetic works on the date parts
+// rather than Date.setMonth: a rule on the 31st has to clamp to Feb 28/29, not
+// overflow into March and skip February entirely.
+function advanceDate(current: string, frequency: string, dayOfMonth: number): string {
+  const [y, m, d] = current.split('-').map(Number)
+
+  if (frequency === 'monthly') {
+    const year = m === 12 ? y + 1 : y
+    const monthIndex = m === 12 ? 0 : m
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate()
+    return ymd(year, monthIndex, Math.min(dayOfMonth, lastDay))
+  }
+
+  const next = new Date(Date.UTC(y, m - 1, d))
+  if      (frequency === 'biweekly') next.setUTCDate(next.getUTCDate() + 14)
+  else if (frequency === 'weekly')   next.setUTCDate(next.getUTCDate() + 7)
+  else if (frequency === 'yearly')   next.setUTCFullYear(next.getUTCFullYear() + 1)
+  return next.toISOString().split('T')[0]
+}
+
 // Generate any due recurring transactions for one user and advance their next_date.
-async function generateRecurringForUser(supabase: Admin, userId: string) {
+async function generateRecurringForUser(supabase: Admin, userId: string): Promise<number> {
   const today = new Date().toISOString().split('T')[0]
   const { data: dueRecurring } = await supabase
     .from('recurring_transactions')
-    .select('id, amount, description, merchant, category_id, next_date, frequency, day_of_month')
+    .select('id, amount, description, merchant, category_id, next_date, frequency, day_of_month, owner')
     .eq('user_id', userId)
     .eq('is_active', true)
     .lte('next_date', today)
 
-  if (!dueRecurring?.length) return
+  if (!dueRecurring?.length) return 0
 
+  let generated = 0
   for (const item of dueRecurring) {
-    await supabase.from('transactions').insert({
+    const { error } = await supabase.from('transactions').insert({
       user_id:       userId,
       amount:        item.amount,
       description:   item.description,
       merchant:      item.merchant,
       category_id:   item.category_id,
       transacted_at: item.next_date + 'T12:00:00',
+      // Inherit the rule's owner so generated rows don't land unassigned.
+      owner:         item.owner ?? null,
+      // Generated from a user-defined rule → already confirmed, skip review.
+      needs_review:  false,
     })
-    const d = new Date(item.next_date + 'T00:00:00')
-    if      (item.frequency === 'monthly')  { d.setMonth(d.getMonth() + 1); d.setDate(item.day_of_month ?? 1) }
-    else if (item.frequency === 'biweekly') d.setDate(d.getDate() + 14)
-    else if (item.frequency === 'weekly')   d.setDate(d.getDate() + 7)
-    else if (item.frequency === 'yearly')   d.setFullYear(d.getFullYear() + 1)
+    // Leave next_date alone if the insert failed, so the next run retries it.
+    if (error) continue
+
     await supabase.from('recurring_transactions')
-      .update({ next_date: d.toISOString().split('T')[0], last_generated_date: item.next_date })
+      .update({
+        next_date: advanceDate(item.next_date, item.frequency, item.day_of_month ?? 1),
+        last_generated_date: item.next_date,
+      })
       .eq('id', item.id)
+    generated++
   }
+  return generated
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET
+  // An unset secret has to fail closed — comparing against `Bearer undefined`
+  // would let anyone sending that literal header trigger a service-role run.
+  if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const supabase = adminClient()
   const today = new Date().toISOString().split('T')[0]
 
-  const { data: allItems } = await supabase
-    .from('plaid_items')
-    .select('item_id, access_token, cursor, user_id')
+  const { data: dueUsers } = await supabase
+    .from('recurring_transactions')
+    .select('user_id')
+    .eq('is_active', true)
+    .lte('next_date', today)
 
-  // Group items by user (may be empty if Plaid is not connected)
-  const byUser = new Map<string, PlaidItemRow[]>()
-  for (const item of (allItems ?? [])) {
-    if (!byUser.has(item.user_id)) byUser.set(item.user_id, [])
-    byUser.get(item.user_id)!.push(item)
-  }
+  const userIds = [...new Set((dueUsers ?? []).map(r => r.user_id))]
 
-  // If no Plaid items exist, still run recurring generation for all active users.
-  // Query distinct user_ids from recurring_transactions where is_active = true.
-  if (!byUser.size) {
-    const { data: recurringUsers } = await supabase
-      .from('recurring_transactions')
-      .select('user_id')
-      .eq('is_active', true)
-      .lte('next_date', today)
-    const userIds = [...new Set((recurringUsers ?? []).map(r => r.user_id))]
-    for (const userId of userIds) {
-      await generateRecurringForUser(supabase, userId)
-    }
-    return NextResponse.json({ ok: true, users: userIds.length })
-  }
-
-  const summary: Record<string, { added: number; modified: number; removed: number; errors?: string[] }> = {}
-
-  for (const [userId, items] of byUser) {
-    let totalAdded = 0, totalModified = 0, totalRemoved = 0
-    const errors: string[] = []
-
-    // Each step is isolated: a Plaid failure on one step (or one institution
-    // inside it) must never stop recurring generation or the net-worth snapshot.
-
-    // ── 1. Sync transactions ──────────────────────────────────────────────────
-    if (PLAID_TRANSACTION_SYNC_ENABLED) {
-      try {
-        const results = await syncTransactionsForUser(supabase, userId, items)
-        for (const r of results) {
-          totalAdded += r.added; totalModified += r.modified; totalRemoved += r.removed
-          if (r.error) errors.push(`sync ${r.itemId}: ${r.error.code ?? r.error.message}`)
-        }
-      } catch (e) {
-        errors.push(`sync: ${e instanceof Error ? e.message : 'failed'}`)
-      }
-    }
-
-    // ── 2. Refresh balances (kept on for net worth) ───────────────────────────
-    if (PLAID_BALANCE_SYNC_ENABLED) {
-      try {
-        const balResults = await refreshBalancesForItems(supabase, items)
-        for (const r of balResults) {
-          if (r.error) errors.push(`balances ${r.itemId}: ${r.error.code ?? r.error.message}`)
-        }
-      } catch (e) {
-        errors.push(`balances: ${e instanceof Error ? e.message : 'failed'}`)
-      }
-    }
-
-    // ── 3. Generate due recurring transactions ────────────────────────────────
+  const summary: Record<string, { generated: number; error?: string }> = {}
+  for (const userId of userIds) {
     try {
-      await generateRecurringForUser(supabase, userId)
+      summary[userId] = { generated: await generateRecurringForUser(supabase, userId) }
     } catch (e) {
-      errors.push(`recurring: ${e instanceof Error ? e.message : 'failed'}`)
+      summary[userId] = { generated: 0, error: e instanceof Error ? e.message : 'failed' }
     }
-
-    // ── 4. Snapshot net worth ─────────────────────────────────────────────────
-    try {
-      await snapshotNetWorth(supabase, userId)
-    } catch (e) {
-      errors.push(`networth: ${e instanceof Error ? e.message : 'failed'}`)
-    }
-
-    summary[userId] = { added: totalAdded, modified: totalModified, removed: totalRemoved, ...(errors.length ? { errors } : {}) }
   }
 
-  return NextResponse.json({ ok: true, users: byUser.size, summary })
+  return NextResponse.json({ ok: true, users: userIds.length, summary })
 }

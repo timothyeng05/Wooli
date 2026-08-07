@@ -46,16 +46,16 @@ export async function POST(request: Request) {
   const catMap = new Map<string, string>()
   for (const c of categories ?? []) catMap.set(c.name.toLowerCase(), c.id)
 
-  // Build mask → plaid_account_id map for linking CSV rows to Plaid accounts
+  // Build mask → provider_account_id map for linking CSV rows to synced accounts
   // CSV names look like "Chase Checking (...1234)" — extract the 4-digit mask
-  const { data: plaidAccounts } = await supabase
-    .from('plaid_accounts')
-    .select('account_id, name, mask')
+  const { data: syncedAccounts } = await supabase
+    .from('synced_accounts')
+    .select('provider_account_id, name, mask')
     .eq('user_id', user.id)
 
-  const maskToPlaidId = new Map<string, string>()
-  for (const a of plaidAccounts ?? []) {
-    if (a.mask) maskToPlaidId.set(a.mask, a.account_id)
+  const maskToAccountId = new Map<string, string>()
+  for (const a of syncedAccounts ?? []) {
+    if (a.mask) maskToAccountId.set(a.mask, a.provider_account_id)
   }
 
   function extractMask(accountName: string): string | null {
@@ -73,10 +73,10 @@ export async function POST(request: Request) {
       const catId = isTransfer ? null : (catMap.get(r.category.toLowerCase()) ?? null)
       const owner = r.owner && validOwners.has(r.owner) ? r.owner : null
       const mask = extractMask(r.account)
-      const plaidAccountId = mask ? (maskToPlaidId.get(mask) ?? null) : null
+      const providerAccountId = mask ? (maskToAccountId.get(mask) ?? null) : null
       // Monarch categories are user-curated, so treat the import as user-confirmed:
       // this seeds merchant_memory (via the DB trigger) and bootstraps the
-      // deterministic layers for future Plaid syncs.
+      // deterministic layers for future bank syncs.
       return {
         user_id: user.id,
         amount: r.amount,
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         notes: r.notes || null,
         owner,
         account_name: r.account || null,
-        plaid_account_id: plaidAccountId,
+        provider_account_id: providerAccountId,
         normalized_merchant: normalizeMerchant(r.merchant),
         categorization_source: 'user_confirmed',
         categorization_confidence: 1.0,

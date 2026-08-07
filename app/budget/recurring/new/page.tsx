@@ -1,16 +1,23 @@
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import RecurringForm from '@/app/components/budget/RecurringForm'
 
 export default async function NewRecurringPage() {
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const { data: allCategories } = await supabase
     .from('categories')
     .select('id, name, parent_id')
     .eq('user_id', user.id)
+
+  const { data: memberRows } = await supabase
+    .from('household_members')
+    .select('id, full_name, display_name, color')
+    .eq('user_id', user.id)
+    .order('sort_order', { ascending: true })
+  const members = memberRows ?? []
 
   const parentIds = new Set(allCategories?.filter(c => c.parent_id).map(c => c.parent_id))
   const parentMap = new Map((allCategories ?? []).map(c => [c.id, c.name]))
@@ -29,7 +36,7 @@ export default async function NewRecurringPage() {
         </div>
       </div>
       <div className="max-w-lg mx-auto px-6 py-8">
-        <RecurringForm userId={user.id} categories={categories} />
+        <RecurringForm userId={user.id} categories={categories} members={members} />
       </div>
     </div>
   )

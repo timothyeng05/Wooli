@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
 
 interface ParsedRow {
   date: string
@@ -229,7 +230,7 @@ export default function CsvImportClient({ members = [] }: { members?: HouseholdM
                       <td className="px-3 py-2 text-gray-500">{r.category}</td>
                       <td className="px-3 py-2 text-gray-400 max-w-[140px] truncate">{r.account}</td>
                       <td className={`px-3 py-2 font-semibold tabular-nums whitespace-nowrap ${r.amount >= 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                        {r.amount >= 0 ? '+' : ''}${Math.abs(r.amount).toFixed(2)}
+                        {fmtSignedMoney(r.amount)}
                       </td>
                       <td className="px-3 py-2">
                         {r.owner && (() => {
@@ -274,7 +275,7 @@ export default function CsvImportClient({ members = [] }: { members?: HouseholdM
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mb-3">Uncheck accounts already synced via Plaid to avoid duplicates. Your selection is remembered.</p>
+              <p className="text-xs text-gray-500 mb-3">Uncheck accounts already synced via SimpleFin to avoid duplicates. Your selection is remembered.</p>
               <div className="space-y-2">
                 {uniqueAccounts.map(acct => {
                   const count = rows.filter(r => r.account === acct).length
@@ -326,7 +327,7 @@ export default function CsvImportClient({ members = [] }: { members?: HouseholdM
               <div>
                 <p className="text-sm font-medium text-gray-900">Replace existing transactions for selected accounts</p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Deletes existing transactions only for the checked accounts above, then imports fresh. Plaid-synced accounts are untouched.
+                  Deletes existing transactions only for the checked accounts above, then imports fresh. SimpleFin-synced accounts are untouched.
                 </p>
               </div>
             </label>

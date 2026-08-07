@@ -22,6 +22,6 @@
 ## Key notes
 
 - Supported source formats: Monarch Money, Copilot, and generic (user maps columns manually).
-- Dedup is based on `plaid_transaction_id` (set to a hash for CSV imports) — re-importing the same file is safe.
+- Dedup is based on `provider_transaction_id` (set to a hash for CSV imports) — re-importing the same file is safe.
 - Category matching during import uses the category `name` field — exact match first, then keyword search.
 - `import-balances` writes to `account_balance_history`, not `accounts.balance` directly.

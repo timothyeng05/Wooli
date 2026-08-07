@@ -2,11 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import TransactionList from '@/app/components/budget/TransactionList'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
 import MonthNav from '@/app/components/budget/MonthNav'
-import { PLAID_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import { SIMPLEFIN_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
 
 export default async function TransactionsPage({
   searchParams,
@@ -25,7 +25,7 @@ export default async function TransactionsPage({
   const resolvedMonth = isNaN(monthParam) ? now.getMonth() : monthParam
 
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) redirect('/login')
 
   const monthStart = new Date(year, resolvedMonth, 1).toISOString()
@@ -41,8 +41,9 @@ export default async function TransactionsPage({
       const { data } = await supabase
         .from('transactions')
         .select(`
-          id, amount, description, merchant, transacted_at, plaid_transaction_id,
-          is_transfer, is_reimbursement, is_pending, needs_review, owner, account_name, trip_id,
+          id, amount, description, merchant, transacted_at, provider_transaction_id,
+          is_transfer, is_pending, needs_review, owner, account_name, trip_id, account_id, notes,
+          is_recurring, recurring_id,
           categories ( id, name, color, icon, is_income ),
           trips ( id, name )
         `)
@@ -58,10 +59,10 @@ export default async function TransactionsPage({
     return all
   }
 
-  const [transactions, plaidResult, catResult, tripResult, memberResult] = await Promise.all([
+  const [transactions, syncedResult, catResult, tripResult, memberResult, acctResult, syncedAcctResult] = await Promise.all([
     fetchMonthTransactions(),
     supabase
-      .from('plaid_accounts')
+      .from('synced_accounts')
       .select('updated_at')
       .eq('user_id', user.id) as any,
     supabase
@@ -79,17 +80,32 @@ export default async function TransactionsPage({
       .select('id, full_name, display_name, color, sort_order, is_shared')
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }),
+    // Account lists for the editor sheet — it is now the only place a
+    // transaction's account can be changed.
+    supabase
+      .from('accounts')
+      .select('id, name, type')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .order('name') as any,
+    supabase
+      .from('synced_accounts')
+      .select('id, name, mask')
+      .eq('user_id', user.id)
+      .order('name') as any,
   ])
 
-  // Last synced = most recent plaid_accounts.updated_at
-  const lastSynced = (plaidResult.data ?? []).reduce((max: string | null, a: { updated_at: string | null }) => {
+  // Last synced = most recent synced_accounts.updated_at
+  const lastSynced = (syncedResult.data ?? []).reduce((max: string | null, a: { updated_at: string | null }) => {
     if (!a.updated_at) return max
     return max === null || a.updated_at > max ? a.updated_at : max
   }, null as string | null)
 
-  const categories = catResult.data || []
-  const trips      = tripResult.data || []
-  const members    = memberResult.data || []
+  const categories     = catResult.data || []
+  const trips          = tripResult.data || []
+  const members        = memberResult.data || []
+  const accounts       = acctResult.data || []
+  const syncedAccounts = syncedAcctResult.data || []
 
   return (
     <div className="min-h-screen bg-white">
@@ -106,7 +122,7 @@ export default async function TransactionsPage({
             </div>
 
             <div className="flex items-center gap-2">
-              {PLAID_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
+              {SIMPLEFIN_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
               <Link
                 href="/budget/new"
                 className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
@@ -126,11 +142,20 @@ export default async function TransactionsPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-20">
+        {/* Keyed by month so a MonthNav navigation remounts the list. Without
+            this the rows never change: TransactionList seeds its `items` state
+            from this prop with useState, which ignores a new initial value, so
+            switching month updated the header and refetched the data but kept
+            painting the previous month's transactions. Remounting also clears
+            search/filter/selection, which is what you want on a month switch. */}
         <TransactionList
+          key={`${year}-${resolvedMonth}`}
           transactions={transactions}
           categories={categories}
           trips={trips}
           members={members}
+          accounts={accounts}
+          syncedAccounts={syncedAccounts}
           initialOwner={initialOwner}
           initialType={initialType}
         />

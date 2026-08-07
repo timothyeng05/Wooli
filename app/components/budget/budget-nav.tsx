@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 // Single source of truth for budget navigation, shared by BudgetSidebar
 // (desktop) and BudgetMobileDrawer (mobile) so the two never drift.
 // Flat, Monarch-style order: Dashboard, Accounts, Transactions, Cash Flow,
-// Budget, Recurring, Goals, Forecast, Import, Settings (last — utility).
+// Budget, Recurring, Goals, Import, Settings (last — utility).
 export interface BudgetNavItem {
   href: string
   label: string
@@ -25,17 +25,29 @@ export const BUDGET_NAV: BudgetNavItem[] = [
     icon: c => svg(c, <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>),
   },
   {
+    href: '/budget/household-map',
+    label: 'Household Map',
+    match: p => p.startsWith('/budget/household-map'),
+    icon: c => svg(c, <><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M12 7.5v3M12 10.5L6.8 16M12 10.5L17.2 16"/></>),
+  },
+  {
     href: '/budget/accounts',
     label: 'Accounts',
     match: p => p.startsWith('/budget/accounts'),
     icon: c => svg(c, <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></>),
   },
   {
+    href: '/budget/investments',
+    label: 'Investments',
+    match: p => p.startsWith('/budget/investments'),
+    icon: c => svg(c, <><line x1="4" y1="20" x2="4" y2="12"/><line x1="10" y1="20" x2="10" y2="7"/><line x1="16" y1="20" x2="16" y2="4"/><line x1="20" y1="20" x2="20" y2="10"/></>),
+  },
+  {
     href: '/budget/transactions',
     label: 'Transactions',
     match: p =>
       p === '/budget/transactions' ||
-      (p.startsWith('/budget/') && !['accounts','settings','recurring','import','targets','goals','forecast','cashflow','dashboard'].some(s => p.startsWith(`/budget/${s}`))),
+      (p.startsWith('/budget/') && !['accounts','settings','recurring','import','targets','goals','cashflow','dashboard','household-map','investments'].some(s => p.startsWith(`/budget/${s}`))),
     icon: c => svg(c, <><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></>),
   },
   {
@@ -61,12 +73,6 @@ export const BUDGET_NAV: BudgetNavItem[] = [
     label: 'Goals',
     match: p => p.startsWith('/budget/goals'),
     icon: c => svg(c, <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>),
-  },
-  {
-    href: '/budget/forecast',
-    label: 'Forecast',
-    match: p => p.startsWith('/budget/forecast'),
-    icon: c => svg(c, <><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></>),
   },
   {
     href: '/budget/import',

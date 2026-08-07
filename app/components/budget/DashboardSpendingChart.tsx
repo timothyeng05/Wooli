@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 
-const CW = 560, CH = 160, PL = 52, PR = 12, PT = 10, PB = 32
+// CW tracks the rendered width so the plot fills its card — at 560 inside a
+// wider container the chart scaled to fit and sat centred with dead margins.
+const CW = 1100, CH = 160, PL = 52, PR = 12, PT = 10, PB = 32
 const IW = CW - PL - PR, IH = CH - PT - PB
 
 function fmt(n: number) {
