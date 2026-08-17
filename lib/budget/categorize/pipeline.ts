@@ -98,7 +98,10 @@ export async function categorizeBatch(
         source: accepted ? 'groq' : 'none',
         confidence: g?.confidence ?? 0,
         is_transfer: false,
-        needs_review: !accepted,
+        // Groq guesses always stay in the review queue — the confidence threshold
+        // gates whether we prefill a category, not whether the user should see it.
+        // The user_confirmed edit downstream is what seeds merchant_memory.
+        needs_review: true,
         reasoning_short: g?.reasoning_short,
       }
     }

@@ -8,8 +8,9 @@ function getGroqClient(): Groq {
   return _groq
 }
 
-// 8b-instant has a much higher free-tier daily token limit than 70b-versatile.
-const CATEGORIZE_MODEL = process.env.GROQ_CATEGORIZE_MODEL ?? 'llama-3.1-8b-instant'
+// Small OpenAI OSS model on Groq — cheap, fast, supports JSON mode. Prior Llama
+// defaults were retired / not available on our account (404s).
+const CATEGORIZE_MODEL = process.env.GROQ_CATEGORIZE_MODEL ?? 'openai/gpt-oss-20b'
 
 // Smaller chunk than the legacy categorizer: each row now also returns a confidence
 // and a short reason, so the JSON per row is larger.

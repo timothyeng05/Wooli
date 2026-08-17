@@ -164,10 +164,10 @@ async function fetchLegacyCandidates(
 }
 
 /**
- * Pull transactions for every connection and upsert them, running the
- * deterministic categorization layers only (never Groq) so the pull stays
- * fast. Rows no deterministic layer can place stay needs_review for the
- * explicit "Auto-categorize" (Groq) pass.
+ * Pull transactions for every connection and upsert them, running the full
+ * categorization pipeline. Deterministic layers (merchant memory, provider
+ * mapping, similarity) resolve most rows from the user's own history; only
+ * fall-throughs hit Groq, so historical merchants never cost an API call.
  */
 export async function syncTransactionsForUser(
   admin: SupabaseClient,
@@ -175,7 +175,7 @@ export async function syncTransactionsForUser(
   connections: Pick<BankConnectionRow, 'id' | 'access_url' | 'last_successful_sync_at'>[],
 ): Promise<ConnectionSyncResult[]> {
   const { nameMap, ownerMap } = await buildAccountMaps(admin, userId)
-  const pipelineCtx = await buildPipelineContext(admin, userId, { enableGroq: false })
+  const pipelineCtx = await buildPipelineContext(admin, userId, { enableGroq: true })
   const ctx: SyncContext = { admin, userId, nameMap, ownerMap, pipelineCtx }
 
   const results: ConnectionSyncResult[] = []
@@ -273,7 +273,7 @@ async function syncOneConnection(
       // a fall-through stays flagged. Hardcoding true here discarded that signal and
       // put every high-confidence merchant-memory match back in the queue by hand.
       needs_review: r.needs_review,
-      groq_called: false,
+      groq_called: r.groq_called,
     }
   })
 

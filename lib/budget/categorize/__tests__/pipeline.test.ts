@@ -93,7 +93,7 @@ describe('categorization pipeline — Groq is skipped when a deterministic layer
 })
 
 describe('categorization pipeline — Groq fallback', () => {
-  it('calls Groq when all deterministic layers miss, and accepts a confident result', async () => {
+  it('calls Groq when all deterministic layers miss, and prefills a confident result for review', async () => {
     const { ctx, groqSpy } = makeCtx({
       groqResult: { category_id: 'cat-shop', confidence: 0.9, reasoning_short: 'online retailer' },
     })
@@ -103,7 +103,8 @@ describe('categorization pipeline — Groq fallback', () => {
     expect(r.source).toBe('groq')
     expect(r.category_id).toBe('cat-shop')
     expect(r.groq_called).toBe(true)
-    expect(r.needs_review).toBe(false)
+    // Even a confident Groq guess must be user-reviewed before it seeds merchant_memory.
+    expect(r.needs_review).toBe(true)
   })
 
   it('marks low-confidence Groq results as Uncategorized + needs_review', async () => {

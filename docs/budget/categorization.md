@@ -33,10 +33,10 @@ Thresholds live in `lib/budget/categorize/config.ts`.
 `lib/budget/categorize/pipeline.ts` — `categorizeBatch(inputs, ctx)` / `categorizeTransaction`.
 Context is built by `lib/budget/categorize/context.ts#buildPipelineContext(admin, userId, { enableGroq })`.
 
-- **Sync** (`/api/simplefin/sync-transactions`, `/api/cron/sync`): `enableGroq: false` —
-  deterministic layers only, fast. Misses become `needs_review`.
-- **Auto-categorize** (`/api/budget/recategorize`): `enableGroq: true` — runs Groq for the
-  remainder, streams progress + per-source counts.
+- **Sync** (`/api/simplefin/sync-transactions`): `enableGroq: true` — deterministic
+  layers resolve prior merchants from history; only fall-throughs hit Groq. Rows Groq
+  can't place with ≥ 0.75 confidence stay `needs_review`. Route sets `maxDuration = 60`
+  to give a large backfill room to finish.
 - **CSV import** (`/api/budget/import-csv`): Monarch categories are tagged `user_confirmed`,
   seeding merchant memory.
 

@@ -4,10 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 import { SIMPLEFIN_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
 import { syncTransactionsForUser } from '@/lib/budget/simplefin-sync'
 
-// Pull + deterministic categorization. At sync we run only the fast deterministic
-// layers (rules, merchant memory, provider mapping, similarity) — never Groq — so
-// the pull stays quick and can't be aborted mid-write. Rows that no deterministic
-// layer can place are left needs_review for the explicit "Auto-categorize" (Groq) pass.
+// Pull + full-pipeline categorization. Deterministic layers (merchant memory,
+// provider mapping, similarity) resolve rows from prior user-confirmed history;
+// only fall-throughs hit Groq. maxDuration is bumped so a large first-sync
+// backfill has room to finish the Groq pass.
+export const maxDuration = 60
+
 export async function POST() {
   if (!SIMPLEFIN_TRANSACTION_SYNC_ENABLED) return NextResponse.json({ added: 0, modified: 0, removed: 0, disabled: true })
 
