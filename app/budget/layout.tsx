@@ -6,8 +6,6 @@ import BudgetMobileDrawer from '@/app/components/budget/BudgetMobileDrawer'
 import ResetOnboardingButton from '@/app/components/budget/ResetOnboardingButton'
 import RecurringCatchUp from '@/app/components/budget/RecurringCatchUp'
 
-const OWNER_EMAIL = 'woolitravel@gmail.com'
-
 export default async function BudgetLayout({ children }: { children: React.ReactNode }) {
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? ''
@@ -34,8 +32,6 @@ export default async function BudgetLayout({ children }: { children: React.React
     }
   }
 
-  const isOwner = user?.email === OWNER_EMAIL
-
   return (
     <div className="flex">
       {/* Generates overdue recurring transactions on open, so the schedule
@@ -45,7 +41,9 @@ export default async function BudgetLayout({ children }: { children: React.React
       <div className="flex-1 min-w-0 pb-16 md:pb-0">
         <BudgetMobileDrawer />
         {children}
-        {!isOwner && (
+        {/* Dev-only: /api/reset-onboarding is guarded to development, so the
+            button is hidden in production rather than shown and failing. */}
+        {process.env.NODE_ENV === 'development' && (
           <div className="fixed bottom-20 md:bottom-4 right-4 z-40">
             <ResetOnboardingButton />
           </div>
