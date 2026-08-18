@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { logout } from '@/app/auth/actions'
 import { BUDGET_NAV } from './budget-nav'
 
 function getCurrentLabel(pathname: string): string {
@@ -109,6 +110,22 @@ export default function BudgetMobileDrawer() {
               )
             })}
           </nav>
+
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <form>
+              <button
+                formAction={logout}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors text-left"
+              >
+                <span className="text-gray-400">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                </span>
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </>
