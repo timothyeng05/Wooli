@@ -19,7 +19,6 @@
 | `TransactionReviewSheet.tsx` | Slide-over sheet for quick review/edit |
 | `FilterPanel.tsx` | Date range + category filter UI used by TransactionList |
 | `MonthNav.tsx` | Prev/next month navigation (used on overview page) |
-| `RecategorizeButton.tsx` | Triggers AI bulk re-categorization via Groq |
 | `transaction-types.ts` | Shared TypeScript types for transactions |
 | `CategoryPicker.tsx` | Inline category selector (used within transaction rows) |
 | `catEmoji.ts` | `getCatEmoji(name, icon?)` + `CAT_EMOJI` name→emoji map |

@@ -32,8 +32,10 @@ Each major module has a **CLAUDE.md** in its route directory and a doc in `docs/
 |--------|--------|------------|-----|-----|
 | Budget | `app/budget/**` | `app/components/budget/**` | `lib/budget/**` | `docs/modules/BUDGET.md` |
 | Trips | `app/trips/**` | `app/components/trips/**` | `lib/trips/**` | `docs/modules/TRIPS.md` |
-| Mood | `app/mood/**` | `app/components/mood/**` | `lib/mood-utils.ts` | `docs/modules/MOOD.md` |
-| Cards | `app/cards/**` | `app/components/cards/**` | `lib/card-utils.ts` | `docs/modules/CARDS.md` |
+| Lists | `app/lists/**`, `app/wishlist/**` | `app/components/lists/**` | — | — |
+| Period | `app/period/**` | `app/components/period/**` | `lib/period-utils.ts` | — |
+
+The Mood and Cards modules were removed in 2026-07/08. Docs that mention them are stale.
 
 **Default reading order for any module work:**
 1. `app/{module}/CLAUDE.md` — boundary rules and key conventions

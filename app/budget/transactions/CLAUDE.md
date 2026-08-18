@@ -12,8 +12,6 @@
 - `app/components/budget/FilterPanel.tsx`
 - `app/components/budget/transaction-types.ts`
 - `app/components/budget/MonthNav.tsx`
-- `app/components/budget/RecategorizeButton.tsx`
-- `app/api/budget/recategorize/route.ts`
 
 ## Do not touch
 

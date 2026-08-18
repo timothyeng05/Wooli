@@ -39,7 +39,6 @@ Quick reference — one line per component. Load only what you need.
 | `TransactionDetail.tsx` | Read view for single transaction |
 | `TransactionReviewSheet.tsx` | Slide-over quick review/edit |
 | `FilterPanel.tsx` | Date + category filters used by TransactionList |
-| `RecategorizeButton.tsx` | AI bulk re-categorize via Groq |
 | `transaction-types.ts` | Shared TS types for transactions |
 
 ## Accounts
@@ -90,9 +89,3 @@ Quick reference — one line per component. Load only what you need.
 |------|-------|
 | `OnboardingWizard.tsx` | Budget setup wizard (~914 lines) |
 | `ResetOnboardingButton.tsx` | Dev/admin reset button |
-
-## Dashboard widgets (used outside budget module)
-
-| File | Notes |
-|------|-------|
-| `DashboardSpendingChart.tsx` | Monthly spend by category — used on main dashboard |

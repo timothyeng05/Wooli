@@ -45,12 +45,16 @@ Each module owns its tables. See `docs/modules/` for per-module schemas.
 
 | Module | Tables |
 |---|---|
-| mood | `mood_entries` |
-| budget | `accounts`, `transactions`, `categories` |
-| cards | `cards`, `card_rewards`, `reward_redemptions` |
-| calendar | `calendar_events`, `journal_entries` |
+| budget | `accounts`, `synced_accounts`, `bank_connections`, `transactions`, `categories`, `budgets`, `budget_goals`, `recurring_transactions`, `merchant_memory`, `institution_logos`, `account_holdings`, `account_balance_history`, `net_worth_history` |
+| trips | `trips`, `trip_days`, `trip_hotels` |
+| lists | `lists`, `list_items` |
+| period | `period_entries` |
+| social | `friendships`, `household_members` |
+| shared | `profiles` |
 
-> Tables not yet created — added here as each module is built.
+**Orphaned — safe to drop.** `mood_entries` and `weekly_summaries` still exist but no code reads them; the mood module and `/api/weekly-summary` are both gone. Both are empty.
+
+**Dropped in migration 054:** `list_shares`, `categorization_rules`, `reward_redemptions`, `template_benefits`, `account_balance_snapshots`, `transactions_backup_20260805`. The cards module tables (`cards`, `card_rewards`) went earlier with the module.
 
 ## Naming Conventions
 

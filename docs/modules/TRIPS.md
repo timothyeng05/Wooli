@@ -43,7 +43,7 @@ Plan, live-edit, and look back on multi-day trip itineraries. Each trip has a li
 | `AiShareButton.tsx` | Copies the `/share/[id]/export?format=md` link (paste into an AI assistant) |
 | `ShareDayPicker.tsx` | Day dropdown on the share page |
 | `CoordsInput.tsx` | Location input (Places autocomplete / paste-a-link) |
-| `DayLocationMap(Client).tsx`, `DayMap.tsx`, `DayContextMap.tsx`, `TripRouteMap(Client).tsx` | Leaflet maps (day pins, trip route) |
+| `DayLocationMap(Client).tsx` | Leaflet map of a day's pins. `DayLocationMapClient` is the `ssr: false` wrapper; import that one, not `DayLocationMap` directly |
 
 ## Lib (`lib/trips/`)
 
