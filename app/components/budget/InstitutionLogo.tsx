@@ -19,7 +19,7 @@ const LOGO_MAP: { match: RegExp; src: string }[] = [
   { match: /schwab/i,            src: '/logos/schwab.png' },
   { match: /fidelity/i,          src: '/logos/fidelity.jpeg' },
   { match: /health ?equity/i,    src: '/logos/healthequity.svg' },
-  { match: /alight/i,            src: '/logos/alight.png' },
+  { match: /alight|benefits connect/i, src: '/logos/alight.png' },
   { match: /hyundai/i,           src: '/logos/hyundai.png' },
 ]
 

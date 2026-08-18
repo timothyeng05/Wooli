@@ -206,7 +206,8 @@ async function syncOneConnection(
   connection: Pick<BankConnectionRow, 'id' | 'access_url' | 'last_successful_sync_at'>,
   result: ConnectionSyncResult,
 ) {
-  const { admin, userId, nameMap, ownerMap, pipelineCtx } = ctx
+  const { admin, userId, pipelineCtx } = ctx
+  let { nameMap, ownerMap } = ctx
 
   // No cursor like Plaid's transactionsSync — SimpleFin uses date-range queries.
   // First sync backfills ~2 years; every later sync re-fetches LOOKBACK_DAYS as a
@@ -229,13 +230,66 @@ async function syncOneConnection(
     result.error = { code: null, message: res.errors.join('; ') }
   }
 
+  // Auto-register any accounts SimpleFin now returns that we haven't seen
+  // before. Previously synced_accounts was only written on first-connect and
+  // reconnect, so accounts added mid-life (a 401(k) joining the bridge, a new
+  // card at the same institution) produced orphaned transactions with no
+  // account_name and no owner. Same upsert as reconnect; safe to skip when
+  // every returned account is already registered.
+  if (res.accounts?.some(a => !nameMap.has(a.id))) {
+    await upsertConnectionAccounts(admin, userId, connection.id, connection.access_url!, res)
+    ;({ nameMap, ownerMap } = await buildAccountMaps(admin, userId))
+    ctx.nameMap = nameMap
+    ctx.ownerMap = ownerMap
+  }
+
   const pairs: { account: SimplefinAccount; txn: SimplefinTransaction }[] = []
   for (const account of res.accounts ?? []) {
     for (const txn of account.transactions ?? []) pairs.push({ account, txn })
   }
   if (!pairs.length) return
 
-  const inputs: CategorizeInput[] = pairs.map(({ account, txn }) => ({
+  // Clobber guard: SimpleFin re-sends every transaction in the date window on
+  // every sync (no cursor). A transaction already on file keeps whatever
+  // category it has — re-running the pipeline (Groq included) on a row we've
+  // already categorized just risks a different, non-deterministic answer and
+  // an unwanted trip back into the review queue. Only genuinely new rows are
+  // categorized; existing ones only get their non-categorization fields
+  // (amount, pending state, merchant text, ...) refreshed.
+  const { data: existing } = await admin
+    .from('transactions')
+    .select('provider_transaction_id')
+    .eq('user_id', userId)
+    .in('provider_transaction_id', pairs.map(p => p.txn.id))
+  const existingIds = new Set((existing ?? []).map(e => e.provider_transaction_id))
+
+  const newPairs = pairs.filter(p => !existingIds.has(p.txn.id))
+  const existingPairs = pairs.filter(p => existingIds.has(p.txn.id))
+
+  const existingRows = existingPairs.map(({ account, txn }) => ({
+    user_id: userId,
+    provider_transaction_id: txn.id,
+    provider_account_id: account.id,
+    account_name: nameMap.get(account.id) ?? null,
+    // SimpleFin's amount is already signed the way Wooli stores it — no negation.
+    amount: Number(txn.amount),
+    description: txn.description,
+    merchant: txn.payee ?? null,
+    transacted_at: resolveTransactedAt(txn, nowSeconds),
+    is_pending: !!txn.pending,
+    owner: ownerMap.get(account.id) ?? null,
+  }))
+  if (existingRows.length) {
+    const { error: touchError } = await admin
+      .from('transactions')
+      .upsert(existingRows, { onConflict: 'provider_transaction_id' })
+    if (touchError) throw new Error(`Failed to save transactions: ${touchError.message}`)
+    result.modified += existingRows.length
+  }
+
+  if (!newPairs.length) return
+
+  const inputs: CategorizeInput[] = newPairs.map(({ account, txn }) => ({
     raw_merchant: txn.payee ?? null,
     description: txn.description,
     amount: Number(txn.amount),
@@ -246,7 +300,7 @@ async function syncOneConnection(
   }))
   const cat = await categorizeBatch(inputs, pipelineCtx)
 
-  const rows = pairs.map(({ account, txn }, i) => {
+  const rows = newPairs.map(({ account, txn }, i) => {
     const r = cat[i]
     const isTransfer = r.is_transfer || transferKeywords.test(txn.description)
     return {
@@ -307,33 +361,12 @@ async function syncOneConnection(
     }
   }
 
-  // Clobber guard: SimpleFin re-sends every transaction in the date window on
-  // every sync (no cursor), so the upsert must not overwrite a category the
-  // user confirmed by hand. Also tells added vs modified apart, since
-  // SimpleFin (unlike Plaid) doesn't split them into separate arrays.
-  const ids = insertRows.map(r => r.provider_transaction_id)
-  const { data: existing } = await admin
-    .from('transactions')
-    .select('provider_transaction_id, categorization_source')
-    .eq('user_id', userId)
-    .in('provider_transaction_id', ids)
-  const existingIds = new Set((existing ?? []).map(e => e.provider_transaction_id))
-  const confirmed = new Set(
-    (existing ?? [])
-      .filter(e => e.categorization_source === 'user_confirmed')
-      .map(e => e.provider_transaction_id)
-  )
-  const safeRows = insertRows.filter(r => !confirmed.has(r.provider_transaction_id))
-
-  if (safeRows.length) {
+  if (insertRows.length) {
     const { error: upsertError } = await admin
       .from('transactions')
-      .upsert(safeRows, { onConflict: 'provider_transaction_id' })
+      .upsert(insertRows, { onConflict: 'provider_transaction_id' })
     if (upsertError) throw new Error(`Failed to save transactions: ${upsertError.message}`)
-  }
-  for (const r of safeRows) {
-    if (existingIds.has(r.provider_transaction_id)) result.modified++
-    else result.added++
+    result.added += insertRows.length
   }
   // SimpleFin has no equivalent of Plaid's "removed" events — a snapshot
   // re-fetch never tells us a transaction disappeared, so this always stays 0.

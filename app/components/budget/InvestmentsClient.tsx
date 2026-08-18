@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import type { HouseholdMember } from './transaction-types'
 import { fmtMoney } from '@/lib/budget/format-utils'
 
@@ -49,6 +50,173 @@ function fmtDate(d: string) {
 }
 function sumField<K extends 'gainsLosses' | 'unrealizedGainLoss' | 'costBasis'>(accounts: InvestmentAccount[], key: K) {
   return accounts.reduce((s, a) => s + a.holdings.reduce((hs, h) => hs + (h[key] ?? 0), 0), 0)
+}
+
+// ── Portfolio treemap ─────────────────────────────────────────────────────────
+// Categorical slots 1-7 of the validated 8-hue palette (see the dataviz skill's
+// palette.md) — worst adjacent CVD ΔE 9.1 light (≥8 target), worst adjacent
+// normal-vision ΔE 19.6 light (≥15 floor). Slot 8 (red) is reserved so it never
+// collides with the red/green gain-loss coloring used elsewhere on this page.
+const ASSET_CLASS_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7']
+// Same gray as the "Unassigned" owner bucket elsewhere in the budget module —
+// a fold-in bucket is a non-answer, not a category, and reads that way.
+const FOLD_COLOR = '#9ca3af'
+
+interface AssetClassSlice { label: string; value: number; pct: number; color: string }
+
+function buildAssetClassBreakdown(accounts: InvestmentAccount[]): AssetClassSlice[] {
+  const totals = new Map<string, number>()
+  for (const a of accounts) {
+    for (const h of a.holdings) {
+      const key = h.assetClass?.trim() || 'Unclassified'
+      totals.set(key, (totals.get(key) ?? 0) + h.closingBalance)
+    }
+  }
+  const sorted = [...totals.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+
+  // Ladder from the dataviz skill: 7-8 is the token ceiling for adjacent
+  // (touching) categorical marks — past it, fold the tail into "Other".
+  const MAX_CLASSES = 7
+  const shown = sorted.slice(0, MAX_CLASSES)
+  const foldedTotal = sorted.slice(MAX_CLASSES).reduce((s, [, v]) => s + v, 0)
+  if (foldedTotal > 0) shown.push(['Other', foldedTotal])
+
+  const total = shown.reduce((s, [, v]) => s + v, 0)
+  let slot = 0
+  return shown.map(([label, value]) => ({
+    label,
+    value,
+    pct: total > 0 ? (value / total) * 100 : 0,
+    color: label === 'Unclassified' || label === 'Other' ? FOLD_COLOR : ASSET_CLASS_COLORS[slot++ % ASSET_CLASS_COLORS.length],
+  }))
+}
+
+interface TreemapRect extends AssetClassSlice { x: number; y: number; w: number; h: number }
+
+/** Squarified treemap (Bruls et al.) — lays out rectangles to keep aspect ratios near 1:1. */
+function squarify(items: AssetClassSlice[], boxW: number, boxH: number): TreemapRect[] {
+  const totalValue = items.reduce((s, i) => s + i.value, 0)
+  if (totalValue <= 0) return []
+  const scaled = items.map(i => ({ ...i, area: (i.value / totalValue) * boxW * boxH }))
+
+  const worstRatio = (row: typeof scaled, side: number) => {
+    const area = row.reduce((s, i) => s + i.area, 0)
+    if (area === 0 || side === 0) return Infinity
+    const maxA = Math.max(...row.map(i => i.area))
+    const minA = Math.min(...row.map(i => i.area))
+    return Math.max((side * side * maxA) / (area * area), (area * area) / (side * side * minA))
+  }
+
+  const rects: TreemapRect[] = []
+  let remaining = scaled
+  let [cx, cy, cw, ch] = [0, 0, boxW, boxH]
+
+  while (remaining.length > 0) {
+    const side = Math.min(cw, ch)
+    let row = [remaining[0]]
+    let rest = remaining.slice(1)
+    while (rest.length > 0 && worstRatio(row, side) >= worstRatio([...row, rest[0]], side)) {
+      row.push(rest[0])
+      rest = rest.slice(1)
+    }
+    remaining = rest
+
+    const rowArea = row.reduce((s, i) => s + i.area, 0)
+    const rowThickness = side > 0 ? rowArea / side : 0
+
+    if (cw >= ch) {
+      let offset = cy
+      for (const item of row) {
+        const itemH = rowArea > 0 ? (item.area / rowArea) * ch : 0
+        rects.push({ ...item, x: cx, y: offset, w: rowThickness, h: itemH })
+        offset += itemH
+      }
+      cx += rowThickness
+      cw -= rowThickness
+    } else {
+      let offset = cx
+      for (const item of row) {
+        const itemW = rowArea > 0 ? (item.area / rowArea) * cw : 0
+        rects.push({ ...item, x: offset, y: cy, w: itemW, h: rowThickness })
+        offset += itemW
+      }
+      cy += rowThickness
+      ch -= rowThickness
+    }
+  }
+  return rects
+}
+
+function srgbToLinear(c: number) {
+  const v = c / 255
+  return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+}
+function relativeLuminance(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16)
+  return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b)
+}
+/** White or ink text, whichever clears contrast against this fill — never a fixed color. */
+function textColorFor(hex: string): string {
+  const l = relativeLuminance(hex)
+  const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+  return contrast(l, 1) >= contrast(l, 0) ? '#ffffff' : '#0b0b0b'
+}
+
+const TREEMAP_W = 1000
+const TREEMAP_H = 380
+
+function PortfolioTreemap({ accounts }: { accounts: InvestmentAccount[] }) {
+  const items = useMemo(() => buildAssetClassBreakdown(accounts), [accounts])
+  const rects = useMemo(() => squarify(items, TREEMAP_W, TREEMAP_H), [items])
+
+  if (items.length === 0) return null
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-8">
+      <p className="text-sm font-bold text-gray-900">Portfolio Diversification</p>
+      <p className="text-xs text-gray-500 mb-4">By asset class, across every tracked account</p>
+
+      <div className="relative w-full rounded-lg overflow-hidden" style={{ aspectRatio: `${TREEMAP_W} / ${TREEMAP_H}` }}>
+        {rects.map(r => {
+          const pctW = (r.w / TREEMAP_W) * 100
+          const pctH = (r.h / TREEMAP_H) * 100
+          // Only place a label where it fits with room to spare — an unmeasured
+          // label on a sliver cell just gets clipped or overflows its tile.
+          const canLabel = pctW >= 12 && pctH >= 16
+          const ink = textColorFor(r.color)
+          return (
+            <div
+              key={r.label}
+              className="absolute"
+              style={{ left: `${(r.x / TREEMAP_W) * 100}%`, top: `${(r.y / TREEMAP_H) * 100}%`, width: `${pctW}%`, height: `${pctH}%` }}
+              title={`${r.label} — ${fmtSigned(r.value)} (${r.pct.toFixed(1)}%)`}
+            >
+              {/* 1px inset on every cell = a 2px surface gap between neighbors, without a border's extra ink. */}
+              <div className="absolute inset-[1px] rounded flex flex-col justify-end p-2 overflow-hidden" style={{ backgroundColor: r.color }}>
+                {canLabel && (
+                  <>
+                    <span className="text-[11px] font-semibold truncate" style={{ color: ink }}>{r.label}</span>
+                    <span className="text-[10px] truncate" style={{ color: ink, opacity: 0.85 }}>{fmtSigned(r.value)} · {r.pct.toFixed(0)}%</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend doubles as the table view — every slice's exact value, not just the ones with room to print on-tile. */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4">
+        {items.map(i => (
+          <div key={i.label} className="flex items-center gap-1.5 text-xs">
+            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: i.color }} />
+            <span className="text-gray-600">{i.label}</span>
+            <span className="text-gray-400 font-mono tabular-nums">{fmtSigned(i.value)} · {i.pct.toFixed(0)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function InvestmentsClient({ accounts, members }: Props) {
@@ -118,6 +286,8 @@ export default function InvestmentsClient({ accounts, members }: Props) {
           </div>
         )}
       </div>
+
+      <PortfolioTreemap accounts={accounts} />
 
       <div className="space-y-3">
         {sorted.map(account => {

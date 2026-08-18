@@ -386,78 +386,6 @@ function BreakdownSection({
   )
 }
 
-// ── Owner breakdown ───────────────────────────────────────────────────────────
-function OwnerBreakdown({ transactions, members }: { transactions: CashFlowTransaction[]; members: HouseholdMember[] }) {
-  const rows = useMemo(() => {
-    const map = new Map<string, { expenses: number; income: number }>()
-    for (const t of transactions) {
-      const key = t.owner ?? 'Unknown'
-      const entry = map.get(key) ?? { expenses: 0, income: 0 }
-      const isExpense = t.category ? !t.category.is_income : t.amount < 0
-      if (isExpense) entry.expenses += -t.amount
-      else entry.income += t.amount
-      map.set(key, entry)
-    }
-    return [...map.entries()]
-      .sort((a, b) => {
-        if (a[0] === 'Unknown') return 1
-        if (b[0] === 'Unknown') return -1
-        const aOrder = members.find(m => m.full_name === a[0])?.sort_order ?? 98
-        const bOrder = members.find(m => m.full_name === b[0])?.sort_order ?? 98
-        return aOrder - bOrder
-      })
-      .filter(([, v]) => v.expenses !== 0 || v.income !== 0)
-  }, [transactions, members])
-
-  if (rows.length === 0 && members.length === 0) return null
-
-  const displayRows: [string, { expenses: number; income: number }][] = rows.length > 0
-    ? rows
-    : members.map(m => [m.full_name, { expenses: 0, income: 0 }])
-
-  const totalExpenses = displayRows.reduce((s, [, v]) => s + v.expenses, 0)
-
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 mt-6">
-      <p className="text-sm font-bold text-gray-900 mb-3">Spending by Person</p>
-      <div className="grid grid-cols-3 gap-3">
-        {displayRows.map(([owner, { expenses, income }]) => {
-          const member = members.find(m => m.full_name === owner)
-          const isUnknown = owner === 'Unknown'
-          const label = isUnknown ? 'Unassigned' : (member?.display_name ?? owner)
-          const color = isUnknown ? '#9ca3af' : (member?.color ?? '#6b7280')
-          const pct = totalExpenses > 0 ? Math.round((expenses / totalExpenses) * 100) : 0
-          const href = isUnknown ? undefined : `/budget/transactions?owner=${encodeURIComponent(owner)}`
-          const card = (
-            <div
-              className={`rounded-xl p-3 ${isUnknown ? 'border border-dashed border-gray-300 bg-gray-50' : ''} ${href ? 'hover:brightness-95 transition-all' : ''}`}
-              style={isUnknown ? undefined : { backgroundColor: `${color}10` }}
-            >
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className={`text-xs font-semibold ${isUnknown ? 'text-gray-400' : 'text-gray-700'}`}>{label}</span>
-                {href && <svg className="w-3 h-3 text-gray-300 ml-auto flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>}
-              </div>
-              <p className="text-[10px] text-gray-400 mb-0.5">Spent</p>
-              <p className={`text-base font-bold tabular-nums ${isUnknown ? 'text-gray-400' : 'text-gray-900'}`}>${fmt(expenses)}</p>
-              <p className="text-[10px] tabular-nums mt-0.5 text-gray-400">{pct}% of total</p>
-              {income > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-200">
-                  <p className="text-[10px] text-gray-400 mb-0.5">Earned</p>
-                  <p className="text-sm font-semibold text-green-600 tabular-nums">${fmt(income)}</p>
-                </div>
-              )}
-            </div>
-          )
-          return href
-            ? <Link key={owner} href={href}>{card}</Link>
-            : <div key={owner}>{card}</div>
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ── Category trends (stacked bar chart) ──────────────────────────────────────
 function CategoryTrends({
   transactions,
@@ -643,6 +571,19 @@ export default function CashFlowClient({
   const [yearlyTxns, setYearlyTxns] = useState<CashFlowTransaction[] | null>(null)
   const [yearlyLoading, setYearlyLoading] = useState(false)
 
+  // ── Owner filter ──────────────────────────────────────────────────────────
+  // null = every owner. Filters every chart on the page, not just the
+  // now-removed "Spending by Person" cards this replaced.
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null)
+  const filteredTransactions = useMemo(
+    () => ownerFilter ? transactions.filter(t => t.owner === ownerFilter) : transactions,
+    [transactions, ownerFilter]
+  )
+  const filteredYearlyTxns = useMemo(
+    () => !yearlyTxns ? null : (ownerFilter ? yearlyTxns.filter(t => t.owner === ownerFilter) : yearlyTxns),
+    [yearlyTxns, ownerFilter]
+  )
+
   // ── Monthly periods (6 months) ────────────────────────────────────────────
   const monthlyPeriods = useMemo(() => {
     const result = []
@@ -656,7 +597,7 @@ export default function CashFlowClient({
   const monthlyTotals = useMemo(() => {
     return monthlyPeriods.map(({ year, month }) => {
       let income = 0, expenses = 0
-      for (const t of transactions) {
+      for (const t of filteredTransactions) {
         if (t.is_transfer || t.category?.is_transfer) continue
         const d = new Date(t.transacted_at)
         if (d.getFullYear() !== year || d.getMonth() !== month) continue
@@ -666,16 +607,16 @@ export default function CashFlowClient({
       }
       return { year, month, income, expenses, savings: income - expenses }
     })
-  }, [transactions, monthlyPeriods])
+  }, [filteredTransactions, monthlyPeriods])
 
   // ── Yearly periods (derived from fetched data) ────────────────────────────
   const yearlyData = useMemo(() => {
-    if (!yearlyTxns) return { periods: [] as { year: number; month: number }[], totals: [] as { year: number; month: number; income: number; expenses: number; savings: number; label: string }[] }
-    const years = [...new Set(yearlyTxns.map(t => new Date(t.transacted_at).getFullYear()))].sort() as number[]
+    if (!filteredYearlyTxns) return { periods: [] as { year: number; month: number }[], totals: [] as { year: number; month: number; income: number; expenses: number; savings: number; label: string }[] }
+    const years = [...new Set(filteredYearlyTxns.map(t => new Date(t.transacted_at).getFullYear()))].sort() as number[]
     const periods = years.map(yr => ({ year: yr, month: 0 }))
     const totals = years.map(yr => {
       let income = 0, expenses = 0
-      for (const t of yearlyTxns) {
+      for (const t of filteredYearlyTxns) {
         if (t.is_transfer || t.category?.is_transfer) continue
         const d = new Date(t.transacted_at)
         if (d.getFullYear() !== yr) continue
@@ -685,12 +626,12 @@ export default function CashFlowClient({
       return { year: yr, month: 0, income, expenses, savings: income - expenses, label: String(yr) }
     })
     return { periods, totals }
-  }, [yearlyTxns])
+  }, [filteredYearlyTxns])
 
   // ── Active data ───────────────────────────────────────────────────────────
   const activePeriods = view === 'monthly' ? monthlyPeriods : yearlyData.periods
   const activeTotals  = view === 'monthly' ? monthlyTotals  : yearlyData.totals
-  const activeTxns    = view === 'monthly' ? transactions   : (yearlyTxns ?? [])
+  const activeTxns    = view === 'monthly' ? filteredTransactions : (filteredYearlyTxns ?? [])
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(monthlyPeriods.length - 1)
@@ -783,6 +724,37 @@ export default function CashFlowClient({
         </div>
       </div>
 
+      {/* Owner filter */}
+      {members.length > 0 && (
+        <div className="flex items-center gap-2 mb-6 overflow-x-auto">
+          <button
+            onClick={() => setOwnerFilter(null)}
+            className={`shrink-0 px-3 py-1.5 text-xs font-semibold rounded-full border transition touch-manipulation ${
+              ownerFilter === null
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            All
+          </button>
+          {members.map(m => (
+            <button
+              key={m.id}
+              onClick={() => setOwnerFilter(m.full_name)}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition touch-manipulation ${
+                ownerFilter === m.full_name
+                  ? 'text-white border-transparent'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+              }`}
+              style={ownerFilter === m.full_name ? { backgroundColor: m.color } : undefined}
+            >
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} />
+              {m.display_name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Setup checklist */}
       <SetupChecklist userId={userId} initialDismissed={setupCtaDismissed} />
 
@@ -810,14 +782,11 @@ export default function CashFlowClient({
         periodicMode={view}
       />
 
-      {/* Spending by Person */}
-      <OwnerBreakdown transactions={selectedTxns} members={members} />
-
       {/* Breakdowns */}
       <BreakdownSection title="Income"   isIncome={true}  transactions={incomeTxns}  categories={categories}
-        allTransactions={transactions} periods={monthlyPeriods} periodicMode="monthly" />
+        allTransactions={filteredTransactions} periods={monthlyPeriods} periodicMode="monthly" />
       <BreakdownSection title="Expenses" isIncome={false} transactions={expenseTxns} categories={categories}
-        allTransactions={transactions} periods={monthlyPeriods} periodicMode="monthly" />
+        allTransactions={filteredTransactions} periods={monthlyPeriods} periodicMode="monthly" />
     </div>
   )
 }
