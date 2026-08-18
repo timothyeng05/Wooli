@@ -41,7 +41,7 @@ export default async function BudgetDashboardPage() {
       .lte('transacted_at', curEnd.toISOString()),
     supabase
       .from('transactions')
-      .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, owner, categories(name, icon, is_income)')
+      .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, is_transfer, owner, categories(name, icon, is_income)')
       .eq('user_id', user.id)
       .order('transacted_at', { ascending: false })
       .limit(8),
@@ -111,6 +111,7 @@ export default async function BudgetDashboardPage() {
     transactedAt: t.transacted_at,
     isPending: t.is_pending ?? false,
     needsReview: t.needs_review ?? false,
+    isTransfer: t.is_transfer ?? false,
     owner: t.owner ?? null,
     categoryName: (t.categories as any)?.name ?? null,
     categoryIcon: (t.categories as any)?.icon ?? null,

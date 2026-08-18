@@ -227,6 +227,7 @@ export interface RecentTransaction {
   transactedAt: string
   isPending: boolean
   needsReview: boolean
+  isTransfer: boolean
   owner: string | null
   categoryName: string | null
   categoryIcon: string | null
@@ -283,7 +284,7 @@ export default function DashboardClient({
       const supabase = createClient()
       let query = supabase
         .from('transactions')
-        .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, owner, categories(name, icon, is_income)')
+        .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, is_transfer, owner, categories(name, icon, is_income)')
         .eq('user_id', userId)
         .eq('needs_review', true)
         .order('transacted_at', { ascending: false })
@@ -298,6 +299,7 @@ export default function DashboardClient({
         transactedAt: t.transacted_at,
         isPending: t.is_pending ?? false,
         needsReview: t.needs_review ?? false,
+        isTransfer: t.is_transfer ?? false,
         owner: t.owner ?? null,
         categoryName: t.categories?.name ?? null,
         categoryIcon: t.categories?.icon ?? null,
@@ -362,16 +364,16 @@ export default function DashboardClient({
               {!loadingTxns && displayedTxns.map(t => (
                 <div key={t.id} className="flex items-center gap-3 py-2">
                   <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 text-sm">
-                    {getCatEmoji(t.categoryName ?? '', t.categoryIcon)}
+                    {t.isTransfer ? '↔️' : getCatEmoji(t.categoryName ?? '', t.categoryIcon)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{t.merchant || t.description || 'Transaction'}</p>
-                    <p className="text-xs text-gray-400 truncate">{t.categoryName ?? 'Uncategorized'}</p>
+                    <p className="text-xs text-gray-400 truncate">{t.isTransfer ? 'Transfer' : (t.categoryName ?? 'Uncategorized')}</p>
                   </div>
                   {t.isPending && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 flex-shrink-0">Pending</span>
                   )}
-                  <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${t.isIncome ? 'text-green-600' : 'text-gray-900'}`}>
+                  <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${t.isTransfer ? 'text-gray-400' : t.isIncome ? 'text-green-600' : 'text-gray-900'}`}>
                     {t.isIncome ? '+' : '-'}${fmt(t.amount)}
                   </span>
                 </div>
