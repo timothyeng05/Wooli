@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { syncTransactionsForUser } from '@/lib/budget/simplefin-sync'
 
-// Scheduled daily via vercel.json ("15 8 * * *", shortly after /api/cron/sync).
+// Scheduled daily via vercel.json ("15 11 * * *" = 7:15am ET during standard
+// time / 8:15am ET during daylight time — Vercel Cron is UTC-only with no DST
+// awareness), shortly after /api/cron/sync.
 // Safe to run on Vercel because the categorizer (groq-fallback.ts) calls Groq's
 // cloud API, not a local LM Studio server — if that ever changes back to a local
 // model, this needs to go back to a local-only trigger instead: pull and
