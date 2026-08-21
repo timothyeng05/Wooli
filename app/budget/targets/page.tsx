@@ -37,6 +37,7 @@ export default async function BudgetTargetsPage({
       .select('category_id, amount')
       .eq('user_id', user.id)
       .eq('is_transfer', false)
+      .eq('is_hidden', false)
       .gte('transacted_at', monthStart)
       .lte('transacted_at', monthEnd),
     supabase

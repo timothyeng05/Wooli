@@ -55,9 +55,19 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 - In review mode: each row gets a one-click ✓ ("accept as-is" → marks reviewed + `user_confirmed`), a **Mark all N reviewed** button (respects any active search/filter), and row-click still opens the review sheet. Standard filters (owner, account, category) narrow the queue.
 - Any reviewed-state change dispatches a `budget:review-changed` window event (`REVIEW_CHANGED_EVENT`). `BudgetSidebar` and `BudgetMobileDrawer` listen for it (and refetch on navigation) to keep the **unreviewed-count badge** on the Transactions nav item current.
 
+## Hidden transactions (`is_hidden`)
+
+- `is_hidden = true` keeps a row **out of every total** without deleting it or mislabelling it a transfer — for a reimbursed expense, a duplicate the bank posted twice, or a one-off that would distort a category trend. Added in migration `055`.
+- The row **stays visible in the transaction list**, dimmed, with a grey `Hidden` badge. Tapping the badge unhides it in place; there's also a **Hide from totals** toggle in the review sheet and a **Hide/Unhide** bulk action. The bulk button shows *Unhide* only when every selected row is already hidden.
+- **Excluded from:** the list's summary bar and day subtotals, dashboard (spend window + recent activity), cash flow, spend targets, household map, and category detail. Report queries filter with `.eq('is_hidden', false)`; the list filters client-side since it still renders the rows.
+- The summary bar reports hidden rows separately (`N hidden, not counted`) so the totals and the row count never look like they disagree.
+- **Excluded from the review queue too** — hiding a row is already a decision about it. It is dropped by the queue's `is_hidden` filter rather than by setting `needs_review = false`, so unhiding restores it with its original review state. All four counts of that queue (`fetchUnreviewed`, `refreshUnreviewedCount`, `BudgetSidebar`, `BudgetMobileDrawer`) apply the same filter — they must agree or the nav badge reads a different number than the queue shows.
+- `FilterPanel` has a **Show hidden transactions** toggle (on by default). Turning it off drops hidden rows from the list entirely and shows a `Hidden excluded` chip.
+
 ## Key notes
 
 - `amount` positive = income, negative = expense.
 - `is_transfer = true` excludes from income/expense totals — always filter this out in summaries.
+- `is_hidden = true` also excludes from totals, but keeps the row's own category and labelling intact.
 - Monthly overview groups by `category.parent_id` (top-level categories), respecting `budget_level`.
 - Inline category edit in `TransactionList` triggers Supabase update directly — no API route needed.

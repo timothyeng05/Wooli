@@ -31,6 +31,8 @@ export default async function BudgetDashboard() {
           categories ( id, name, color, icon, is_income, is_transfer, parent_id )
         `)
         .eq('user_id', user.id)
+        // Hidden transactions are excluded from every reporting surface.
+        .eq('is_hidden', false)
         .gte('transacted_at', start)
         .lte('transacted_at', end)
         .order('transacted_at', { ascending: false })

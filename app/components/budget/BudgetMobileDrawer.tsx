@@ -29,6 +29,8 @@ export default function BudgetMobileDrawer() {
         .from('transactions')
         .select('id', { count: 'exact', head: true })
         .eq('needs_review', true)
+        // Matches the review queue in TransactionList, which skips hidden rows.
+        .eq('is_hidden', false)
       if (!cancelled) setReviewCount(count ?? 0)
     }
     load()

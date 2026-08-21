@@ -28,12 +28,19 @@ function emitReviewChanged() {
 const REVIEW_SELECT = `
   id, amount, description, merchant, transacted_at, provider_transaction_id,
   is_transfer, is_pending, needs_review, owner, account_name, trip_id, account_id, notes,
+  is_hidden,
   categories ( id, name, color, icon, is_income ),
   trips ( id, name )
 `
 
 // The review queue is global (all time), not month-scoped like the page's main
 // query — so it can be cleared to zero the way Monarch's queue works.
+//
+// Hidden rows are excluded: hiding one is already a decision about it, so
+// leaving it to nag in the queue would mean two actions for one intent. Every
+// other count of this queue (refreshUnreviewedCount, BudgetSidebar,
+// BudgetMobileDrawer, DashboardClient) filters the same way — they must agree
+// or the badge reads a different number than the queue shows.
 async function fetchUnreviewed(supabase: SupabaseClient): Promise<Transaction[]> {
   const PAGE = 1000
   let all: Transaction[] = []
@@ -42,6 +49,7 @@ async function fetchUnreviewed(supabase: SupabaseClient): Promise<Transaction[]>
       .from('transactions')
       .select(REVIEW_SELECT)
       .eq('needs_review', true)
+      .eq('is_hidden', false)
       .order('transacted_at', { ascending: false })
       .range(page * PAGE, (page + 1) * PAGE - 1)
     if (!data || data.length === 0) break
@@ -113,6 +121,7 @@ export default function TransactionList({
   const [typeFilter, setTypeFilter] = useState<'income' | 'expense' | null>(initialType ?? null)
   const [dateStart, setDateStart] = useState('')
   const [dateEnd, setDateEnd] = useState('')
+  const [showHidden, setShowHidden] = useState(true)
 
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
@@ -135,6 +144,7 @@ export default function TransactionList({
       .from('transactions')
       .select('id', { count: 'exact', head: true })
       .eq('needs_review', true)
+      .eq('is_hidden', false)
     setUnreviewedCount(count ?? 0)
   }, [])
 
@@ -230,6 +240,23 @@ export default function TransactionList({
     }
   }
 
+  // ── Hide / unhide ─────────────────────────────────────────────────────────
+  // Hiding leaves needs_review and the categorization fields alone — the row is
+  // dropped from the review queue by the `is_hidden` filter on the queue's own
+  // query, not by silently marking it reviewed. Unhiding therefore restores it
+  // to the queue with its original review state intact.
+  const setHidden = async (id: string, hidden: boolean) => {
+    const supabase = createClient()
+    const { error } = await supabase.from('transactions').update({ is_hidden: hidden }).eq('id', id)
+    if (error) return
+    setItems(prev => prev.map(t => (t.id === id ? { ...t, is_hidden: hidden } : t)))
+    // The queue is a snapshot, so a newly hidden row has to be spliced out of it
+    // here; an unhidden one reappears the next time review mode is entered.
+    setReviewItems(prev => hidden ? prev.filter(t => t.id !== id) : prev)
+    emitReviewChanged()
+    refreshUnreviewedCount()
+  }
+
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!await confirm('Delete this transaction?')) return
@@ -285,6 +312,23 @@ export default function TransactionList({
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
 
+  // Chunked like the other bulk writes — a large selection would otherwise blow
+  // the URL length on the .in() filter.
+  const bulkSetHidden = async (hidden: boolean) => {
+    setBulkLoading(true)
+    const supabase = createClient()
+    const ids = [...selectedIds]
+    for (let i = 0; i < ids.length; i += 500) {
+      await supabase.from('transactions').update({ is_hidden: hidden }).in('id', ids.slice(i, i + 500))
+    }
+    const idSet = new Set(ids)
+    setItems(prev => prev.map(t => (idSet.has(t.id) ? { ...t, is_hidden: hidden } : t)))
+    setReviewItems(prev => hidden ? prev.filter(t => !idSet.has(t.id)) : prev)
+    emitReviewChanged()
+    refreshUnreviewedCount()
+    setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
+  }
+
   const bulkDelete = async () => {
     if (!await confirm(`Delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`)) return
     setBulkLoading(true)
@@ -318,10 +362,11 @@ export default function TransactionList({
     () => [...new Set(base.map(t => t.account_name).filter(Boolean) as string[])].sort(),
     [base]
   )
-  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size + (typeFilter ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0)
+  const activeFilterCount = selectedAccounts.size + selectedCatIds.size + selectedOwners.size + selectedTripIds.size + (typeFilter ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0) + (showHidden ? 0 : 1)
 
   const filtered = useMemo(() => {
     const result = base.filter(t => {
+      if (!showHidden && t.is_hidden) return false
       if (selectedAccounts.size > 0 && !selectedAccounts.has(t.account_name ?? '')) return false
       if (selectedCatIds.size > 0) {
         const isUncategorized = !t.categories && !t.is_transfer
@@ -352,7 +397,7 @@ export default function TransactionList({
     if (sortOrder === 'amount-desc') return [...result].sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
     if (sortOrder === 'amount-asc')  return [...result].sort((a, b) => Math.abs(Number(a.amount)) - Math.abs(Number(b.amount)))
     return result
-  }, [base, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder])
+  }, [base, search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder, showHidden])
 
   // ── Render windowing ────────────────────────────────────────────────────────
   const [visibleCount, setVisibleCount] = useState(WINDOW_INITIAL)
@@ -361,7 +406,7 @@ export default function TransactionList({
   // top window so we don't render thousands of now-irrelevant rows.
   useEffect(() => {
     setVisibleCount(WINDOW_INITIAL)
-  }, [search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder, reviewMode])
+  }, [search, selectedAccounts, selectedCatIds, selectedOwners, selectedTripIds, typeFilter, dateStart, dateEnd, sortOrder, reviewMode, showHidden])
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
   const hasMore = filtered.length > visible.length
@@ -393,6 +438,7 @@ export default function TransactionList({
     setTypeFilter(null)
     setDateStart('')
     setDateEnd('')
+    setShowHidden(true)
   }
 
   const removeAccountFilter = (a: string) => { const n = new Set(selectedAccounts); n.delete(a); setSelectedAccounts(n) }
@@ -408,6 +454,14 @@ export default function TransactionList({
       </div>
     )
   }
+
+  // Drives the bulk bar's single Hide/Unhide button: only offer "Unhide" when
+  // every selected row is already hidden, so a mixed selection hides. Reads off
+  // `filtered`, which a filter change can empty out from under a live selection
+  // — hence the length check, since `[].every()` is vacuously true and would
+  // otherwise flip the button to Unhide with nothing hidden.
+  const selectedRows = filtered.filter(t => selectedIds.has(t.id))
+  const allSelectedHidden = selectedRows.length > 0 && selectedRows.every(t => t.is_hidden)
 
   const transferCatIds = new Set(categories.filter(c => c.is_transfer).map(c => c.id))
   const parents  = categories.filter(c => !c.parent_id)
@@ -553,6 +607,12 @@ export default function TransactionList({
               </span>
             ) : null
           })}
+          {!showHidden && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700 font-medium">
+              Hidden excluded
+              <button onClick={() => setShowHidden(true)} className="text-blue-400 hover:text-blue-600 leading-none">×</button>
+            </span>
+          )}
           {activeFilterCount > 0 && (
             <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600 px-1 transition">
               Clear all
@@ -563,7 +623,11 @@ export default function TransactionList({
 
       {/* ── Filter summary bar ─────────────────────────────────────────────── */}
       {filtered.length > 0 && (() => {
-        const nonTransfer = filtered.filter(t => !t.is_transfer)
+        // Hidden rows are excluded from the money, but still counted in the row
+        // count — the count describes the list you're looking at, the totals
+        // describe what actually counts toward spend.
+        const hiddenCount = filtered.filter(t => t.is_hidden).length
+        const nonTransfer = filtered.filter(t => !t.is_transfer && !t.is_hidden)
         // Bucket by category, not by sign: a credit filed against an expense
         // category is a refund and nets down "spent", it isn't income.
         const isExpenseRow = (t: Transaction) =>
@@ -582,6 +646,9 @@ export default function TransactionList({
             )}
             {income > 0 && (
               <span>· <span className="text-green-600">${income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} income</span></span>
+            )}
+            {hiddenCount > 0 && (
+              <span>· <span className="text-gray-400">{hiddenCount} hidden, not counted</span></span>
             )}
           </div>
         )
@@ -625,7 +692,7 @@ export default function TransactionList({
       ) : (
         (sortOrder === 'amount-desc' || sortOrder === 'amount-asc' ? [['', visible] as [string, Transaction[]]] : grouped).map(([date, txns]) => {
           const dayTotal = (txns as Transaction[])
-            .filter(t => !t.is_transfer && !t.is_pending && !transferCatIds.has(t.categories?.id ?? ''))
+            .filter(t => !t.is_transfer && !t.is_pending && !t.is_hidden && !transferCatIds.has(t.categories?.id ?? ''))
             .reduce((s, t) => s + ((t.categories ? t.categories.is_income === false : t.amount < 0) ? -Number(t.amount) : 0), 0)
 
           return (
@@ -661,7 +728,7 @@ export default function TransactionList({
                       key={t.id}
                       className={`group flex items-center gap-3 py-3 cursor-pointer rounded-lg px-2 transition ${
                         selectMode && selectedIds.has(t.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
-                      }`}
+                      } ${t.is_hidden ? 'opacity-50' : ''}`}
                       onClick={selectMode ? () => toggleSelect(t.id) : () => setReviewTxn(t)}
                     >
                       {selectMode && (
@@ -705,6 +772,26 @@ export default function TransactionList({
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
                               Pending
                             </span>
+                          )}
+                          {t.is_hidden && (
+                            selectMode ? (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 flex-shrink-0">
+                                Hidden
+                              </span>
+                            ) : (
+                              // Tapping the badge unhides in place — the same one-tap
+                              // undo the Review badge offers, so getting a row back
+                              // into the totals never needs the editor sheet.
+                              <button
+                                onClick={e => { e.stopPropagation(); setHidden(t.id, false) }}
+                                title="Unhide — count this in totals again"
+                                aria-label={`Unhide ${name}`}
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 active:bg-gray-400 flex-shrink-0 transition inline-flex items-center gap-1"
+                              >
+                                Hidden
+                                <span className="opacity-40 hover:opacity-100">↩</span>
+                              </button>
+                            )
                           )}
                           {t.needs_review && (
                             selectMode ? (
@@ -826,6 +913,8 @@ export default function TransactionList({
           dateEnd={dateEnd}
           onDateStartChange={setDateStart}
           onDateEndChange={setDateEnd}
+          showHidden={showHidden}
+          onShowHiddenChange={setShowHidden}
           onClear={clearFilters}
         />
       )}
@@ -877,6 +966,19 @@ export default function TransactionList({
               className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition">
               Mark Reviewed
             </button>
+            {/* Whichever action the selection needs — showing both would put two
+                near-identical buttons in an already-crowded mobile bar. */}
+            {allSelectedHidden ? (
+              <button onClick={() => bulkSetHidden(false)} disabled={bulkLoading}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition">
+                Unhide
+              </button>
+            ) : (
+              <button onClick={() => bulkSetHidden(true)} disabled={bulkLoading}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition">
+                Hide
+              </button>
+            )}
             {trips.length > 0 && (
               <select
                 value=""

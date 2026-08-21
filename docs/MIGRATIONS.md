@@ -255,6 +255,19 @@ drop table if exists public.forecast_member_settings;
 
 **Why:** Forecast (net worth / retirement projection) feature removed. `household_members` and `budget_goals` are shared with other features (Accounts owner labels, Goals) and were not touched.
 
+### 055 — hide a transaction from totals (`supabase/migrations/055_transaction_hidden.sql`)
+
+```sql
+alter table public.transactions
+  add column if not exists is_hidden boolean not null default false;
+
+create index if not exists transactions_hidden_idx
+  on public.transactions (user_id, transacted_at)
+  where is_hidden;
+```
+
+**Why:** `is_transfer` was the only way to keep a row out of income/expense maths, but it also relabels the row as a transfer — wrong for a reimbursed work expense, a double-posted charge, or a one-off that would distort a category trend. Those are real expenses on a real account that simply shouldn't count toward spend. Monarch's semantics: a hidden transaction stays visible (dimmed) in the transaction list so it can be found and unhidden, and is excluded from every total. `not null default false` so reads treat it as a plain boolean rather than defending against null the way `is_transfer` has to. The index is partial on the hidden rows only — they're the rare case, so it stays small.
+
 ---
 
 ## Pending

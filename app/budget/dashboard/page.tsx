@@ -37,12 +37,17 @@ export default async function BudgetDashboardPage() {
       .from('transactions')
       .select('amount, transacted_at, is_transfer, categories(is_income)')
       .eq('user_id', user.id)
+      // Hidden transactions are excluded from every reporting surface.
+      .eq('is_hidden', false)
       .gte('transacted_at', farStart.toISOString())
       .lte('transacted_at', curEnd.toISOString()),
     supabase
       .from('transactions')
       .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, is_transfer, owner, categories(name, icon, is_income)')
       .eq('user_id', user.id)
+      // A row you've hidden shouldn't resurface in the recent-activity feed —
+      // the transactions list is where it stays visible and can be unhidden.
+      .eq('is_hidden', false)
       .order('transacted_at', { ascending: false })
       .limit(8),
     supabase

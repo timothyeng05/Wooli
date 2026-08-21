@@ -675,6 +675,8 @@ export default function CashFlowClient({
       const { data } = await supabase
         .from('transactions')
         .select('id, amount, merchant, transacted_at, is_transfer, owner, categories(id, name, color, icon, is_income, is_transfer, parent_id)')
+        // Hidden transactions are excluded from every reporting surface.
+        .eq('is_hidden', false)
         .order('transacted_at', { ascending: false })
         .range(page * PAGE, (page + 1) * PAGE - 1) as any
       if (!data || data.length === 0) break

@@ -287,6 +287,7 @@ export default function DashboardClient({
         .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, is_transfer, owner, categories(name, icon, is_income)')
         .eq('user_id', userId)
         .eq('needs_review', true)
+        .eq('is_hidden', false)
         .order('transacted_at', { ascending: false })
         .limit(8)
       if (filter !== 'anyone') query = query.eq('owner', filter)

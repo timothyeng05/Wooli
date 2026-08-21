@@ -71,6 +71,8 @@ export default async function HouseholdMapPage() {
       .from('transactions')
       .select('amount, transacted_at, is_transfer, categories(is_income)')
       .eq('user_id', user.id)
+      // Hidden transactions are excluded from every reporting surface.
+      .eq('is_hidden', false)
       .gte('transacted_at', spendWindowStart.toISOString())
       .lte('transacted_at', spendWindowEnd.toISOString()),
   ])

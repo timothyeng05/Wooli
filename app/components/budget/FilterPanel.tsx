@@ -36,6 +36,7 @@ export default function FilterPanel({
   members, selectedOwners, onOwnersChange,
   trips, selectedTripIds, onTripsChange,
   dateStart, dateEnd, onDateStartChange, onDateEndChange,
+  showHidden, onShowHiddenChange,
   onClear,
 }: {
   onClose: () => void
@@ -57,6 +58,8 @@ export default function FilterPanel({
   dateEnd: string
   onDateStartChange: (s: string) => void
   onDateEndChange: (s: string) => void
+  showHidden: boolean
+  onShowHiddenChange: (v: boolean) => void
   onClear: () => void
 }) {
   const [screen, setScreen] = useState<FilterScreen>('main')
@@ -157,6 +160,22 @@ export default function FilterPanel({
                   </div>
                 </button>
               ))}
+
+              {/* Hidden transactions stay in the list by default (dimmed, and
+                  already excluded from every total) so they can be found and
+                  unhidden. This drops them from the list entirely. */}
+              <div className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <span className="text-sm text-gray-800">Show hidden transactions</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showHidden}
+                  onClick={() => onShowHiddenChange(!showHidden)}
+                  className={`relative w-10 h-6 rounded-full flex-shrink-0 transition ${showHidden ? 'bg-blue-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${showHidden ? 'left-[1.125rem]' : 'left-0.5'}`} />
+                </button>
+              </div>
             </>
           )}
 

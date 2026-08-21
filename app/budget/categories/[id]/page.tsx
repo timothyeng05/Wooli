@@ -53,6 +53,8 @@ export default async function CategoryDetailPage({
       .select('id, amount, merchant, description, transacted_at, is_pending, owner, account_name')
       .eq('user_id', user.id)
       .in('category_id', catIds)
+      // Hidden transactions are excluded from every reporting surface.
+      .eq('is_hidden', false)
       .order('transacted_at', { ascending: false })
       .range(page * PAGE, (page + 1) * PAGE - 1) as any
     if (!data || data.length === 0) break

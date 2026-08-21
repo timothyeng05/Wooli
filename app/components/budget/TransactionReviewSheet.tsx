@@ -68,6 +68,7 @@ export default function TransactionReviewSheet({
     notes: string | null
     is_recurring: boolean
     recurring_id: string | null
+    is_hidden: boolean
   }) => void
   onDelete: (id: string) => void
 }) {
@@ -89,6 +90,7 @@ export default function TransactionReviewSheet({
   const [catPickerOpen, setCatPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [isRecurring, setIsRecurring] = useState(!!transaction.is_recurring)
+  const [isHidden, setIsHidden] = useState(!!transaction.is_hidden)
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const { toast } = useToast()
 
@@ -189,6 +191,7 @@ export default function TransactionReviewSheet({
       merchant: merchant || null,
       is_recurring: isRecurring,
       recurring_id: recurringId,
+      is_hidden: isHidden,
       // User confirmation → recompute normalized merchant and seed memory via trigger.
       normalized_merchant: normalizeMerchant(merchant || description || null),
       categorization_source: 'user_confirmed',
@@ -212,6 +215,7 @@ export default function TransactionReviewSheet({
       merchant: merchant || null,
       is_recurring: isRecurring,
       recurring_id: recurringId,
+      is_hidden: isHidden,
     })
   }
 
@@ -428,6 +432,27 @@ export default function TransactionReviewSheet({
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Hide from totals */}
+          <div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Hide from totals</p>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isHidden}
+                onClick={() => setIsHidden(v => !v)}
+                className={`relative w-10 h-6 rounded-full flex-shrink-0 transition ${isHidden ? 'bg-gray-700' : 'bg-gray-200'}`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${isHidden ? 'left-[1.125rem]' : 'left-0.5'}`} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {isHidden
+                ? 'Excluded from the summary, dashboard, cash flow and targets. Still listed here, dimmed.'
+                : 'Keep a reimbursement or duplicate out of your spending without deleting it.'}
+            </p>
           </div>
 
           {/* Actions */}

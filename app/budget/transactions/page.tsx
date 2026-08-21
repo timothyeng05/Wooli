@@ -43,7 +43,7 @@ export default async function TransactionsPage({
         .select(`
           id, amount, description, merchant, transacted_at, provider_transaction_id,
           is_transfer, is_pending, needs_review, owner, account_name, trip_id, account_id, notes,
-          is_recurring, recurring_id,
+          is_recurring, recurring_id, is_hidden,
           categories ( id, name, color, icon, is_income ),
           trips ( id, name )
         `)
