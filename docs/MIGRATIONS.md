@@ -279,6 +279,16 @@ where needs_review = false
 
 **Why:** Migration 045 set the rule — `needs_review` means "a human hasn't verified this yet" — but the categorization pipeline never followed it. `runDeterministicLayers` in `lib/budget/categorize/pipeline.ts` built every result from a `base` object carrying `needs_review: false`, so confident `merchant_memory`, `provider_mapping` and `similarity_match` hits were written already-reviewed and never appeared in the queue. Because merchant memory is seeded by user confirmations, a single early confirmation silently auto-approved every future transaction from that merchant. The pipeline is fixed (base now carries `needs_review: true`, with regression tests); this backfills the 90 rows written while it was wrong, reusing 045's exact predicate so genuinely user-confirmed rows are left alone.
 
+### 057 — merge duplicate categories (`supabase/migrations/057_merge_duplicate_categories.sql`)
+
+**Why:** On 2026-08-18 16:59:59–17:00:00 UTC, `/api/setup-budget` seeded its full 34-category default tree on top of an existing, already-customised tree, leaving 14 duplicated names. The `sort_order` fingerprint is conclusive — parents at 0..6 in `DEFAULT_CATEGORIES` order, children at `7 + parentIndex*10 + childIndex`, exactly that route's formula.
+
+The likely trigger is `/api/reset-onboarding`, which deletes every category and clears `onboarding_completed_at`, after which onboarding re-seeds. Its only guard then was an email check for `woolitravel@gmail.com`, which does not match the app account; commit `8069fd6` later added the `NODE_ENV` gate that closes this off. That route's delete has no error handling, so a partial failure would pass silently — consistent with the originals surviving alongside the new set.
+
+**Merge rule:** for each `(user, name, top-level-or-not)` group with more than one row, the **oldest** row wins; newer copies have their transactions, budgets, merchant memory and child categories repointed onto it, then are deleted. Most pairs sat under different parents (Lifestyle/Personal, General/Other, Household/Home, Earnings/Income) because the top-level categories had been renamed — same concept under a renamed vs default parent, so older-wins is still correct.
+
+**Result:** 78 → 64 categories, 14 removed; 7 transactions, 0 budgets and 6 merchant-memory rows repointed, 12 children reparented. Transaction count unchanged at 146, with zero orphaned transactions, budgets, memory rows or child categories.
+
 ---
 
 ## Pending
