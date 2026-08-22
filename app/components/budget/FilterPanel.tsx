@@ -299,7 +299,7 @@ export default function FilterPanel({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 bg-white">
+        <div className="flex gap-3 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 border-t border-gray-100 bg-white">
           <button
             onClick={() => { onClear(); setScreen('main') }}
             className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition"

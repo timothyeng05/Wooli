@@ -481,7 +481,9 @@ export default function TransactionList({
           <input
             type="text"
             aria-label="Search transactions"
-            placeholder="Search transactions…"
+            // Short enough not to clip at 393px (iPhone); the full wording lives
+            // in aria-label, so nothing is lost for assistive tech.
+            placeholder="Search…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
@@ -933,9 +935,12 @@ export default function TransactionList({
         />
       )}
 
-      {/* ── Bulk action bar ─────────────────────────────────────────────────── */}
+      {/* ── Bulk action bar ─────────────────────────────────────────────────────
+          Sits directly on top of the mobile tab bar, which is 4rem tall plus its
+          own safe-area inset — a flat bottom-16 overlapped it on notched iPhones,
+          hiding Delete/Cancel behind the tab bar. */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg px-4 py-3">
+        <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] md:bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg px-4 py-3">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-gray-700 mr-1">{selectedIds.size} selected</span>
             <select defaultValue="" onChange={e => { if (e.target.value) bulkSetCategory(e.target.value) }}

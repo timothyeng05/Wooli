@@ -223,7 +223,10 @@ export default function TransactionReviewSheet({
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
         <div className="absolute inset-0 bg-black/20" />
-        <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md mx-0 sm:mx-4 p-6 space-y-5 max-h-[90dvh] overflow-y-auto"
+        {/* Extra bottom padding on mobile: as a bottom sheet its Save/Delete row
+            ends at the viewport edge, which on a notched iPhone is under the home
+            indicator. sm+ renders it centred, where the plain p-6 is right. */}
+        <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md mx-0 sm:mx-4 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6 space-y-5 max-h-[90dvh] overflow-y-auto"
           onClick={e => e.stopPropagation()}>
           <div>
             <p className="font-semibold text-gray-900 truncate">{transaction.merchant || transaction.description || 'Transaction'}</p>
