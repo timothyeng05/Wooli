@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import CashFlowClient from '@/app/components/budget/CashFlowClient'
 import type { CashFlowTransaction, CashFlowCategory } from '@/app/budget/cashflow/page'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
 export default async function BudgetDashboard() {
   const supabase = await createServerSupabaseClient()
@@ -18,13 +19,15 @@ export default async function BudgetDashboard() {
   const start = new Date(year, month - 5, 1).toISOString()
   const end = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
 
+  const onlyVisible = await visibleTransactionsFilter(supabase, user.id)
+
   // Transactions, categories, and members are independent — fetch concurrently
   // instead of serially so the window query doesn't block the metadata reads.
   const fetchWindowTxns = async () => {
     const PAGE = 1000
     let all: any[] = []
     for (let page = 0; ; page++) {
-      const { data } = await supabase
+      const { data } = await onlyVisible(supabase
         .from('transactions')
         .select(`
           id, amount, merchant, description, transacted_at, is_transfer, is_pending, owner,
@@ -36,7 +39,7 @@ export default async function BudgetDashboard() {
         .gte('transacted_at', start)
         .lte('transacted_at', end)
         .order('transacted_at', { ascending: false })
-        .range(page * PAGE, (page + 1) * PAGE - 1) as any
+        .range(page * PAGE, (page + 1) * PAGE - 1)) as any
       if (!data || data.length === 0) break
       all = all.concat(data)
       if (data.length < PAGE) break

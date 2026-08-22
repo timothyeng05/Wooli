@@ -11,6 +11,8 @@ import CategoryPicker from './CategoryPicker'
 import FilterPanel from './FilterPanel'
 import TransactionReviewSheet from './TransactionReviewSheet'
 import { fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
+import { fetchHiddenAccountFilter } from '@/lib/budget/hidden-accounts'
+import { countUnreviewed } from '@/lib/budget/review-queue'
 
 // Render rows in windows so the full (possibly 1000+ row) dataset isn't all
 // committed to the DOM at once — the entire set still lives in memory for
@@ -43,15 +45,17 @@ const REVIEW_SELECT = `
 // or the badge reads a different number than the queue shows.
 async function fetchUnreviewed(supabase: SupabaseClient): Promise<Transaction[]> {
   const PAGE = 1000
+  const hiddenAccountFilter = await fetchHiddenAccountFilter(supabase)
   let all: Transaction[] = []
   for (let page = 0; ; page++) {
-    const { data } = await supabase
+    const base = supabase
       .from('transactions')
       .select(REVIEW_SELECT)
       .eq('needs_review', true)
       .eq('is_hidden', false)
       .order('transacted_at', { ascending: false })
       .range(page * PAGE, (page + 1) * PAGE - 1)
+    const { data } = await (hiddenAccountFilter ? base.or(hiddenAccountFilter) : base)
     if (!data || data.length === 0) break
     all = all.concat(data as unknown as Transaction[])
     if (data.length < PAGE) break
@@ -139,13 +143,7 @@ export default function TransactionList({
   const [unreviewedCount, setUnreviewedCount] = useState<number | null>(null)
 
   const refreshUnreviewedCount = useCallback(async () => {
-    const supabase = createClient()
-    const { count } = await supabase
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('needs_review', true)
-      .eq('is_hidden', false)
-    setUnreviewedCount(count ?? 0)
+    setUnreviewedCount(await countUnreviewed(createClient()))
   }, [])
 
   useEffect(() => { refreshUnreviewedCount() }, [refreshUnreviewedCount])

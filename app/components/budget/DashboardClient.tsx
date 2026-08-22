@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 import { getCatEmoji } from './catEmoji'
 
 function fmt(n: number) {
@@ -282,14 +283,15 @@ export default function DashboardClient({
     setLoadingTxns(true)
     try {
       const supabase = createClient()
-      let query = supabase
+      const onlyVisible = await visibleTransactionsFilter(supabase, userId)
+      let query = onlyVisible(supabase
         .from('transactions')
         .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, is_transfer, owner, categories(name, icon, is_income)')
         .eq('user_id', userId)
         .eq('needs_review', true)
         .eq('is_hidden', false)
         .order('transacted_at', { ascending: false })
-        .limit(8)
+        .limit(8))
       if (filter !== 'anyone') query = query.eq('owner', filter)
       const { data } = await query
       setFilteredTxns((data ?? []).map((t: any) => ({

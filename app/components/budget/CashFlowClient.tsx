@@ -5,8 +5,9 @@ import Link from 'next/link'
 import type { CashFlowTransaction, CashFlowCategory } from '@/app/budget/cashflow/page'
 import type { HouseholdMember } from './transaction-types'
 import { createClient } from '@/lib/supabase-client'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
-const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_LABELS =['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // ── Setup checklist CTA ───────────────────────────────────────────────────────
 const CTA_ITEMS = [
@@ -669,16 +670,17 @@ export default function CashFlowClient({
     if (yearlyTxns || yearlyLoading) return
     setYearlyLoading(true)
     const supabase = createClient()
+    const onlyVisible = await visibleTransactionsFilter(supabase)
     const PAGE = 1000
     const all: CashFlowTransaction[] = []
     for (let page = 0; ; page++) {
-      const { data } = await supabase
+      const { data } = await onlyVisible(supabase
         .from('transactions')
         .select('id, amount, merchant, transacted_at, is_transfer, owner, categories(id, name, color, icon, is_income, is_transfer, parent_id)')
         // Hidden transactions are excluded from every reporting surface.
         .eq('is_hidden', false)
         .order('transacted_at', { ascending: false })
-        .range(page * PAGE, (page + 1) * PAGE - 1) as any
+        .range(page * PAGE, (page + 1) * PAGE - 1)) as any
       if (!data || data.length === 0) break
       all.push(...data.map((t: any) => ({
         id: t.id,

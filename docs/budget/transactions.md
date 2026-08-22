@@ -64,6 +64,24 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 - **Excluded from the review queue too** — hiding a row is already a decision about it. It is dropped by the queue's `is_hidden` filter rather than by setting `needs_review = false`, so unhiding restores it with its original review state. All four counts of that queue (`fetchUnreviewed`, `refreshUnreviewedCount`, `BudgetSidebar`, `BudgetMobileDrawer`) apply the same filter — they must agree or the nav badge reads a different number than the queue shows.
 - `FilterPanel` has a **Show hidden transactions** toggle (on by default). Turning it off drops hidden rows from the list entirely and shows a `Hidden excluded` chip.
 
+## Hidden accounts (`synced_accounts.is_hidden`)
+
+Hiding an account on the Accounts page also hides **its transactions** — unlike `transactions.is_hidden`, these don't linger dimmed in the list, they don't appear at all.
+
+- Kept separate from `transactions.is_hidden` on purpose: that flag is a per-transaction decision, this is a property of the account. Unhiding an account therefore restores exactly the rows that were visible before, leaving any individually hidden ones hidden.
+- Transactions link to a synced account by the denormalized text `transactions.provider_account_id`, **not** a foreign key, so the exclusion is a value filter (`lib/budget/hidden-accounts.ts`).
+- **Always apply it via `visibleTransactionsFilter(supabase, userId)`**, which resolves the hidden accounts once and returns a wrapper for each query. Don't hand-roll the filter:
+  - `NULL NOT IN (…)` is `NULL` in SQL, not true, so a bare `not.in` silently drops every **manually added** transaction (those have no `provider_account_id`). The `provider_account_id.is.null` arm exists solely to prevent that — verified against live data: the correct filter keeps the manual row, the naive one loses it.
+  - PostgREST rejects an empty `in.()` list, so "no accounts hidden" must mean "apply no filter at all". The wrapper handles that; a raw filter string doesn't.
+- `buildHiddenAccountFilter` quotes each id, so a comma inside a provider id can't split the list. Unit-tested in `lib/budget/__tests__/hidden-accounts.test.ts`.
+- **Applied in:** transactions list, review queue and all its badge counts (via `countUnreviewed`), dashboard (spend window + recent + review feed), monthly overview, cash flow (incl. the lazy yearly fetch), targets, household map, category detail.
+
+### Review-queue count
+
+`lib/budget/review-queue.ts` exports `countUnreviewed`, the single source for the violet nav badge. Four places used to ask this question independently and every new exclusion had to be mirrored by hand; when they disagree the badge shows a number the queue can't produce, and clearing the queue never zeroes the badge. Add exclusions there, not at the call sites.
+
+Note: `accounts.exclude_from_reports` and `synced_accounts.exclude_from_reports` exist in the database but are **unused** — no code reads or writes them.
+
 ## Key notes
 
 - `amount` positive = income, negative = expense.

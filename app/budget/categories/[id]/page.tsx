@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import CategoryDetailClient from '@/app/components/budget/CategoryDetailClient'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
 export default async function CategoryDetailPage({
   params,
@@ -45,18 +46,21 @@ export default async function CategoryDetailPage({
 
   const catIds = [id, ...(children?.map((c: any) => c.id) ?? [])]
 
+  const onlyVisible = await visibleTransactionsFilter(supabase, user.id)
+
   const PAGE = 1000
   let transactions: any[] = []
   for (let page = 0; ; page++) {
-    const { data } = await supabase
+    const { data } = await onlyVisible(supabase
       .from('transactions')
       .select('id, amount, merchant, description, transacted_at, is_pending, owner, account_name')
       .eq('user_id', user.id)
       .in('category_id', catIds)
-      // Hidden transactions are excluded from every reporting surface.
+      // Hidden transactions, and transactions on a hidden account, are excluded
+      // from every reporting surface.
       .eq('is_hidden', false)
       .order('transacted_at', { ascending: false })
-      .range(page * PAGE, (page + 1) * PAGE - 1) as any
+      .range(page * PAGE, (page + 1) * PAGE - 1)) as any
     if (!data || data.length === 0) break
     transactions = transactions.concat(data)
     if (data.length < PAGE) break

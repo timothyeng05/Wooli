@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { logout } from '@/app/auth/actions'
+import { countUnreviewed } from '@/lib/budget/review-queue'
 import { BUDGET_NAV } from './budget-nav'
 
 function getCurrentLabel(pathname: string): string {
@@ -24,14 +25,8 @@ export default function BudgetMobileDrawer() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const supabase = createClient()
-      const { count } = await supabase
-        .from('transactions')
-        .select('id', { count: 'exact', head: true })
-        .eq('needs_review', true)
-        // Matches the review queue in TransactionList, which skips hidden rows.
-        .eq('is_hidden', false)
-      if (!cancelled) setReviewCount(count ?? 0)
+      const count = await countUnreviewed(createClient())
+      if (!cancelled) setReviewCount(count)
     }
     load()
     window.addEventListener('budget:review-changed', load)
