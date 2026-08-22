@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import HouseholdMapClient, { type MapAccount } from '@/app/components/budget/HouseholdMapClient'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
 function monthBounds(d: Date) {
   const start = new Date(d.getFullYear(), d.getMonth(), 1)
@@ -47,6 +48,8 @@ export default async function HouseholdMapPage() {
   const spendWindowEnd = monthBounds(monthsAgo(1)).end
   const spendMonthKeys = [3, 2, 1].map(n => monthKey(monthsAgo(n)))
 
+  const onlyVisible = await visibleTransactionsFilter(supabase, user.id)
+
   const [
     { data: syncedAccounts },
     { data: manualAccounts },
@@ -67,12 +70,14 @@ export default async function HouseholdMapPage() {
       .select('id, full_name, display_name, color, sort_order, is_shared')
       .eq('user_id', user.id)
       .order('sort_order', { ascending: true }),
-    supabase
+    onlyVisible(supabase
       .from('transactions')
       .select('amount, transacted_at, is_transfer, categories(is_income)')
       .eq('user_id', user.id)
+      // Hidden transactions are excluded from every reporting surface.
+      .eq('is_hidden', false)
       .gte('transacted_at', spendWindowStart.toISOString())
-      .lte('transacted_at', spendWindowEnd.toISOString()),
+      .lte('transacted_at', spendWindowEnd.toISOString())),
   ])
 
   // Freshness of the synced balances this page renders. Nothing pulls from

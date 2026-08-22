@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import BudgetTargetsClient from '@/app/components/budget/BudgetTargetsClient'
 import MonthNav from '@/app/components/budget/MonthNav'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
 export default async function BudgetTargetsPage({
   searchParams,
@@ -26,19 +27,22 @@ export default async function BudgetTargetsPage({
   const monthStart = new Date(year, resolvedMonth, 1).toISOString()
   const monthEnd   = new Date(year, resolvedMonth + 1, 0, 23, 59, 59).toISOString()
 
+  const onlyVisible = await visibleTransactionsFilter(supabase, user.id)
+
   const [categoriesResult, txnResult, budgetsResult] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, color, icon, is_income, is_transfer, parent_id, sort_order, budget_level')
       .eq('user_id', user.id)
       .order('sort_order'),
-    supabase
+    onlyVisible(supabase
       .from('transactions')
       .select('category_id, amount')
       .eq('user_id', user.id)
       .eq('is_transfer', false)
+      .eq('is_hidden', false)
       .gte('transacted_at', monthStart)
-      .lte('transacted_at', monthEnd),
+      .lte('transacted_at', monthEnd)),
     supabase
       .from('budgets')
       .select('category_id, target_amount')

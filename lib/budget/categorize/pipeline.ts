@@ -18,7 +18,15 @@ async function runDeterministicLayers(
   ctx: PipelineContext,
   names: Map<string, string>,
 ): Promise<CategorizeResult | null> {
-  const base = { normalized_merchant: normalized, groq_called: false, needs_review: false }
+  // Every layer below prefills a category, but no human has confirmed *this*
+  // transaction — so it stays in the review queue, exactly like the Groq path.
+  // `needs_review` means "a human hasn't verified this yet", not "the
+  // categorizer was unsure" (migration 045): confidence decides whether we
+  // prefill a category, not whether the user gets to see the row. Only an
+  // explicit user confirmation clears the flag, and that's also what seeds
+  // merchant memory — so auto-clearing here let a single early confirmation
+  // silently approve every future match of that merchant.
+  const base = { normalized_merchant: normalized, groq_called: false, needs_review: true }
 
   // 2. Merchant memory — prior confirmed categorizations for this normalized merchant.
   const mem = ctx.lookupMemory(normalized, input.account_name ?? null)

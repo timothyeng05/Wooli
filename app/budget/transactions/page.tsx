@@ -7,6 +7,7 @@ import TransactionList from '@/app/components/budget/TransactionList'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
 import MonthNav from '@/app/components/budget/MonthNav'
 import { SIMPLEFIN_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
+import { fetchHiddenAccountFilter } from '@/lib/budget/hidden-accounts'
 
 export default async function TransactionsPage({
   searchParams,
@@ -33,17 +34,21 @@ export default async function TransactionsPage({
 
   // All independent reads run concurrently — transactions overlap with the
   // smaller metadata queries instead of blocking them serially.
+  // Transactions on a hidden account are dropped here rather than client-side,
+  // so the row windowing in TransactionList counts only rows that will render.
+  const hiddenAccountFilter = await fetchHiddenAccountFilter(supabase, user.id)
+
   const fetchMonthTransactions = async () => {
     // Supabase caps each request at 1000 rows, so paginate.
     const PAGE = 1000
     let all: any[] = []
     for (let page = 0; ; page++) {
-      const { data } = await supabase
+      const base = supabase
         .from('transactions')
         .select(`
           id, amount, description, merchant, transacted_at, provider_transaction_id,
           is_transfer, is_pending, needs_review, owner, account_name, trip_id, account_id, notes,
-          is_recurring, recurring_id,
+          is_recurring, recurring_id, is_hidden,
           categories ( id, name, color, icon, is_income ),
           trips ( id, name )
         `)
@@ -51,7 +56,8 @@ export default async function TransactionsPage({
         .gte('transacted_at', monthStart)
         .lte('transacted_at', monthEnd)
         .order('transacted_at', { ascending: false })
-        .range(page * PAGE, (page + 1) * PAGE - 1) as any
+        .range(page * PAGE, (page + 1) * PAGE - 1)
+      const { data } = await (hiddenAccountFilter ? base.or(hiddenAccountFilter) : base) as any
       if (!data || data.length === 0) break
       all = all.concat(data)
       if (data.length < PAGE) break
@@ -112,16 +118,18 @@ export default async function TransactionsPage({
       <div className="sticky top-[53px] z-30 bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 sm:py-0">
 
-          {/* Single row on sm+, two rows on mobile */}
-          <div className="flex items-center justify-between sm:h-14 gap-3">
-            <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
+          {/* Single row on sm+, two rows on mobile. MonthNav is rendered ONCE and
+              repositioned with flex order — it used to be rendered twice, in a
+              `hidden sm:flex` wrapper and again in an `sm:hidden` row, which meant
+              two live month pickers in the DOM at every viewport. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:h-14 sm:flex-nowrap">
+            <h1 className="order-1 text-xl font-bold text-gray-900">Transactions</h1>
 
-            {/* MonthNav: hidden on mobile (shown in row 2 below) */}
-            <div className="hidden sm:flex flex-1 justify-center">
+            <div className="order-3 basis-full flex justify-center pb-2 sm:order-2 sm:basis-auto sm:flex-1 sm:pb-0">
               <MonthNav year={year} month={resolvedMonth} />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="order-2 flex items-center gap-2 sm:order-3">
               {SIMPLEFIN_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
               <Link
                 href="/budget/new"
@@ -131,11 +139,6 @@ export default async function TransactionsPage({
                 <span className="hidden sm:inline">Add</span>
               </Link>
             </div>
-          </div>
-
-          {/* MonthNav row — mobile only, sits below title row */}
-          <div className="flex justify-center pb-2 sm:hidden">
-            <MonthNav year={year} month={resolvedMonth} />
           </div>
 
         </div>

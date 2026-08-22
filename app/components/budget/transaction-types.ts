@@ -33,6 +33,12 @@ export interface Transaction {
   is_recurring: boolean | null
   /** recurring_transactions row this transaction was marked as an occurrence of. */
   recurring_id: string | null
+  /**
+   * Excluded from every total — summary bar, day subtotals, dashboard, cash
+   * flow, targets — while staying visible (dimmed) in the list so it can be
+   * found and unhidden. Unlike `is_transfer` this doesn't relabel the row.
+   */
+  is_hidden: boolean | null
   categories: { id: string; name: string; color: string; icon?: string | null; is_income?: boolean } | null
   trips: { id: string; name: string } | null
 }

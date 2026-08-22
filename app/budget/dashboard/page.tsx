@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server'
 import DashboardClient from '@/app/components/budget/DashboardClient'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
 function monthBounds(d: Date) {
   const start = new Date(d.getFullYear(), d.getMonth(), 1)
@@ -24,6 +25,9 @@ export default async function BudgetDashboardPage() {
   const farStart = new Date(Date.now() - EXPENSE_WINDOW_DAYS * 86400000)
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
+  // Transactions on a hidden account are excluded everywhere below.
+  const onlyVisible = await visibleTransactionsFilter(supabase, user.id)
+
   const [
     { data: profile },
     { data: windowTxns },
@@ -33,18 +37,23 @@ export default async function BudgetDashboardPage() {
     { data: members },
   ] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', user.id).single(),
-    supabase
+    onlyVisible(supabase
       .from('transactions')
       .select('amount, transacted_at, is_transfer, categories(is_income)')
       .eq('user_id', user.id)
+      // Hidden transactions are excluded from every reporting surface.
+      .eq('is_hidden', false)
       .gte('transacted_at', farStart.toISOString())
-      .lte('transacted_at', curEnd.toISOString()),
-    supabase
+      .lte('transacted_at', curEnd.toISOString())),
+    onlyVisible(supabase
       .from('transactions')
       .select('id, amount, merchant, description, transacted_at, is_pending, needs_review, is_transfer, owner, categories(name, icon, is_income)')
       .eq('user_id', user.id)
+      // A row you've hidden shouldn't resurface in the recent-activity feed —
+      // the transactions list is where it stays visible and can be unhidden.
+      .eq('is_hidden', false)
       .order('transacted_at', { ascending: false })
-      .limit(8),
+      .limit(8)),
     supabase
       .from('budgets')
       .select('category_id, target_amount, categories!inner(is_income, is_transfer)')
