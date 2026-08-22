@@ -361,8 +361,8 @@ function SyncedAccountRow({ account, onUpdate, onHide, members }: {
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Visibility</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-800">Hide from list</p>
-              <p className="text-[11px] text-gray-400">Removes account from the accounts view</p>
+              <p className="text-xs font-medium text-gray-800">Hide account &amp; its transactions</p>
+              <p className="text-[11px] text-gray-400">Hides it here, and keeps its transactions out of the list, review queue and every report. Balance still counts toward net worth.</p>
             </div>
             <Toggle checked={hidden} onChange={setHidden} />
           </div>
