@@ -1,0 +1,44 @@
+-- Swap the category tree: keep the seeded default names, drop the custom ones.
+--
+-- Migrations 057 and 058 consolidated onto the OLDER tree (Household, Lifestyle,
+-- General, Earnings) on the evidence that it was hand-built and the newer one
+-- came from an accidental /api/setup-budget re-seed. The user confirmed the
+-- opposite preference: keep Home / Personal / Other / Income and remove the
+-- older four trees. This reverses that direction.
+--
+-- Data is REPOINTED, not orphaned — every custom category has a seeded
+-- equivalent, so transactions, merchant memory and budgets move across rather
+-- than being dropped. Verified after the fact: all 783 merchant_memory rows and
+-- all 146 transactions survived, with zero orphans.
+--
+-- Mapping (custom -> seeded):
+--   Household              -> Home                Lifestyle           -> Personal
+--   Household>Home         -> Home                Lifestyle>Entertainment -> Personal>Entertainment
+--   Household>Property Insurance -> Home          Lifestyle>Grooming  -> Personal>Personal Care
+--   Household>Repairs & Furnishing -> Home>Home Improvement
+--   Household>Utilities    -> Home>Utilities      Lifestyle>Medical   -> Personal>Medical
+--                                                 Lifestyle>Shopping  -> Personal>Shopping
+--   General                -> Other               Earnings            -> Income
+--   General>Annual Fees    -> Other               Earnings>Interest & Rewards -> Income>Other Income
+--   General>Miscellaneous  -> Other>Miscellaneous Earnings>Rental     -> Income>Rent Income
+--   General>Subscription   -> Other>Subscriptions Earnings>Salary     -> Income>Salary
+--   General>Taxes          -> Other>Taxes
+--   General>Uncategorized  -> Other
+--
+-- A full snapshot was taken first (categories_backup_20260822 and the
+-- txn_/memory_/budget_category_backup_20260822 tables), so this is reversible.
+--
+-- Budgets are unique on (user_id, category_id, month). Where several sources
+-- collapse onto the same target and month, the largest single target_amount is
+-- kept rather than summing, so a figure the user actually set is preserved
+-- verbatim instead of one being invented. Two rows were consolidated this way
+-- (27 budgets -> 25).
+--
+-- Business and Car belong to neither tree and were left untouched. Travel keeps
+-- both its custom children (Flights & Hotels, Transit & Rideshare) and the
+-- seeded ones (Transit, Rideshare, Flights, Hotels) — overlapping but not
+-- name-duplicates, so consolidating them is a judgement call left to the user.
+--
+-- The SQL applied is recorded in the Supabase migration history as
+-- swap_to_seeded_category_tree and repoint_and_drop_custom_category_trees_v2;
+-- it is reproduced here for the repo's own log.
