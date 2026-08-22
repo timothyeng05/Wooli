@@ -74,7 +74,7 @@ function PlannedCell({ value, onSave, compact }: { value: number; onSave: (v: nu
           if (e.key === 'Enter') { onSave(parseFloat(draft) || 0); setEditing(false) }
           if (e.key === 'Escape') setEditing(false)
         }}
-        className={`${compact ? 'w-20' : 'w-24'} px-2 py-0.5 text-sm border border-blue-400 rounded-lg bg-white tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-blue-500`}
+        className={`${compact ? 'w-16 md:w-20' : 'w-24'} px-2 py-0.5 text-sm border border-blue-400 rounded-lg bg-white tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-blue-500`}
       />
     )
   }
@@ -82,7 +82,7 @@ function PlannedCell({ value, onSave, compact }: { value: number; onSave: (v: nu
   return (
     <button
       onClick={() => { setDraft(value > 0 ? String(value) : ''); setEditing(true) }}
-      className={`${compact ? 'w-20' : 'w-24'} px-2 py-0.5 text-sm tabular-nums text-right rounded-lg border transition ${
+      className={`${compact ? 'w-16 md:w-20' : 'w-24'} px-2 py-0.5 text-sm tabular-nums text-right rounded-lg border transition ${
         value > 0
           ? 'border-gray-200 hover:border-blue-300 text-gray-700 bg-white'
           : 'border-dashed border-gray-200 hover:border-blue-300 text-gray-300 bg-white'
@@ -215,8 +215,9 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
 
     return (
       <div key={parent.id} className="border border-gray-200 rounded-xl overflow-hidden mb-2 bg-white shadow-sm">
-        {/* Parent row */}
-        <div className="flex items-center gap-2 px-3 py-3">
+        {/* Parent row — tighter gaps and padding on mobile so the category name
+            keeps usable width once Planned/Actual/Remaining are all shown. */}
+        <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-3">
           {hasChildren ? (
             <button
               onClick={() => setOpenGroups(prev => {
@@ -235,8 +236,8 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
             <div className="w-5 flex-shrink-0" />
           )}
 
-          <span className="text-lg flex-shrink-0">{getCatEmoji(parent.name, parent.icon)}</span>
-          <Link href={`/budget/categories/${parent.id}`} className="flex-1 text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors">
+          <span className="text-base md:text-lg flex-shrink-0">{getCatEmoji(parent.name, parent.icon)}</span>
+          <Link href={`/budget/categories/${parent.id}`} className="flex-1 min-w-0 text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors">
             {parent.name}
           </Link>
 
@@ -255,19 +256,19 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
             {!hasChildren || level === 'parent' ? (
               <PlannedCell value={localBudgets[parent.id] ?? 0} onSave={v => saveBudget(parent.id, v)} compact />
             ) : (
-              <span className="text-sm text-gray-500 tabular-nums w-20 text-right block">
+              <span className="text-sm text-gray-500 tabular-nums w-16 md:w-20 text-right block">
                 {planned > 0 ? `$${fmt(planned)}` : '—'}
               </span>
             )}
           </div>
 
-          {/* Actual — hidden on mobile */}
-          <div className="hidden md:block flex-shrink-0 w-20 text-right">
+          {/* Actual */}
+          <div className="flex-shrink-0 w-14 md:w-20 text-right ml-2 md:ml-0">
             <span className="text-sm text-gray-600 tabular-nums">${fmt(displayActual)}</span>
           </div>
 
           {/* Remaining pill */}
-          <div className="flex-shrink-0 flex justify-end w-20 md:w-24">
+          <div className="flex-shrink-0 flex justify-end w-16 md:w-24">
             <RemainingPill
               remaining={remaining}
               isOver={groupOver}
@@ -296,7 +297,7 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
 
               return (
                 <div key={child.id} className="bg-gray-50/50">
-                  <div className="flex items-center gap-2 px-3 py-2.5 pl-8">
+                  <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-2.5 pl-6 md:pl-8">
                     <span className="text-base flex-shrink-0">{getCatEmoji(child.name, child.icon)}</span>
                     <Link href={`/budget/categories/${child.id}`} className="flex-1 text-sm text-gray-700 truncate hover:text-blue-600 transition-colors">
                       {child.name}
@@ -306,16 +307,16 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
                       {level === 'sub' ? (
                         <PlannedCell value={childPlanned} onSave={v => saveBudget(child.id, v)} compact />
                       ) : (
-                        <span className="text-sm text-gray-300 w-20 text-right block">—</span>
+                        <span className="text-sm text-gray-300 w-16 md:w-20 text-right block">—</span>
                       )}
                     </div>
 
-                    {/* Actual hidden on mobile */}
-                    <div className="hidden md:block flex-shrink-0 w-20 text-right">
+                    {/* Actual */}
+                    <div className="flex-shrink-0 w-14 md:w-20 text-right ml-2 md:ml-0">
                       <span className="text-sm text-gray-400 tabular-nums">${fmt(childActual)}</span>
                     </div>
 
-                    <div className="flex-shrink-0 flex justify-end w-20 md:w-24">
+                    <div className="flex-shrink-0 flex justify-end w-16 md:w-24">
                       {level === 'sub' ? (
                         <RemainingPill
                           remaining={childRemaining}
@@ -388,11 +389,14 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
           {/* Main table */}
           <div className="flex-1 min-w-0">
             {/* Column headers */}
-            <div className="flex items-center px-3 pb-1 mb-1">
+            <div className="flex items-center px-2 md:px-3 pb-1 mb-1">
               <div className="flex-1" />
-              <div className="w-20 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Planned</div>
-              <div className="hidden md:block w-20 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider ml-2">Actual</div>
-              <div className="w-20 md:w-24 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider ml-2">Remaining</div>
+              <div className="w-16 md:w-20 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Planned</div>
+              {/* Actual is narrower on mobile so all three numeric columns fit at
+                  390px. It used to be `hidden md:block`, which left phone users
+                  looking at targets with no actuals to compare them against. */}
+              <div className="w-14 md:w-20 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider ml-2">Actual</div>
+              <div className="w-16 md:w-24 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider ml-2">Remaining</div>
             </div>
 
             {/* Income */}
@@ -401,15 +405,15 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
                 <span className="flex-1 text-xs font-bold text-gray-500 uppercase tracking-widest">Income</span>
               </div>
               {incomeGroups.map(g => renderGroup(g, true))}
-              <div className="flex items-center px-3 py-2.5 bg-white rounded-xl border border-gray-200 mt-1 shadow-sm">
+              <div className="flex items-center px-2 md:px-3 py-2.5 bg-white rounded-xl border border-gray-200 mt-1 shadow-sm">
                 <span className="flex-1 text-sm font-bold text-gray-900">Total Income</span>
-                <div className="w-20 text-right text-sm font-bold text-gray-700 tabular-nums">
+                <div className="w-16 md:w-20 text-right text-sm font-bold text-gray-700 tabular-nums">
                   {totals.incomePlanned > 0 ? `$${fmt(totals.incomePlanned)}` : '—'}
                 </div>
-                <div className="hidden md:block w-20 text-right text-sm font-semibold text-gray-600 tabular-nums ml-2">
+                <div className="w-14 md:w-20 text-right text-sm font-semibold text-gray-600 tabular-nums ml-2">
                   ${fmt(totals.incomeActual)}
                 </div>
-                <div className="w-20 md:w-24 flex justify-end ml-2">
+                <div className="w-16 md:w-24 flex justify-end ml-2">
                   <RemainingPill
                     remaining={totals.incomePlanned - totals.incomeActual}
                     isOver={false}
@@ -426,15 +430,15 @@ export default function BudgetTargetsClient({ categories, actuals, budgets: init
                 <span className="flex-1 text-xs font-bold text-gray-500 uppercase tracking-widest">Expenses</span>
               </div>
               {expenseGroups.map(g => renderGroup(g, false))}
-              <div className="flex items-center px-3 py-2.5 bg-white rounded-xl border border-gray-200 mt-1 shadow-sm">
+              <div className="flex items-center px-2 md:px-3 py-2.5 bg-white rounded-xl border border-gray-200 mt-1 shadow-sm">
                 <span className="flex-1 text-sm font-bold text-gray-900">Total Expenses</span>
-                <div className="w-20 text-right text-sm font-bold text-gray-700 tabular-nums">
+                <div className="w-16 md:w-20 text-right text-sm font-bold text-gray-700 tabular-nums">
                   {totals.expensePlanned > 0 ? `$${fmt(totals.expensePlanned)}` : '—'}
                 </div>
-                <div className="hidden md:block w-20 text-right text-sm font-semibold text-gray-600 tabular-nums ml-2">
+                <div className="w-14 md:w-20 text-right text-sm font-semibold text-gray-600 tabular-nums ml-2">
                   ${fmt(totals.expenseActual)}
                 </div>
-                <div className="w-20 md:w-24 flex justify-end ml-2">
+                <div className="w-16 md:w-24 flex justify-end ml-2">
                   <RemainingPill
                     remaining={totals.expensePlanned - totals.expenseActual}
                     isOver={totals.expenseActual > totals.expensePlanned && totals.expensePlanned > 0}

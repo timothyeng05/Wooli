@@ -475,19 +475,16 @@ export default function TransactionList({
             strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
+          {/* One input, not one per breakpoint: the mobile and desktop copies
+              differed only in placeholder text, but both sat in the DOM bound to
+              the same state, so assistive tech announced two search fields. */}
           <input
             type="text"
-            placeholder="Search…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent sm:hidden"
-          />
-          <input
-            type="text"
+            aria-label="Search transactions"
             placeholder="Search transactions…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="hidden sm:block w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
+            className="w-full pl-9 pr-9 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
           />
           {search && (
             <button onClick={() => setSearch('')}

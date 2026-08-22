@@ -268,6 +268,17 @@ create index if not exists transactions_hidden_idx
 
 **Why:** `is_transfer` was the only way to keep a row out of income/expense maths, but it also relabels the row as a transfer — wrong for a reimbursed work expense, a double-posted charge, or a one-off that would distort a category trend. Those are real expenses on a real account that simply shouldn't count toward spend. Monarch's semantics: a hidden transaction stays visible (dimmed) in the transaction list so it can be found and unhidden, and is excluded from every total. `not null default false` so reads treat it as a plain boolean rather than defending against null the way `is_transfer` has to. The index is partial on the hidden rows only — they're the rare case, so it stays small.
 
+### 056 — re-flag auto-approved transactions for review (`supabase/migrations/056_reflag_auto_approved_for_review.sql`)
+
+```sql
+update public.transactions
+set needs_review = true
+where needs_review = false
+  and coalesce(categorization_source, '') <> 'user_confirmed';
+```
+
+**Why:** Migration 045 set the rule — `needs_review` means "a human hasn't verified this yet" — but the categorization pipeline never followed it. `runDeterministicLayers` in `lib/budget/categorize/pipeline.ts` built every result from a `base` object carrying `needs_review: false`, so confident `merchant_memory`, `provider_mapping` and `similarity_match` hits were written already-reviewed and never appeared in the queue. Because merchant memory is seeded by user confirmations, a single early confirmation silently auto-approved every future transaction from that merchant. The pipeline is fixed (base now carries `needs_review: true`, with regression tests); this backfills the 90 rows written while it was wrong, reusing 045's exact predicate so genuinely user-confirmed rows are left alone.
+
 ---
 
 ## Pending

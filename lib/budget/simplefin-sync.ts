@@ -323,9 +323,10 @@ async function syncOneConnection(
       // made it indistinguishable from a genuine pipeline miss in any review stats.
       categorization_source: isTransfer ? 'transfer_rule' : r.source,
       categorization_confidence: r.confidence,
-      // Trust the pipeline's own verdict: a confident deterministic hit clears review,
-      // a fall-through stays flagged. Hardcoding true here discarded that signal and
-      // put every high-confidence merchant-memory match back in the queue by hand.
+      // The pipeline flags every synced row for review — a confident merchant-memory
+      // or similarity hit prefills the category but is still a guess no human has
+      // confirmed. Clearing review on those meant new transactions arrived
+      // pre-approved and never surfaced in the queue at all.
       needs_review: r.needs_review,
       groq_called: r.groq_called,
     }

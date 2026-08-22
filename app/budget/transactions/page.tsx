@@ -118,16 +118,18 @@ export default async function TransactionsPage({
       <div className="sticky top-[53px] z-30 bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 sm:py-0">
 
-          {/* Single row on sm+, two rows on mobile */}
-          <div className="flex items-center justify-between sm:h-14 gap-3">
-            <h1 className="text-xl font-bold text-gray-900">Transactions</h1>
+          {/* Single row on sm+, two rows on mobile. MonthNav is rendered ONCE and
+              repositioned with flex order — it used to be rendered twice, in a
+              `hidden sm:flex` wrapper and again in an `sm:hidden` row, which meant
+              two live month pickers in the DOM at every viewport. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:h-14 sm:flex-nowrap">
+            <h1 className="order-1 text-xl font-bold text-gray-900">Transactions</h1>
 
-            {/* MonthNav: hidden on mobile (shown in row 2 below) */}
-            <div className="hidden sm:flex flex-1 justify-center">
+            <div className="order-3 basis-full flex justify-center pb-2 sm:order-2 sm:basis-auto sm:flex-1 sm:pb-0">
               <MonthNav year={year} month={resolvedMonth} />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="order-2 flex items-center gap-2 sm:order-3">
               {SIMPLEFIN_TRANSACTION_SYNC_ENABLED && <SyncTransactionsButton lastSynced={lastSynced} />}
               <Link
                 href="/budget/new"
@@ -137,11 +139,6 @@ export default async function TransactionsPage({
                 <span className="hidden sm:inline">Add</span>
               </Link>
             </div>
-          </div>
-
-          {/* MonthNav row — mobile only, sits below title row */}
-          <div className="flex justify-center pb-2 sm:hidden">
-            <MonthNav year={year} month={resolvedMonth} />
           </div>
 
         </div>

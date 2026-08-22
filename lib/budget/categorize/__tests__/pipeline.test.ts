@@ -49,6 +49,8 @@ describe('categorization pipeline — Groq is skipped when a deterministic layer
     expect(r.category_id).toBe('cat-groc')
     expect(r.groq_called).toBe(false)
     expect(groqSpy).not.toHaveBeenCalled()
+    // Prefilling a category is not the same as a human confirming this row.
+    expect(r.needs_review).toBe(true)
   })
 
   it('provider_mapping: maps Plaid PFC (>=0.85) without Groq', async () => {
@@ -62,6 +64,42 @@ describe('categorization pipeline — Groq is skipped when a deterministic layer
     expect(r.category_id).toBe('cat-groc')
     expect(r.groq_called).toBe(false)
     expect(groqSpy).not.toHaveBeenCalled()
+    expect(r.needs_review).toBe(true)
+  })
+
+  it('every deterministic layer leaves the row in the review queue', async () => {
+    // Regression guard for the bug where `base` carried needs_review: false, so a
+    // confident merchant-memory hit arrived pre-approved and never reached the
+    // queue. `needs_review` tracks human verification, not categorizer confidence
+    // (migration 045); confidence only decides the prefilled category.
+    const mem: MerchantMemoryEntry = {
+      normalized_merchant: 'whole foods', account_name: null,
+      category_id: 'cat-groc', is_transfer: false, confidence: 1.0,
+    }
+    const cases: [string, Partial<PipelineContext>, CategorizeInput][] = [
+      ['merchant_memory', { lookupMemory: () => mem }, input('WHOLE FOODS MKT')],
+      ['similarity_match', { lookupSimilar: async () => ({ category_id: 'cat-shop', score: 0.95 }) }, input('TARGET STORE 42')],
+      ['provider_mapping', {}, input('SOME GROCERY', { provider_category: 'FOOD_AND_DRINK_GROCERIES', provider_confidence: 'HIGH' })],
+    ]
+    for (const [expectedSource, over, txn] of cases) {
+      const { ctx } = makeCtx(over)
+      const r = await categorizeTransaction(txn, ctx)
+      expect(r.source, `${expectedSource} should win`).toBe(expectedSource)
+      expect(r.needs_review, `${expectedSource} must stay in the review queue`).toBe(true)
+    }
+  })
+
+  it('flagging for review does not cost the prefilled category', async () => {
+    // The other half of the contract — otherwise the user re-categorizes by hand.
+    const mem: MerchantMemoryEntry = {
+      normalized_merchant: 'whole foods', account_name: null,
+      category_id: 'cat-groc', is_transfer: false, confidence: 1.0,
+    }
+    const { ctx } = makeCtx({ lookupMemory: () => mem })
+    const r = await categorizeTransaction(input('WHOLE FOODS MKT'), ctx)
+    expect(r.category_id).toBe('cat-groc')
+    expect(r.confidence).toBe(1.0)
+    expect(r.needs_review).toBe(true)
   })
 
   it('similarity_match: reuses nearest match (>=0.90) without Groq', async () => {
@@ -73,6 +111,7 @@ describe('categorization pipeline — Groq is skipped when a deterministic layer
     expect(r.category_id).toBe('cat-shop')
     expect(r.groq_called).toBe(false)
     expect(groqSpy).not.toHaveBeenCalled()
+    expect(r.needs_review).toBe(true)
   })
 
   it('low-confidence provider mapping still wins when its category keyword-matches (no Groq)', async () => {

@@ -47,6 +47,8 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 - Only an explicit user confirmation clears it: the review sheet, inline category pick, inline transfer toggle, and bulk category/transfer actions all set `needs_review = false` with `categorization_source = 'user_confirmed'`.
 - Exceptions that start reviewed: manual adds (`TransactionForm`), CSV imports (curated from Monarch/Copilot), and recurring-rule-generated transactions.
 - AI re-categorization (`/api/budget/recategorize`) does **not** change review state — it's not a human review.
+- **Neither does an automatic categorization at sync time.** Every layer of the pipeline — `merchant_memory`, `provider_mapping`, `similarity_match`, `groq` — returns `needs_review: true`. Confidence decides whether a category is *prefilled*, never whether the user sees the row. Regression-tested in `lib/budget/categorize/__tests__/pipeline.test.ts`.
+  - This was broken between roughly 2026-07-25 and 2026-08-22: `runDeterministicLayers` built its result from a `base` object carrying `needs_review: false`, so confident deterministic hits were written already-reviewed and never reached the queue. Because merchant memory is *seeded by user confirmations*, one early confirmation then silently auto-approved every later transaction from that merchant. Migration `056` re-flagged the 90 affected rows.
 - The list shows a violet `Review` badge on any `needs_review` row.
 
 ### Review queue (Monarch-style)
