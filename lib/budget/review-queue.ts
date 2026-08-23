@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { fetchHiddenAccountFilter } from './hidden-accounts'
+import { visibleTransactionsFilter } from './hidden-accounts'
 
 /**
  * Size of the review queue — the number behind the violet badge on the
@@ -12,15 +12,17 @@ import { fetchHiddenAccountFilter } from './hidden-accounts'
  * the queue can't produce, and clearing the queue never zeroes the badge.
  *
  * Excluded, matching `fetchUnreviewed`: individually hidden transactions
- * (`is_hidden`), and transactions on a hidden account.
+ * (`is_hidden`), and transactions on an account whose transactions are hidden
+ * (`exclude_from_reports`).
  */
 export async function countUnreviewed(supabase: SupabaseClient): Promise<number> {
-  const hiddenAccountFilter = await fetchHiddenAccountFilter(supabase)
-  const base = supabase
-    .from('transactions')
-    .select('id', { count: 'exact', head: true })
-    .eq('needs_review', true)
-    .eq('is_hidden', false)
-  const { count } = await (hiddenAccountFilter ? base.or(hiddenAccountFilter) : base)
+  const onlyVisible = await visibleTransactionsFilter(supabase)
+  const { count } = await onlyVisible(
+    supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('needs_review', true)
+      .eq('is_hidden', false),
+  )
   return count ?? 0
 }

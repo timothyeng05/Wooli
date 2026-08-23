@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildHiddenAccountFilter } from '@/lib/budget/hidden-accounts'
+import { buildAccountExclusionFilter, buildHiddenAccountFilter } from '@/lib/budget/hidden-accounts'
 
 describe('buildHiddenAccountFilter', () => {
   it('returns null when nothing is hidden, so callers apply no filter', () => {
@@ -41,5 +41,29 @@ describe('buildHiddenAccountFilter', () => {
       .toBe('provider_account_id.is.null,provider_account_id.not.in.("say\\"hi")')
     expect(buildHiddenAccountFilter(['back\\slash']))
       .toBe('provider_account_id.is.null,provider_account_id.not.in.("back\\\\slash")')
+  })
+})
+
+describe('buildAccountExclusionFilter — manual accounts', () => {
+  it('covers account_id as well as provider_account_id', () => {
+    expect(buildAccountExclusionFilter('account_id', ['aaa-bbb'])).toBe(
+      'account_id.is.null,account_id.not.in.("aaa-bbb")',
+    )
+  })
+
+  it('keeps rows with no account_id', () => {
+    // Every synced transaction has account_id null, so without the is.null arm
+    // excluding one manual account would hide the entire synced history.
+    const filter = buildAccountExclusionFilter('account_id', ['aaa-bbb'])
+    expect(filter?.startsWith('account_id.is.null,')).toBe(true)
+  })
+
+  it('still returns null when nothing is excluded', () => {
+    expect(buildAccountExclusionFilter('account_id', [])).toBeNull()
+  })
+
+  it('buildHiddenAccountFilter stays an alias for the provider column', () => {
+    expect(buildHiddenAccountFilter(['ACT-1']))
+      .toBe(buildAccountExclusionFilter('provider_account_id', ['ACT-1']))
   })
 })

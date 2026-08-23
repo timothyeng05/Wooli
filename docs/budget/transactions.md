@@ -66,12 +66,21 @@ categories (id, user_id, name, color, parent_id, is_income, is_transfer,
 - **Excluded from the review queue too** — hiding a row is already a decision about it. It is dropped by the queue's `is_hidden` filter rather than by setting `needs_review = false`, so unhiding restores it with its original review state. All four counts of that queue (`fetchUnreviewed`, `refreshUnreviewedCount`, `BudgetSidebar`, `BudgetMobileDrawer`) apply the same filter — they must agree or the nav badge reads a different number than the queue shows.
 - `FilterPanel` has a **Show hidden transactions** toggle (on by default). Turning it off drops hidden rows from the list entirely and shows a `Hidden excluded` chip.
 
-## Hidden accounts (`synced_accounts.is_hidden`)
+## Hidden accounts (`exclude_from_reports`)
 
-Hiding an account on the Accounts page also hides **its transactions** — unlike `transactions.is_hidden`, these don't linger dimmed in the list, they don't appear at all.
+Hiding an account and hiding its transactions are **two independent toggles** on the Accounts page (Visibility section), split in migration `062`:
+
+| Column | Toggle | Effect |
+|---|---|---|
+| `synced_accounts.is_hidden` | Hide account | Collapses the account out of the accounts list. Balance still counts toward net worth. Synced accounts only — manual ones are archived instead. |
+| `synced_accounts.exclude_from_reports` / `accounts.exclude_from_reports` | Hide its transactions | That account's transactions vanish from the list, the review queue and every report. |
+
+Only `exclude_from_reports` is read by the transaction filter. The two were a single flag before `062`, which backfilled `exclude_from_reports` from `is_hidden` so behaviour was unchanged at the split.
+
+Unlike `transactions.is_hidden`, excluded transactions don't linger dimmed in the list — they don't appear at all.
 
 - Kept separate from `transactions.is_hidden` on purpose: that flag is a per-transaction decision, this is a property of the account. Unhiding an account therefore restores exactly the rows that were visible before, leaving any individually hidden ones hidden.
-- Transactions link to a synced account by the denormalized text `transactions.provider_account_id`, **not** a foreign key, so the exclusion is a value filter (`lib/budget/hidden-accounts.ts`).
+- Transactions reach a synced account through the denormalized text `transactions.provider_account_id` and a manual one through `transactions.account_id`, neither a foreign key — so the exclusion is a value filter over **both** columns (`lib/budget/hidden-accounts.ts`).
 - **Always apply it via `visibleTransactionsFilter(supabase, userId)`**, which resolves the hidden accounts once and returns a wrapper for each query. Don't hand-roll the filter:
   - `NULL NOT IN (…)` is `NULL` in SQL, not true, so a bare `not.in` silently drops every **manually added** transaction (those have no `provider_account_id`). The `provider_account_id.is.null` arm exists solely to prevent that — verified against live data: the correct filter keeps the manual row, the naive one loses it.
   - PostgREST rejects an empty `in.()` list, so "no accounts hidden" must mean "apply no filter at all". The wrapper handles that; a raw filter string doesn't.

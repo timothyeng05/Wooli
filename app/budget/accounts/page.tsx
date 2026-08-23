@@ -22,7 +22,7 @@ export default async function AccountsPage() {
   ] = await Promise.all([
     supabase
       .from('synced_accounts')
-      .select('id, provider_account_id, name, mask, type, subtype, current_balance, owner, connection_id, org_name, updated_at, is_hidden, exclude_from_net_worth, nickname, type_override, sort_order')
+      .select('id, provider_account_id, name, mask, type, subtype, current_balance, owner, connection_id, org_name, updated_at, is_hidden, exclude_from_net_worth, exclude_from_reports, nickname, type_override, sort_order')
       .eq('user_id', user.id),
     supabase
       .from('bank_connections')
@@ -30,7 +30,7 @@ export default async function AccountsPage() {
       .eq('user_id', user.id),
     supabase
       .from('accounts')
-      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner, updated_at, exclude_from_net_worth, purchase_price, purchase_date, depreciation_months, residual_value')
+      .select('id, name, type, institution, current_balance, is_active, is_asset, notes, sort_order, owner, updated_at, exclude_from_net_worth, exclude_from_reports, purchase_price, purchase_date, depreciation_months, residual_value')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
@@ -140,6 +140,7 @@ export default async function AccountsPage() {
         source: 'synced' as const,
         is_hidden: a.is_hidden ?? false,
         exclude_from_net_worth: a.exclude_from_net_worth ?? false,
+        exclude_from_reports: a.exclude_from_reports ?? false,
         nickname: a.nickname ?? null,
         sortOrder: a.sort_order ?? 0,
         logoUrl: institution ? institutionLogoMap.get(institution) ?? null : null,
@@ -158,6 +159,7 @@ export default async function AccountsPage() {
       updatedAt: a.updated_at ?? null,
       source: 'manual' as const,
       exclude_from_net_worth: (a as any).exclude_from_net_worth ?? false,
+      exclude_from_reports: (a as any).exclude_from_reports ?? false,
       sortOrder: a.sort_order ?? 0,
       purchasePrice: a.purchase_price ?? null,
       purchaseDate: a.purchase_date ?? null,

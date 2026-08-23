@@ -11,7 +11,7 @@ import CategoryPicker from './CategoryPicker'
 import FilterPanel from './FilterPanel'
 import TransactionReviewSheet from './TransactionReviewSheet'
 import { fmtMoney, fmtSignedMoney } from '@/lib/budget/format-utils'
-import { fetchHiddenAccountFilter } from '@/lib/budget/hidden-accounts'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 import { countUnreviewed } from '@/lib/budget/review-queue'
 
 // Render rows in windows so the full (possibly 1000+ row) dataset isn't all
@@ -45,17 +45,18 @@ const REVIEW_SELECT = `
 // or the badge reads a different number than the queue shows.
 async function fetchUnreviewed(supabase: SupabaseClient): Promise<Transaction[]> {
   const PAGE = 1000
-  const hiddenAccountFilter = await fetchHiddenAccountFilter(supabase)
+  const onlyVisible = await visibleTransactionsFilter(supabase)
   let all: Transaction[] = []
   for (let page = 0; ; page++) {
-    const base = supabase
-      .from('transactions')
-      .select(REVIEW_SELECT)
-      .eq('needs_review', true)
-      .eq('is_hidden', false)
-      .order('transacted_at', { ascending: false })
-      .range(page * PAGE, (page + 1) * PAGE - 1)
-    const { data } = await (hiddenAccountFilter ? base.or(hiddenAccountFilter) : base)
+    const { data } = await onlyVisible(
+      supabase
+        .from('transactions')
+        .select(REVIEW_SELECT)
+        .eq('needs_review', true)
+        .eq('is_hidden', false)
+        .order('transacted_at', { ascending: false })
+        .range(page * PAGE, (page + 1) * PAGE - 1),
+    )
     if (!data || data.length === 0) break
     all = all.concat(data as unknown as Transaction[])
     if (data.length < PAGE) break

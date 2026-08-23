@@ -94,6 +94,8 @@ export interface UnifiedAccount {
   source: 'synced' | 'manual'
   is_hidden?: boolean
   exclude_from_net_worth?: boolean
+  /** Hide this account's transactions from the list, review queue and reports. */
+  exclude_from_reports?: boolean
   nickname?: string | null
   sortOrder?: number
   purchasePrice?: number | null
@@ -307,6 +309,7 @@ function SyncedAccountRow({ account, onUpdate, onHide, members }: {
   )
   const [hidden, setHidden] = useState(account.is_hidden ?? false)
   const [excludeNW, setExcludeNW] = useState(account.exclude_from_net_worth ?? false)
+  const [excludeTxns, setExcludeTxns] = useState(account.exclude_from_reports ?? false)
   const [saving, setSaving] = useState(false)
   const isAsset = account.type !== 'credit' && account.type !== 'loan'
   const displayName = account.nickname || account.name
@@ -316,6 +319,7 @@ function SyncedAccountRow({ account, onUpdate, onHide, members }: {
     try {
       await onUpdate(account.id, {
         nickname: nickname.trim() || null, owner: owner || null, is_hidden: hidden, exclude_from_net_worth: excludeNW,
+        exclude_from_reports: excludeTxns,
         type_override: category || null,
       })
       setEditing(false)
@@ -361,10 +365,17 @@ function SyncedAccountRow({ account, onUpdate, onHide, members }: {
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Visibility</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-800">Hide account &amp; its transactions</p>
-              <p className="text-[11px] text-gray-400">Hides it here, and keeps its transactions out of the list, review queue and every report. Balance still counts toward net worth.</p>
+              <p className="text-xs font-medium text-gray-800">Hide account</p>
+              <p className="text-[11px] text-gray-400">Collapses it out of the accounts list. Balance still counts toward net worth.</p>
             </div>
             <Toggle checked={hidden} onChange={setHidden} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-800">Hide its transactions</p>
+              <p className="text-[11px] text-gray-400">Keeps this account&apos;s transactions out of the list, review queue and every report.</p>
+            </div>
+            <Toggle checked={excludeTxns} onChange={setExcludeTxns} />
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -463,6 +474,7 @@ function ManualAccountRow({ account, userId, onUpdate, onArchive, members }: {
   const [type, setType] = useState<AccountType>((account.rawType as AccountType) ?? 'checking')
   const [owner, setOwner] = useState(account.owner || '')
   const [excludeNW, setExcludeNW] = useState(account.exclude_from_net_worth ?? false)
+  const [excludeTxns, setExcludeTxns] = useState(account.exclude_from_reports ?? false)
   const [saving, setSaving] = useState(false)
   const isVehicle = type === 'vehicle'
   const [purchasePrice, setPurchasePrice] = useState(String(account.purchasePrice ?? ''))
@@ -501,6 +513,7 @@ function ManualAccountRow({ account, userId, onUpdate, onArchive, members }: {
         is_asset: newIsAsset,
         owner: owner || null,
         exclude_from_net_worth: excludeNW,
+        exclude_from_reports: excludeTxns,
         updated_at: new Date().toISOString(),
         ...vehicleFields,
       })
@@ -606,6 +619,13 @@ function ManualAccountRow({ account, userId, onUpdate, onArchive, members }: {
               <p className="text-[11px] text-gray-400">Balance won't count toward totals or net worth</p>
             </div>
             <Toggle checked={excludeNW} onChange={setExcludeNW} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-800">Hide its transactions</p>
+              <p className="text-[11px] text-gray-400">Keeps this account&apos;s transactions out of the list, review queue and every report.</p>
+            </div>
+            <Toggle checked={excludeTxns} onChange={setExcludeTxns} />
           </div>
         </div>
         <div className="flex gap-2 pt-1">

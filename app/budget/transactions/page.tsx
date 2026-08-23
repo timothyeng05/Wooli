@@ -7,7 +7,7 @@ import TransactionList from '@/app/components/budget/TransactionList'
 import SyncTransactionsButton from '@/app/components/budget/SyncTransactionsButton'
 import MonthNav from '@/app/components/budget/MonthNav'
 import { SIMPLEFIN_TRANSACTION_SYNC_ENABLED } from '@/lib/budget/sync-config'
-import { fetchHiddenAccountFilter } from '@/lib/budget/hidden-accounts'
+import { visibleTransactionsFilter } from '@/lib/budget/hidden-accounts'
 
 export default async function TransactionsPage({
   searchParams,
@@ -36,14 +36,14 @@ export default async function TransactionsPage({
   // smaller metadata queries instead of blocking them serially.
   // Transactions on a hidden account are dropped here rather than client-side,
   // so the row windowing in TransactionList counts only rows that will render.
-  const hiddenAccountFilter = await fetchHiddenAccountFilter(supabase, user.id)
+  const onlyVisible = await visibleTransactionsFilter(supabase, user.id)
 
   const fetchMonthTransactions = async () => {
     // Supabase caps each request at 1000 rows, so paginate.
     const PAGE = 1000
     let all: any[] = []
     for (let page = 0; ; page++) {
-      const base = supabase
+      const q = supabase
         .from('transactions')
         .select(`
           id, amount, description, merchant, transacted_at, provider_transaction_id,
@@ -57,7 +57,7 @@ export default async function TransactionsPage({
         .lte('transacted_at', monthEnd)
         .order('transacted_at', { ascending: false })
         .range(page * PAGE, (page + 1) * PAGE - 1)
-      const { data } = await (hiddenAccountFilter ? base.or(hiddenAccountFilter) : base) as any
+      const { data } = await onlyVisible(q) as any
       if (!data || data.length === 0) break
       all = all.concat(data)
       if (data.length < PAGE) break

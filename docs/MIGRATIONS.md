@@ -289,6 +289,19 @@ The likely trigger is `/api/reset-onboarding`, which deletes every category and 
 
 **Result:** 78 → 64 categories, 14 removed; 7 transactions, 0 budgets and 6 merchant-memory rows repointed, 12 children reparented. Transaction count unchanged at 146, with zero orphaned transactions, budgets, memory rows or child categories.
 
+### 062 — split hide-account from hide-transactions (`supabase/migrations/062_split_hide_account_from_hide_transactions.sql`)
+
+```sql
+update public.synced_accounts
+set exclude_from_reports = true
+where is_hidden = true and coalesce(exclude_from_reports, false) = false;
+
+alter table public.synced_accounts alter column exclude_from_reports set default false;
+alter table public.accounts        alter column exclude_from_reports set default false;
+```
+
+**Why:** `synced_accounts.is_hidden` was doing two jobs — collapsing the account out of the accounts list AND excluding its transactions from the list, the review queue and every report. They are now independent toggles on the Accounts page. `exclude_from_reports` already existed on both account tables but was dead (no code read or wrote it); it now carries the second meaning, and is the only column the transaction filter reads. The backfill copies `is_hidden` into it so behaviour was unchanged at the moment of the split. Both columns were nullable with no default, so they are normalised to `false` and given a default — the app-side filters use `eq`, which would otherwise have to defend against null.
+
 ---
 
 ## Pending
