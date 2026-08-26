@@ -1,34 +1,85 @@
 @import "tailwindcss";
 
+/*
+ * Wooli brand palette (Tim Eng brand board v2, Aug 2026):
+ * blue leads Wooli & budgeting, green leads vlog & trips, red leads recipes
+ * & kitchen. Wooli itself stays blue-led throughout, so `primary` mirrors
+ * `blue` exactly. Intermediate stops are interpolated between the five
+ * brand anchors (100/300/500/700/900) to fill Tailwind's full 50-950 ramp.
+ */
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+  --color-primary-50: #f2f6f8;
+  --color-primary-100: #E8EEF3;
+  --color-primary-200: #d1dde8;
+  --color-primary-300: #B9CCDC;
+  --color-primary-400: #8ca9c1;
+  --color-primary-500: #5E85A6;
+  --color-primary-600: #3e6182;
+  --color-primary-700: #1D3C5E;
+  --color-primary-800: #18324f;
+  --color-primary-900: #12283F;
+  --color-primary-950: #0d1d2d;
+
+  --color-blue-50: #f2f6f8;
+  --color-blue-100: #E8EEF3;
+  --color-blue-200: #d1dde8;
+  --color-blue-300: #B9CCDC;
+  --color-blue-400: #8ca9c1;
+  --color-blue-500: #5E85A6;
+  --color-blue-600: #3e6182;
+  --color-blue-700: #1D3C5E;
+  --color-blue-800: #18324f;
+  --color-blue-900: #12283F;
+  --color-blue-950: #0d1d2d;
+
+  --color-green-50: #f3f7f1;
+  --color-green-100: #EAF0E6;
+  --color-green-200: #d9e5d2;
+  --color-green-300: #C7D9BE;
+  --color-green-400: #a2ba98;
+  --color-green-500: #7C9B72;
+  --color-green-600: #698560;
+  --color-green-700: #566E4E;
+  --color-green-800: #475c3f;
+  --color-green-900: #38492F;
+  --color-green-950: #283522;
+
+  --color-red-50: #faf1ef;
+  --color-red-100: #F5E6E2;
+  --color-red-200: #ebcdc5;
+  --color-red-300: #E0B3A8;
+  --color-red-400: #cb8b7b;
+  --color-red-500: #B5624E;
+  --color-red-600: #a15442;
+  --color-red-700: #8C4636;
+  --color-red-800: #74392c;
+  --color-red-900: #5C2C22;
+  --color-red-950: #422018;
+
+  --color-sand: #F1F3E0;
+  --color-seaglass: #D7E4EC;
+
+  --font-sans: var(--font-manrope), system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, serif;
+
+  /* Corner radii: 10-12px on shared surfaces */
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
 }
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --foreground: #12283F;
 }
 
 body {
-  background: #ffffff;
+  background: var(--background);
   color: var(--foreground);
-  font-family: 'Sora', system-ui, sans-serif;
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
 }
 
 .safe-area-pb {
