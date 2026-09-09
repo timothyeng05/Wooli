@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getCatEmoji } from '@/app/components/budget/catEmoji'
-import { useConfirm } from '@/app/components/ui/ToastProvider'
+import { useConfirm, useToast } from '@/app/components/ui/ToastProvider'
 import { type Transaction, type Category, type Trip, type SortOrder, type HouseholdMember } from './transaction-types'
 import CategoryPicker from './CategoryPicker'
 import FilterPanel from './FilterPanel'
@@ -113,6 +113,7 @@ export default function TransactionList({
   initialType?: 'income' | 'expense'
 }) {
   const confirm = useConfirm()
+  const { toast } = useToast()
   const [items, setItems] = useState<Transaction[]>(transactions)
 
   // ── Filter / sort state ───────────────────────────────────────────────────
@@ -172,22 +173,39 @@ export default function TransactionList({
     refreshUnreviewedCount()
   }
 
+  // "Accept as-is" only makes sense once there's actually a category (or a
+  // transfer classification) to accept — an uncategorized row has nothing to
+  // confirm, so it can't be waved through the review queue.
+  const isUncategorized = (t: Transaction) => !t.categories && !t.is_transfer
+
   // One-click "accept as-is": confirm the current categorization without opening
   // the sheet. Seeds merchant memory via the user_confirmed trigger.
-  const markReviewed = async (id: string) => {
+  const markReviewed = async (t: Transaction) => {
+    if (isUncategorized(t)) {
+      toast.error('Pick a category before marking this reviewed')
+      setReviewTxn(t)
+      return
+    }
     const supabase = createClient()
     await supabase.from('transactions').update({
       needs_review: false,
       categorization_source: 'user_confirmed',
       categorization_confidence: 1,
-    }).eq('id', id)
-    dropFromQueue([id])
+    }).eq('id', t.id)
+    dropFromQueue([t.id])
   }
 
   const markAllReviewed = async () => {
-    const ids = filtered.map(t => t.id)
-    if (ids.length === 0) return
-    if (!await confirm(`Mark ${ids.length} transaction${ids.length > 1 ? 's' : ''} as reviewed?`)) return
+    const uncategorized = filtered.filter(isUncategorized)
+    const ids = filtered.filter(t => !isUncategorized(t)).map(t => t.id)
+    if (ids.length === 0) {
+      toast.error('Every transaction here needs a category first')
+      return
+    }
+    const detail = uncategorized.length
+      ? `${uncategorized.length} uncategorized transaction${uncategorized.length > 1 ? 's' : ''} will be skipped — pick a category for ${uncategorized.length > 1 ? 'them' : 'it'} first.`
+      : undefined
+    if (!await confirm(`Mark ${ids.length} transaction${ids.length > 1 ? 's' : ''} as reviewed?`, detail)) return
     setReviewLoading(true)
     const supabase = createClient()
     // Chunk to stay well under URL/statement limits on large queues.
@@ -201,6 +219,7 @@ export default function TransactionList({
     }
     dropFromQueue(ids)
     setReviewLoading(false)
+    if (uncategorized.length) toast.info(`Skipped ${uncategorized.length} uncategorized transaction${uncategorized.length > 1 ? 's' : ''} — still in the queue`)
   }
 
   // ── Category inline change ────────────────────────────────────────────────
@@ -297,9 +316,15 @@ export default function TransactionList({
   // Chunked for the same reason markAllReviewed is — large selections would
   // otherwise blow the URL length on the .in() filter.
   const bulkMarkReviewed = async () => {
+    const selected = filtered.filter(t => selectedIds.has(t.id))
+    const uncategorizedCount = selected.filter(isUncategorized).length
+    const ids = selected.filter(t => !isUncategorized(t)).map(t => t.id)
+    if (ids.length === 0) {
+      toast.error('Every selected transaction needs a category first')
+      return
+    }
     setBulkLoading(true)
     const supabase = createClient()
-    const ids = [...selectedIds]
     for (let i = 0; i < ids.length; i += 500) {
       await supabase.from('transactions').update({
         needs_review: false,
@@ -307,6 +332,7 @@ export default function TransactionList({
         categorization_confidence: 1,
       }).in('id', ids.slice(i, i + 500))
     }
+    if (uncategorizedCount) toast.info(`Skipped ${uncategorizedCount} uncategorized transaction${uncategorizedCount > 1 ? 's' : ''}`)
     dropFromQueue(ids)
     setSelectedIds(new Set()); setSelectMode(false); setBulkLoading(false)
   }
@@ -739,7 +765,7 @@ export default function TransactionList({
 
                       {reviewMode && !selectMode && (
                         <button
-                          onClick={e => { e.stopPropagation(); markReviewed(t.id) }}
+                          onClick={e => { e.stopPropagation(); markReviewed(t) }}
                           className="w-7 h-7 flex-shrink-0 rounded-full border-2 border-violet-300 text-violet-500 flex items-center justify-center hover:bg-violet-600 hover:border-violet-600 hover:text-white transition"
                           title="Mark reviewed"
                         >
@@ -801,7 +827,7 @@ export default function TransactionList({
                               // the review queue makes — so clearing a stray flag doesn't
                               // require entering review mode first.
                               <button
-                                onClick={e => { e.stopPropagation(); markReviewed(t.id) }}
+                                onClick={e => { e.stopPropagation(); markReviewed(t) }}
                                 title="Mark as reviewed"
                                 aria-label={`Mark ${name} as reviewed`}
                                 className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 hover:bg-violet-200 active:bg-violet-300 flex-shrink-0 transition inline-flex items-center gap-1"
