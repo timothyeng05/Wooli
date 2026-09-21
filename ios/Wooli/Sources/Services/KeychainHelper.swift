@@ -3,6 +3,9 @@ import Security
 
 /// Stores the SimpleFIN access URL (which embeds bank credentials) in the
 /// iOS Keychain instead of SwiftData/UserDefaults, since it's a secret.
+/// Unlike the account/transaction data, this is intentionally NOT synced via
+/// CloudKit or iCloud Keychain, and excluded from device backups
+/// (`.whenUnlockedThisDeviceOnly`) -- it never leaves this specific phone.
 enum KeychainHelper {
     private static let service = "com.wooli.simplefin"
 
@@ -15,6 +18,7 @@ enum KeychainHelper {
         SecItemDelete(query as CFDictionary)
         var attributes = query
         attributes[kSecValueData as String] = Data(value.utf8)
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         SecItemAdd(attributes as CFDictionary, nil)
     }
 

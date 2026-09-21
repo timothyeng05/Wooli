@@ -1,15 +1,17 @@
 import Foundation
 import SwiftData
 
+// No @Attribute(.unique) here -- CloudKit-backed SwiftData containers don't
+// support unique constraints. Dedup is done by hand in SyncService instead.
 @Model
 final class LocalAccount {
-    @Attribute(.unique) var providerAccountId: String
-    var name: String
-    var institutionName: String
-    var currency: String
-    var balance: Double
-    var balanceDate: Date
-    var lastSyncedAt: Date
+    var providerAccountId: String = ""
+    var name: String = ""
+    var institutionName: String = ""
+    var currency: String = "USD"
+    var balance: Double = 0
+    var balanceDate: Date = .now
+    var lastSyncedAt: Date = .now
 
     init(
         providerAccountId: String,
@@ -32,13 +34,13 @@ final class LocalAccount {
 
 @Model
 final class LocalTransaction {
-    @Attribute(.unique) var providerTransactionId: String
-    var accountId: String
-    var amount: Double
-    var transactionDescription: String
+    var providerTransactionId: String = ""
+    var accountId: String = ""
+    var amount: Double = 0
+    var transactionDescription: String = ""
     var payee: String?
-    var transactedAt: Date
-    var isPending: Bool
+    var transactedAt: Date = .now
+    var isPending: Bool = false
 
     init(
         providerTransactionId: String,
