@@ -41,7 +41,8 @@ enum SyncService {
         // "now" lands a few seconds over by the time the request arrives), so
         // the first sync pulls 89 days. Later syncs re-read the last week too so
         // pending transactions that have since posted get updated.
-        let oldestAllowed = Calendar.current.date(byAdding: .day, value: -89, to: .now)!
+        // The app only keeps last month and this month (see ReviewWindow).
+        let oldestAllowed = max(Calendar.current.date(byAdding: .day, value: -89, to: .now)!, ReviewWindow.start)
         let startDate = lastSyncAt.map { max(Calendar.current.date(byAdding: .day, value: -7, to: $0)!, oldestAllowed) }
             ?? oldestAllowed
 

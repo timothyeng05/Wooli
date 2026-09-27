@@ -154,7 +154,7 @@ struct Ledger {
     func isVisible(_ tx: LocalTransaction) -> Bool { !hiddenAccounts.contains(tx.accountId) }
 
     func reviewQueue(_ transactions: [LocalTransaction]) -> [LocalTransaction] {
-        transactions.filter { $0.needsReview && !$0.isHidden && isVisible($0) }
+        transactions.filter { $0.needsReview && !$0.isHidden && isVisible($0) && ReviewWindow.contains($0.transactedAt) }
     }
 }
 

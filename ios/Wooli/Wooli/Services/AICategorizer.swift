@@ -82,8 +82,10 @@ enum AICategorizer {
 @MainActor
 private enum OnDeviceCategorizer {
     static func run(context: ModelContext, limit: Int) async -> Int {
+        let windowStart = ReviewWindow.start
         let pendingFetch = FetchDescriptor<LocalTransaction>(
-            predicate: #Predicate { $0.needsReview && !$0.aiAttempted && !$0.isHidden && ($0.categoryId == nil || $0.aiSuggested) },
+            predicate: #Predicate { $0.needsReview && !$0.aiAttempted && !$0.isHidden
+                && ($0.categoryId == nil || $0.aiSuggested) && $0.transactedAt >= windowStart },
             sortBy: [SortDescriptor(\.transactedAt, order: .reverse)])
         guard let pending = try? context.fetch(pendingFetch), !pending.isEmpty else { return 0 }
 

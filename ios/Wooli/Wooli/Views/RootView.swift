@@ -17,6 +17,7 @@ struct RootView: View {
         .animation(.default, value: app.mode)
         .tint(Theme.brand)
         .task {
+            if app.mode == .live { ReviewWindow.pruneOlderTransactions(context: context) }
             syncIfStale()
             if app.mode != .onboarding { await app.autoCategorize(context: context) }
         }
@@ -60,7 +61,7 @@ struct MainTabView: View {
 
     private var reviewCount: Int {
         let hidden = Set(hiddenAccounts.map(\.providerAccountId))
-        return toReview.filter { !hidden.contains($0.accountId) }.count
+        return toReview.filter { !hidden.contains($0.accountId) && ReviewWindow.contains($0.transactedAt) }.count
     }
 
     var body: some View {

@@ -59,6 +59,7 @@ final class AppModel {
         defer { isSyncing = false }
         do {
             let summary = try await SyncService.sync(context: context)
+            ReviewWindow.pruneOlderTransactions(context: context)
             bankMessages = summary.bankMessages
             lastSyncAt = SyncService.lastSyncAt
         } catch {

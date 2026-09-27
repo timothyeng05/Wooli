@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 enum ChartRange: String, CaseIterable, Identifiable {
     case month1, month3, month6, ytd, year1, all
@@ -112,9 +113,31 @@ func cumulativeSpending(_ transactions: [LocalTransaction], in month: DateInterv
 
 // MARK: - Transaction filters
 
+/// The window the app shows and asks the user to review: last month plus
+/// month to date. Older synced data stays in the store for charts and reports.
+enum ReviewWindow {
+    static var start: Date {
+        let cal = Calendar.current
+        let thisMonth = cal.dateInterval(of: .month, for: .now)!.start
+        return cal.date(byAdding: .month, value: -1, to: thisMonth)!
+    }
+
+    static func contains(_ date: Date) -> Bool { date >= start }
+
+    /// Delete transactions older than the window, so the app only ever holds
+    /// last month and this month. Balances, net-worth history and learned
+    /// merchant rules are kept.
+    @MainActor
+    static func pruneOlderTransactions(context: ModelContext) {
+        let cutoff = start
+        try? context.delete(model: LocalTransaction.self, where: #Predicate { $0.transactedAt < cutoff })
+        try? context.save()
+    }
+}
+
 struct TransactionFilter: Equatable {
     enum DateRange: String, CaseIterable, Identifiable {
-        case all = "All time", thisMonth = "This month", lastMonth = "Last month",
+        case recent = "Last month & this month", all = "All time", thisMonth = "This month", lastMonth = "Last month",
              last30 = "Last 30 days", last60 = "Last 60 days", last90 = "Last 90 days", thisYear = "This year"
         var id: String { rawValue }
 
@@ -123,6 +146,7 @@ struct TransactionFilter: Equatable {
             let now = Date.now
             switch self {
             case .all: return nil
+            case .recent: return DateInterval(start: ReviewWindow.start, end: .distantFuture)
             case .thisMonth: return cal.dateInterval(of: .month, for: now)
             case .lastMonth: return cal.dateInterval(of: .month, for: cal.date(byAdding: .month, value: -1, to: now)!)
             case .last30, .last60, .last90:
@@ -139,7 +163,7 @@ struct TransactionFilter: Equatable {
         var id: String { rawValue }
     }
 
-    var dateRange: DateRange = .all
+    var dateRange: DateRange = .recent
     var sort: Sort = .newest
     var accountIds: Set<String> = []
     var categoryIds: Set<String> = []
@@ -148,7 +172,7 @@ struct TransactionFilter: Equatable {
     var maxAmount: Double?
 
     var activeCount: Int {
-        [dateRange != .all, !accountIds.isEmpty, !categoryIds.isEmpty, !merchants.isEmpty,
+        [dateRange != .recent, !accountIds.isEmpty, !categoryIds.isEmpty, !merchants.isEmpty,
          minAmount != nil || maxAmount != nil].filter { $0 }.count
     }
 
