@@ -114,6 +114,19 @@ struct MenuView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Feedback") {
+                    Button {
+                        if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
+                            #if os(iOS)
+                            UIApplication.shared.open(url)
+                            #endif
+                        }
+                    } label: {
+                        Label("Send Feedback", systemImage: "envelope")
+                    }
+                    .foregroundStyle(Theme.text)
+                }
+
                 Section("Budget & Settings") {
                     NavigationLink(value: "budget") {
                         Label("Budget", systemImage: "map")

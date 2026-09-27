@@ -74,9 +74,9 @@ enum CycleMath {
         periodEntry(on: date, in: entries, today: today, calendar: calendar) != nil
     }
 
-    /// Inside the next predicted period (needs ≥ 2 entries, like the web).
+    /// Inside the next predicted period (now works with 1 entry).
     static func isPredictedDay(_ date: Date, in entries: [Entry], today: Date = .now, calendar: Calendar = .current) -> Bool {
-        guard entries.count >= 2, !isPeriodDay(date, in: entries, today: today, calendar: calendar),
+        guard !isPeriodDay(date, in: entries, today: today, calendar: calendar),
               let next = predictedNextStart(entries, calendar: calendar) else { return false }
         let offset = days(from: next, to: date, calendar: calendar)
         return offset >= 0 && offset < averagePeriodLength(entries, calendar: calendar)
@@ -101,7 +101,7 @@ enum CycleMath {
         // 1 entry: prediction uses the default cycle, but no predicted days shown
         let one = [Entry(start: d(2026, 9, 1), end: d(2026, 9, 5))]
         check(predictedNextStart(one, calendar: cal) == cal.startOfDay(for: d(2026, 9, 29)), "1 entry predicts +28")
-        check(!isPredictedDay(d(2026, 9, 29), in: one, today: d(2026, 9, 10), calendar: cal), "no predicted days with 1 entry")
+        check(isPredictedDay(d(2026, 9, 29), in: one, today: d(2026, 9, 10), calendar: cal), "works with 1 entry")
         check(averagePeriodLength(one, calendar: cal) == 5, "inclusive length")
 
         // 3 entries, 30-day cycles, 4-day periods
