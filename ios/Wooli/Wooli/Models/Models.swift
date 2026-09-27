@@ -118,6 +118,11 @@ final class LocalTransaction {
     var aiAttempted: Bool = false
     /// Display name set by a "Rename merchant" rule.
     var customTitle: String = ""
+    /// This transaction was split into parts (it's kept, but set aside so it
+    /// isn't counted twice; the parts carry the categories and amounts).
+    var isSplit: Bool = false
+    /// For a part of a split: the providerTransactionId of the original.
+    var splitParentId: String = ""
 
     init(providerTransactionId: String, accountId: String, amount: Double, transactionDescription: String,
          payee: String?, transactedAt: Date, isPending: Bool) {

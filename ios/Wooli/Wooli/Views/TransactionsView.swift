@@ -30,6 +30,8 @@ struct TransactionsView: View {
         let reviewCount = ledger.reviewQueue(transactions).count
 
         let visible = filter.sorted(transactions.filter { tx in
+            // A split original is represented by its parts.
+            if tx.isSplit { return false }
             if let accountId { if tx.accountId != accountId { return false } }
             else if !ledger.isVisible(tx) && !filter.accountIds.contains(tx.accountId) { return false }
             guard filter.matches(tx) else { return false }

@@ -17,6 +17,7 @@ struct QuickCategorySheet: View {
     @State private var ruleOnStatement = true
     @State private var ruleText = ""
     @State private var markReviewed = false
+    @State private var skipReviewForMerchant = false
 
     var body: some View {
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -75,6 +76,13 @@ struct QuickCategorySheet: View {
                     if transaction.needsReview {
                         Toggle("Mark as reviewed", isOn: $markReviewed)
                     }
+                    Toggle(isOn: $skipReviewForMerchant) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Skip review for \(transaction.baseTitle)")
+                            Text("Always use this category and don't ask again")
+                                .font(.caption).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
                 } footer: {
                     if !siblings.isEmpty {
                         Text("Also updates \(siblings.count) other unreviewed \(transaction.title) transaction\(siblings.count == 1 ? "" : "s").")
@@ -128,6 +136,12 @@ struct QuickCategorySheet: View {
     }
 
     private func pick(_ category: BudgetCategory) {
+        if skipReviewForMerchant {
+            RuleEngine.autoApprove(transaction, category: category, context: context)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            dismiss()
+            return
+        }
         Categorizer.assign(category, to: transaction)
         if markReviewed { transaction.needsReview = false }
         Categorizer.learn(from: transaction, categories: categories, context: context)

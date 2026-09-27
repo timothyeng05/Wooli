@@ -152,6 +152,7 @@ struct TransactionEditor: View {
                 }
                 .padding(.top, 4)
                 MarkRecurringButton(transaction: transaction)
+                SplitButton(transaction: transaction)
             }
         }
         .sheet(isPresented: $customizeRule, onDismiss: { teachCategory = nil }) {
@@ -284,7 +285,14 @@ struct TransactionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             if transaction.needsReview {
-                ReviewActionBar(canConfirm: transaction.categoryId != nil, skipTitle: nil) {
+                let category = transaction.categoryId.flatMap { id in categories.first { $0.id == id } }
+                ReviewActionBar(canConfirm: transaction.categoryId != nil, skipTitle: nil,
+                                alwaysTitle: category.map { "Always \($0.name) for \(transaction.baseTitle) · skip review" },
+                                onAlways: {
+                                    guard let category else { return }
+                                    RuleEngine.autoApprove(transaction, category: category, context: context)
+                                    dismiss()
+                                }) {
                     withAnimation {
                         if Categorizer.confirm(transaction, categories: categories, context: context) { dismiss() }
                     }
@@ -302,12 +310,18 @@ struct ReviewActionBar: View {
     let canConfirm: Bool
     let skipTitle: String?
     var onSkip: (() -> Void)?
+    /// Press-and-hold option on "Mark as reviewed", e.g. "Always Transit for MTA · skip review".
+    var alwaysTitle: String?
+    var onAlways: (() -> Void)?
     let onConfirm: () -> Void
 
-    init(canConfirm: Bool, skipTitle: String?, onSkip: (() -> Void)? = nil, onConfirm: @escaping () -> Void) {
+    init(canConfirm: Bool, skipTitle: String?, onSkip: (() -> Void)? = nil,
+         alwaysTitle: String? = nil, onAlways: (() -> Void)? = nil, onConfirm: @escaping () -> Void) {
         self.canConfirm = canConfirm
         self.skipTitle = skipTitle
         self.onSkip = onSkip
+        self.alwaysTitle = alwaysTitle
+        self.onAlways = onAlways
         self.onConfirm = onConfirm
     }
 
@@ -326,10 +340,19 @@ struct ReviewActionBar: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!canConfirm)
+                .contextMenu {
+                    if canConfirm, let alwaysTitle, let onAlways {
+                        Button("Mark as reviewed", systemImage: "checkmark", action: onConfirm)
+                        Button(alwaysTitle, systemImage: "checkmark.seal", action: onAlways)
+                    }
+                }
             }
             .controlSize(.large)
             if !canConfirm {
                 Text("Choose a category first").font(.footnote).foregroundStyle(Theme.textSecondary)
+            } else if alwaysTitle != nil {
+                Text("Hold \"Mark as reviewed\" to skip review for this merchant from now on")
+                    .font(.caption).foregroundStyle(Theme.textTertiary)
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 12)

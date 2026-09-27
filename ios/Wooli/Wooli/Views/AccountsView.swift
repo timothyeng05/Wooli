@@ -202,7 +202,7 @@ struct AccountDetailView: View {
         let history = BalanceHistory(snapshots: mine)
         let series = history.series(for: [account], from: range.startDate(earliest: history.earliest)) { _, b in b }
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let recent = transactions.filter { $0.accountId == account.providerAccountId }.prefix(25)
+        let recent = transactions.filter { $0.accountId == account.providerAccountId && !$0.isSplit }.prefix(25)
 
         ScrollView {
             VStack(spacing: 16) {

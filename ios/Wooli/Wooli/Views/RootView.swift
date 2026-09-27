@@ -37,6 +37,7 @@ struct RootView: View {
                 if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
             }
             if args.contains("-review") { app.showReview = true }
+            if args.contains("-selftest") { DebugSelfTest.run(context: context) }
         }
         #endif
         .onChange(of: scenePhase) { _, phase in

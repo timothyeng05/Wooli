@@ -38,6 +38,13 @@ struct TransactionRow: View {
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     if transaction.isPending { PendingBadge() }
+                    if !transaction.splitParentId.isEmpty {
+                        Label("Split", systemImage: "arrow.triangle.branch")
+                            .labelStyle(.iconOnly)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(Theme.brand)
+                            .accessibilityLabel("Part of a split transaction")
+                    }
                 }
                 HStack(spacing: 4) {
                     if let category {

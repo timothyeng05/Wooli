@@ -31,6 +31,40 @@ enum RuleEngine {
         "online", "web", "withdrawal", "deposit", "payment", "pmt", "dbt", "crd", "sq", "tst*", "sq*",
     ]
 
+    /// "Always use this category for this merchant and skip review": a rule on
+    /// the merchant name that sets the category and marks it reviewed, applied
+    /// right away to every matching transaction. Reuses an existing rule for
+    /// the same merchant. Returns how many other transactions it cleared.
+    @MainActor
+    @discardableResult
+    static func autoApprove(_ tx: LocalTransaction, category: BudgetCategory, context: ModelContext) -> Int {
+        let merchant = tx.baseTitle
+        let existing = ((try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []).first {
+            $0.merchantMatch == "exact" && $0.merchantText.caseInsensitiveCompare(merchant) == .orderedSame
+                && $0.statementText.isEmpty && $0.amountMatch.isEmpty && $0.accountIds.isEmpty && $0.categoryIds.isEmpty
+        }
+        let rule = existing ?? {
+            let r = TransactionRule()
+            r.merchantMatch = "exact"
+            r.merchantText = merchant
+            context.insert(r)
+            return r
+        }()
+        rule.setCategoryId = category.id
+        rule.reviewAction = "reviewed"
+        rule.isEnabled = true
+
+        Categorizer.assign(category, to: tx)
+        tx.needsReview = false
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        Categorizer.learn(from: tx, categories: categories, context: context)
+        let all = (try? context.fetch(FetchDescriptor<LocalTransaction>())) ?? []
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let cleared = RuleEngine.applyToExisting(rule, transactions: all.filter { $0 !== tx && !$0.isSplit }, categories: byId)
+        try? context.save()
+        return cleared
+    }
+
     /// A new rule pre-filled from a transaction: original statement contains
     /// its meaningful start, set to `category`. No account is pre-selected.
     static func seed(_ rule: TransactionRule, from tx: LocalTransaction, category: BudgetCategory?) {

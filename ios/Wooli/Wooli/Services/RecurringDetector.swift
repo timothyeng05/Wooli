@@ -22,7 +22,8 @@ enum RecurringDetector {
     static func refresh(context: ModelContext) {
         let transactions = ((try? context.fetch(FetchDescriptor<LocalTransaction>(
             sortBy: [SortDescriptor(\.transactedAt)]))) ?? [])
-            .filter { !$0.isHidden && !$0.isTransfer && !$0.isPending && abs($0.amount) >= 1 && !$0.normalizedMerchant.isEmpty }
+            .filter { !$0.isHidden && !$0.isTransfer && !$0.isPending && $0.splitParentId.isEmpty
+                && abs($0.amount) >= 1 && !$0.normalizedMerchant.isEmpty }
         var items = (try? context.fetch(FetchDescriptor<RecurringItem>())) ?? []
 
         if UserDefaults.standard.integer(forKey: versionKey) < version {

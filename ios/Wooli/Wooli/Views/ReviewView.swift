@@ -87,9 +87,24 @@ struct ReviewView: View {
                             }
                             PillButton(title: "Mark as reviewed", filled: true) { confirm(tx) }
                                 .disabled(tx.categoryId == nil)
+                                .contextMenu {
+                                    if let category = categories.first(where: { $0.id == tx.categoryId }) {
+                                        Button("Mark as reviewed", systemImage: "checkmark") { confirm(tx) }
+                                        Button("Always \(category.name) for \(tx.baseTitle) · skip review", systemImage: "checkmark.seal") {
+                                            direction = .trailing
+                                            withAnimation(.snappy) {
+                                                _ = RuleEngine.autoApprove(tx, category: category, context: context)
+                                            }
+                                        }
+                                    }
+                                }
                         }
                         if tx.categoryId == nil {
                             Text("Choose a category first").font(.footnote).foregroundStyle(.white.opacity(0.9))
+                        } else {
+                            Text("Hold \"Mark as reviewed\" to always skip review for \(tx.baseTitle)")
+                                .font(.caption).foregroundStyle(.white.opacity(0.8))
+                                .lineLimit(1).minimumScaleFactor(0.8)
                         }
                     }
                     .padding(.horizontal, 16)
