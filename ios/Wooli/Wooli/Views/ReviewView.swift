@@ -4,6 +4,11 @@ import SwiftData
 /// Full-screen, one-at-a-time review: "130 remaining", a card per transaction,
 /// Skip for now / Mark as reviewed.
 struct ReviewView: View {
+    /// True for the guided first-run pass right after connecting a bank:
+    /// scoped to the last 30 days instead of the usual review window, with
+    /// a one-time tip pointing at rule creation.
+    var isCalibration = false
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
@@ -16,6 +21,7 @@ struct ReviewView: View {
     @State private var skipped: Set<PersistentIdentifier> = []
     @State private var showSameMerchant = false
     @State private var direction: Edge = .trailing
+    @State private var showTip = true
     /// Every card acted on this session, newest last, so Back can walk
     /// through them. `reviewed` = marked reviewed (Back puts it back in the
     /// queue); otherwise it was skipped.
@@ -54,6 +60,23 @@ struct ReviewView: View {
                     }
                 }
                 .padding(.horizontal, 12)
+
+                if isCalibration && showTip {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "lightbulb.fill").foregroundStyle(.white)
+                        Text("Pick a category, then tap **Create rule** when Wooli offers it — that teaches Wooli to categorize transactions like this one automatically from now on.")
+                            .font(.footnote)
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 0)
+                        Button("Dismiss", systemImage: "xmark") { withAnimation { showTip = false } }
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                    .padding(12)
+                    .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if let tx = current {
                     let sameMerchant = transactions.filter { $0.normalizedMerchant == tx.normalizedMerchant }
@@ -139,9 +162,17 @@ struct ReviewView: View {
         }
         .onAppear {
             if queue.isEmpty {
-                queue = ledger.reviewQueue(transactions).map(\.persistentModelID)
+                let source = isCalibration
+                    ? transactions.filter { $0.needsReview && !$0.isHidden && ledger.isVisible($0) && $0.transactedAt >= calibrationStart }
+                    : ledger.reviewQueue(transactions)
+                queue = source.map(\.persistentModelID)
             }
         }
+    }
+
+    /// The last 30 days, for the guided first-run pass.
+    private var calibrationStart: Date {
+        Calendar.current.date(byAdding: .day, value: -30, to: .now)!
     }
 
     private func confirm(_ tx: LocalTransaction) {

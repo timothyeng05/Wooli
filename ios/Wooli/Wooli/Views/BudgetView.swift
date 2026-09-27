@@ -18,87 +18,78 @@ struct BudgetView: View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let plan = BudgetPlan(categories: categories, transactions: transactions, month: month, ledger: ledger)
 
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    LeftToBudgetBanner(amount: plan.plannedIncome - plan.plannedExpenses)
+        ScrollView {
+            VStack(spacing: 16) {
+                LeftToBudgetBanner(amount: plan.plannedIncome - plan.plannedExpenses)
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        Button {
-                            withAnimation(.snappy) { summaryOpen.toggle() }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "chevron.down")
-                                    .rotationEffect(.degrees(summaryOpen ? 0 : -90))
-                                    .font(.caption.weight(.bold))
-                                    .frame(width: 28, height: 28)
-                                    .overlay(Circle().strokeBorder(Theme.border))
-                                Text("Summary").font(.headline).foregroundStyle(Theme.text)
-                                Spacer()
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        if summaryOpen {
-                            PlanRow(title: "Income", actual: plan.earned, planned: plan.plannedIncome, tint: Theme.income,
-                                    actualLabel: "earned", isIncome: true)
-                            Divider()
-                            PlanRow(title: "Expenses", actual: plan.spent, planned: plan.plannedExpenses, tint: Theme.income,
-                                    actualLabel: "spent", isIncome: false)
-                        }
-                    }
-                    .card()
-
-                    BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, month: month, editing: $editing)
-                    BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, month: month, editing: $editing)
-
-                    if plan.uncategorizedSpending > 0 {
-                        Button { app.showReview = true } label: {
-                            HStack {
-                                Text("❓")
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Uncategorized").font(.body.weight(.medium)).foregroundStyle(Theme.text)
-                                    Text("\(plan.uncategorizedSpending.currency(cents: false)) spent — review to budget it")
-                                        .font(.footnote).foregroundStyle(Theme.textSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
-                            }
-                            .card(padding: 16)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    SpendingHistoryCard(transactions: transactions, ledger: ledger, month: month, target: plan.plannedExpenses)
-                }
-                .padding(16)
-            }
-            .pageBackground()
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
-            .navigationBarTitleDisplayMode(.inline)
-            .refreshable { await app.sync(context: context) }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Previous Month", systemImage: "chevron.left") { shift(-1) }
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Menu {
-                        NavigationLink { CategoriesSettingsView() } label: { Label("Edit Categories", systemImage: "square.grid.2x2") }
-                        NavigationLink { RulesView() } label: { Label("Rules", systemImage: "wand.and.stars") }
-                        NavigationLink { RecurringView() } label: { Label("Recurring", systemImage: "arrow.triangle.2.circlepath") }
+                VStack(alignment: .leading, spacing: 16) {
+                    Button {
+                        withAnimation(.snappy) { summaryOpen.toggle() }
                     } label: {
-                        Label("More", systemImage: "ellipsis")
+                        HStack(spacing: 12) {
+                            Image(systemName: "chevron.down")
+                                .rotationEffect(.degrees(summaryOpen ? 0 : -90))
+                                .font(.caption.weight(.bold))
+                                .frame(width: 28, height: 28)
+                                .overlay(Circle().strokeBorder(Theme.border))
+                            Text("Summary").font(.headline).foregroundStyle(Theme.text)
+                            Spacer()
+                        }
                     }
-                    if !isCurrentMonth {
-                        Button("Today") { withAnimation { month = .month(containing: .now) } }
+                    .buttonStyle(.plain)
+                    if summaryOpen {
+                        PlanRow(title: "Income", actual: plan.earned, planned: plan.plannedIncome, tint: Theme.income,
+                                actualLabel: "earned", isIncome: true)
+                        Divider()
+                        PlanRow(title: "Expenses", actual: plan.spent, planned: plan.plannedExpenses, tint: Theme.income,
+                                actualLabel: "spent", isIncome: false)
                     }
-                    Button("Next Month", systemImage: "chevron.right") { shift(1) }
-                        .disabled(isCurrentMonth)
                 }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { editing = nil }
+                .card()
+
+                BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, month: month, editing: $editing)
+                BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, month: month, editing: $editing)
+
+                if plan.uncategorizedSpending > 0 {
+                    Button { app.showReview = true } label: {
+                        HStack {
+                            Text("❓")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Uncategorized").font(.body.weight(.medium)).foregroundStyle(Theme.text)
+                                Text("\(plan.uncategorizedSpending.currency(cents: false)) spent — review to budget it")
+                                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
+                        }
+                        .card(padding: 16)
+                    }
+                    .buttonStyle(.plain)
                 }
+
+                SpendingHistoryCard(transactions: transactions, ledger: ledger, month: month, target: plan.plannedExpenses)
+            }
+            .padding(16)
+        }
+        .pageBackground()
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await app.sync(context: context) }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Previous Month", systemImage: "chevron.left") { shift(-1) }
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if !isCurrentMonth {
+                    Button("Today") { withAnimation { month = .month(containing: .now) } }
+                }
+                Button("Next Month", systemImage: "chevron.right") { shift(1) }
+                    .disabled(isCurrentMonth)
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { editing = nil }
             }
         }
     }

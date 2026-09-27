@@ -88,11 +88,14 @@ struct MainTabView: View {
                 ReportsView()
             }
             Tab("Budget", systemImage: "map", value: AppTab.budget) {
-                BudgetView()
+                BudgetHomeView()
             }
         }
         .fullScreenCover(isPresented: $app.showReview) {
             ReviewView()
+        }
+        .fullScreenCover(isPresented: $app.showCalibration) {
+            ReviewView(isCalibration: true)
         }
     }
 }

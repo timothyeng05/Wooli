@@ -23,6 +23,8 @@ final class AppModel {
     var selectedTab: AppTab = .dashboard
     var isCategorizing = false
     var showReview = false
+    /// The guided first-run review, shown once right after connecting a bank.
+    var showCalibration = false
 
     init() {
         let stored = UserDefaults.standard.string(forKey: Self.modeKey).flatMap(Mode.init) ?? .onboarding
@@ -43,6 +45,7 @@ final class AppModel {
         DefaultCategories.seedIfNeeded(context)
         mode = .live
         await sync(context: context)
+        showCalibration = true
     }
 
     func startSample(context: ModelContext) {

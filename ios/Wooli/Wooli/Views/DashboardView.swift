@@ -27,7 +27,7 @@ struct DashboardView: View {
         let plan = BudgetPlan(categories: categories, transactions: transactions, month: thisMonth, ledger: ledger)
         let plannedIncome = plan.plannedIncome
         let plannedExpenses = plan.plannedExpenses
-        let reviewCount = ledger.reviewQueue(transactions).count
+        let reviewItems = ledger.reviewQueue(transactions)
 
         NavigationStack {
             ScrollView {
@@ -44,22 +44,10 @@ struct DashboardView: View {
                         .contentTransition(.numericText())
                     }
 
-                    if reviewCount > 0 {
-                        Button { app.showReview = true } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "checkmark.square.fill")
-                                    .font(.title2).foregroundStyle(Theme.brand)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(reviewCount) transactions to review").font(.headline).foregroundStyle(Theme.text)
-                                    Text("Confirm categories so your budget stays accurate")
-                                        .font(.footnote).foregroundStyle(Theme.textSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
-                            }
-                            .card(padding: 16)
-                        }
-                        .buttonStyle(.plain)
+                    PaceCard(transactions: transactions, ledger: ledger, month: thisMonth, target: plannedExpenses)
+
+                    if !reviewItems.isEmpty {
+                        ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
                     }
 
                     BudgetSummaryCard(month: thisMonth, summary: month,
@@ -172,6 +160,125 @@ struct PlanRow: View {
             .font(.footnote)
             .monospacedDigit()
         }
+    }
+}
+
+/// Cumulative spend this month against a dashed "even pace" line — the one
+/// number that answers "am I on track?" Until flex budgeting exists, "pace"
+/// is measured against all planned expenses rather than a flex-only subset.
+struct PaceCard: View {
+    let transactions: [LocalTransaction]
+    let ledger: Ledger
+    let month: DateInterval
+    let target: Double
+
+    var body: some View {
+        let current = cumulativeSpending(transactions, in: month, through: .now,
+                                         categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
+        let spent = current.last?.value ?? 0
+        let daysInMonth = Calendar.current.range(of: .day, in: .month, for: month.start)?.count ?? 30
+        let dayOfMonth = min(current.count, daysInMonth)
+        let evenPaceToday = target > 0 ? target * Double(dayOfMonth) / Double(daysInMonth) : 0
+        let paceDiff = evenPaceToday - spent
+        let over = target > 0 && spent > target
+        let tint = over ? Theme.expense : Theme.income
+
+        VStack(alignment: .leading, spacing: 10) {
+            CardHeader(title: "Spending Pace", subtitle: month.start.formatted(.dateTime.month(.wide)))
+            if target > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(max(target - spent, 0).currency(cents: false)) \(spent > target ? "over" : "left")")
+                        .font(.system(size: 28, weight: .bold)).monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                    Text("of \(target.currency(cents: false))").font(.subheadline).foregroundStyle(Theme.textTertiary)
+                }
+            } else {
+                Text(spent.currency())
+                    .font(.system(size: 28, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(Theme.text)
+            }
+
+            Chart {
+                if target > 0 {
+                    ForEach([(1, 0.0), (daysInMonth, target)], id: \.0) { day, value in
+                        LineMark(x: .value("Day", day), y: .value("Pace", value), series: .value("Series", "Pace"))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                    }
+                }
+                ForEach(Array(current.enumerated()), id: \.offset) { i, point in
+                    AreaMark(x: .value("Day", i + 1), y: .value("Spent", point.value))
+                        .foregroundStyle(LinearGradient(colors: [tint.opacity(0.18), tint.opacity(0)],
+                                                        startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Day", i + 1), y: .value("Spent", point.value), series: .value("Series", "Actual"))
+                        .foregroundStyle(tint)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                        .interpolationMethod(.monotone)
+                }
+                if let last = current.last {
+                    PointMark(x: .value("Day", current.count), y: .value("Spent", last.value))
+                        .foregroundStyle(tint)
+                        .symbolSize(50)
+                }
+            }
+            .chartXScale(domain: 1...max(daysInMonth, 2))
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .frame(height: 120)
+
+            if target > 0 {
+                Text("\(abs(paceDiff).currency(cents: false)) \(paceDiff >= 0 ? "under pace" : "over pace") · dashed line is an even spend")
+                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+            } else {
+                Text("Set a budget on the Budget tab to see your pace this month.")
+                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .card()
+    }
+}
+
+/// A few transactions waiting on a category, plus a one-tap way to clear
+/// whichever of them already have one — the review queue stays for the rest.
+struct ReviewPreviewCard: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.modelContext) private var context
+    let items: [LocalTransaction]
+    let categories: [BudgetCategory]
+    let ledger: Ledger
+    @State private var confirmedPulse = false
+
+    var body: some View {
+        let ready = items.filter { $0.categoryId != nil }
+
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: "To Review · \(items.count)") {
+                Button("See all") { app.showReview = true }
+                    .font(.subheadline.weight(.medium))
+            }
+            ForEach(items.prefix(4)) { tx in
+                TransactionRow(transaction: tx, category: ledger.category(for: tx), quickEdit: false)
+            }
+            if !ready.isEmpty {
+                Button {
+                    withAnimation(.snappy) {
+                        for tx in ready { Categorizer.confirm(tx, categories: categories, context: context) }
+                    }
+                    confirmedPulse.toggle()
+                } label: {
+                    Text("Mark \(ready.count) as reviewed")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .sensoryFeedback(.success, trigger: confirmedPulse)
+            }
+        }
+        .card()
     }
 }
 
