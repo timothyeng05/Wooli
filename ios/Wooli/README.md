@@ -1,123 +1,93 @@
-# Wooli (iPhone, local-first)
+# Wooli for iPhone (private, on-device budget)
 
-A minimal, single-user iPhone app for the Budget module: accounts and
-transactions live in SwiftData, synced across the user's own devices via
-their own private iCloud (CloudKit) — never a Wooli-run database — and
-bank data comes in by talking directly to the user's bank's SimpleFIN
-bridge, using a SimpleFIN token they provide themselves. There is no Wooli
-server involved in this app at all — no Supabase, no API routes, no
-account creation, no Wooli-operated storage of anyone's financial data.
+A native SwiftUI version of Wooli's **Budget** module, built so each person's
+financial data stays theirs:
 
-This is a deliberately separate, scoped-down slice of the Budget module
-(accounts + transactions only — no categories, budgets, goals, or
-AI categorization). See `docs/PRODUCT-DIRECTION.md` in the main repo:
-a real mobile app was already called out as "a separate product."
+- **No Wooli server.** No Supabase, no API routes, no account sign-up.
+- **Bank data comes straight from SimpleFIN** to the phone, using the person's own
+  SimpleFIN setup token.
+- **The SimpleFIN access key lives only in this iPhone's Keychain**
+  (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), so it's not in iCloud
+  Keychain, iCloud sync, or backups.
+- **Accounts, transactions, categories and rules are stored in SwiftData**, and
+  sync only through the person's own private iCloud once CloudKit is enabled (below).
 
-## Status: source only, not build-verified
+## What's in it
 
-The container this was written in has no Xcode or Swift toolchain, so
-none of this has been compiled, run in the Simulator, or tested on a
-device. Treat it as a strong first draft, not a working build — you'll
-likely need to fix small SwiftData/SwiftUI API mismatches once it's
-actually compiled (these change often between iOS/Xcode versions).
-CloudKit sync specifically is the least-tested part of this: it also
-needs a real device signed into iCloud (the Simulator's CloudKit support
-is unreliable) and the container capability set up per below before it
-does anything.
+| Tab | What it does |
+|---|---|
+| **Overview** | Net worth, this month's spending vs. target, spending donut, review shortcut, recent activity |
+| **Transactions** | Grouped by day, search, "To Review" filter, swipe right to mark reviewed, swipe left to hide |
+| **Budget** | Month navigation, left-to-spend, 6-month chart, per-group targets and breakdown, cash flow |
+| **Accounts** | Grouped by type, net worth, nickname/type/hide per account, per-account activity |
+| **Settings** | Connect/sync, category editor, privacy summary, disconnect and erase |
 
-## Requirements
+Ported from the web app:
+- The default category tree (`app/api/setup-budget/route.ts`).
+- Merchant normalization (`lib/budget/categorize/normalize-merchant.ts`); it passes
+  the same cases as the web tests.
+- The review-queue rules: everything starts unreviewed, a transaction needs a
+  category before it can be marked reviewed, and confirming one teaches a
+  merchant rule.
+- The money rules: positive is income, and transfers are excluded.
 
-- Xcode 15+ on a Mac
-- iOS 17+ deployment target (uses SwiftData, `@Query`, `#Predicate`)
-- A SimpleFIN setup token from https://simplefin.org (or your bridge's
-  equivalent) — a one-time-use base64 token you get after linking your
-  bank(s) at the bridge.
-- **An Apple Developer Program membership ($99/yr)** — required for two
-  separate reasons, not just one:
-  - Distributing to anyone besides yourself (TestFlight or the App Store).
-    A free Apple ID only lets you build to your own registered devices from
-    Xcode, with the app re-signing every 7 days.
-  - Using a real CloudKit container at all, even just to test sync on your
-    own devices — CloudKit containers are tied to a paid Team ID.
+Not included (yet): AI categorization (it runs server-side on the web), recurring
+rules, goals, CSV import, investments, household map.
 
-## Distributing to other people
+## Running it
 
-- **TestFlight** (up to 10,000 external testers) or the **App Store** both
-  need the $99/yr program above; there's no way around that fee once this
-  is meant for anyone but you.
-- Each install is fully isolated — there's no shared backend, so a bug in
-  one person's data can't leak into another's the way a multi-tenant
-  Supabase/RLS bug could. What you give up in exchange: no central way to
-  revoke a compromised token, see usage, or push a data fix — each user's
-  copy is independent.
+1. Open `ios/Wooli/Wooli.xcodeproj` in Xcode.
+2. Pick an iPhone simulator and press **Run** (⌘R).
+3. On the welcome screen, choose **Explore with Sample Data** or **Connect with SimpleFIN**.
 
-## iCloud / CloudKit sync
+Debug-only launch arguments for quick Simulator checks: `-sampleData` skips onboarding,
+and `-tab N` opens tab N (0–3).
 
-`WooliApp.swift` uses a CloudKit-backed `ModelContainer`, so a user's
-accounts and transactions sync across their own iPhone/iPad/Mac via their
-own private iCloud database — Wooli never sees or stores this data, and
-storage cost/quota is the user's own iCloud plan, not yours to pay for.
-The SimpleFIN token itself is **excluded from this** on purpose (see
-`KeychainHelper.swift`) — it's Keychain-only, marked
-`.whenUnlockedThisDeviceOnly`, and never rides along in CloudKit, iCloud
-Keychain, or device backups.
+## Putting it on a real iPhone
 
-To enable it in Xcode once the project exists:
+**Just your own phone (free):** plug it in, select it as the run destination, and in
+**Signing & Capabilities** choose your Personal Team. The app must be re-installed
+every 7 days.
 
-1. Target → **Signing & Capabilities** → **+ Capability** → **iCloud**
-2. Check **CloudKit**, then create a container (e.g.
-   `iCloud.com.yourteam.Wooli`)
-3. That's it for foreground sync. Background sync (updating one device
-   while another is closed) additionally needs the **Background Modes** →
-   **Remote notifications** capability — left out here since it adds real
-   entitlement/push-registration complexity beyond what was asked for;
-   add it later if you want sync without reopening the app.
+**Someone else's phone (Apple Developer Program, $99/yr):**
+1. **Signing & Capabilities** → choose your paid team, and change the bundle id
+   (`com.wooli.budget`) to one you own.
+2. **Product → Archive**, then **Distribute App → TestFlight**.
+3. In App Store Connect, add the person as an external tester. They install
+   TestFlight and open the invite. Builds expire after 90 days.
 
-Two SwiftData schema constraints CloudKit forces (already applied in
-`LocalModels.swift`): no `@Attribute(.unique)`, and every property needs a
-default value. Dedup on sync is handled by hand in `SyncService` instead
-of a database-level unique constraint.
+## Turning on iCloud sync (needs the paid program)
 
-## Setup (creates a correct Xcode project, then drops these files in)
+1. Target → **Signing & Capabilities** → **+ Capability** → **iCloud** → check
+   **CloudKit** → add a container (e.g. `iCloud.com.yourname.wooli`).
+2. **+ Capability** → **Background Modes** → **Remote notifications** (so other
+   devices update without being opened).
 
-Xcode's own "New Project" wizard generates a guaranteed-valid project
-file — much safer than a hand-written one, so:
+`WooliApp.swift` already uses `cloudKitDatabase: .automatic`, which picks up the
+container once it exists. Until then, data is stored only on the device.
 
-1. In Xcode: **File → New → Project → iOS → App**
-2. Product Name: `Wooli`, Interface: **SwiftUI**, Language: **Swift**
-3. Uncheck "Use Core Data" and "Include Tests" (not needed)
-4. Save it anywhere — e.g. as a sibling of this `ios/Wooli/` folder, or
-   right on top of it
-5. In the new project's `Wooli` group, **delete** the auto-generated
-   `ContentView.swift` and the `@main` App file Xcode created
-6. Drag every file under this `Sources/` folder into the Xcode project
-   navigator (check "Copy items if needed" and add to the `Wooli` target),
-   keeping the folder groups (`Models`, `SimpleFin`, `Services`, `Views`)
-7. Project settings → General → Minimum Deployments → **iOS 17.0**
-8. Build (⌘B). Fix whatever the compiler flags — SwiftData/SwiftUI APIs
-   shift slightly release to release, so expect a handful of small fixes.
-9. Run on Simulator or a real device (⌘R)
+CloudKit notes:
+- The models follow CloudKit's rules: no unique constraints, and every property has a default.
+- Default categories are seeded when the store is empty. If two devices both start
+  fresh before syncing, the categories can be duplicated. Set up on one device first.
+- Sync goes to the user's **private** database, so neither Apple nor you can read it
+  if they turn on Advanced Data Protection.
 
-## How it works
+## Code map
 
-- `Sources/SimpleFin/SimpleFinClient.swift` — direct port of the web app's
-  `lib/budget/simplefin-client.ts`: claims a setup token for a long-lived
-  access URL, then fetches accounts/transactions from that bridge.
-- `Sources/Services/KeychainHelper.swift` — the access URL contains bank
-  credentials, so it's stored in the iOS Keychain (device-only, no backup,
-  no CloudKit), never in SwiftData or UserDefaults.
-- `Sources/Services/SyncService.swift` — claims the token once, then on
-  each sync fetches the last 90 days and upserts into SwiftData by
-  provider id (same dedup key as the web app's `provider_transaction_id`).
-- `Sources/Models/LocalModels.swift` — `LocalAccount` / `LocalTransaction`,
-  synced via the user's own iCloud (CloudKit), never a Wooli server.
-- `Sources/Views/` — Connect screen (paste token) → Accounts list →
-  Transactions per account, with a manual refresh button.
-
-## Known gaps (by design, given the "Budget/SimpleFIN only" scope)
-
-- No categories, budgets, goals, net worth, or recurring rules
-- No AI categorization (that's server-side Groq in the web app)
-- Single SimpleFIN connection at a time (matches the SimpleFIN model:
-  one token's access URL can already cover multiple linked banks)
-- No CSV import
+```
+Wooli/
+  WooliApp.swift              app entry, SwiftData container
+  Models/Models.swift         LocalAccount, LocalTransaction, BudgetCategory, MerchantRule
+  Models/DefaultCategories    starter category tree
+  SimpleFin/                  SimpleFIN protocol client + response models
+  Services/
+    SyncService               claim token, fetch, merge (never overwrites user edits)
+    Categorizer               merchant rules + keyword hints, review confirmation
+    MerchantNormalizer        port of the web normalizer
+    BudgetMath                month totals, currency formatting
+    AppModel                  mode (onboarding / live / sample), sync state, erase
+    KeychainHelper            device-only secret storage
+    SampleData                6 months of realistic demo data
+  Views/                      SwiftUI screens (standard iOS components, SF Symbols, Swift Charts)
+```
