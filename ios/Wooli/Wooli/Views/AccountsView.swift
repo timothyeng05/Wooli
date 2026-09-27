@@ -231,6 +231,8 @@ struct AccountDetailView: View {
                     TextField("Nickname", text: $account.nickname, prompt: Text(account.name))
                         .padding(.vertical, 12)
                     Divider()
+                    InstitutionLogoEditor(institutionName: account.institutionName)
+                    Divider()
                     Picker("Type", selection: $account.kindRaw) {
                         ForEach(AccountKind.allCases) { Text($0.singularLabel).tag($0.rawValue) }
                     }
@@ -278,5 +280,37 @@ struct AccountDetailView: View {
         
             .navigationTitle(account.displayName)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+
+private struct InstitutionLogoEditor: View {
+    let institutionName: String
+    @AppStorage("institutionLogos") private var customLogosData: Data = Data()
+    @State private var showingPicker = false
+    @State private var selection = ""
+    
+    var body: some View {
+        NavigationLink {
+            IconPickerView(selection: $selection, categoryName: institutionName)
+                .onAppear { selection = "" }
+                .onChange(of: selection) { _, emoji in
+                    guard !emoji.isEmpty else { return }
+                    var dict = (try? JSONDecoder().decode([String: String].self, from: customLogosData)) ?? [:]
+                    dict[institutionName] = emoji
+                    if let data = try? JSONEncoder().encode(dict) { customLogosData = data }
+                    showingPicker = false
+                }
+        } label: {
+            HStack {
+                Text("Institution Icon")
+                Spacer()
+                InstitutionLogo(name: institutionName, size: 32)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 8)
     }
 }

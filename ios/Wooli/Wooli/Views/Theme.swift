@@ -163,14 +163,23 @@ struct InstitutionLogo: View {
         ("health equity", "logo-healthequity"), ("healthequity", "logo-healthequity"),
     ]
 
+    @AppStorage("institutionLogos") private var customLogosData: Data = Data()
+
     var body: some View {
         let lower = name.lowercased()
+        let customLogos = (try? JSONDecoder().decode([String: String].self, from: customLogosData)) ?? [:]
+        let custom = customLogos[name]
+        
         Group {
-            if let asset = Self.known.first(where: { lower.contains($0.0) })?.1 {
+            if let custom, let first = custom.first, first.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF }) {
+                ZStack {
+                    Circle().fill(Color.gray.opacity(0.15))
+                    Text(custom).font(.system(size: size * 0.55))
+                }
+            } else if let asset = Self.known.first(where: { lower.contains($0.0) })?.1 {
                 Image(asset).resizable().scaledToFill()
             } else {
                 let palette: [Color] = [.blue, .teal, .indigo, .green, .orange, .pink, .purple]
-                // Stable across launches (String.hashValue is randomly seeded).
                 let tint = palette[name.unicodeScalars.reduce(0) { $0 + Int($1.value) } % palette.count]
                 ZStack {
                     Circle().fill(tint.opacity(0.15))
