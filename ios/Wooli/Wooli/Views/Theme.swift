@@ -162,6 +162,7 @@ struct InstitutionLogo: View {
         ("american express", "logo-amex"), ("amex", "logo-amex"), ("citi", "logo-citi"),
         ("health equity", "logo-healthequity"), ("healthequity", "logo-healthequity"),
         ("capital one", "logo-capital-one"), ("capitalone", "logo-capital-one"),
+        ("bank of america", "logo-bank-of-america"), ("bofa", "logo-bank-of-america"),
     ]
 
     @AppStorage("institutionLogos") private var customLogosData: Data = Data()

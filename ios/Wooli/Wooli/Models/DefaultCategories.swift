@@ -219,11 +219,26 @@ enum DefaultCategories {
 
     /// Generic rules that fit almost anyone. Visible and editable in Rules.
     private static let starterRules: [(merchant: String, category: String)] = [
+        ("uber eats", "Takeout & Delivery"),
+        ("doordash", "Takeout & Delivery"),
+        ("starbucks", "Coffee"),
+        ("mcdonald's", "Restaurants"),
+        ("whole foods", "Groceries"),
+        ("safeway", "Groceries"),
+        ("target", "General Shopping"),
+        ("amazon", "Amazon"),
+        ("netflix", "Subscriptions"),
+        ("spotify", "Subscriptions"),
+        ("pg&e", "Utilities & Internet"),
+        ("comcast", "Utilities & Internet"),
+        ("uber ", "Rideshare & Taxis"),
+        ("lyft ", "Rideshare & Taxis"),
+        ("delta air", "Flights"),
+        ("united airlines", "Flights"),
         ("e-zpass", "Parking & Tolls"),
         ("ezpass", "Parking & Tolls"),
         ("atm withdrawal", "Transfer"),
         ("autopay", "Credit Card Payment"),
-        ("metropolitan transportation authority", "Transit"),
     ]
 
     private static func seedStarterRules(_ context: ModelContext) {
