@@ -142,10 +142,6 @@ private struct CategoryEditor: View {
 
     static let palette = ["#f59e0b", "#ef4444", "#ec4899", "#8b5cf6", "#3b82f6", "#06b6d4",
                           "#22c55e", "#84cc16", "#f97316", "#64748b"]
-    static let emojis = ["🍽️", "🛒", "☕", "🥡", "🏠", "💡", "📶", "🔨", "🚇", "🚗", "✈️", "🏨", "🚘", "🅿️",
-                         "🏥", "💊", "🛍️", "🎬", "💅", "🐾", "🎁", "📚", "💪", "📱", "📋", "📌", "💵", "💻",
-                         "💰", "↔️", "💳", "⚖️", "👶", "🎓", "🧾", "🍷"]
-
     private var isGroup: Bool {
         switch mode {
         case .newGroup: true
@@ -178,21 +174,27 @@ private struct CategoryEditor: View {
                 }
 
                 Section("Icon") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 8), spacing: 10) {
-                        ForEach(Self.emojis, id: \.self) { e in
-                            Button { icon = e } label: {
-                                Text(e).font(.title3)
-                                    .frame(width: 36, height: 36)
-                                    .background(icon == e ? Theme.brandSoft : .clear, in: RoundedRectangle(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(icon == e ? Theme.brand : .clear))
+                    let suggested = IconLibrary.suggestions(for: name)
+                    if !suggested.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(suggested, id: \.self) { e in
+                                    Button { icon = e } label: {
+                                        Text(e).font(.title2)
+                                            .frame(width: 44, height: 44)
+                                            .background(icon == e ? Theme.brandSoft : Theme.track, in: RoundedRectangle(cornerRadius: 10))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(icon == e ? Theme.brand : .clear))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
                     }
-                    TextField("Or type any emoji", text: $icon)
-                        .onChange(of: icon) { _, new in
-                            if new.count > 1, let last = new.last { icon = String(last) }
-                        }
+                    NavigationLink {
+                        IconPickerView(selection: $icon, categoryName: name.isEmpty ? "this category" : name)
+                    } label: {
+                        LabeledContent("All icons") { Text(icon.isEmpty ? "•" : icon).font(.title3) }
+                    }
                 }
 
                 if isGroup {
