@@ -27,13 +27,52 @@ struct ReviewView: View {
     /// queue); otherwise it was skipped.
     @State private var history: [(id: PersistentIdentifier, reviewed: Bool)] = []
 
+    @State private var hasSeenIntro = false
+
     var body: some View {
+        if isCalibration && !hasSeenIntro {
+            introScreen
+        } else {
+            mainReview
+        }
+    }
+    
+    @ViewBuilder
+    private var introScreen: some View {
+        VStack(spacing: 32) {
+            Spacer()
+            Image(systemName: "tray.full.fill").font(.system(size: 72)).foregroundStyle(.white)
+            VStack(spacing: 12) {
+                Text("Transactions Loaded").font(.system(size: 32, weight: .bold)).foregroundStyle(.white)
+                Text("We've securely loaded in your transactions from the past month and month to date.")
+                    .font(.title3).foregroundStyle(.white.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+            
+            Spacer()
+            
+            VStack(spacing: 16) {
+                PillButton(title: "Let me explore the app first", filled: false) {
+                    dismiss()
+                }
+                PillButton(title: "Review them now", filled: true) {
+                    withAnimation { hasSeenIntro = true }
+                }
+            }
+            .padding(24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.gradient.ignoresSafeArea())
+    }
+
+    private var mainReview: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let byId = Dictionary(transactions.map { ($0.persistentModelID, $0) }, uniquingKeysWith: { a, _ in a })
         let pending = queue.compactMap { byId[$0] }.filter { $0.needsReview && !$0.isHidden }
         let current = pending.first { !skipped.contains($0.persistentModelID) } ?? pending.first
 
-        ZStack {
+        return ZStack {
             Theme.gradient.ignoresSafeArea()
 
             VStack(spacing: 16) {

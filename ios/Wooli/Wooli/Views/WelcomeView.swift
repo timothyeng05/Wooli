@@ -19,10 +19,9 @@ struct WelcomeView: View {
             VStack(spacing: 16) {
                 HStack {
                     Spacer()
+                    // Forced review of intro screens
                     if page < pageCount - 1 {
-                        Button("Skip") { withAnimation { page = pageCount - 1 } }
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color(hex: "#6b7280"))
+                        Text("").frame(height: 20)
                     }
                 }
 
