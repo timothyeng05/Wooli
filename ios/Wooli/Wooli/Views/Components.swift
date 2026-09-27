@@ -7,10 +7,30 @@ struct TransactionRow: View {
     let transaction: LocalTransaction
     let category: BudgetCategory?
     var accountName: String?
+    /// Tapping the icon opens the quick category sheet.
+    var quickEdit = true
+    @State private var showQuick = false
 
     var body: some View {
         HStack(spacing: 12) {
-            CategoryTile(category: category, size: 40)
+            if quickEdit {
+                Button { showQuick = true } label: {
+                    CategoryTile(category: category, size: 40)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 14))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, Theme.brand)
+                                .background(Circle().fill(Theme.card).padding(-1.5))
+                                .offset(x: 2, y: 2)
+                        }
+                }
+                .buttonStyle(.borderless)
+                .padding(.trailing, 2).padding(.bottom, 2)
+                .accessibilityLabel("Change category, currently \(category?.name ?? "uncategorized")")
+            } else {
+                CategoryTile(category: category, size: 40)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(transaction.title)
@@ -55,6 +75,9 @@ struct TransactionRow: View {
         }
         .padding(.vertical, 2)
         .opacity(transaction.isHidden ? 0.5 : 1)
+        .sheet(isPresented: $showQuick) {
+            QuickCategorySheet(transaction: transaction)
+        }
     }
 
     private var amountColor: Color {

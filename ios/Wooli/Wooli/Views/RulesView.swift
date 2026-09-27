@@ -176,7 +176,7 @@ struct RuleEditor: View {
                     settings(byId: byId)
                 } else {
                     List(matches) { tx in
-                        TransactionRow(transaction: tx, category: tx.categoryId.flatMap { byId[$0] })
+                        TransactionRow(transaction: tx, category: tx.categoryId.flatMap { byId[$0] }, quickEdit: false)
                     }
                     .overlay {
                         if matches.isEmpty {

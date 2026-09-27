@@ -62,10 +62,13 @@ struct TransactionEditor: View {
     @Environment(\.modelContext) private var context
 
     private func pick(_ category: BudgetCategory?) {
-        let overridingAI = transaction.aiSuggested && transaction.categoryId != category?.id
+        let changed = transaction.categoryId != category?.id
         withAnimation(.snappy) {
             Categorizer.assign(category, to: transaction)
-            if overridingAI { teachCategory = category }
+            if changed, let category {
+                Categorizer.learn(from: transaction, categories: allCategories, context: context)
+                teachCategory = category
+            }
         }
     }
 

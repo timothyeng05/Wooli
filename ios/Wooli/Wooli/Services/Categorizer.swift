@@ -53,11 +53,21 @@ enum Categorizer {
     /// still need their own confirmation.
     @discardableResult
     static func confirm(_ transaction: LocalTransaction, categories: [BudgetCategory], context: ModelContext) -> Bool {
-        guard let categoryId = transaction.categoryId else { return false }
+        guard transaction.categoryId != nil else { return false }
         transaction.needsReview = false
+        learn(from: transaction, categories: categories, context: context)
+        return true
+    }
 
+    /// The user picked a category by hand: remember it for this merchant and
+    /// pass it on to other unreviewed transactions from the same merchant
+    /// that are uncategorized or only have an AI guess. Those stay in review.
+    /// Returns how many other transactions were updated.
+    @discardableResult
+    static func learn(from transaction: LocalTransaction, categories: [BudgetCategory], context: ModelContext) -> Int {
+        guard let categoryId = transaction.categoryId else { return 0 }
         let merchant = transaction.normalizedMerchant
-        guard !merchant.isEmpty else { return true }
+        guard !merchant.isEmpty else { return 0 }
 
         let ruleFetch = FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.merchant == merchant })
         if let rule = try? context.fetch(ruleFetch).first {
@@ -68,11 +78,23 @@ enum Categorizer {
         }
 
         let category = categories.first { $0.id == categoryId }
-        let siblings = FetchDescriptor<LocalTransaction>(
-            predicate: #Predicate { $0.normalizedMerchant == merchant && $0.needsReview && $0.categoryId == nil })
-        for other in (try? context.fetch(siblings)) ?? [] {
+        var updated = 0
+        for other in siblingsToUpdate(of: transaction, context: context) where other.categoryId != categoryId {
             assign(category, to: other)
+            updated += 1
         }
-        return true
+        try? context.save()
+        return updated
+    }
+
+    /// Other unreviewed transactions from the same merchant that a manual
+    /// choice would carry over to (uncategorized or AI-guessed only).
+    static func siblingsToUpdate(of transaction: LocalTransaction, context: ModelContext) -> [LocalTransaction] {
+        let merchant = transaction.normalizedMerchant
+        guard !merchant.isEmpty else { return [] }
+        let fetch = FetchDescriptor<LocalTransaction>(
+            predicate: #Predicate { $0.normalizedMerchant == merchant && $0.needsReview && ($0.categoryId == nil || $0.aiSuggested) })
+        let me = transaction.persistentModelID
+        return ((try? context.fetch(fetch)) ?? []).filter { $0.persistentModelID != me }
     }
 }
