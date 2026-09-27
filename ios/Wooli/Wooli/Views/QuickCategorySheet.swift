@@ -17,7 +17,6 @@ struct QuickCategorySheet: View {
     @State private var ruleOnStatement = true
     @State private var ruleText = ""
     @State private var markReviewed = false
-    @State private var skipReviewForMerchant = false
 
     var body: some View {
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -43,8 +42,8 @@ struct QuickCategorySheet: View {
                     }
                     Toggle(isOn: $makeRule.animation()) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Always categorize like this")
-                            Text("Creates a rule for future transactions")
+                            Text("Always categorize like this & skip review")
+                            Text("Creates a rule; matching transactions leave your review queue")
                                 .font(.caption).foregroundStyle(Theme.textTertiary)
                         }
                     }
@@ -75,13 +74,6 @@ struct QuickCategorySheet: View {
                     }
                     if transaction.needsReview {
                         Toggle("Mark as reviewed", isOn: $markReviewed)
-                    }
-                    Toggle(isOn: $skipReviewForMerchant) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Skip review for \(transaction.baseTitle)")
-                            Text("Always use this category and don't ask again")
-                                .font(.caption).foregroundStyle(Theme.textTertiary)
-                        }
                     }
                 } footer: {
                     if !siblings.isEmpty {
@@ -136,12 +128,6 @@ struct QuickCategorySheet: View {
     }
 
     private func pick(_ category: BudgetCategory) {
-        if skipReviewForMerchant {
-            RuleEngine.autoApprove(transaction, category: category, context: context)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            dismiss()
-            return
-        }
         Categorizer.assign(category, to: transaction)
         if markReviewed { transaction.needsReview = false }
         Categorizer.learn(from: transaction, categories: categories, context: context)
@@ -156,6 +142,7 @@ struct QuickCategorySheet: View {
                 rule.merchantText = matchText
             }
             rule.setCategoryId = category.id
+            rule.reviewAction = "reviewed"
             context.insert(rule)
             let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             RuleEngine.applyToExisting(rule, transactions: transactions, categories: byId)

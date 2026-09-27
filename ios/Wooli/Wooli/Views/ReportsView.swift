@@ -52,6 +52,7 @@ struct ReportsView: View {
                     CashFlowCard(transactions: transactions, ledger: ledger)
                     SpendingBreakdownCard(summary: summary, ledger: ledger)
                     TopMerchantsCard(transactions: transactions, interval: period.interval, ledger: ledger)
+                    TagsReportCard(transactions: transactions, interval: period.interval, ledger: ledger)
                 }
                 .padding(16)
             }

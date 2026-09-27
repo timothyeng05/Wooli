@@ -254,6 +254,12 @@ struct FiltersSheet: View {
                         FilterRow(title: "Merchants", count: draft.merchants.count)
                     }
                     NavigationLink {
+                        MultiSelectList(title: "Tags", selection: $draft.tags,
+                                        options: TagStyle.allTags(in: transactions).map { ($0, "#\($0)", nil) })
+                    } label: {
+                        FilterRow(title: "Tags", count: draft.tags.count)
+                    }
+                    NavigationLink {
                         AmountFilter(minAmount: $draft.minAmount, maxAmount: $draft.maxAmount)
                     } label: {
                         FilterRow(title: "Amounts", count: draft.minAmount != nil || draft.maxAmount != nil ? 1 : 0)

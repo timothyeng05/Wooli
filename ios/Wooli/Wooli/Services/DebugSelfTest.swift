@@ -19,6 +19,17 @@ enum DebugSelfTest {
             SplitService.split(trip, into: [.init(categoryId: groceries.id, amount: a), .init(categoryId: supplies.id, amount: total - a)],
                                categories: categories, context: context)
         }
+        // A rule made from a transaction (as when reviewing) clears matches from review.
+        if let coffee = categories.first(where: { $0.name == "Coffee" }),
+           let starbucks = txs.first(where: { $0.title == "Starbucks" }) {
+            let rule = TransactionRule()
+            RuleEngine.seed(rule, from: starbucks, category: coffee)
+            context.insert(rule)
+            let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            RuleEngine.applyToExisting(rule, transactions: txs, categories: byId)
+            starbucks.tags = ["Test tag"]
+            try? context.save()
+        }
         // Skip review for MTA Subway.
         if let mta = txs.first(where: { $0.title == "MTA Subway" }) {
             RuleEngine.autoApprove(mta, category: transit, context: context)

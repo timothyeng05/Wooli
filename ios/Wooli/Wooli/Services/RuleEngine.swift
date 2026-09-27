@@ -71,6 +71,8 @@ enum RuleEngine {
         rule.statementMatch = "contains"
         rule.statementText = statementPrefix(tx.transactionDescription)
         rule.setCategoryId = category?.id ?? tx.categoryId
+        // Made while reviewing: matching transactions should leave the queue.
+        rule.reviewAction = "reviewed"
     }
 
     static func hasConditions(_ r: TransactionRule) -> Bool {
@@ -79,7 +81,7 @@ enum RuleEngine {
     }
 
     static func hasActions(_ r: TransactionRule) -> Bool {
-        !r.renameTo.isEmpty || r.setCategoryId != nil || !r.reviewAction.isEmpty || r.hide
+        !r.renameTo.isEmpty || r.setCategoryId != nil || !r.reviewAction.isEmpty || r.hide || !r.addTag.isEmpty
     }
 
     static func matches(_ r: TransactionRule, _ tx: LocalTransaction) -> Bool {
@@ -124,6 +126,10 @@ enum RuleEngine {
         default: break
         }
         if r.hide && !tx.isHidden { tx.isHidden = true; changed = true }
+        if !r.addTag.isEmpty && !tx.tags.contains(where: { $0.caseInsensitiveCompare(r.addTag) == .orderedSame }) {
+            tx.tags.append(r.addTag)
+            changed = true
+        }
         return changed
     }
 
@@ -189,6 +195,7 @@ enum RuleEngine {
         if r.reviewAction == "reviewed" { lines.append("Mark as reviewed") }
         if r.reviewAction == "needsReview" { lines.append("Mark as needs review") }
         if r.hide { lines.append("Hide transaction") }
+        if !r.addTag.isEmpty { lines.append("Add tag #\(r.addTag)") }
         return lines
     }
 }

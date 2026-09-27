@@ -287,6 +287,10 @@ struct RuleEditor: View {
                     Text("Mark as needs review").tag("needsReview")
                 }
                 Toggle("Hide transaction", isOn: $draft.hide)
+                LabeledContent("Add tag") {
+                    TextField("None", text: $draft.addTag).multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                }
             }
 
             if rule != nil {
@@ -327,6 +331,7 @@ struct RuleEditor: View {
             draft.accountIds = rule.accountIds
             draft.setCategoryId = rule.setCategoryId
             draft.hide = rule.hide
+            draft.addTag = rule.addTag
             draft.isEnabled = rule.isEnabled
             applyToExisting = false
         } else {
@@ -356,6 +361,7 @@ struct RuleEditor: View {
         target.setCategoryId = draft.setCategoryId
         target.reviewAction = draft.reviewAction
         target.hide = draft.hide
+        target.addTag = draft.addTag.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "#", with: "")
         target.isEnabled = draft.isEnabled
         if applyToExisting && target.isEnabled {
             RuleEngine.applyToExisting(target, transactions: matches, categories: categories)

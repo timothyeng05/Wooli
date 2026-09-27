@@ -127,6 +127,8 @@ struct TransactionEditor: View {
                 }
             }
 
+            TagsSection(transaction: transaction)
+
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel("Notes")
                 TextField("Add notes…", text: $transaction.note, axis: .vertical)

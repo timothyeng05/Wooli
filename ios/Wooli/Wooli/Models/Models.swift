@@ -123,6 +123,8 @@ final class LocalTransaction {
     var isSplit: Bool = false
     /// For a part of a split: the providerTransactionId of the original.
     var splitParentId: String = ""
+    /// Free-form labels across categories, e.g. "Japan trip".
+    var tags: [String] = []
 
     init(providerTransactionId: String, accountId: String, amount: Double, transactionDescription: String,
          payee: String?, transactedAt: Date, isPending: Bool) {
@@ -251,6 +253,7 @@ final class TransactionRule {
     var setCategoryId: String?
     var reviewAction: String = ""     // "reviewed" | "needsReview"
     var hide: Bool = false
+    var addTag: String = ""
 
     init() {}
 }

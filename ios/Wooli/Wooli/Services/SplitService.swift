@@ -42,6 +42,7 @@ enum SplitService {
             tx.splitParentId = original.providerTransactionId
             tx.customTitle = original.customTitle
             tx.note = original.note
+            tx.tags = original.tags
             Categorizer.assign(part.categoryId.flatMap { byId[$0] }, to: tx)
             // The user chose each part's category, so the parts are reviewed.
             tx.needsReview = part.categoryId == nil

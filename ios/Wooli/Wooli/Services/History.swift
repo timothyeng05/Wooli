@@ -168,11 +168,12 @@ struct TransactionFilter: Equatable {
     var accountIds: Set<String> = []
     var categoryIds: Set<String> = []
     var merchants: Set<String> = []
+    var tags: Set<String> = []
     var minAmount: Double?
     var maxAmount: Double?
 
     var activeCount: Int {
-        [dateRange != .recent, !accountIds.isEmpty, !categoryIds.isEmpty, !merchants.isEmpty,
+        [dateRange != .recent, !accountIds.isEmpty, !tags.isEmpty, !categoryIds.isEmpty, !merchants.isEmpty,
          minAmount != nil || maxAmount != nil].filter { $0 }.count
     }
 
@@ -181,6 +182,7 @@ struct TransactionFilter: Equatable {
         if !accountIds.isEmpty && !accountIds.contains(tx.accountId) { return false }
         if !categoryIds.isEmpty && !categoryIds.contains(tx.categoryId ?? "") { return false }
         if !merchants.isEmpty && !merchants.contains(tx.normalizedMerchant) { return false }
+        if !tags.isEmpty && tags.isDisjoint(with: tx.tags) { return false }
         let size = abs(tx.amount)
         if let minAmount, size < minAmount { return false }
         if let maxAmount, size > maxAmount { return false }

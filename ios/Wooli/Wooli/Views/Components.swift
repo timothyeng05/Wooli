@@ -56,6 +56,9 @@ struct TransactionRow: View {
                     } else {
                         Text("Uncategorized").foregroundStyle(Theme.pending)
                     }
+                    if let tag = transaction.tags.first {
+                        Text("#\(tag)").foregroundStyle(TagStyle.color(tag))
+                    }
                     if let accountName {
                         Text("·")
                         Text(accountName).lineLimit(1)
