@@ -19,6 +19,7 @@ struct RootView: View {
         .task {
             if app.mode == .live { ReviewWindow.pruneOlderTransactions(context: context) }
             RuleImporter.importIfPresent(context: context)
+            Categorizer.refreshKeywordHints(context: context)
             syncIfStale()
             if app.mode != .onboarding { await app.autoCategorize(context: context) }
         }

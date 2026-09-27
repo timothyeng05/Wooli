@@ -13,6 +13,11 @@ enum Categorizer {
         ("payment thank you", "Credit Card Payment"), ("autopay", "Credit Card Payment"),
         ("card payment", "Credit Card Payment"), ("epay", "Credit Card Payment"),
         ("online transfer", "Transfer"), ("transfer to", "Transfer"), ("transfer from", "Transfer"),
+        // Parking & tolls, before anything that could also match (e.g. "rent" in "rentaltoll").
+        ("parking", "Parking & Tolls"), ("toll", "Parking & Tolls"), ("e-zpass", "Parking & Tolls"),
+        ("ezpass", "Parking & Tolls"), ("fastrak", "Parking & Tolls"), ("sunpass", "Parking & Tolls"),
+        ("i-pass", "Parking & Tolls"), ("platepass", "Parking & Tolls"), ("spothero", "Parking & Tolls"),
+        ("parkwhiz", "Parking & Tolls"), ("parkmobile", "Parking & Tolls"), ("paybyphone", "Parking & Tolls"),
         ("apartments", "Rent"), ("property mgmt", "Rent"), ("landlord", "Rent"),
         ("payroll", "Salary"), ("direct dep", "Salary"), ("interest paid", "Other Income"),
         ("uber eats", "Takeout"), ("doordash", "Takeout"), ("grubhub", "Takeout"), ("seamless", "Takeout"),
@@ -40,6 +45,25 @@ enum Categorizer {
             if let category = categoriesByName[categoryName.lowercased()] { return category.id }
         }
         return nil
+    }
+
+    /// Re-run keyword hints over unreviewed transactions that have no
+    /// category or only an AI guess (keywords are more reliable than the AI).
+    /// Limited to specific, low-risk categories so loose keywords never
+    /// override a good AI guess.
+    static func refreshKeywordHints(context: ModelContext, only targets: Set<String> = ["Parking & Tolls"]) {
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        let byName = Dictionary(categories.filter { $0.parentId != nil }.map { ($0.name.lowercased(), $0) },
+                                uniquingKeysWith: { a, _ in a })
+        let fetch = FetchDescriptor<LocalTransaction>(predicate: #Predicate { $0.needsReview && ($0.categoryId == nil || $0.aiSuggested) })
+        for tx in (try? context.fetch(fetch)) ?? [] {
+            if let id = suggest(merchant: tx.normalizedMerchant, description: tx.transactionDescription + " " + tx.title,
+                                rules: [:], categoriesByName: byName), id != tx.categoryId,
+               let target = categories.first(where: { $0.id == id }), targets.contains(target.name) {
+                assign(target, to: tx)
+            }
+        }
+        try? context.save()
     }
 
     /// Apply a category to a transaction. The transfer flag always follows the
