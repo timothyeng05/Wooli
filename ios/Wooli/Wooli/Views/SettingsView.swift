@@ -57,7 +57,7 @@ struct SettingsView: View {
                 Section {
                     PrivacyRow(symbol: "iphone", text: "Accounts and transactions are stored on this iPhone.")
                     PrivacyRow(symbol: "icloud", text: "They sync only to your own private iCloud. Turn on Advanced Data Protection in iCloud settings for end-to-end encryption.")
-                    PrivacyRow(symbol: "key", text: "Your SimpleFIN access key stays in this iPhone's Keychain and never leaves the device.")
+                    PrivacyRow(symbol: "key", text: "Your SimpleFIN access key is kept in your iCloud Keychain, end-to-end encrypted like your saved passwords, so a new iPhone connects automatically.")
                     PrivacyRow(symbol: "eye.slash", text: "No analytics, no ads, and no Wooli server.")
                 } header: {
                     Text("Privacy")
@@ -68,7 +68,7 @@ struct SettingsView: View {
                         confirmErase = true
                     }
                 } footer: {
-                    Text("Removes the SimpleFIN connection and everything Wooli stored on this iPhone and in your iCloud.")
+                    Text("Removes the SimpleFIN connection and everything Wooli stored on this iPhone, in your iCloud, and on your other devices.")
                 }
             }
             .navigationTitle("Settings")

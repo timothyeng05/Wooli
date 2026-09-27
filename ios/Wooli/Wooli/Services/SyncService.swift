@@ -120,6 +120,7 @@ enum SyncService {
         }
 
         try context.save()
+        Deduplicator.run(context: context)
         UserDefaults.standard.set(Date.now, forKey: lastSyncKey)
         return summary
     }

@@ -6,9 +6,10 @@ financial data stays theirs:
 - **No Wooli server.** No Supabase, no API routes, no account sign-up.
 - **Bank data comes straight from SimpleFIN** to the phone, using the person's own
   SimpleFIN setup token.
-- **The SimpleFIN access key lives only in this iPhone's Keychain**
-  (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), so it's not in iCloud
-  Keychain, iCloud sync, or backups.
+- **The SimpleFIN access key lives in the Keychain**, saved as a synchronizable
+  item. It travels in the user's iCloud Keychain (always end-to-end encrypted,
+  like saved passwords), so a new iPhone on the same Apple ID connects without a
+  new setup token. It's never stored in SwiftData/CloudKit or anywhere Wooli can read it.
 - **Accounts, transactions, categories and rules are stored in SwiftData**, and
   sync only through the person's own private iCloud once CloudKit is enabled (below).
 
@@ -81,8 +82,9 @@ container once it exists. Until then, data is stored only on the device.
 
 CloudKit notes:
 - The models follow CloudKit's rules: no unique constraints, and every property has a default.
-- Default categories are seeded when the store is empty. If two devices both start
-  fresh before syncing, the categories can be duplicated. Set up on one device first.
+- Default categories are seeded only when connecting for the first time. A new
+  iPhone that picks up the key from iCloud Keychain skips setup and waits for the
+  existing categories to sync down, so they aren't duplicated.
 - Sync goes to the user's **private** database, so neither Apple nor you can read it
   if they turn on Advanced Data Protection.
 
@@ -101,7 +103,7 @@ Wooli/
     BudgetMath                month totals, currency formatting
     History                   chart ranges, balance history, cumulative spending, transaction filters
     AppModel                  mode (onboarding / live / sample), sync state, erase
-    KeychainHelper            device-only secret storage
+    KeychainHelper            iCloud Keychain secret storage
     SampleData                6 months of realistic demo data
   Views/Theme.swift           web design tokens, cards, badges, bank logos, sheep logo
   Views/                      SwiftUI screens (standard iOS components, SF Symbols, Swift Charts)

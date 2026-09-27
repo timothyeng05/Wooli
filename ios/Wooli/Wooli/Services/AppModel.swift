@@ -25,9 +25,15 @@ final class AppModel {
 
     init() {
         let stored = UserDefaults.standard.string(forKey: Self.modeKey).flatMap(Mode.init) ?? .onboarding
-        // If the Keychain entry is gone (e.g. restored to a new phone — it's
-        // device-only on purpose), fall back to onboarding to reconnect.
-        mode = (stored == .live && !SyncService.hasCredentials) ? .onboarding : stored
+        if SyncService.hasCredentials {
+            // The key syncs through iCloud Keychain, so on a new iPhone it can
+            // already be here before the app has ever run: go straight to the
+            // user's (iCloud-synced) data instead of onboarding.
+            mode = .live
+        } else {
+            // No key (iCloud Keychain off, or disconnected): reconnect.
+            mode = stored == .sample ? .sample : .onboarding
+        }
     }
 
     func connect(setupToken: String, context: ModelContext) async throws {

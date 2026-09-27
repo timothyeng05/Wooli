@@ -137,7 +137,7 @@ struct ConnectSheet: View {
                         Label("Open SimpleFIN Bridge", systemImage: "safari")
                     }
                 } footer: {
-                    Text("SimpleFIN Bridge is a paid service (about $15 a year) that links your banks. Your access key is stored only in this iPhone's Keychain.")
+                    Text("SimpleFIN Bridge is a paid service (about $15 a year) that links your banks. Your access key is kept in your iCloud Keychain, end-to-end encrypted like your saved passwords.")
                 }
             }
             .navigationTitle("Connect")

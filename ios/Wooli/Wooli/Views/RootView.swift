@@ -31,7 +31,10 @@ struct RootView: View {
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { syncIfStale() }
+            guard phase == .active else { return }
+            // iCloud may have delivered copies of records while we were away.
+            Deduplicator.run(context: context)
+            syncIfStale()
         }
     }
 

@@ -1,7 +1,8 @@
 import Foundation
 
 /// Low-level SimpleFIN protocol client. Every secret (the access URL) lives
-/// only in this device's Keychain -- there is no Wooli server in this path.
+/// only in the user's Keychain (synced via their iCloud Keychain) -- there is
+/// no Wooli server in this path.
 /// Mirrors lib/budget/simplefin-client.ts in the web app.
 enum SimpleFinError: Error, LocalizedError {
     case invalidSetupToken
