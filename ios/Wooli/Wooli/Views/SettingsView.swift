@@ -69,6 +69,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Household") {
+                    NavigationLink {
+                        PeopleSettingsView()
+                    } label: {
+                        Label("People", systemImage: "person.2.fill")
+                    }
+                }
+
                 Section("Budget") {
                     NavigationLink {
                         RulesView()

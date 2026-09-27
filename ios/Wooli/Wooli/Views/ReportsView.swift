@@ -27,16 +27,32 @@ struct ReportsView: View {
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var accounts: [LocalAccount]
+    @Query(sort: \Person.name) private var people: [Person]
+    @State private var selectedPersonId: String? = nil
+
     @State private var period: Period = .thisMonth
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
-        let summary = MonthSummary(transactions: transactions, in: period.interval,
+        let visibleAccountIds = Set(accounts.filter { selectedPersonId == nil || $0.ownerId == selectedPersonId }.map(\.providerAccountId))
+        let relevantTransactions = transactions.filter { visibleAccountIds.contains($0.accountId) }
+        let summary = MonthSummary(transactions: relevantTransactions, in: period.interval,
                                    categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
 
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    if !people.isEmpty {
+                        Picker("Person", selection: $selectedPersonId) {
+                            Text("Everyone").tag(String?.none)
+                            ForEach(people) { person in
+                                Text("\(person.name)").tag(String?.some(person.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     Picker("Period", selection: $period) {
                         ForEach(Period.allCases) { Text($0.rawValue).tag($0) }
                     }
@@ -49,10 +65,10 @@ struct ReportsView: View {
                         StatTile(label: "Saved", value: summary.net, tint: summary.net >= 0 ? Theme.brand : Theme.expense)
                     }
 
-                    CashFlowCard(transactions: transactions, ledger: ledger)
+                    CashFlowCard(transactions: relevantTransactions, ledger: ledger)
                     SpendingBreakdownCard(summary: summary, ledger: ledger)
-                    TopMerchantsCard(transactions: transactions, interval: period.interval, ledger: ledger)
-                    TagsReportCard(transactions: transactions, interval: period.interval, ledger: ledger)
+                    TopMerchantsCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                    TagsReportCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
                 }
                 .padding(16)
             }

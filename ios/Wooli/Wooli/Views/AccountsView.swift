@@ -191,6 +191,8 @@ private struct AccountLink: View {
 }
 
 struct AccountDetailView: View {
+    @Query(sort: \Person.name) private var people: [Person]
+
     @Bindable var account: LocalAccount
     @Query private var snapshots: [BalanceSnapshot]
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
@@ -232,6 +234,15 @@ struct AccountDetailView: View {
                         ForEach(AccountKind.allCases) { Text($0.singularLabel).tag($0.rawValue) }
                     }
                     .padding(.vertical, 6)
+                    Picker("Assigned To", selection: $account.ownerId) {
+                        Text("Everyone").tag(String?.none)
+                        ForEach(people) { person in
+                            Text("\(person.icon) \(person.name)").tag(String?.some(person.id))
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    Divider()
+
                     Divider()
                     Toggle("Hide account", isOn: $account.isHidden).padding(.vertical, 10)
                     Text("Hidden accounts aren't counted in net worth, budgets, or the review queue.")

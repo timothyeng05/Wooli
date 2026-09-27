@@ -59,6 +59,8 @@ enum AccountKind: String, CaseIterable, Identifiable {
 
 @Model
 final class LocalAccount {
+    var ownerId: String?
+
     var providerAccountId: String = ""
     var name: String = ""
     var nickname: String = ""
@@ -361,5 +363,19 @@ final class RecurringItem {
     var cadence: Cadence {
         get { Cadence(rawValue: cadenceRaw) ?? .monthly }
         set { cadenceRaw = newValue.rawValue }
+    }
+}
+
+@Model
+final class Person {
+    var id: String = UUID().uuidString
+    var name: String = ""
+    var icon: String = "👤"
+    var colorHex: String = "#2563eb"
+
+    init(name: String, icon: String = "👤", colorHex: String = "#2563eb") {
+        self.name = name
+        self.icon = icon
+        self.colorHex = colorHex
     }
 }

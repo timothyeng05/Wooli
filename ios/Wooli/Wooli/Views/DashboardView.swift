@@ -9,6 +9,9 @@ struct DashboardView: View {
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var snapshots: [BalanceSnapshot]
+    @Query(sort: \Person.name) private var people: [Person]
+    @State private var selectedPersonId: String? = nil
+
     @AppStorage("displayName") private var displayName = ""
     @State private var showSettings = false
     @State private var range: ChartRange = .month3
@@ -22,16 +25,29 @@ struct DashboardView: View {
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let thisMonth = DateInterval.month(containing: .now)
-        let month = MonthSummary(transactions: transactions, in: thisMonth,
+        let visibleAccounts = Set(accounts.filter { selectedPersonId == nil || $0.ownerId == selectedPersonId }.map(\.providerAccountId))
+        let relevantTransactions = transactions.filter { visibleAccounts.contains($0.accountId) }
+        let month = MonthSummary(transactions: relevantTransactions, in: thisMonth,
                                  categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
-        let plan = BudgetPlan(categories: categories, transactions: transactions, month: thisMonth, ledger: ledger)
+        let plan = BudgetPlan(categories: categories, transactions: relevantTransactions, month: thisMonth, ledger: ledger)
         let plannedIncome = plan.plannedIncome
         let plannedExpenses = plan.plannedExpenses
-        let reviewItems = ledger.reviewQueue(transactions)
+        let reviewItems = ledger.reviewQueue(relevantTransactions)
 
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    if !people.isEmpty {
+                        Picker("Person", selection: $selectedPersonId) {
+                            Text("Household").tag(String?.none)
+                            ForEach(people) { person in
+                                Text("\(person.name)").tag(String?.some(person.id))
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 4)
+                    }
+
                     if StatusBanner.isVisible(app) { StatusBanner().card(padding: 14) }
 
                     if app.mode == .live, let lastSyncAt = app.lastSyncAt {
@@ -44,7 +60,7 @@ struct DashboardView: View {
                         .contentTransition(.numericText())
                     }
 
-                    PaceCard(transactions: transactions, ledger: ledger, month: thisMonth, target: plannedExpenses)
+                    PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses)
 
                     if !reviewItems.isEmpty {
                         ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
@@ -59,14 +75,14 @@ struct DashboardView: View {
 
                     NetWorthCard(accounts: accounts, snapshots: snapshots, range: $range)
 
-                    SpendingComparisonCard(transactions: transactions, ledger: ledger)
+                    SpendingComparisonCard(transactions: relevantTransactions, ledger: ledger)
 
                     VStack(alignment: .leading, spacing: 12) {
                         CardHeader(title: "Transactions") {
                             Button("See all") { app.selectedTab = .transactions }
                                 .font(.subheadline.weight(.medium))
                         }
-                        let recent = transactions.filter { !$0.isHidden && ledger.isVisible($0) }.prefix(5)
+                        let recent = relevantTransactions.filter { !$0.isHidden && ledger.isVisible($0) }.prefix(5)
                         if recent.isEmpty {
                             Text("No transactions yet").font(.subheadline).foregroundStyle(Theme.textTertiary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 16)
