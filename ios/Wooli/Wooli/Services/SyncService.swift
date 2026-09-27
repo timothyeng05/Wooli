@@ -3,8 +3,8 @@ import SwiftData
 
 @MainActor
 enum SyncService {
-    static let accessURLKey = \"simplefin-access-url\"
-    static let lastSyncKey = \"lastSimpleFinSyncAt\"
+    static let accessURLKey = "simplefin-access-url"
+    static let lastSyncKey = "lastSimpleFinSyncAt"
 
     static var hasCredentials: Bool {
         KeychainHelper.load(forKey: accessURLKey) != nil

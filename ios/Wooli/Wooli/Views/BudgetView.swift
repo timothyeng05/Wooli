@@ -193,7 +193,7 @@ private struct BudgetSection: View {
             HStack {
                 Text(title).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
                 Spacer()
-                Text("Planned").frame(width: 84, alignment: .trailing)
+                Text("Planned").frame(width: 90, alignment: .trailing)
                 Text("Remaining").frame(width: 80, alignment: .trailing)
             }
             .font(.footnote.weight(.medium))
@@ -245,7 +245,7 @@ private struct GroupBudgetCard: View {
                 Spacer(minLength: 4)
                 if byCategory && !groupLevel {
                     Text(plan.planned(group).currency(cents: false)).font(.body.weight(.semibold)).monospacedDigit()
-                        .frame(width: 84, alignment: .trailing)
+                        .frame(width: 90, alignment: .trailing)
                 } else {
                     PlannedField(value: $group.monthlyTarget, id: group.id, editing: editing)
                 }
@@ -330,18 +330,37 @@ private struct PlannedField: View {
     @Binding var value: Double
     let id: String
     var editing: FocusState<String?>.Binding
+    
+    @State private var draftValue: Double = 0
 
     var body: some View {
-        TextField("$0", value: $value, format: .currency(code: "USD").precision(.fractionLength(0)))
+        TextField("$0", value: $draftValue, format: .currency(code: "USD").precision(.fractionLength(0)))
             .keyboardType(.numberPad)
             .multilineTextAlignment(.trailing)
-            .font(.body.weight(.medium).monospacedDigit())
+            .font(.subheadline.weight(.semibold).monospacedDigit())
             .focused(editing, equals: id)
             .padding(.horizontal, 8).padding(.vertical, 7)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(editing.wrappedValue == id ? Theme.brand : Theme.border, lineWidth: editing.wrappedValue == id ? 1.5 : 1))
-            .frame(width: 84)
+            .frame(width: 90)
+            .onAppear {
+                draftValue = value
+            }
+            .onChange(of: editing.wrappedValue) { old, new in
+                if new == id {
+                    draftValue = value
+                } else if old == id {
+                    if value != draftValue {
+                        value = draftValue
+                    }
+                }
+            }
+            .onChange(of: value) { old, new in
+                if editing.wrappedValue != id {
+                    draftValue = new
+                }
+            }
     }
 }
 

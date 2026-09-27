@@ -13,6 +13,7 @@ struct TransactionsView: View {
     @Query private var accounts: [LocalAccount]
     @State private var filter = TransactionFilter()
     @State private var search = ""
+    @State private var debouncedSearch = ""
     @State private var showFilters = false
 
     var body: some View {
@@ -25,7 +26,7 @@ struct TransactionsView: View {
 
     private var content: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
-        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let query = debouncedSearch.trimmingCharacters(in: .whitespaces).lowercased()
         let reviewCount = ledger.reviewQueue(transactions).count
 
         let visible = filter.sorted(transactions.filter { tx in
@@ -83,7 +84,7 @@ struct TransactionsView: View {
         .overlay {
             if visible.isEmpty {
                 if !query.isEmpty {
-                    ContentUnavailableView.search(text: search)
+                    ContentUnavailableView.search(text: debouncedSearch)
                 } else if filter.activeCount > 0 {
                     ContentUnavailableView("No Matches", systemImage: "line.3.horizontal.decrease.circle",
                                            description: Text("Try clearing some filters."))
@@ -94,6 +95,12 @@ struct TransactionsView: View {
             }
         }
         .searchable(text: $search, prompt: "Search transactions")
+        .task(id: search) {
+            // Wait for a pause in typing; a new keystroke cancels this task.
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            debouncedSearch = search
+        }
         .navigationTitle(accountId == nil ? "Transactions" : "Activity")
         .refreshable { await app.sync(context: context) }
         .toolbar {

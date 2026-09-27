@@ -10,13 +10,13 @@ import FoundationModels
 ///
 /// It only looks at transactions still uncategorized after the user's own
 /// merchant rules and the keyword hints, picks from the user's categories
-/// (or \"None\"), and learns from merchants the user already confirmed. Like
+/// (or "None"), and learns from merchants the user already confirmed. Like
 /// every suggestion, the result stays in the review queue until confirmed.
-private let log = Logger(subsystem: \"com.wooli\", category: \"ai-categorize\")
+private let log = Logger(subsystem: "com.wooli", category: "ai-categorize")
 
 @MainActor
 enum AICategorizer {
-    static let enabledKey = \"aiCategorizeEnabled\"
+    static let enabledKey = "aiCategorizeEnabled"
 
     static var isEnabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
@@ -47,11 +47,11 @@ enum AICategorizer {
 
     static var statusDescription: String {
         switch status {
-        case .available: \"Runs on this iPhone. Nothing is sent anywhere.\"
-        case .unsupportedOS: \"Needs iOS 26 or later.\"
-        case .deviceNotEligible: \"This iPhone doesn't support Apple Intelligence. Wooli will keep using your merchant rules.\"
-        case .notEnabled: \"Turn on Apple Intelligence in Settings to use this.\"
-        case .notReady: \"Apple Intelligence is still downloading. Wooli will try again later.\"
+        case .available: "Runs on this iPhone. Nothing is sent anywhere."
+        case .unsupportedOS: "Needs iOS 26 or later."
+        case .deviceNotEligible: "This iPhone doesn't support Apple Intelligence. Wooli will keep using your merchant rules."
+        case .notEnabled: "Turn on Apple Intelligence in Settings to use this."
+        case .notReady: "Apple Intelligence is still downloading. Wooli will try again later."
         }
     }
 
@@ -82,7 +82,7 @@ enum AICategorizer {
 @available(iOS 26.0, *)
 extension AICategorizer {
 
-    static func isContentRefusal(_ error: Error) -> Bool {
+    nonisolated static func isContentRefusal(_ error: Error) -> Bool {
         if #available(iOS 27.0, *), let error = error as? LanguageModelError {
             switch error {
             case .guardrailViolation, .refusal: return true
@@ -100,9 +100,9 @@ extension AICategorizer {
 
     /// Up to 3 confirmed transactions that share the merchant's first word, or
     /// the same amount on the same account (recurring bills).
-    static func similarConfirmed(to tx: LocalTransaction, in confirmed: [LocalTransaction],
+    nonisolated static func similarConfirmed(to tx: LocalTransaction, in confirmed: [LocalTransaction],
                                          names: [String: String]) -> [String] {
-        let firstWord = tx.normalizedMerchant.split(separator: \" \").first.map(String.init) ?? \"\"
+        let firstWord = tx.normalizedMerchant.split(separator: " ").first.map(String.init) ?? ""
         let matches = confirmed.filter { other in
             (firstWord.count > 2 && other.normalizedMerchant.hasPrefix(firstWord))
                 || (other.accountId == tx.accountId && abs(other.amount - tx.amount) < 0.01 && abs(tx.amount) >= 5)
@@ -110,22 +110,22 @@ extension AICategorizer {
         var seen = Set<String>()
         return matches.compactMap { other -> String? in
             guard let name = other.categoryId.flatMap({ names[$0] }), seen.insert(other.title + name).inserted else { return nil }
-            return \"- \\\"\\(other.title)\\\" \\(abs(other.amount).formatted(.currency(code: \"USD\"))) -> \\(name)\"
+            return "- \"\(other.title)\" \(abs(other.amount).formatted(.currency(code: "USD"))) -> \(name)"
         }
         .prefix(3).map { $0 }
     }
 
-    static func buildInstructions(byName: [String: BudgetCategory], groups: [String: BudgetCategory],
+    nonisolated static func buildInstructions(byName: [String: BudgetCategory], groups: [String: BudgetCategory],
                                           rules: [String], examples: [String]) -> String {
         let list = byName.values.sorted { $0.sortOrder < $1.sortOrder }.map { c -> String in
             let group = c.parentId.flatMap { groups[$0] }
-            let kind = c.isIncome ? \"income\" : c.isTransfer ? \"transfer between own accounts\" : \"spending\"
-            return \"- \\(c.name)\" + (group.map { \" (\\($0.name), \\(kind))\" } ?? \" (\\(kind))\")
-        }.joined(separator: \"\\n\")
-        var text = \"\"\"
+            let kind = c.isIncome ? "income" : c.isTransfer ? "transfer between own accounts" : "spending"
+            return "- \(c.name)" + (group.map { " (\($0.name), \(kind))" } ?? " (\(kind))")
+        }.joined(separator: "\n")
+        var text = """
         You sort personal bank transactions into budget categories.
         Pick exactly one category from this list, or None if you are not reasonably sure:
-        \\(list)
+        \(list)
 
         Guidance:
         - If you don't recognize the merchant and nothing in the description makes the category clear, answer None.
@@ -139,24 +139,24 @@ extension AICategorizer {
         - A merchant name with a foreign city or region (for example Hokkaido, Tokyo, Paris) means the person was
           travelling: pick the kind of place (restaurant, shop, hotel, transport), not a transfer or card payment.
         - Only choose a transfer or credit card payment if the description clearly says payment, transfer or autopay.
-        \"\"\"
+        """
         if !rules.isEmpty {
-            text += \"\\n\\nThis person's own rules. Always follow these, even over the examples below:\\n\"
-                + rules.map { \"- \\($0)\" }.joined(separator: \"\\n\")
+            text += "\n\nThis person's own rules. Always follow these, even over the examples below:\n"
+                + rules.map { "- \($0)" }.joined(separator: "\n")
         }
         if !examples.isEmpty {
-            text += \"\\n\\nThis person has categorized these merchants before:\\n\" + examples.joined(separator: \"\\n\")
+            text += "\n\nThis person has categorized these merchants before:\n" + examples.joined(separator: "\n")
         }
         return text
     }
 
     /// Up to 20 recent confirmed merchant -> category pairs, like the web app's few-shot examples.
-    static func examples(context: ModelContext, categories: [BudgetCategory]) -> [String] {
+    nonisolated static func examples(context: ModelContext, categories: [BudgetCategory]) -> [String] {
         let names = Dictionary(categories.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
-        var fetch = FetchDescriptor<MerchantRule>(sortBy: [SortDescriptor(\\.updatedAt, order: .reverse)])
+        var fetch = FetchDescriptor<MerchantRule>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         fetch.fetchLimit = 20
         let rules = (try? context.fetch(fetch)) ?? []
-        return rules.compactMap { rule in names[rule.categoryId].map { \"\\\"\\(rule.merchant)\\\" -> \\($0)\" } }
+        return rules.compactMap { rule in names[rule.categoryId].map { "\"\(rule.merchant)\" -> \($0)" } }
     }
 }
 #endif
