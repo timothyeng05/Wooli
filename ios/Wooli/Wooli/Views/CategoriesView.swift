@@ -48,7 +48,7 @@ struct CategoriesSettingsView: View {
                 }
             }
         }
-        .hamburgerMenu()
+        
             .navigationTitle("Categories")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
@@ -240,7 +240,7 @@ private struct CategoryEditor: View {
                     }
                 }
             }
-            .hamburgerMenu()
+            
             .navigationTitle(existing == nil ? (isGroup ? "New Group" : "New Category") : (isGroup ? "Edit Group" : "Edit Category"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

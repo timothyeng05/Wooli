@@ -100,7 +100,7 @@ struct RecurringView: View {
                 }
             }
         }
-        .hamburgerMenu()
+        
             .navigationTitle("Recurring")
         .sheet(item: $editing) { RecurringEditor(item: $0) }
     }
@@ -200,7 +200,7 @@ struct RecurringEditor: View {
                     Text("Deleting only removes it from Recurring. Your transactions aren't touched. Wooli may find it again if it keeps repeating — turn off \"Track this\" instead to ignore it for good.")
                 }
             }
-            .hamburgerMenu()
+            
             .navigationTitle(item.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

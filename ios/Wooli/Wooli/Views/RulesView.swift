@@ -102,7 +102,7 @@ struct RulesView: View {
             }
         }
         .searchable(text: $search, prompt: "Search rules")
-        .hamburgerMenu()
+        
             .navigationTitle("Rules")
         .toolbar {
             Menu {
@@ -230,7 +230,7 @@ struct RuleEditor: View {
                 }
             }
             .background(Color(.systemGroupedBackground))
-            .hamburgerMenu()
+            
             .navigationTitle(rule == nil ? "Create rule" : "Edit rule")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -500,7 +500,7 @@ private struct TextListConditionEditor: View {
                 }
             }
         }
-        .hamburgerMenu()
+        
             .navigationTitle(title)
         .onAppear { if mode.isEmpty { mode = title == "Merchant name" ? "exact" : "contains" } }
     }
@@ -548,7 +548,7 @@ private struct AmountConditionEditor: View {
                 }
             }
         }
-        .hamburgerMenu()
+        
             .navigationTitle("Amount")
     }
 }

@@ -83,35 +83,22 @@ struct MainTabView: View {
 
     var body: some View {
         @Bindable var app = app
-        
-        ZStack(alignment: .leading) {
-            // Main Content Area
-            TabView(selection: $app.selectedTab) {
-                ForEach(AppTab.allCases) { tab in
-                    innerView(for: tab)
-                        .tag(tab)
-                        .toolbar(.hidden, for: .tabBar)
-                }
+        TabView(selection: $app.selectedTab) {
+            Tab("Dashboard", systemImage: "house", value: AppTab.dashboard) {
+                DashboardView()
             }
-            .disabled(app.isSidebarOpen)
-            
-            // Dimmed Overlay
-            if app.isSidebarOpen {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.spring()) {
-                            app.isSidebarOpen = false
-                        }
-                    }
+            Tab("Accounts", systemImage: "square.stack.3d.up", value: AppTab.accounts) {
+                AccountsView()
             }
-            
-            // Sidebar Drawer
-            if app.isSidebarOpen {
-                SidebarDrawer(reviewCount: reviewCount)
-                    .frame(width: 280)
-                    .ignoresSafeArea(edges: .bottom)
-                    .transition(.move(edge: .leading))
+            Tab("Transactions", systemImage: "creditcard", value: AppTab.transactions) {
+                TransactionsView()
+            }
+            .badge(reviewCount)
+            Tab("Reports", systemImage: "chart.pie", value: AppTab.reports) {
+                ReportsView()
+            }
+            Tab("Menu", systemImage: "line.3.horizontal", value: AppTab.menu) {
+                MenuView()
             }
         }
         .fullScreenCover(isPresented: $app.showReview) {
@@ -121,126 +108,37 @@ struct MainTabView: View {
             ReviewView(isCalibration: true)
         }
     }
-    
-    @ViewBuilder
-    private func innerView(for tab: AppTab) -> some View {
-        switch tab {
-        case .dashboard: DashboardView()
-        case .accounts: AccountsView()
-        case .transactions: TransactionsView()
-        case .reports: ReportsView()
-        case .budget: BudgetView()
-        case .categories: CategoriesSettingsView()
-        case .rules: RulesView()
-        case .recurring: RecurringView()
-        }
-    }
 }
 
-struct HamburgerMenuModifier: ViewModifier {
-    @Environment(AppModel.self) private var app
-    
-    func body(content: Content) -> some View {
-        content
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            app.isSidebarOpen.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "line.3.horizontal")
-                            .imageScale(.large)
-                            .foregroundColor(Theme.brand)
+struct MenuView: View {
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Budget & Settings") {
+                    NavigationLink(value: "budget") {
+                        Label("Budget", systemImage: "map")
+                    }
+                    NavigationLink(value: "categories") {
+                        Label("Categories", systemImage: "square.grid.2x2")
+                    }
+                    NavigationLink(value: "rules") {
+                        Label("Rules", systemImage: "wand.and.stars")
+                    }
+                    NavigationLink(value: "recurring") {
+                        Label("Recurring", systemImage: "arrow.triangle.2.circlepath")
                     }
                 }
             }
-    }
-}
-
-extension View {
-    func hamburgerMenu() -> some View {
-        modifier(HamburgerMenuModifier())
-    }
-}
-
-struct SidebarDrawer: View {
-    @Environment(AppModel.self) private var app
-    let reviewCount: Int
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text("Wooli")
-                    .font(.largeTitle.bold())
-                    .foregroundColor(Theme.brand)
-                Spacer()
-            }
-            .padding()
-            .padding(.top, 50)
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 5) {
-                    sidebarButton(for: .dashboard)
-                    sidebarButton(for: .accounts)
-                    sidebarButton(for: .transactions, badge: reviewCount)
-                    sidebarButton(for: .reports)
-                    
-                    Divider().padding(.vertical, 10)
-                    
-                    Text("Budget")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal)
-                        .padding(.bottom, 5)
-                    
-                    sidebarButton(for: .budget)
-                    sidebarButton(for: .categories)
-                    sidebarButton(for: .rules)
-                    sidebarButton(for: .recurring)
-                }
-                .padding(.vertical)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(UIColor.systemBackground))
-    }
-    
-    @ViewBuilder
-    private func sidebarButton(for tab: AppTab, badge: Int = 0) -> some View {
-        Button {
-            app.selectedTab = tab
-            withAnimation(.spring()) {
-                app.isSidebarOpen = false
-            }
-        } label: {
-            HStack(spacing: 16) {
-                Image(systemName: tab.symbol)
-                    .frame(width: 24)
-                    .font(.system(size: 18, weight: .medium))
-                
-                Text(tab.title)
-                    .font(.body.weight(app.selectedTab == tab ? .semibold : .regular))
-                
-                Spacer()
-                
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.caption.bold())
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.red)
-                        .clipShape(Capsule())
+            .navigationTitle("Menu")
+            .navigationDestination(for: String.self) { val in
+                switch val {
+                case "budget": BudgetView()
+                case "categories": CategoriesSettingsView()
+                case "rules": RulesView()
+                case "recurring": RecurringView()
+                default: EmptyView()
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-            .background(app.selectedTab == tab ? Theme.brand.opacity(0.15) : Color.clear)
-            .foregroundColor(app.selectedTab == tab ? Theme.brand : .primary)
-            .cornerRadius(10)
-            .padding(.horizontal, 12)
         }
     }
 }

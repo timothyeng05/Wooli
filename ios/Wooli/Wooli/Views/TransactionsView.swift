@@ -103,7 +103,7 @@ struct TransactionsView: View {
             guard !Task.isCancelled else { return }
             debouncedSearch = search
         }
-        .hamburgerMenu()
+        
             .navigationTitle(accountId == nil ? "Transactions" : "Activity")
         .refreshable { await app.sync(context: context) }
         .toolbar {
@@ -267,7 +267,7 @@ struct FiltersSheet: View {
                     }
                 }
             }
-            .hamburgerMenu()
+            
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -339,7 +339,7 @@ struct MultiSelectList: View {
             }
         }
         .modifier(OptionalSearch(enabled: searchable, text: $search))
-        .hamburgerMenu()
+        
             .navigationTitle(title)
         .toolbar {
             if !selection.isEmpty {
@@ -376,7 +376,7 @@ private struct AmountFilter: View {
                 Text("Matches money in and money out by size.")
             }
         }
-        .hamburgerMenu()
+        
             .navigationTitle("Amounts")
     }
 }
