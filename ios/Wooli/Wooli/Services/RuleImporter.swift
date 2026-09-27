@@ -33,6 +33,10 @@ enum RuleImporter {
         var rules: [Rule]?
         /// Existing rules to delete, matched on their merchant/statement text.
         var removeRules: [Rule]?
+        /// Update the category tree to the starter set first (in place).
+        var adoptStarterCategories: Bool?
+        /// Planned monthly amounts by category or group name.
+        var planned: [String: Double]?
     }
 
     static var fileURL: URL {
@@ -46,6 +50,11 @@ enum RuleImporter {
         guard let data = try? Data(contentsOf: fileURL),
               let payload = try? JSONDecoder().decode(Payload.self, from: data) else { return nil }
 
+        if payload.adoptStarterCategories == true {
+            DefaultCategories.adopt(context)
+            // Let the directory and AI look again with the new categories.
+            AICategorizer.reconsiderUnreviewed(context: context)
+        }
         var categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         for c in payload.categories ?? [] where !categories.contains(where: { $0.name.caseInsensitiveCompare(c.name) == .orderedSame }) {
             guard let group = categories.first(where: { $0.parentId == nil && $0.name.caseInsensitiveCompare(c.group) == .orderedSame })
@@ -110,6 +119,18 @@ enum RuleImporter {
             context.insert(rule)
             RuleEngine.applyToExisting(rule, transactions: transactions, categories: byId)
             added += 1
+        }
+
+        for (name, amount) in payload.planned ?? [:] {
+            let leaf = categories.first { $0.parentId != nil && $0.name.caseInsensitiveCompare(name) == .orderedSame }
+            let group = categories.first { $0.parentId == nil && $0.name.caseInsensitiveCompare(name) == .orderedSame }
+            if let leaf {
+                leaf.monthlyTarget = amount
+                // Budgeting a category switches its group to "by category".
+                categories.first { $0.id == leaf.parentId }?.monthlyTarget = 0
+            } else {
+                group?.monthlyTarget = amount
+            }
         }
 
         try? context.save()

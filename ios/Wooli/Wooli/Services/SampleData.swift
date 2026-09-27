@@ -46,9 +46,9 @@ enum SampleData {
 
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let byName = Dictionary(categories.filter { $0.parentId != nil }.map { ($0.name.lowercased(), $0) },
-                                uniquingKeysWith: { a, _ in a })
-        let targets = ["Food & Dining": 800.0, "Home": 2400, "Travel": 300, "Personal": 400, "Other": 150,
+        let byName = Categorizer.leavesByName(categories)
+        let targets = ["Food & Dining": 800.0, "Home": 2400, "Transportation": 250, "Travel": 150,
+                       "Shopping": 300, "Health & Personal": 150, "Entertainment": 120, "Bills & Other": 100,
                        "Income": 6500]
         for c in categories where c.parentId == nil { c.monthlyTarget = targets[c.name] ?? 0 }
 
@@ -64,8 +64,8 @@ enum SampleData {
             let tx = LocalTransaction(providerTransactionId: "sample-\(counter)", accountId: account,
                                       amount: (amount * 100).rounded() / 100, transactionDescription: description,
                                       payee: payee, transactedAt: date, isPending: pending)
-            if let id = Categorizer.suggest(merchant: tx.normalizedMerchant, description: description,
-                                            rules: [:], categoriesByName: byName) {
+            if let id = Categorizer.suggest(merchant: tx.normalizedMerchant, description: description + " " + (payee ?? ""),
+                                            amount: tx.amount, rules: [:], categoriesByName: byName) {
                 Categorizer.assign(byId[id], to: tx)
             }
             // Older, categorized activity looks already reviewed; the last few

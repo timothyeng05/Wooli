@@ -117,7 +117,11 @@ private enum OnDeviceCategorizer {
         let instructions = buildInstructions(byName: byName, groups: groups, rules: userRules,
                                              examples: examples(context: context, categories: categories))
         let accounts = (try? context.fetch(FetchDescriptor<LocalAccount>())) ?? []
-        let accountKinds = Dictionary(accounts.map { ($0.providerAccountId, $0.kind.singularLabel) }, uniquingKeysWith: { a, _ in a })
+        let accountKinds = Dictionary(accounts.map { ($0.providerAccountId, "\($0.displayName) (\($0.kind.singularLabel))") },
+                                      uniquingKeysWith: { a, _ in a })
+        // Transactions the user has already confirmed, for "similar merchant" clues.
+        let confirmed = ((try? context.fetch(FetchDescriptor<LocalTransaction>(predicate: #Predicate { !$0.needsReview && $0.categoryId != nil }))) ?? [])
+        let namesById = Dictionary(categories.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         let options = GenerationOptions(samplingMode: .greedy)
         var suggested = 0
 
@@ -125,12 +129,16 @@ private enum OnDeviceCategorizer {
             // A fresh session per transaction keeps the context window small.
             let session = LanguageModelSession(instructions: instructions)
             let direction = tx.amount >= 0 ? "money in" : "money out"
-            let prompt = """
+            var prompt = """
             Bank description: \(tx.transactionDescription)
             Merchant: \(tx.title)
             Amount: \(abs(tx.amount).formatted(.currency(code: "USD"))) (\(direction))
-            Account type: \(accountKinds[tx.accountId] ?? "Unknown")
+            Account: \(accountKinds[tx.accountId] ?? "Unknown")
             """
+            let similar = similarConfirmed(to: tx, in: confirmed, names: namesById)
+            if !similar.isEmpty {
+                prompt += "\nSimilar transactions this person already categorized:\n" + similar.joined(separator: "\n")
+            }
             do {
                 let response = try await session.respond(to: prompt, schema: schema, includeSchemaInPrompt: true, options: options)
                 let answer = try response.content.value(String.self, forProperty: "category")
@@ -175,6 +183,23 @@ private enum OnDeviceCategorizer {
         return false
     }
 
+    /// Up to 3 confirmed transactions that share the merchant's first word, or
+    /// the same amount on the same account (recurring bills).
+    private static func similarConfirmed(to tx: LocalTransaction, in confirmed: [LocalTransaction],
+                                         names: [String: String]) -> [String] {
+        let firstWord = tx.normalizedMerchant.split(separator: " ").first.map(String.init) ?? ""
+        let matches = confirmed.filter { other in
+            (firstWord.count > 2 && other.normalizedMerchant.hasPrefix(firstWord))
+                || (other.accountId == tx.accountId && abs(other.amount - tx.amount) < 0.01 && abs(tx.amount) >= 5)
+        }
+        var seen = Set<String>()
+        return matches.compactMap { other -> String? in
+            guard let name = other.categoryId.flatMap({ names[$0] }), seen.insert(other.title + name).inserted else { return nil }
+            return "- \"\(other.title)\" \(abs(other.amount).formatted(.currency(code: "USD"))) → \(name)"
+        }
+        .prefix(3).map { $0 }
+    }
+
     private static func buildInstructions(byName: [String: BudgetCategory], groups: [String: BudgetCategory],
                                           rules: [String], examples: [String]) -> String {
         let list = byName.values.sorted { $0.sortOrder < $1.sortOrder }.map { c -> String in
@@ -187,9 +212,18 @@ private enum OnDeviceCategorizer {
         Pick exactly one category from this list, or None if you are not reasonably sure:
         \(list)
 
-        Credit card payments and moves between the person's own accounts are transfers.
-        Paychecks and deposits from employers are income. Payments to people through apps like
-        Venmo or Zelle are usually unclear, so answer None unless the description says what it was for.
+        Guidance:
+        - If you don't recognize the merchant and nothing in the description makes the category clear, answer None.
+          A blank is much better than a wrong guess — the person will categorize it themselves.
+        - Credit card payments and moves between the person's own accounts are transfers.
+        - Money going into or out of investment or retirement accounts (401k, IRA, Roth, brokerage, money market,
+          Fidelity, Vanguard, Schwab) is savings/investments or a transfer, never salary or spending.
+        - Paychecks and deposits from employers are salary. Interest and dividends are not salary.
+        - Payments to people through Venmo, Zelle, Cash App or PayPal are unclear: answer None unless the description
+          says what it was for.
+        - A merchant name with a foreign city or region (for example Hokkaido, Tokyo, Paris) means the person was
+          travelling: pick the kind of place (restaurant, shop, hotel, transport), not a transfer or card payment.
+        - Only choose a transfer or credit card payment if the description clearly says payment, transfer or autopay.
         """
         if !rules.isEmpty {
             text += "\n\nThis person's own rules. Always follow these, even over the examples below:\n"

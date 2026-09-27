@@ -1,66 +1,39 @@
 import Foundation
 import SwiftData
 
-/// On-device replacement for the web app's categorization pipeline. There's no
-/// AI layer here (that runs on a server in the web app), so suggestions come
-/// from the user's own confirmed merchant rules first, then a small built-in
-/// keyword list. Either way the transaction stays in the review queue until the
-/// user confirms it.
+/// Suggests categories without AI: the user's confirmed merchants first, then
+/// the built-in merchant directory. Either way the transaction stays in the
+/// review queue until the user confirms it. (User rules run before this, and
+/// the on-device AI handles whatever is left.)
 enum Categorizer {
-    /// Built-in hints: keyword in the merchant/description → default category name.
-    /// Order matters: the first match wins, so more specific keywords come first.
-    private static let keywordHints: [(String, String)] = [
-        ("payment thank you", "Credit Card Payment"), ("autopay", "Credit Card Payment"),
-        ("card payment", "Credit Card Payment"), ("epay", "Credit Card Payment"),
-        ("online transfer", "Transfer"), ("transfer to", "Transfer"), ("transfer from", "Transfer"),
-        // Parking & tolls, before anything that could also match (e.g. "rent" in "rentaltoll").
-        ("parking", "Parking & Tolls"), ("toll", "Parking & Tolls"), ("e-zpass", "Parking & Tolls"),
-        ("ezpass", "Parking & Tolls"), ("fastrak", "Parking & Tolls"), ("sunpass", "Parking & Tolls"),
-        ("i-pass", "Parking & Tolls"), ("platepass", "Parking & Tolls"), ("spothero", "Parking & Tolls"),
-        ("parkwhiz", "Parking & Tolls"), ("parkmobile", "Parking & Tolls"), ("paybyphone", "Parking & Tolls"),
-        ("apartments", "Rent"), ("property mgmt", "Rent"), ("landlord", "Rent"),
-        ("payroll", "Salary"), ("direct dep", "Salary"), ("interest paid", "Other Income"),
-        ("uber eats", "Takeout"), ("doordash", "Takeout"), ("grubhub", "Takeout"), ("seamless", "Takeout"),
-        ("uber", "Rideshare"), ("lyft", "Rideshare"),
-        ("starbucks", "Coffee"), ("blue bottle", "Coffee"), ("peet", "Coffee"), ("dunkin", "Coffee"),
-        ("whole foods", "Groceries"), ("wholefds", "Groceries"), ("trader joe", "Groceries"),
-        ("safeway", "Groceries"), ("kroger", "Groceries"), ("costco", "Groceries"), ("instacart", "Groceries"),
-        ("mta", "Transit"), ("bart", "Transit"), ("clipper", "Transit"), ("metro", "Transit"),
-        ("shell", "Car"), ("chevron", "Car"), ("exxon", "Car"),
-        ("netflix", "Subscriptions"), ("spotify", "Subscriptions"), ("hulu", "Subscriptions"),
-        ("apple.com", "Subscriptions"), ("icloud", "Subscriptions"), ("youtube", "Subscriptions"),
-        ("comcast", "Internet"), ("xfinity", "Internet"), ("verizon", "Utilities"), ("pg&e", "Utilities"),
-        ("con ed", "Utilities"), ("airbnb", "Hotels"), ("marriott", "Hotels"), ("hilton", "Hotels"),
-        ("united", "Flights"), ("delta", "Flights"), ("jetblue", "Flights"), ("southwest", "Flights"),
-        ("cvs", "Medical"), ("walgreens", "Medical"), ("amazon", "Shopping"), ("amzn", "Shopping"),
-        ("target", "Shopping"), ("amc theatres", "Entertainment"), ("regal", "Entertainment"),
-    ]
-
-    /// Suggest a category id for a fresh transaction, or nil.
-    static func suggest(merchant: String, description: String,
+    /// Suggest a category id for a transaction, or nil.
+    static func suggest(merchant: String, description: String, amount: Double = 0,
                         rules: [String: MerchantRule], categoriesByName: [String: BudgetCategory]) -> String? {
         if !merchant.isEmpty, let rule = rules[merchant] { return rule.categoryId }
-        let haystack = (merchant + " " + description).lowercased()
-        for (keyword, categoryName) in keywordHints where haystack.contains(keyword) {
-            if let category = categoriesByName[categoryName.lowercased()] { return category.id }
-        }
-        return nil
+        guard let kind = MerchantDirectory.kind(for: merchant + " " + description, amount: amount) else { return nil }
+        return MerchantDirectory.category(forKind: kind, in: categoriesByName)?.id
     }
 
-    /// Re-run keyword hints over unreviewed transactions that have no
-    /// category or only an AI guess (keywords are more reliable than the AI).
-    /// Limited to specific, low-risk categories so loose keywords never
-    /// override a good AI guess.
-    static func refreshKeywordHints(context: ModelContext, only targets: Set<String> = ["Parking & Tolls"]) {
+    /// Leaf categories keyed by lowercased name, for `suggest`.
+    static func leavesByName(_ categories: [BudgetCategory]) -> [String: BudgetCategory] {
+        let parents = Set(categories.compactMap(\.parentId))
+        return Dictionary(categories.filter { $0.parentId != nil || !parents.contains($0.id) }
+            .map { ($0.name.lowercased(), $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// Re-run the merchant directory over unreviewed transactions that have no
+    /// category or only an AI guess. Directory entries are specific merchants,
+    /// so they're trusted over the AI. Runs on launch so directory
+    /// improvements reach existing transactions.
+    static func refreshKeywordHints(context: ModelContext) {
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
-        let byName = Dictionary(categories.filter { $0.parentId != nil }.map { ($0.name.lowercased(), $0) },
-                                uniquingKeysWith: { a, _ in a })
+        let byName = leavesByName(categories)
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let fetch = FetchDescriptor<LocalTransaction>(predicate: #Predicate { $0.needsReview && ($0.categoryId == nil || $0.aiSuggested) })
         for tx in (try? context.fetch(fetch)) ?? [] {
             if let id = suggest(merchant: tx.normalizedMerchant, description: tx.transactionDescription + " " + tx.title,
-                                rules: [:], categoriesByName: byName), id != tx.categoryId,
-               let target = categories.first(where: { $0.id == id }), targets.contains(target.name) {
-                assign(target, to: tx)
+                                amount: tx.amount, rules: [:], categoriesByName: byName), id != tx.categoryId {
+                assign(byId[id], to: tx)
             }
         }
         try? context.save()

@@ -9,88 +9,71 @@ struct BudgetView: View {
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var accounts: [LocalAccount]
     @State private var month = DateInterval.month(containing: .now)
+    @State private var summaryOpen = true
+    @FocusState private var editing: String?
 
     private var isCurrentMonth: Bool { month.contains(.now) }
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
-        let summary = MonthSummary(transactions: transactions, in: month,
-                                   categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
-        let groups = categories.filter { $0.parentId == nil && $0.isExpense }
-        let incomeGroups = categories.filter { $0.parentId == nil && $0.isIncome }
-        let plannedIncome = incomeGroups.reduce(0) { $0 + $1.monthlyTarget }
-        let plannedExpenses = groups.reduce(0) { $0 + $1.monthlyTarget }
+        let plan = BudgetPlan(categories: categories, transactions: transactions, month: month, ledger: ledger)
 
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Left to spend
-                    VStack(alignment: .leading, spacing: 10) {
-                        if plannedExpenses > 0 {
-                            let left = plannedExpenses - summary.spending
-                            SectionLabel(left >= 0 ? "Left to spend" : "Over budget")
-                            Text(abs(left).currency(cents: false))
-                                .font(.system(size: 34, weight: .bold)).monospacedDigit()
-                                .foregroundStyle(left >= 0 ? Theme.text : Theme.expense)
-                            BarGauge(value: summary.spending, total: plannedExpenses,
-                                     tint: left >= 0 ? Theme.brand : Theme.expense, height: 10)
-                            Text("\(summary.spending.currency(cents: false)) spent of \(plannedExpenses.currency(cents: false)) planned")
-                                .font(.footnote).foregroundStyle(Theme.textSecondary)
-                        } else {
-                            SectionLabel("Spent")
-                            Text(summary.spending.currency(cents: false))
-                                .font(.system(size: 34, weight: .bold)).monospacedDigit()
-                            Text("Tap a category below to plan a monthly amount.")
-                                .font(.footnote).foregroundStyle(Theme.textSecondary)
+                    LeftToBudgetBanner(amount: plan.plannedIncome - plan.plannedExpenses)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button {
+                            withAnimation(.snappy) { summaryOpen.toggle() }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "chevron.down")
+                                    .rotationEffect(.degrees(summaryOpen ? 0 : -90))
+                                    .font(.caption.weight(.bold))
+                                    .frame(width: 28, height: 28)
+                                    .overlay(Circle().strokeBorder(Theme.border))
+                                Text("Summary").font(.headline).foregroundStyle(Theme.text)
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        if summaryOpen {
+                            PlanRow(title: "Income", actual: plan.earned, planned: plan.plannedIncome, tint: Theme.income,
+                                    actualLabel: "earned", isIncome: true)
+                            Divider()
+                            PlanRow(title: "Expenses", actual: plan.spent, planned: plan.plannedExpenses, tint: Theme.income,
+                                    actualLabel: "spent", isIncome: false)
                         }
                     }
                     .card()
 
-                    // Income
-                    VStack(alignment: .leading, spacing: 14) {
-                        CardHeader(title: "Income")
-                        ForEach(incomeGroups) { group in
-                            NavigationLink {
-                                CategoryBudgetView(group: group, month: month)
-                            } label: {
-                                PlanRow(title: "\(group.icon)  \(group.name)", actual: summary.income, planned: group.monthlyTarget,
-                                        tint: Theme.income, actualLabel: "earned", isIncome: true)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .card()
+                    BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, editing: $editing)
+                    BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, editing: $editing)
 
-                    // Expenses
-                    VStack(alignment: .leading, spacing: 4) {
-                        CardHeader(title: "Expenses").padding(.bottom, 10)
-                        ForEach(groups) { group in
-                            NavigationLink {
-                                CategoryBudgetView(group: group, month: month)
-                            } label: {
-                                BudgetRow(icon: group.icon, name: group.name, color: Color(hex: group.colorHex),
-                                          spent: summary.spendingByGroup[group.id] ?? 0, target: group.monthlyTarget)
+                    if plan.uncategorizedSpending > 0 {
+                        Button { app.showReview = true } label: {
+                            HStack {
+                                Text("❓")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Uncategorized").font(.body.weight(.medium)).foregroundStyle(Theme.text)
+                                    Text("\(plan.uncategorizedSpending.currency(cents: false)) spent — review to budget it")
+                                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
                             }
-                            .buttonStyle(.plain)
-                            if group.id != groups.last?.id { Divider().overlay(Theme.border) }
+                            .card(padding: 16)
                         }
-                        if let uncategorized = summary.spendingByGroup[nil], uncategorized > 0 {
-                            Divider().overlay(Theme.border)
-                            Button { app.showReview = true } label: {
-                                BudgetRow(icon: "❓", name: "Uncategorized", color: Color(.systemGray3),
-                                          spent: uncategorized, target: 0)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .buttonStyle(.plain)
                     }
-                    .card()
 
-                    // History
-                    SpendingHistoryCard(transactions: transactions, ledger: ledger, month: month, target: plannedExpenses)
+                    SpendingHistoryCard(transactions: transactions, ledger: ledger, month: month, target: plan.plannedExpenses)
                 }
                 .padding(16)
             }
             .pageBackground()
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
             .navigationBarTitleDisplayMode(.inline)
             .refreshable { await app.sync(context: context) }
@@ -111,6 +94,10 @@ struct BudgetView: View {
                     Button("Next Month", systemImage: "chevron.right") { shift(1) }
                         .disabled(isCurrentMonth)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { editing = nil }
+                }
             }
         }
     }
@@ -121,38 +108,264 @@ struct BudgetView: View {
     }
 }
 
-private struct BudgetRow: View {
-    let icon: String
-    let name: String
-    let color: Color
-    let spent: Double
-    let target: Double
+/// Planned vs. actual for one month, per category and group.
+struct BudgetPlan {
+    let categories: [BudgetCategory]
+    let incomeGroups: [BudgetCategory]
+    let expenseGroups: [BudgetCategory]
+    private let children: [String: [BudgetCategory]]
+    /// Actual per leaf: earned for income, net spent for expenses.
+    private let actualByCategory: [String: Double]
+    let uncategorizedSpending: Double
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Text(icon)
-                    .frame(width: 32, height: 32)
-                    .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text(name).font(.body.weight(.medium)).foregroundStyle(Theme.text)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(spent.currency(cents: false)).font(.subheadline.weight(.semibold)).monospacedDigit()
-                        .foregroundStyle(target > 0 && spent > target ? Theme.expense : Theme.text)
-                    if target > 0 {
-                        let left = target - spent
-                        Text(left >= 0 ? "\(left.currency(cents: false)) left" : "\(abs(left).currency(cents: false)) over")
-                            .font(.caption).foregroundStyle(left >= 0 ? Theme.textTertiary : Theme.expense)
-                    }
-                }
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.textTertiary)
-            }
-            if target > 0 {
-                BarGauge(value: max(spent, 0), total: target, tint: spent > target ? Theme.expense : color, height: 6)
+    init(categories: [BudgetCategory], transactions: [LocalTransaction], month: DateInterval, ledger: Ledger) {
+        self.categories = categories
+        let groups = categories.filter { $0.parentId == nil }
+        incomeGroups = groups.filter(\.isIncome)
+        expenseGroups = groups.filter(\.isExpense)
+        children = Dictionary(grouping: categories.filter { $0.parentId != nil }, by: { $0.parentId! })
+
+        var actual = [String: Double]()
+        var uncategorized = 0.0
+        for tx in transactions where month.contains(tx.transactedAt) && !tx.isHidden && !tx.isTransfer && ledger.isVisible(tx) {
+            if let category = ledger.category(for: tx) {
+                actual[category.id, default: 0] += category.isIncome ? tx.amount : -tx.amount
+            } else if tx.amount < 0 {
+                uncategorized -= tx.amount
             }
         }
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
+        actualByCategory = actual
+        uncategorizedSpending = uncategorized
+    }
+
+    func children(of group: BudgetCategory) -> [BudgetCategory] { children[group.id] ?? [] }
+
+    func actual(_ category: BudgetCategory) -> Double {
+        if category.parentId == nil {
+            return children(of: category).reduce(actualByCategory[category.id] ?? 0) { $0 + (actualByCategory[$1.id] ?? 0) }
+        }
+        return actualByCategory[category.id] ?? 0
+    }
+
+    /// A group is budgeted either as a whole (its own amount) or by category.
+    func isGroupBudget(_ group: BudgetCategory) -> Bool { group.monthlyTarget > 0 }
+
+    func planned(_ category: BudgetCategory) -> Double {
+        if category.parentId == nil && !isGroupBudget(category) {
+            return children(of: category).reduce(0) { $0 + $1.monthlyTarget }
+        }
+        return category.monthlyTarget
+    }
+
+    var plannedIncome: Double { incomeGroups.reduce(0) { $0 + planned($1) } }
+    var plannedExpenses: Double { expenseGroups.reduce(0) { $0 + planned($1) } }
+    var earned: Double { incomeGroups.reduce(0) { $0 + actual($1) } }
+    var spent: Double { expenseGroups.reduce(0) { $0 + actual($1) } + uncategorizedSpending }
+}
+
+private struct LeftToBudgetBanner: View {
+    let amount: Double
+
+    var body: some View {
+        let over = amount < 0
+        HStack {
+            Text("Left to budget").font(.headline)
+            Spacer()
+            Text(amount.currency(cents: false)).font(.title3.weight(.bold)).monospacedDigit()
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 20).padding(.vertical, 16)
+        .background(over ? Theme.expense : Theme.income, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(over ? "You've planned more spending than income." : "Income not yet assigned to a category.")
+    }
+}
+
+private struct BudgetSection: View {
+    let title: String
+    let groups: [BudgetCategory]
+    let plan: BudgetPlan
+    let isIncome: Bool
+    var editing: FocusState<String?>.Binding
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                Spacer()
+                Text("Planned").frame(width: 84, alignment: .trailing)
+                Text("Remaining").frame(width: 80, alignment: .trailing)
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(Theme.textTertiary)
+            .padding(.horizontal, 4)
+
+            ForEach(groups) { group in
+                GroupBudgetCard(group: group, plan: plan, isIncome: isIncome, editing: editing)
+            }
+        }
+    }
+}
+
+private struct GroupBudgetCard: View {
+    @Bindable var group: BudgetCategory
+    let plan: BudgetPlan
+    let isIncome: Bool
+    var editing: FocusState<String?>.Binding
+    @State private var open = true
+    @State private var showUnbudgeted = false
+
+    var body: some View {
+        let children = plan.children(of: group)
+        let groupLevel = plan.isGroupBudget(group)
+        let byCategory = children.contains { $0.monthlyTarget > 0 }
+        let budgeted = groupLevel ? children : children.filter { $0.monthlyTarget > 0 }
+        let unbudgeted = groupLevel ? [] : children.filter { $0.monthlyTarget == 0 }
+
+        VStack(spacing: 0) {
+            // Group row
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(.snappy) { open.toggle() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(open ? 0 : -90))
+                        .font(.caption.weight(.bold))
+                        .frame(width: 28, height: 28)
+                        .overlay(Circle().strokeBorder(Theme.border))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.text)
+                NavigationLink {
+                    CategoryBudgetView(group: group, month: DateInterval.month(containing: .now))
+                } label: {
+                    Text(group.name).font(.headline).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 4)
+                if byCategory && !groupLevel {
+                    Text(plan.planned(group).currency(cents: false)).font(.body.weight(.semibold)).monospacedDigit()
+                        .frame(width: 84, alignment: .trailing)
+                } else {
+                    PlannedField(value: $group.monthlyTarget, id: group.id, editing: editing)
+                }
+                RemainingPill(planned: plan.planned(group), actual: plan.actual(group), isIncome: isIncome)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+
+            if open {
+                ForEach(budgeted) { child in
+                    Divider().overlay(Theme.border)
+                    CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: !groupLevel, editing: editing)
+                }
+                if !unbudgeted.isEmpty {
+                    if showUnbudgeted {
+                        ForEach(unbudgeted) { child in
+                            Divider().overlay(Theme.border)
+                            CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: true, editing: editing)
+                        }
+                    }
+                    Divider().overlay(Theme.border)
+                    Button {
+                        withAnimation(.snappy) { showUnbudgeted.toggle() }
+                    } label: {
+                        Label(showUnbudgeted ? "Hide unbudgeted" : "Show \(unbudgeted.count) unbudgeted",
+                              systemImage: showUnbudgeted ? "eye.slash" : "eye")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .card(padding: 0)
+    }
+}
+
+private struct CategoryBudgetRow: View {
+    @Bindable var category: BudgetCategory
+    let plan: BudgetPlan
+    let isIncome: Bool
+    let showsField: Bool
+    var editing: FocusState<String?>.Binding
+
+    var body: some View {
+        let planned = category.monthlyTarget
+        let actual = plan.actual(category)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text(category.icon).font(.title3).frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.name).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
+                    if actual != 0 {
+                        Text("\(abs(actual).currency(cents: false)) \(isIncome ? "earned" : "spent")")
+                            .font(.caption).foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                Spacer(minLength: 4)
+                if showsField {
+                    PlannedField(value: $category.monthlyTarget, id: category.id, editing: editing)
+                    RemainingPill(planned: planned, actual: actual, isIncome: isIncome)
+                } else {
+                    Text(abs(actual).currency(cents: false)).font(.subheadline).monospacedDigit()
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 80, alignment: .trailing)
+                }
+            }
+            .padding(.leading, showsField ? 14 : 28).padding(.trailing, 14).padding(.vertical, 10)
+
+            if showsField && planned > 0 {
+                BarGauge(value: max(actual, 0), total: planned,
+                         tint: !isIncome && actual > planned ? Theme.expense : Theme.income, height: 3)
+            }
+        }
+        .background(showsField ? Color.clear : Theme.background.opacity(0.5))
+    }
+}
+
+/// Boxed, editable planned amount.
+private struct PlannedField: View {
+    @Binding var value: Double
+    let id: String
+    var editing: FocusState<String?>.Binding
+
+    var body: some View {
+        TextField("$0", value: $value, format: .currency(code: "USD").precision(.fractionLength(0)))
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.trailing)
+            .font(.body.weight(.medium).monospacedDigit())
+            .focused(editing, equals: id)
+            .padding(.horizontal, 8).padding(.vertical, 7)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(editing.wrappedValue == id ? Theme.brand : Theme.border, lineWidth: editing.wrappedValue == id ? 1.5 : 1))
+            .frame(width: 84)
+    }
+}
+
+/// "Remaining" amount as a colored pill.
+private struct RemainingPill: View {
+    let planned: Double
+    let actual: Double
+    let isIncome: Bool
+
+    var body: some View {
+        let remaining = max(planned, 0) - actual
+        let shown = isIncome ? max(remaining, 0) : remaining
+        let (fg, bg): (Color, Color) = {
+            if planned == 0 && actual == 0 { return (Theme.textTertiary, .clear) }
+            if isIncome { return shown > 0 ? (Theme.textSecondary, Theme.track) : (Theme.income, Theme.income.opacity(0.12)) }
+            return shown >= 0 ? (Theme.income, Theme.income.opacity(0.12)) : (Theme.expense, Theme.expense.opacity(0.12))
+        }()
+        Text(shown.currency(cents: false))
+            .font(.subheadline.weight(.semibold)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .background(bg, in: Capsule())
+            .foregroundStyle(fg)
+            .frame(width: 80, alignment: .trailing)
     }
 }
 

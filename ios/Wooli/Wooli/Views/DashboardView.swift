@@ -24,9 +24,9 @@ struct DashboardView: View {
         let thisMonth = DateInterval.month(containing: .now)
         let month = MonthSummary(transactions: transactions, in: thisMonth,
                                  categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
-        let groups = categories.filter { $0.parentId == nil }
-        let plannedIncome = groups.filter(\.isIncome).reduce(0) { $0 + $1.monthlyTarget }
-        let plannedExpenses = groups.filter(\.isExpense).reduce(0) { $0 + $1.monthlyTarget }
+        let plan = BudgetPlan(categories: categories, transactions: transactions, month: thisMonth, ledger: ledger)
+        let plannedIncome = plan.plannedIncome
+        let plannedExpenses = plan.plannedExpenses
         let reviewCount = ledger.reviewQueue(transactions).count
 
         NavigationStack {
