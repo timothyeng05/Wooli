@@ -16,6 +16,8 @@ struct ReviewView: View {
     @State private var skipped: Set<PersistentIdentifier> = []
     @State private var showSameMerchant = false
     @State private var direction: Edge = .trailing
+    /// The one transaction a tap on "Mark as reviewed" can undo.
+    @State private var lastConfirmed: PersistentIdentifier?
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
@@ -39,7 +41,15 @@ struct ReviewView: View {
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
                     Spacer()
-                    Color.clear.frame(width: 44, height: 44)
+                    if lastConfirmed != nil {
+                        Button("Undo", systemImage: "arrow.uturn.backward") { undo() }
+                            .labelStyle(.iconOnly)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                    } else {
+                        Color.clear.frame(width: 44, height: 44)
+                    }
                 }
                 .padding(.horizontal, 12)
 
@@ -113,9 +123,24 @@ struct ReviewView: View {
 
     private func confirm(_ tx: LocalTransaction) {
         direction = .trailing
+        lastConfirmed = tx.persistentModelID
         withAnimation(.snappy) {
             _ = Categorizer.confirm(tx, categories: categories, context: context)
         }
+    }
+
+    /// Puts the last confirmed transaction back at the front of the queue.
+    /// Its category stays as-is — only the "reviewed" state is undone — since
+    /// what a mistap actually needs undone is being marked done, not the pick.
+    private func undo() {
+        guard let id = lastConfirmed, let tx = transactions.first(where: { $0.persistentModelID == id }) else { return }
+        direction = .leading
+        withAnimation(.snappy) {
+            tx.needsReview = true
+            if let i = queue.firstIndex(of: id) { queue.remove(at: i) }
+            queue.insert(id, at: 0)
+        }
+        lastConfirmed = nil
     }
 
     private func advance(skipping tx: LocalTransaction, pending: [LocalTransaction]) {

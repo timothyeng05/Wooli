@@ -34,6 +34,16 @@ struct DashboardView: View {
                 VStack(spacing: 16) {
                     if StatusBanner.isVisible(app) { StatusBanner().card(padding: 14) }
 
+                    if app.mode == .live, let lastSyncAt = app.lastSyncAt {
+                        HStack(spacing: 4) {
+                            Spacer()
+                            Text(app.isSyncing ? "Syncing…" : "Synced \(lastSyncAt.formatted(.relative(presentation: .named)))")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(Theme.textTertiary)
+                        .contentTransition(.numericText())
+                    }
+
                     if reviewCount > 0 {
                         Button { app.showReview = true } label: {
                             HStack(spacing: 12) {

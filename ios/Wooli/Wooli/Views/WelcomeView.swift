@@ -96,6 +96,22 @@ private struct FeatureRow: View {
     }
 }
 
+private struct ConnectStep: View {
+    let number: Int
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(Theme.brand, in: Circle())
+            Text(text)
+        }
+    }
+}
+
 /// Paste a SimpleFIN setup token. Used from Welcome and from Settings.
 struct ConnectSheet: View {
     @Environment(AppModel.self) private var app
@@ -111,6 +127,19 @@ struct ConnectSheet: View {
         NavigationStack {
             Form {
                 Section {
+                    ConnectStep(number: 1, text: "Open SimpleFIN Bridge and connect your bank accounts.")
+                    ConnectStep(number: 2, text: "Create a setup token for a new app.")
+                    ConnectStep(number: 3, text: "Paste that token below. It can only be used once.")
+                    Link(destination: URL(string: "https://beta-bridge.simplefin.org")!) {
+                        Label("Open SimpleFIN Bridge", systemImage: "safari")
+                    }
+                } header: {
+                    Text("How to Connect")
+                } footer: {
+                    Text("SimpleFIN Bridge is a separate, paid service (about $15 a year) that links your banks to apps like Wooli. You'll need an account there before you can get a token.")
+                }
+
+                Section {
                     TextField("Setup token", text: $token, axis: .vertical)
                         .lineLimit(3...6)
                         .font(.body.monospaced())
@@ -120,9 +149,7 @@ struct ConnectSheet: View {
                         token = UIPasteboard.general.string ?? token
                     }
                 } header: {
-                    Text("SimpleFIN Setup Token")
-                } footer: {
-                    Text("In SimpleFIN Bridge, connect your banks, then create a setup token for a new app and paste it here. The token can only be used once.")
+                    Text("Setup Token")
                 }
 
                 if let errorMessage {
@@ -133,11 +160,9 @@ struct ConnectSheet: View {
                 }
 
                 Section {
-                    Link(destination: URL(string: "https://beta-bridge.simplefin.org")!) {
-                        Label("Open SimpleFIN Bridge", systemImage: "safari")
-                    }
+                    Label("Read-only. Wooli can see balances and transactions but can never move money.", systemImage: "lock.shield")
                 } footer: {
-                    Text("SimpleFIN Bridge is a paid service (about $15 a year) that links your banks. Your access key is kept in your iCloud Keychain, end-to-end encrypted like your saved passwords.")
+                    Text("Your access key is kept in your iCloud Keychain, end-to-end encrypted like your saved passwords.")
                 }
             }
             .navigationTitle("Connect")

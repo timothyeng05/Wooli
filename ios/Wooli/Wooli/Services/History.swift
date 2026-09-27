@@ -180,7 +180,7 @@ struct TransactionFilter: Equatable {
         if let interval = dateRange.interval, !interval.contains(tx.transactedAt) { return false }
         if !accountIds.isEmpty && !accountIds.contains(tx.accountId) { return false }
         if !categoryIds.isEmpty && !categoryIds.contains(tx.categoryId ?? "") { return false }
-        if !merchants.isEmpty && !merchants.contains(tx.title) { return false }
+        if !merchants.isEmpty && !merchants.contains(tx.normalizedMerchant) { return false }
         let size = abs(tx.amount)
         if let minAmount, size < minAmount { return false }
         if let maxAmount, size > maxAmount { return false }

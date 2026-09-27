@@ -48,8 +48,8 @@ struct BudgetView: View {
                     }
                     .card()
 
-                    BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, editing: $editing)
-                    BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, editing: $editing)
+                    BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, month: month, editing: $editing)
+                    BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, month: month, editing: $editing)
 
                     if plan.uncategorizedSpending > 0 {
                         Button { app.showReview = true } label: {
@@ -186,6 +186,7 @@ private struct BudgetSection: View {
     let groups: [BudgetCategory]
     let plan: BudgetPlan
     let isIncome: Bool
+    let month: DateInterval
     var editing: FocusState<String?>.Binding
 
     var body: some View {
@@ -201,7 +202,7 @@ private struct BudgetSection: View {
             .padding(.horizontal, 4)
 
             ForEach(groups) { group in
-                GroupBudgetCard(group: group, plan: plan, isIncome: isIncome, editing: editing)
+                GroupBudgetCard(group: group, plan: plan, isIncome: isIncome, month: month, editing: editing)
             }
         }
     }
@@ -211,6 +212,7 @@ private struct GroupBudgetCard: View {
     @Bindable var group: BudgetCategory
     let plan: BudgetPlan
     let isIncome: Bool
+    let month: DateInterval
     var editing: FocusState<String?>.Binding
     @State private var open = true
     @State private var showUnbudgeted = false
@@ -237,7 +239,7 @@ private struct GroupBudgetCard: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.text)
                 NavigationLink {
-                    CategoryBudgetView(group: group, month: DateInterval.month(containing: .now))
+                    CategoryBudgetView(group: group, month: month)
                 } label: {
                     Text(group.name).font(.headline).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
                 }
@@ -256,13 +258,13 @@ private struct GroupBudgetCard: View {
             if open {
                 ForEach(budgeted) { child in
                     Divider().overlay(Theme.border)
-                    CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: !groupLevel, editing: editing)
+                    CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: !groupLevel, month: month, editing: editing)
                 }
                 if !unbudgeted.isEmpty {
                     if showUnbudgeted {
                         ForEach(unbudgeted) { child in
                             Divider().overlay(Theme.border)
-                            CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: true, editing: editing)
+                            CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: true, month: month, editing: editing)
                         }
                     }
                     Divider().overlay(Theme.border)
@@ -289,17 +291,26 @@ private struct CategoryBudgetRow: View {
     let plan: BudgetPlan
     let isIncome: Bool
     let showsField: Bool
+    let month: DateInterval
     var editing: FocusState<String?>.Binding
 
     var body: some View {
         let planned = category.monthlyTarget
         let actual = plan.actual(category)
+        // The bar below already shows progress against the plan, so the
+        // amount caption would just repeat it — only show one or the other.
+        let showsBar = showsField && planned > 0
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Text(category.icon).font(.title3).frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(category.name).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
-                    if actual != 0 {
+                    NavigationLink {
+                        CategoryBudgetView(group: category, month: month)
+                    } label: {
+                        Text(category.name).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
+                    }
+                    .buttonStyle(.plain)
+                    if actual != 0 && !showsBar {
                         Text("\(abs(actual).currency(cents: false)) \(isIncome ? "earned" : "spent")")
                             .font(.caption).foregroundStyle(Theme.textTertiary)
                     }
@@ -316,7 +327,7 @@ private struct CategoryBudgetRow: View {
             }
             .padding(.leading, showsField ? 14 : 28).padding(.trailing, 14).padding(.vertical, 10)
 
-            if showsField && planned > 0 {
+            if showsBar {
                 BarGauge(value: max(actual, 0), total: planned,
                          tint: !isIncome && actual > planned ? Theme.expense : Theme.income, height: 3)
             }
@@ -451,7 +462,10 @@ struct CategoryBudgetView: View {
             month.contains($0.transactedAt) && !$0.isHidden && ledger.isVisible($0)
                 && $0.categoryId.map(memberIds.contains) == true
         }
-        let actual = group.isIncome ? items.reduce(0) { $0 + $1.amount } : (summary.spendingByGroup[group.id] ?? 0)
+        // Top-level groups roll up under spendingByGroup; a single leaf
+        // category (tapped directly, not via its parent) needs its own total.
+        let actual = group.isIncome ? items.reduce(0) { $0 + $1.amount }
+            : (group.parentId == nil ? (summary.spendingByGroup[group.id] ?? 0) : (summary.spendingByCategory[group.id] ?? 0))
 
         ScrollView {
             VStack(spacing: 16) {

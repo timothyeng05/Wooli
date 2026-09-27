@@ -123,6 +123,21 @@ struct TransactionsView: View {
     }
 
     private func row(_ tx: LocalTransaction, ledger: Ledger) -> some View {
+        TransactionListRow(tx: tx, ledger: ledger, categories: categories, accountId: accountId)
+    }
+}
+
+/// One row in the transactions list, with swipe actions to review/hide it.
+private struct TransactionListRow: View {
+    let tx: LocalTransaction
+    let ledger: Ledger
+    let categories: [BudgetCategory]
+    let accountId: String?
+
+    @Environment(\.modelContext) private var context
+    @State private var showCategorize = false
+
+    var body: some View {
         NavigationLink {
             TransactionDetailView(transaction: tx)
         } label: {
@@ -132,11 +147,18 @@ struct TransactionsView: View {
         .listRowBackground(Theme.card)
         .listRowSeparatorTint(Theme.border)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            if tx.needsReview && tx.categoryId != nil {
-                Button("Reviewed", systemImage: "checkmark") {
-                    withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
+            if tx.needsReview {
+                if tx.categoryId != nil {
+                    Button("Reviewed", systemImage: "checkmark") {
+                        withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
+                    }
+                    .tint(Theme.income)
+                } else {
+                    // No category yet, so a swipe can't confirm it — open the
+                    // picker instead of doing nothing.
+                    Button("Categorize", systemImage: "tag") { showCategorize = true }
+                        .tint(Theme.brand)
                 }
-                .tint(Theme.income)
             }
         }
         .swipeActions(edge: .trailing) {
@@ -144,6 +166,9 @@ struct TransactionsView: View {
                 withAnimation { tx.isHidden.toggle() }
             }
             .tint(.gray)
+        }
+        .sheet(isPresented: $showCategorize) {
+            QuickCategorySheet(transaction: tx)
         }
     }
 }
@@ -212,9 +237,16 @@ struct FiltersSheet: View {
                         FilterRow(title: "Categories", count: draft.categoryIds.count)
                     }
                     NavigationLink {
-                        let merchants = Dictionary(grouping: transactions, by: \.title)
+                        let merchants = Dictionary(grouping: transactions.filter { !$0.normalizedMerchant.isEmpty },
+                                                    by: \.normalizedMerchant)
                             .sorted { $0.value.count > $1.value.count }
-                            .map { ($0.key, $0.key, "\($0.value.count) transactions") }
+                            .map { key, items -> (String, String, String?) in
+                                // Show whichever raw title is most common for this merchant,
+                                // since the normalized key itself isn't meant for display.
+                                let label = Dictionary(grouping: items, by: \.title)
+                                    .max { $0.value.count < $1.value.count }?.key ?? key
+                                return (key, label, "\(items.count) transactions")
+                            }
                         MultiSelectList(title: "Merchants", selection: $draft.merchants, options: merchants, searchable: true)
                     } label: {
                         FilterRow(title: "Merchants", count: draft.merchants.count)
