@@ -417,6 +417,7 @@ struct RuleEditor: View {
             RuleEngine.applyToExisting(target, transactions: matches, categories: categories)
         }
         try? context.save()
+        _ = RuleEngine.tidy(context: context)
         dismiss()
     }
 }
