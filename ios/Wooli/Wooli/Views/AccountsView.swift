@@ -84,6 +84,7 @@ struct AccountsView: View {
                 .padding(16)
             }
             .pageBackground()
+            .hamburgerMenu()
             .navigationTitle("Accounts")
             .refreshable { await app.sync(context: context) }
             .toolbar {
@@ -269,7 +270,8 @@ struct AccountDetailView: View {
             .padding(16)
         }
         .pageBackground()
-        .navigationTitle(account.displayName)
+        .hamburgerMenu()
+            .navigationTitle(account.displayName)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

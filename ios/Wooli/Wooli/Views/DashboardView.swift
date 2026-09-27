@@ -101,6 +101,7 @@ struct DashboardView: View {
                 .padding(16)
             }
             .pageBackground()
+            .hamburgerMenu()
             .navigationTitle(greeting)
             .navigationDestination(item: Binding(get: { app.openModule }, set: { app.openModule = $0 })) { moduleScreen($0) }
             .refreshable { await app.sync(context: context) }

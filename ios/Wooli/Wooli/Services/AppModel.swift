@@ -4,7 +4,11 @@ import SwiftData
 
 /// App-wide state: whether we're connected to SimpleFIN, showing sample data,
 /// or not set up yet, plus the in-flight sync status.
-enum AppTab: Hashable { case dashboard, accounts, transactions, reports, budget }
+enum AppTab: Hashable, CaseIterable, Identifiable { case dashboard, accounts, transactions, reports, budget, categories, rules, recurring
+    var id: AppTab { self }
+    var title: String { switch self { case .dashboard: return "Dashboard"; case .accounts: return "Accounts"; case .transactions: return "Transactions"; case .reports: return "Reports"; case .budget: return "Budget"; case .categories: return "Categories"; case .rules: return "Rules"; case .recurring: return "Recurring" } }
+    var symbol: String { switch self { case .dashboard: return "house"; case .accounts: return "square.stack.3d.up"; case .transactions: return "creditcard"; case .reports: return "chart.pie"; case .budget: return "map"; case .categories: return "square.grid.2x2"; case .rules: return "wand.and.stars"; case .recurring: return "arrow.triangle.2.circlepath" } }
+}
 
 @MainActor
 @Observable
@@ -21,6 +25,8 @@ final class AppModel {
     var bankMessages: [String] = []
     var lastSyncAt: Date? = SyncService.lastSyncAt
     var selectedTab: AppTab = .dashboard
+    var isSidebarOpen = false
+
     var isCategorizing = false
     var showReview = false
     /// A module screen to push on the Dashboard (debug launch args, deep links).

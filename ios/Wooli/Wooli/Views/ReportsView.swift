@@ -73,6 +73,7 @@ struct ReportsView: View {
                 .padding(16)
             }
             .pageBackground()
+            .hamburgerMenu()
             .navigationTitle("Reports")
             .refreshable { await app.sync(context: context) }
         }

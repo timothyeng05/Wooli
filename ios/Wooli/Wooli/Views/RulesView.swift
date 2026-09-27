@@ -102,7 +102,8 @@ struct RulesView: View {
             }
         }
         .searchable(text: $search, prompt: "Search rules")
-        .navigationTitle("Rules")
+        .hamburgerMenu()
+            .navigationTitle("Rules")
         .toolbar {
             Menu {
                 Button("Tidy up rules", systemImage: "wand.and.rays") { confirmTidy = true }
@@ -229,6 +230,7 @@ struct RuleEditor: View {
                 }
             }
             .background(Color(.systemGroupedBackground))
+            .hamburgerMenu()
             .navigationTitle(rule == nil ? "Create rule" : "Edit rule")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -498,7 +500,8 @@ private struct TextListConditionEditor: View {
                 }
             }
         }
-        .navigationTitle(title)
+        .hamburgerMenu()
+            .navigationTitle(title)
         .onAppear { if mode.isEmpty { mode = title == "Merchant name" ? "exact" : "contains" } }
     }
 
@@ -545,7 +548,8 @@ private struct AmountConditionEditor: View {
                 }
             }
         }
-        .navigationTitle("Amount")
+        .hamburgerMenu()
+            .navigationTitle("Amount")
     }
 }
 

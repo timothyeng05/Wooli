@@ -73,7 +73,8 @@ struct BudgetView: View {
         }
         .pageBackground()
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
+        .hamburgerMenu()
+            .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await app.sync(context: context) }
         .toolbar {
@@ -550,7 +551,8 @@ struct CategoryBudgetView: View {
             .padding(16)
         }
         .pageBackground()
-        .navigationTitle("\(group.icon) \(group.name)")
+        .hamburgerMenu()
+            .navigationTitle("\(group.icon) \(group.name)")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
