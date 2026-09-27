@@ -16,8 +16,10 @@ struct ReviewView: View {
     @State private var skipped: Set<PersistentIdentifier> = []
     @State private var showSameMerchant = false
     @State private var direction: Edge = .trailing
-    /// The one transaction a tap on "Mark as reviewed" can undo.
-    @State private var lastConfirmed: PersistentIdentifier?
+    /// Every card acted on this session, newest last, so Back can walk
+    /// through them. `reviewed` = marked reviewed (Back puts it back in the
+    /// queue); otherwise it was skipped.
+    @State private var history: [(id: PersistentIdentifier, reviewed: Bool)] = []
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
@@ -41,8 +43,8 @@ struct ReviewView: View {
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
                     Spacer()
-                    if lastConfirmed != nil {
-                        Button("Undo", systemImage: "arrow.uturn.backward") { undo() }
+                    if !history.isEmpty {
+                        Button("Back to previous", systemImage: "arrow.uturn.backward") { goBack() }
                             .labelStyle(.iconOnly)
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.white)
@@ -92,6 +94,7 @@ struct ReviewView: View {
                                         Button("Mark as reviewed", systemImage: "checkmark") { confirm(tx) }
                                         Button("Always \(category.name) for \(tx.baseTitle) · skip review", systemImage: "checkmark.seal") {
                                             direction = .trailing
+                                            history.append((tx.persistentModelID, true))
                                             withAnimation(.snappy) {
                                                 _ = RuleEngine.autoApprove(tx, category: category, context: context)
                                             }
@@ -124,6 +127,11 @@ struct ReviewView: View {
                             .foregroundStyle(Theme.brand)
                             .controlSize(.large)
                             .padding(.top, 8)
+                        if !history.isEmpty {
+                            Button("Go back to the last one", systemImage: "arrow.uturn.backward") { goBack() }
+                                .foregroundStyle(.white)
+                                .font(.subheadline.weight(.semibold))
+                        }
                     }
                     Spacer()
                 }
@@ -138,28 +146,30 @@ struct ReviewView: View {
 
     private func confirm(_ tx: LocalTransaction) {
         direction = .trailing
-        lastConfirmed = tx.persistentModelID
+        history.append((tx.persistentModelID, true))
         withAnimation(.snappy) {
             _ = Categorizer.confirm(tx, categories: categories, context: context)
         }
     }
 
-    /// Puts the last confirmed transaction back at the front of the queue.
-    /// Its category stays as-is — only the "reviewed" state is undone — since
-    /// what a mistap actually needs undone is being marked done, not the pick.
-    private func undo() {
-        guard let id = lastConfirmed, let tx = transactions.first(where: { $0.persistentModelID == id }) else { return }
+    /// Step back to the previous card. A reviewed one goes back in the queue
+    /// (its category stays — what a mistap needs undone is "done", not the
+    /// pick); a skipped one just comes back to the front. Repeat to keep going.
+    private func goBack() {
+        guard let step = history.popLast(),
+              let tx = transactions.first(where: { $0.persistentModelID == step.id }) else { return }
         direction = .leading
         withAnimation(.snappy) {
-            tx.needsReview = true
-            if let i = queue.firstIndex(of: id) { queue.remove(at: i) }
-            queue.insert(id, at: 0)
+            if step.reviewed { tx.needsReview = true }
+            skipped.remove(step.id)
+            if let i = queue.firstIndex(of: step.id) { queue.remove(at: i) }
+            queue.insert(step.id, at: 0)
         }
-        lastConfirmed = nil
     }
 
     private func advance(skipping tx: LocalTransaction, pending: [LocalTransaction]) {
         direction = .trailing
+        history.append((tx.persistentModelID, false))
         withAnimation(.snappy) {
             skipped.insert(tx.persistentModelID)
             // Once everything has been skipped, start another pass.

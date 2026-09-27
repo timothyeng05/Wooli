@@ -92,6 +92,14 @@ struct TransactionEditor: View {
         let chips = current.map { c in [c] + suggestions.filter { $0.id != c.id } } ?? suggestions
 
         VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Original Statement")
+                Text(transaction.transactionDescription)
+                    .font(.callout)
+                    .foregroundStyle(Theme.textSecondary)
+                    .textSelection(.enabled)
+            }
+
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel("Category")
                 FlowLayout(spacing: 8) {
@@ -139,18 +147,13 @@ struct TransactionEditor: View {
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
 
             VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Original Statement")
-                Text(transaction.transactionDescription)
-                    .font(.callout)
-                    .foregroundStyle(Theme.textSecondary)
-                    .textSelection(.enabled)
+                SectionLabel("Actions")
                 Button {
                     customizeRule = true
                 } label: {
                     Label("Create rule from this transaction", systemImage: "wand.and.stars")
                         .font(.subheadline.weight(.medium))
                 }
-                .padding(.top, 4)
                 MarkRecurringButton(transaction: transaction)
                 SplitButton(transaction: transaction)
             }
