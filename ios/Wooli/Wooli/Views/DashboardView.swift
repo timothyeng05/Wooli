@@ -65,6 +65,8 @@ struct DashboardView: View {
                     BudgetSummaryCard(month: thisMonth, summary: month,
                                       plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
 
+                    RecurringCard()
+
                     NetWorthCard(accounts: accounts, snapshots: snapshots, range: $range)
 
                     SpendingComparisonCard(transactions: transactions, ledger: ledger)

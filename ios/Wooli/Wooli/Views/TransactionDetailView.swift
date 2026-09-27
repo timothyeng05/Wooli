@@ -151,6 +151,7 @@ struct TransactionEditor: View {
                         .font(.subheadline.weight(.medium))
                 }
                 .padding(.top, 4)
+                MarkRecurringButton(transaction: transaction)
             }
         }
         .sheet(isPresented: $customizeRule, onDismiss: { teachCategory = nil }) {

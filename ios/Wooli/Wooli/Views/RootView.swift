@@ -21,7 +21,10 @@ struct RootView: View {
             RuleImporter.importIfPresent(context: context)
             Categorizer.refreshKeywordHints(context: context)
             syncIfStale()
-            if app.mode != .onboarding { await app.autoCategorize(context: context) }
+            if app.mode != .onboarding {
+                RecurringDetector.refresh(context: context)
+                await app.autoCategorize(context: context)
+            }
         }
         #if DEBUG
         .task {

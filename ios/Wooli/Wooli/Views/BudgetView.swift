@@ -85,6 +85,7 @@ struct BudgetView: View {
                     Menu {
                         NavigationLink { CategoriesSettingsView() } label: { Label("Edit Categories", systemImage: "square.grid.2x2") }
                         NavigationLink { RulesView() } label: { Label("Rules", systemImage: "wand.and.stars") }
+                        NavigationLink { RecurringView() } label: { Label("Recurring", systemImage: "arrow.triangle.2.circlepath") }
                     } label: {
                         Label("More", systemImage: "ellipsis")
                     }

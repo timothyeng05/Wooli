@@ -249,3 +249,96 @@ final class TransactionRule {
 
     init() {}
 }
+
+enum Cadence: String, CaseIterable, Identifiable {
+    case weekly, biweekly, semimonthly, monthly, quarterly, yearly
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .weekly: "Weekly"
+        case .biweekly: "Every 2 weeks"
+        case .semimonthly: "Twice a month"
+        case .monthly: "Monthly"
+        case .quarterly: "Every 3 months"
+        case .yearly: "Yearly"
+        }
+    }
+
+    /// Typical days between charges.
+    var days: Double {
+        switch self {
+        case .weekly: 7
+        case .biweekly: 14
+        case .semimonthly: 15.2
+        case .monthly: 30.4
+        case .quarterly: 91
+        case .yearly: 365
+        }
+    }
+
+    func next(after date: Date) -> Date {
+        let cal = Calendar.current
+        switch self {
+        case .weekly: return cal.date(byAdding: .day, value: 7, to: date)!
+        case .biweekly: return cal.date(byAdding: .day, value: 14, to: date)!
+        case .semimonthly:
+            // e.g. the 1st and 15th: the other half of the month.
+            let day = cal.component(.day, from: date)
+            if day <= 15 { return cal.date(byAdding: .day, value: 14, to: date)! }
+            let firstOfNext = cal.date(from: cal.dateComponents([.year, .month], from: cal.date(byAdding: .month, value: 1, to: date)!))!
+            return cal.date(byAdding: .day, value: max(day - 16, 0), to: firstOfNext)!
+        case .monthly: return cal.date(byAdding: .month, value: 1, to: date)!
+        case .quarterly: return cal.date(byAdding: .month, value: 3, to: date)!
+        case .yearly: return cal.date(byAdding: .year, value: 1, to: date)!
+        }
+    }
+
+    /// Classify an interval in days, or nil if it isn't a regular cadence.
+    static func from(days: Double) -> Cadence? {
+        switch days {
+        case 6...8: .weekly
+        case 13...17: .biweekly  // also catches twice-a-month (1st & 15th)
+        case 26...35: .monthly
+        case 84...98: .quarterly
+        case 350...380: .yearly
+        default: nil
+        }
+    }
+}
+
+/// A bill, subscription or paycheck that repeats. Kept separately from
+/// transactions so it survives when old transactions are pruned.
+@Model
+final class RecurringItem {
+    var id: String = UUID().uuidString
+    /// Normalized merchant it matches (see LocalTransaction.normalizedMerchant).
+    var merchant: String = ""
+    var title: String = ""
+    var categoryId: String?
+    var accountId: String = ""
+    /// Typical amount, signed like transactions (negative = money out).
+    var amount: Double = 0
+    var cadenceRaw: String = Cadence.monthly.rawValue
+    var lastDate: Date = Date.now
+    var nextDate: Date = Date.now
+    var lastTransactionId: String = ""
+    var isActive: Bool = true
+    /// Added by the user rather than detected.
+    var isManual: Bool = false
+    var createdAt: Date = Date.now
+
+    init(merchant: String, title: String, amount: Double, cadence: Cadence, lastDate: Date) {
+        self.merchant = merchant
+        self.title = title
+        self.amount = amount
+        self.cadenceRaw = cadence.rawValue
+        self.lastDate = lastDate
+        self.nextDate = cadence.next(after: lastDate)
+    }
+
+    var cadence: Cadence {
+        get { Cadence(rawValue: cadenceRaw) ?? .monthly }
+        set { cadenceRaw = newValue.rawValue }
+    }
+}

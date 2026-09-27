@@ -49,6 +49,7 @@ final class AppModel {
         DefaultCategories.seedIfNeeded(context)
         SampleData.load(into: context)
         mode = .sample
+        RecurringDetector.refresh(context: context)
         Task { await autoCategorize(context: context) }
     }
 
@@ -65,6 +66,7 @@ final class AppModel {
         } catch {
             syncError = error.localizedDescription
         }
+        RecurringDetector.refresh(context: context)
         Task { await autoCategorize(context: context) }
     }
 
@@ -104,6 +106,7 @@ final class AppModel {
         try? context.delete(model: BalanceSnapshot.self)
         try? context.delete(model: CategoryRule.self)
         try? context.delete(model: TransactionRule.self)
+        try? context.delete(model: RecurringItem.self)
         try? context.save()
     }
 }
