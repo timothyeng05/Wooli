@@ -37,11 +37,13 @@ enum SyncService {
             throw SimpleFinError.notConnected
         }
 
-        // First sync pulls 90 days; later syncs re-read the last week too so
+        // SimpleFIN rejects ranges longer than 90 days (and exactly 90 days from
+        // "now" lands a few seconds over by the time the request arrives), so
+        // the first sync pulls 89 days. Later syncs re-read the last week too so
         // pending transactions that have since posted get updated.
-        let ninetyDaysAgo = Calendar.current.date(byAdding: .day, value: -90, to: .now)!
-        let startDate = lastSyncAt.map { max(Calendar.current.date(byAdding: .day, value: -7, to: $0)!, ninetyDaysAgo) }
-            ?? ninetyDaysAgo
+        let oldestAllowed = Calendar.current.date(byAdding: .day, value: -89, to: .now)!
+        let startDate = lastSyncAt.map { max(Calendar.current.date(byAdding: .day, value: -7, to: $0)!, oldestAllowed) }
+            ?? oldestAllowed
 
         var options = SimpleFinClient.FetchOptions()
         options.startDate = startDate
