@@ -111,6 +111,8 @@ struct MainTabView: View {
 }
 
 struct MenuView: View {
+    @State private var showSettings = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -140,6 +142,12 @@ struct MenuView: View {
                     NavigationLink(value: "recurring") {
                         Label("Recurring", systemImage: "arrow.triangle.2.circlepath")
                     }
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .foregroundStyle(Theme.text)
                 }
             }
             .navigationTitle("Menu")
@@ -152,6 +160,7 @@ struct MenuView: View {
                 default: EmptyView()
                 }
             }
+            .sheet(isPresented: $showSettings) { SettingsView() }
         }
     }
 }

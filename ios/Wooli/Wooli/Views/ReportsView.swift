@@ -66,7 +66,7 @@ struct ReportsView: View {
                     }
 
                     CashFlowCard(transactions: relevantTransactions, ledger: ledger)
-                    SpendingBreakdownCard(summary: summary, ledger: ledger)
+                    SpendingBreakdownCard(summary: summary, ledger: ledger, interval: period.interval)
                     TopMerchantsCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
                     TagsReportCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
                 }
@@ -165,6 +165,7 @@ private struct CashFlowCard: View {
 private struct SpendingBreakdownCard: View {
     let summary: MonthSummary
     let ledger: Ledger
+    let interval: DateInterval
 
     private struct Slice: Identifiable {
         let id: String
@@ -172,13 +173,15 @@ private struct SpendingBreakdownCard: View {
         let icon: String
         let color: Color
         let amount: Double
+        /// Nil for the "Uncategorized" slice — nothing to drill into there.
+        let category: BudgetCategory?
     }
 
     var body: some View {
         let slices = summary.spendingByGroup.filter { $0.value > 0 }.sorted { $0.value > $1.value }.map { key, value in
             let c = key.flatMap { ledger.categoriesById[$0] }
             return Slice(id: key ?? "none", name: c?.name ?? "Uncategorized", icon: c?.icon ?? "❓",
-                         color: c.map { Color(hex: $0.colorHex) } ?? Color(.systemGray3), amount: value)
+                         color: c.map { Color(hex: $0.colorHex) } ?? Color(.systemGray3), amount: value, category: c)
         }
         let total = slices.reduce(0) { $0 + $1.amount }
 
@@ -202,24 +205,41 @@ private struct SpendingBreakdownCard: View {
 
                 VStack(spacing: 12) {
                     ForEach(slices) { slice in
-                        VStack(spacing: 6) {
-                            HStack {
-                                Text(slice.icon)
-                                Text(slice.name).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
-                                Spacer()
-                                Text((slice.amount / total).formatted(.percent.precision(.fractionLength(0))))
-                                    .font(.footnote).foregroundStyle(Theme.textTertiary)
-                                Text(slice.amount.currency(cents: false))
-                                    .font(.subheadline.weight(.semibold)).monospacedDigit()
-                                    .frame(minWidth: 70, alignment: .trailing)
+                        if let category = slice.category {
+                            NavigationLink {
+                                CategoryBudgetView(group: category, month: interval)
+                            } label: {
+                                sliceRow(slice, total: total)
                             }
-                            BarGauge(value: slice.amount, total: total, tint: slice.color, height: 6)
+                            .buttonStyle(.plain)
+                        } else {
+                            sliceRow(slice, total: total)
                         }
                     }
                 }
             }
         }
         .card()
+    }
+
+    @ViewBuilder
+    private func sliceRow(_ slice: Slice, total: Double) -> some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(slice.icon)
+                Text(slice.name).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
+                Spacer()
+                Text((slice.amount / total).formatted(.percent.precision(.fractionLength(0))))
+                    .font(.footnote).foregroundStyle(Theme.textTertiary)
+                Text(slice.amount.currency(cents: false))
+                    .font(.subheadline.weight(.semibold)).monospacedDigit()
+                    .frame(minWidth: 70, alignment: .trailing)
+                if slice.category != nil {
+                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+                }
+            }
+            BarGauge(value: slice.amount, total: total, tint: slice.color, height: 6)
+        }
     }
 }
 

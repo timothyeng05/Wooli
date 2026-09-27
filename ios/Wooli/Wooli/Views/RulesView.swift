@@ -454,11 +454,17 @@ private struct TextListConditionEditor: View {
             }
 
             Section {
-                ForEach(values, id: \.self) { value in
-                    Text(value)
+                ForEach(values.indices, id: \.self) { i in
+                    TextField("Value", text: Binding(
+                        get: { values.indices.contains(i) ? values[i] : "" },
+                        set: { if values.indices.contains(i) { values[i] = $0 } }
+                    ), axis: .vertical)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .padding(.vertical, 4)
                         .swipeActions {
                             Button("Remove", systemImage: "trash", role: .destructive) {
-                                values.removeAll { $0 == value }
+                                if values.indices.contains(i) { values.remove(at: i) }
                             }
                         }
                 }
