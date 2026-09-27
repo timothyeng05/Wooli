@@ -109,9 +109,12 @@ struct BudgetPlan {
     /// Actual per leaf: earned for income, net spent for expenses.
     private let actualByCategory: [String: Double]
     let uncategorizedSpending: Double
+    /// Rollover balances apply to the current month only.
+    let isCurrentMonth: Bool
 
     init(categories: [BudgetCategory], transactions: [LocalTransaction], month: DateInterval, ledger: Ledger) {
         self.categories = categories
+        isCurrentMonth = month.contains(.now)
         let groups = categories.filter { $0.parentId == nil }
         incomeGroups = groups.filter(\.isIncome)
         expenseGroups = groups.filter(\.isExpense)
@@ -147,6 +150,15 @@ struct BudgetPlan {
             return children(of: category).reduce(0) { $0 + $1.monthlyTarget }
         }
         return category.monthlyTarget
+    }
+
+    /// Carried over from earlier months (0 unless rollover is on and this is the current month).
+    func rollover(_ category: BudgetCategory) -> Double {
+        guard isCurrentMonth, category.isExpense else { return 0 }
+        if category.parentId == nil && !isGroupBudget(category) {
+            return children(of: category).reduce(0) { $0 + ($1.rolloverEnabled ? $1.rolloverBalance : 0) }
+        }
+        return category.rolloverEnabled ? category.rolloverBalance : 0
     }
 
     var plannedIncome: Double { incomeGroups.reduce(0) { $0 + planned($1) } }
@@ -243,7 +255,7 @@ private struct GroupBudgetCard: View {
                 } else {
                     PlannedField(value: $group.monthlyTarget, id: group.id, editing: editing)
                 }
-                RemainingPill(planned: plan.planned(group), actual: plan.actual(group), isIncome: isIncome)
+                RemainingPill(planned: plan.planned(group) + plan.rollover(group), actual: plan.actual(group), isIncome: isIncome)
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
 
@@ -289,6 +301,7 @@ private struct CategoryBudgetRow: View {
     var body: some View {
         let planned = category.monthlyTarget
         let actual = plan.actual(category)
+        let carried = plan.rollover(category)
         // The bar below already shows progress against the plan, so the
         // amount caption would just repeat it — only show one or the other.
         let showsBar = showsField && planned > 0
@@ -302,7 +315,10 @@ private struct CategoryBudgetRow: View {
                         Text(category.name).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
                     }
                     .buttonStyle(.plain)
-                    if actual != 0 && !showsBar {
+                    if carried != 0 {
+                        Text(carried > 0 ? "+\(carried.currency(cents: false)) rolled over" : "\(abs(carried).currency(cents: false)) overspent last month")
+                            .font(.caption).foregroundStyle(carried > 0 ? Theme.income : Theme.expense)
+                    } else if actual != 0 && !showsBar {
                         Text("\(abs(actual).currency(cents: false)) \(isIncome ? "earned" : "spent")")
                             .font(.caption).foregroundStyle(Theme.textTertiary)
                     }
@@ -310,7 +326,7 @@ private struct CategoryBudgetRow: View {
                 Spacer(minLength: 4)
                 if showsField {
                     PlannedField(value: $category.monthlyTarget, id: category.id, editing: editing)
-                    RemainingPill(planned: planned, actual: actual, isIncome: isIncome)
+                    RemainingPill(planned: planned + carried, actual: actual, isIncome: isIncome)
                 } else {
                     Text(abs(actual).currency(cents: false)).font(.subheadline).monospacedDigit()
                         .foregroundStyle(Theme.textSecondary)
@@ -478,6 +494,24 @@ struct CategoryBudgetView: View {
                             .font(.body.weight(.semibold))
                     }
                     .foregroundStyle(Theme.text)
+                    if group.isExpense {
+                        Toggle("Roll over what's left", isOn: Binding(get: { group.rolloverEnabled }, set: { on in
+                            if on { RolloverService.turnOn(group) } else { group.rolloverEnabled = false }
+                        }))
+                        .foregroundStyle(Theme.text)
+                        if group.rolloverEnabled {
+                            LabeledContent("Carried over") {
+                                TextField("$0", value: $group.rolloverBalance, format: .currency(code: "USD").precision(.fractionLength(0)))
+                                    .keyboardType(.numbersAndPunctuation)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: 140)
+                                    .font(.body.weight(.semibold))
+                            }
+                            .foregroundStyle(Theme.text)
+                            Text("Each new month, whatever is left of the plan (or overspent) is added here. Available this month: \((group.monthlyTarget + group.rolloverBalance).currency(cents: false)).")
+                                .font(.footnote).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
                 }
                 .card()
 

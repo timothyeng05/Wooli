@@ -163,6 +163,12 @@ final class BudgetCategory {
     /// Monthly spend target. Set on top-level groups (the web app's default
     /// `budget_level = 'parent'`); 0 means no target.
     var monthlyTarget: Double = 0
+    /// Carry what's left (or overspent) into next month.
+    var rolloverEnabled: Bool = false
+    /// Running carried-over amount available this month (negative = overspent).
+    var rolloverBalance: Double = 0
+    /// Start of the first month not yet folded into the balance.
+    var rolloverThrough: Date?
 
     init(name: String, icon: String, colorHex: String, parentId: String? = nil,
          isIncome: Bool = false, isTransfer: Bool = false, sortOrder: Int = 0) {
