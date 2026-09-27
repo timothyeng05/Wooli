@@ -37,6 +37,8 @@ enum RuleImporter {
         var adoptStarterCategories: Bool?
         /// Planned monthly amounts by category or group name.
         var planned: [String: Double]?
+        /// Run "Tidy up rules" after importing.
+        var tidyRules: Bool?
     }
 
     static var fileURL: URL {
@@ -134,6 +136,7 @@ enum RuleImporter {
         }
 
         try? context.save()
+        if payload.tidyRules == true { RuleEngine.tidy(context: context) }
         try? FileManager.default.removeItem(at: fileURL)
         return added
     }

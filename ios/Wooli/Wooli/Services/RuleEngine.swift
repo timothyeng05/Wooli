@@ -93,6 +93,19 @@ enum RuleEngine {
         // merged by simply OR-ing each field's values: that would also match
         // combinations neither original rule matched (statement from one
         // rule paired with the merchant from another). Leave those alone.
+        // A rule aimed at a group ("Transfer") that has a category of the same
+        // name inside it means that category: point it there, so it lines up
+        // with the other rules for it (and files transactions properly).
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        var retargeted = false
+        for rule in (try? context.fetch(FetchDescriptor<TransactionRule>())) ?? [] {
+            guard let id = rule.setCategoryId, let target = categories.first(where: { $0.id == id }), target.parentId == nil,
+                  let child = categories.first(where: { $0.parentId == target.id && $0.name.caseInsensitiveCompare(target.name) == .orderedSame })
+            else { continue }
+            rule.setCategoryId = child.id
+            retargeted = true
+        }
+
         let rules = ((try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []).filter {
             statementValues($0).isEmpty || merchantValues($0).isEmpty
         }
@@ -116,13 +129,41 @@ enum RuleEngine {
             keeper.merchantTexts = merchants.sorted()
             keeper.merchantText = ""
         }
-        if merged > 0 { try? context.save() }
+        if merged > 0 || retargeted { try? context.save() }
         return merged
     }
 
     /// Everything that must match for two rules to merge safely: same mode
     /// and same non-text conditions, same actions. Only the text values
     /// (which the merge unions with OR) are allowed to differ.
+    /// "Tidy up": rules that file into the same category and differ only in
+    /// "contains" vs "is exactly" or in whether they mark reviewed are lined
+    /// up (contains; reviewed if any of them was), then merged. Slightly
+    /// broader than the originals, so it's a user action, not automatic.
+    @MainActor
+    @discardableResult
+    static func tidy(context: ModelContext) -> Int {
+        let rules = ((try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []).filter {
+            $0.setCategoryId != nil && (statementValues($0).isEmpty != merchantValues($0).isEmpty)
+        }
+        let groups = Dictionary(grouping: rules) { r in
+            [r.isEnabled ? "1" : "0", statementValues(r).isEmpty ? "merchant" : "statement", r.amountDirection, r.amountMatch,
+             String(r.amountValue), String(r.amountValue2), r.categoryIds.sorted().joined(separator: ","),
+             r.accountIds.sorted().joined(separator: ","), r.renameTo, r.setCategoryId ?? "", r.hide ? "1" : "0", r.addTag]
+                .joined(separator: "|")
+        }
+        for group in groups.values where group.count > 1 {
+            let reviewed = group.contains { $0.reviewAction == "reviewed" }
+            for r in group {
+                if !statementValues(r).isEmpty { r.statementMatch = "contains" }
+                if !merchantValues(r).isEmpty { r.merchantMatch = "contains" }
+                if reviewed && r.reviewAction.isEmpty { r.reviewAction = "reviewed" }
+            }
+        }
+        try? context.save()
+        return consolidate(context: context)
+    }
+
     private static func mergeSignature(_ r: TransactionRule) -> String {
         [r.isEnabled ? "1" : "0", r.statementMatch, r.merchantMatch, r.amountDirection, r.amountMatch,
          String(r.amountValue), String(r.amountValue2), r.categoryIds.sorted().joined(separator: ","),

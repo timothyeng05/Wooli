@@ -14,6 +14,8 @@ struct RulesView: View {
     @State private var editing: TransactionRule?
     @State private var creating = false
     @State private var draftInstruction = ""
+    @State private var confirmTidy = false
+    @State private var tidyMerged: Int?
 
     var body: some View {
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -23,27 +25,52 @@ struct RulesView: View {
                 + RuleEngine.actionLines(rule, categories: byId)).joined(separator: " ").localizedCaseInsensitiveContains(search)
         }
 
+        // One section per category the rules file into, in category order.
+        let grouped = Dictionary(grouping: shown) { $0.setCategoryId ?? "" }
+            .sorted { a, b in
+                let sa = byId[a.key]?.sortOrder ?? Int.max, sb = byId[b.key]?.sortOrder ?? Int.max
+                return sa == sb ? a.key < b.key : sa < sb
+            }
+
         List {
             Section {
-                ForEach(shown) { rule in
-                    Button { editing = rule } label: {
-                        RuleCard(rule: rule, categories: byId, accounts: names)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions {
-                        Button("Delete", systemImage: "trash", role: .destructive) { context.delete(rule) }
-                        Button(rule.isEnabled ? "Pause" : "Resume", systemImage: rule.isEnabled ? "pause" : "play") {
-                            rule.isEnabled.toggle()
-                        }
-                        .tint(.gray)
-                    }
-                }
                 if rules.isEmpty {
                     Text("Rules run on every new transaction, before anything else. Tap + to create one, or tap \"Create rule\" when you fix a transaction.")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                } else {
+                    Text("\(rules.count) rule\(rules.count == 1 ? "" : "s") across \(grouped.count) categor\(grouped.count == 1 ? "y" : "ies")")
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary)
                 }
-            } header: {
-                Text("\(rules.count) transaction rule\(rules.count == 1 ? "" : "s")")
+            }
+
+            ForEach(grouped, id: \.key) { categoryId, group in
+                Section {
+                    ForEach(group) { rule in
+                        Button { editing = rule } label: {
+                            RuleCard(rule: rule, categories: byId, accounts: names)
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions {
+                            Button("Delete", systemImage: "trash", role: .destructive) { context.delete(rule) }
+                            Button(rule.isEnabled ? "Pause" : "Resume", systemImage: rule.isEnabled ? "pause" : "play") {
+                                rule.isEnabled.toggle()
+                            }
+                            .tint(.gray)
+                        }
+                    }
+                } header: {
+                    if let category = byId[categoryId] {
+                        HStack(spacing: 6) {
+                            Text(category.icon)
+                            Text(category.name)
+                            Spacer()
+                            Text("\(group.count) rule\(group.count == 1 ? "" : "s")").foregroundStyle(Theme.textTertiary)
+                        }
+                        .textCase(nil)
+                    } else {
+                        Text("Other")
+                    }
+                }
             }
 
             Section {
@@ -77,7 +104,21 @@ struct RulesView: View {
         .searchable(text: $search, prompt: "Search rules")
         .navigationTitle("Rules")
         .toolbar {
+            Menu {
+                Button("Tidy up rules", systemImage: "wand.and.rays") { confirmTidy = true }
+            } label: {
+                Label("More", systemImage: "ellipsis")
+            }
             Button("Create rule", systemImage: "plus") { creating = true }
+        }
+        .confirmationDialog("Tidy up rules?", isPresented: $confirmTidy, titleVisibility: .visible) {
+            Button("Tidy up") { tidyMerged = RuleEngine.tidy(context: context) }
+        } message: {
+            Text("Rules for the same category are combined into one where possible: \"is exactly\" becomes \"contains\", and if one of them marks transactions reviewed, they all do.")
+        }
+        .alert(tidyMerged == 0 ? "Nothing to combine" : "Combined \(tidyMerged ?? 0) rule\(tidyMerged == 1 ? "" : "s")",
+               isPresented: Binding(get: { tidyMerged != nil }, set: { if !$0 { tidyMerged = nil } })) {
+            Button("OK", role: .cancel) {}
         }
         .sheet(isPresented: $creating) { RuleEditor(rule: nil) }
         .sheet(item: $editing) { rule in RuleEditor(rule: rule) }
