@@ -28,6 +28,7 @@ struct ReportsView: View {
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var accounts: [LocalAccount]
     @State private var period: Period = .thisMonth
+    @State private var showClaude = false
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
@@ -42,6 +43,24 @@ struct ReportsView: View {
                     }
                     .pickerStyle(.menu)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button { showClaude = true } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "sparkles")
+                                .font(.title3).foregroundStyle(Theme.brand)
+                                .frame(width: 40, height: 40)
+                                .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Analyze with Claude").font(.headline).foregroundStyle(Theme.text)
+                                Text("Ask questions about your spending using your Claude app")
+                                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
+                        }
+                        .card(padding: 14)
+                    }
+                    .buttonStyle(.plain)
 
                     HStack(spacing: 12) {
                         StatTile(label: "Income", value: summary.income, tint: Theme.income)
@@ -58,6 +77,15 @@ struct ReportsView: View {
             .pageBackground()
             .navigationTitle("Reports")
             .refreshable { await app.sync(context: context) }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Analyze with Claude", systemImage: "sparkles") { showClaude = true }
+                }
+            }
+            .sheet(isPresented: $showClaude) { AnalyzeWithClaudeView() }
+            #if DEBUG
+            .onAppear { if ProcessInfo.processInfo.arguments.contains("-claude") { showClaude = true } }
+            #endif
         }
     }
 }
