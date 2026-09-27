@@ -248,6 +248,11 @@ struct AccountDetailView: View {
                     Toggle("Hide account", isOn: $account.isHidden).padding(.vertical, 10)
                     Text("Hidden accounts aren't counted in net worth, budgets, or the review queue.")
                         .font(.footnote).foregroundStyle(Theme.textTertiary)
+
+                    Divider()
+                    Toggle("Hide transactions", isOn: $account.hideTransactions).padding(.vertical, 10)
+                    Text("Account balance is still included in net worth, but its transactions won't appear in budgets or lists.")
+                        .font(.footnote).foregroundStyle(Theme.textTertiary)
                 }
                 .card()
 

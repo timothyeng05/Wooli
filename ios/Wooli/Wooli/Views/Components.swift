@@ -178,7 +178,7 @@ struct Ledger {
 
     init(categories: [BudgetCategory], accounts: [LocalAccount]) {
         categoriesById = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        hiddenAccounts = Set(accounts.filter(\.isHidden).map(\.providerAccountId))
+        hiddenAccounts = Set(accounts.filter { $0.isHidden || $0.hideTransactions }.map(\.providerAccountId))
         accountNames = Dictionary(accounts.map { ($0.providerAccountId, $0.displayName) }, uniquingKeysWith: { a, _ in a })
     }
 

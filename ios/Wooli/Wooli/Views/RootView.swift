@@ -73,7 +73,7 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var app
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
-    @Query(filter: #Predicate<LocalAccount> { $0.isHidden })
+    @Query(filter: #Predicate<LocalAccount> { $0.isHidden || $0.hideTransactions })
     private var hiddenAccounts: [LocalAccount]
 
     private var reviewCount: Int {

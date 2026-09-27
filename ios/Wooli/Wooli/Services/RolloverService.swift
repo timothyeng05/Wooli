@@ -23,7 +23,7 @@ enum RolloverService {
         let transactions = (try? context.fetch(FetchDescriptor<LocalTransaction>())) ?? []
         let accounts = (try? context.fetch(FetchDescriptor<LocalAccount>())) ?? []
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let hidden = Set(accounts.filter(\.isHidden).map(\.providerAccountId))
+        let hidden = Set(accounts.filter { $0.isHidden || $0.hideTransactions }.map(\.providerAccountId))
 
         for category in due {
             var month = category.rolloverThrough ?? thisMonth

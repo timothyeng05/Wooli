@@ -71,6 +71,8 @@ final class LocalAccount {
     var lastSyncedAt: Date = Date.now
     var kindRaw: String = AccountKind.other.rawValue
     var isHidden: Bool = false
+    var hideTransactions: Bool = false
+
 
     init(providerAccountId: String, name: String, institutionName: String, currency: String,
          balance: Double, balanceDate: Date, kind: AccountKind) {
@@ -112,6 +114,8 @@ final class LocalTransaction {
     /// Only an explicit confirmation clears it (same rule as the web app).
     var needsReview: Bool = true
     var isHidden: Bool = false
+    var hideTransactions: Bool = false
+
     var normalizedMerchant: String = ""
     var note: String = ""
     /// The current category came from the on-device model and hasn't been confirmed.
