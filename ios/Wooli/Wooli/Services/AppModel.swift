@@ -21,6 +21,7 @@ final class AppModel {
     var bankMessages: [String] = []
     var lastSyncAt: Date? = SyncService.lastSyncAt
     var selectedTab: AppTab = .dashboard
+    var isCategorizing = false
     var showReview = false
 
     init() {
@@ -48,6 +49,7 @@ final class AppModel {
         DefaultCategories.seedIfNeeded(context)
         SampleData.load(into: context)
         mode = .sample
+        Task { await autoCategorize(context: context) }
     }
 
     func sync(context: ModelContext) async {
@@ -62,7 +64,25 @@ final class AppModel {
         } catch {
             syncError = error.localizedDescription
         }
+        Task { await autoCategorize(context: context) }
     }
+
+    /// Let the on-device model suggest categories for anything still uncategorized.
+    func autoCategorize(context: ModelContext) async {
+        guard !isCategorizing else {
+            // A rule changed mid-run: go around again when this pass ends.
+            rerunCategorizer = true
+            return
+        }
+        isCategorizing = true
+        defer { isCategorizing = false }
+        repeat {
+            rerunCategorizer = false
+            await AICategorizer.run(context: context)
+        } while rerunCategorizer
+    }
+
+    private var rerunCategorizer = false
 
     /// Removes the SimpleFIN connection and every account, transaction,
     /// category and rule stored by this app.
@@ -81,6 +101,7 @@ final class AppModel {
         try? context.delete(model: MerchantRule.self)
         try? context.delete(model: BudgetCategory.self)
         try? context.delete(model: BalanceSnapshot.self)
+        try? context.delete(model: CategoryRule.self)
         try? context.save()
     }
 }

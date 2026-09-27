@@ -56,6 +56,29 @@ struct TransactionEditor: View {
     let suggestions: [BudgetCategory]
     let allCategories: [BudgetCategory]
     @State private var showPicker = false
+    /// Set when the user overrides an AI suggestion: offer to save a rule.
+    @State private var teachSuggestion: String?
+    @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var app
+
+    private func pick(_ category: BudgetCategory?) {
+        let overridingAI = transaction.aiSuggested && transaction.categoryId != category?.id
+        withAnimation(.snappy) {
+            Categorizer.assign(category, to: transaction)
+            if overridingAI, let category {
+                teachSuggestion = "\(transaction.title) is \(category.name)"
+            }
+        }
+    }
+
+    private func saveRule(_ text: String) {
+        guard !text.isEmpty else { return }
+        context.insert(CategoryRule(text: text))
+        try? context.save()
+        withAnimation { teachSuggestion = nil }
+        AICategorizer.reconsiderUnreviewed(context: context)
+        Task { await app.autoCategorize(context: context) }
+    }
 
     var body: some View {
         let current = transaction.categoryId.flatMap { id in allCategories.first { $0.id == id } }
@@ -67,10 +90,20 @@ struct TransactionEditor: View {
                 FlowLayout(spacing: 8) {
                     ForEach(chips.prefix(4)) { category in
                         Chip(label: category.name, emoji: category.icon, selected: category.id == transaction.categoryId) {
-                            withAnimation(.snappy) { Categorizer.assign(category, to: transaction) }
+                            pick(category)
                         }
                     }
                     Chip(label: "Other", symbol: "magnifyingglass", selected: false) { showPicker = true }
+                }
+                if transaction.aiSuggested && transaction.needsReview {
+                    Label("Suggested by Apple Intelligence. Check it's right.", systemImage: "sparkles")
+                        .font(.footnote).foregroundStyle(Theme.brand)
+                }
+                if let teachSuggestion {
+                    TeachWooliCard(suggestion: teachSuggestion, onSave: saveRule) {
+                        withAnimation { self.teachSuggestion = nil }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
                 if transaction.isTransfer {
                     Label("Transfers aren't counted as income or spending.", systemImage: "arrow.left.arrow.right")
@@ -108,7 +141,7 @@ struct TransactionEditor: View {
         .sheet(isPresented: $showPicker) {
             NavigationStack {
                 CategoryPickerView(selectedId: transaction.categoryId) { picked in
-                    Categorizer.assign(picked, to: transaction)
+                    pick(picked)
                 }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {

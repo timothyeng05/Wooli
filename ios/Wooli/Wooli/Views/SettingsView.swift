@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var showConnect = false
     @State private var confirmErase = false
     @AppStorage("displayName") private var displayName = ""
+    @AppStorage(AICategorizer.enabledKey) private var aiEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -44,6 +45,25 @@ struct SettingsView: View {
                         LabeledContent("Status", value: "Sample Data")
                         Button("Connect with SimpleFIN", systemImage: "link") { showConnect = true }
                     }
+                }
+
+                Section {
+                    Toggle(isOn: $aiEnabled) {
+                        Label("Suggest categories", systemImage: "sparkles")
+                    }
+                    .disabled(AICategorizer.status != .available)
+                    .onChange(of: aiEnabled) { _, on in
+                        if on { Task { await app.autoCategorize(context: context) } }
+                    }
+                    NavigationLink {
+                        RulesView()
+                    } label: {
+                        Label("Categorization Rules", systemImage: "list.bullet.rectangle")
+                    }
+                } header: {
+                    Text("Apple Intelligence")
+                } footer: {
+                    Text(AICategorizer.statusDescription + " Suggestions stay in your review queue until you confirm them.")
                 }
 
                 Section("Budget") {

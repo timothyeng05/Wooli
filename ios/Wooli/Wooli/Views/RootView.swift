@@ -16,7 +16,10 @@ struct RootView: View {
         }
         .animation(.default, value: app.mode)
         .tint(Theme.brand)
-        .task { syncIfStale() }
+        .task {
+            syncIfStale()
+            if app.mode != .onboarding { await app.autoCategorize(context: context) }
+        }
         #if DEBUG
         .task {
             // Launch arguments for Simulator checks: `-sampleData` skips

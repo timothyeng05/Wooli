@@ -112,6 +112,10 @@ final class LocalTransaction {
     var isHidden: Bool = false
     var normalizedMerchant: String = ""
     var note: String = ""
+    /// The current category came from the on-device model and hasn't been confirmed.
+    var aiSuggested: Bool = false
+    /// The on-device model has already looked at this one (don't ask again).
+    var aiAttempted: Bool = false
 
     init(providerTransactionId: String, accountId: String, amount: Double, transactionDescription: String,
          payee: String?, transactedAt: Date, isPending: Bool) {
@@ -187,5 +191,18 @@ final class BalanceSnapshot {
         self.accountId = accountId
         self.day = day
         self.balance = balance
+    }
+}
+
+/// A plain-English instruction from the user that the on-device categorizer
+/// follows, e.g. "Venmo payments to Maya are Rent".
+@Model
+final class CategoryRule {
+    var text: String = ""
+    var isEnabled: Bool = true
+    var createdAt: Date = Date.now
+
+    init(text: String) {
+        self.text = text
     }
 }

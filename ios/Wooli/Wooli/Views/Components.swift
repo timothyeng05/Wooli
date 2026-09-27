@@ -21,6 +21,10 @@ struct TransactionRow: View {
                 }
                 HStack(spacing: 4) {
                     if let category {
+                        if transaction.aiSuggested && transaction.needsReview {
+                            Image(systemName: "sparkles").foregroundStyle(Theme.brand)
+                                .accessibilityLabel("Suggested by Apple Intelligence")
+                        }
                         Text(category.name)
                     } else {
                         Text("Uncategorized").foregroundStyle(Theme.pending)

@@ -44,9 +44,10 @@ enum Categorizer {
 
     /// Apply a category to a transaction. The transfer flag always follows the
     /// category, as it does on the web.
-    static func assign(_ category: BudgetCategory?, to transaction: LocalTransaction) {
+    static func assign(_ category: BudgetCategory?, to transaction: LocalTransaction, byAI: Bool = false) {
         transaction.categoryId = category?.id
         transaction.isTransfer = category?.isTransfer ?? false
+        transaction.aiSuggested = byAI && category != nil
     }
 
     /// The user confirmed this transaction. Requires a category (same rule as
