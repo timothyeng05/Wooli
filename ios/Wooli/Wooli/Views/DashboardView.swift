@@ -126,7 +126,7 @@ struct BudgetSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Button { app.selectedTab = .budget } label: {
+            Button { app.selectedTab = .menu } label: {
                 CardHeader(title: "Budget") {
                     HStack(spacing: 4) {
                         Text(month.start.formatted(.dateTime.month(.wide).year()))

@@ -35,7 +35,7 @@ struct RootView: View {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-sampleData"), app.mode == .onboarding { app.startSample(context: context) }
             if let i = args.firstIndex(of: "-tab"), i + 1 < args.count, let n = Int(args[i + 1]) {
-                let tabs: [AppTab] = [.dashboard, .accounts, .transactions, .reports, .budget]
+                let tabs: [AppTab] = [.dashboard, .accounts, .transactions, .reports, .menu]
                 if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
             }
             if args.contains("-review") { app.showReview = true }
