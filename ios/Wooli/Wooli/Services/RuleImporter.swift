@@ -30,7 +30,9 @@ enum RuleImporter {
             var hide: Bool?
         }
         var categories: [Category]?
-        var rules: [Rule]
+        var rules: [Rule]?
+        /// Existing rules to delete, matched on their merchant/statement text.
+        var removeRules: [Rule]?
     }
 
     static var fileURL: URL {
@@ -69,10 +71,21 @@ enum RuleImporter {
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var added = 0
 
-        for (i, r) in payload.rules.enumerated() {
+        for r in payload.removeRules ?? [] {
+            let merchant = (r.merchantExact ?? r.merchantContains ?? "").lowercased()
+            let statement = (r.statementContains ?? r.statementExact ?? "").lowercased()
+            for rule in existingRules where rule.merchantText.lowercased() == merchant
+                && rule.statementText.lowercased() == statement {
+                context.delete(rule)
+            }
+        }
+        let remaining = existingRules.filter { !$0.isDeleted }
+        let rules = payload.rules ?? []
+
+        for (i, r) in rules.enumerated() {
             let rule = TransactionRule()
             // Keep the file's order: older createdAt runs first.
-            rule.createdAt = Date.now.addingTimeInterval(Double(i) - Double(payload.rules.count))
+            rule.createdAt = Date.now.addingTimeInterval(Double(i) - Double(rules.count))
             if let m = r.merchantExact { rule.merchantMatch = "exact"; rule.merchantText = m }
             if let m = r.merchantContains { rule.merchantMatch = "contains"; rule.merchantText = m }
             if let s = r.statementContains { rule.statementMatch = "contains"; rule.statementText = s }
@@ -88,7 +101,7 @@ enum RuleImporter {
             rule.hide = r.hide ?? false
 
             guard RuleEngine.hasConditions(rule), RuleEngine.hasActions(rule) else { continue }
-            let duplicate = existingRules.contains {
+            let duplicate = remaining.contains {
                 $0.merchantText == rule.merchantText && $0.statementText == rule.statementText
                     && $0.setCategoryId == rule.setCategoryId && $0.renameTo == rule.renameTo
                     && $0.amountValue == rule.amountValue && $0.accountIds == rule.accountIds

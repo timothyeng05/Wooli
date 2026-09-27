@@ -15,7 +15,8 @@ enum DefaultCategories {
         Group(name: "Home", color: "#8b5cf6", icon: "🏠",
               children: [("Rent", "🏠"), ("Utilities", "💡"), ("Internet", "📶"), ("Home Improvement", "🔨")]),
         Group(name: "Travel", color: "#06b6d4", icon: "✈️",
-              children: [("Transit", "🚇"), ("Rideshare", "🚗"), ("Flights", "✈️"), ("Hotels", "🏨"), ("Car", "🚘")]),
+              children: [("Transit", "🚇"), ("Rideshare", "🚗"), ("Flights", "✈️"), ("Hotels", "🏨"), ("Car", "🚘"),
+                         ("Parking & Tolls", "🅿️")]),
         Group(name: "Personal", color: "#ec4899", icon: "🧴",
               children: [("Medical", "🏥"), ("Shopping", "🛍️"), ("Entertainment", "🎬"), ("Personal Care", "💅")]),
         Group(name: "Other", color: "#64748b", icon: "📁",
@@ -39,6 +40,29 @@ enum DefaultCategories {
                                               sortOrder: gi * 100 + ci + 1))
             }
         }
+        seedStarterRules(context)
         try? context.save()
+    }
+
+    /// Generic rules that fit almost anyone. Visible and editable in Rules.
+    private static let starterRules: [(merchant: String, category: String)] = [
+        ("e-zpass", "Parking & Tolls"),
+        ("ezpass", "Parking & Tolls"),
+        ("atm withdrawal", "Transfer"),
+        ("autopay", "Credit Card Payment"),
+        ("metropolitan transportation authority", "Transit"),
+    ]
+
+    private static func seedStarterRules(_ context: ModelContext) {
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        for (i, starter) in starterRules.enumerated() {
+            guard let category = categories.first(where: { $0.parentId != nil && $0.name == starter.category }) else { continue }
+            let rule = TransactionRule()
+            rule.createdAt = Date.now.addingTimeInterval(Double(i - starterRules.count))
+            rule.merchantMatch = "contains"
+            rule.merchantText = starter.merchant
+            rule.setCategoryId = category.id
+            context.insert(rule)
+        }
     }
 }
