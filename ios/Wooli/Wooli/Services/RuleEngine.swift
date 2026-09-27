@@ -26,6 +26,18 @@ enum RuleEngine {
         return prefix.isEmpty ? statement : prefix
     }
 
+    /// The values a statement condition matches against — any one is enough
+    /// (OR). Falls back to the old single-value field for rules saved before
+    /// multi-value support existed.
+    static func statementValues(_ r: TransactionRule) -> [String] {
+        r.statementTexts.isEmpty ? (r.statementText.isEmpty ? [] : [r.statementText]) : r.statementTexts
+    }
+
+    /// Same as `statementValues`, for the merchant condition.
+    static func merchantValues(_ r: TransactionRule) -> [String] {
+        r.merchantTexts.isEmpty ? (r.merchantText.isEmpty ? [] : [r.merchantText]) : r.merchantTexts
+    }
+
     private static let fillerWords: Set<String> = [
         "pos", "debit", "credit", "purchase", "card", "checkcard", "ach", "visa", "mastercard", "recurring",
         "online", "web", "withdrawal", "deposit", "payment", "pmt", "dbt", "crd", "sq", "tst*", "sq*",
@@ -40,13 +52,14 @@ enum RuleEngine {
     static func autoApprove(_ tx: LocalTransaction, category: BudgetCategory, context: ModelContext) -> Int {
         let merchant = tx.baseTitle
         let existing = ((try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []).first {
-            $0.merchantMatch == "exact" && $0.merchantText.caseInsensitiveCompare(merchant) == .orderedSame
-                && $0.statementText.isEmpty && $0.amountMatch.isEmpty && $0.accountIds.isEmpty && $0.categoryIds.isEmpty
+            let merchants = merchantValues($0)
+            return $0.merchantMatch == "exact" && merchants.count == 1 && merchants[0].caseInsensitiveCompare(merchant) == .orderedSame
+                && statementValues($0).isEmpty && $0.amountMatch.isEmpty && $0.accountIds.isEmpty && $0.categoryIds.isEmpty
         }
         let rule = existing ?? {
             let r = TransactionRule()
             r.merchantMatch = "exact"
-            r.merchantText = merchant
+            r.merchantTexts = [merchant]
             context.insert(r)
             return r
         }()
@@ -65,18 +78,70 @@ enum RuleEngine {
         return cleared
     }
 
+    /// Merges rules that are identical except for which statement/merchant
+    /// values they match on, so e.g. five separate "this merchant → Coffee"
+    /// rules collapse into one "contains A or B or C or D or E" rule/card.
+    /// Lossless: the merged rule matches the exact union of what the
+    /// originals matched, since everything else about them is identical.
+    /// Rules that reach the same category by different means (different
+    /// match modes, amount/account/category conditions, or other actions)
+    /// are left alone rather than guessed at.
+    @MainActor
+    @discardableResult
+    static func consolidate(context: ModelContext) -> Int {
+        // A rule with both a statement AND a merchant condition can't be
+        // merged by simply OR-ing each field's values: that would also match
+        // combinations neither original rule matched (statement from one
+        // rule paired with the merchant from another). Leave those alone.
+        let rules = ((try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []).filter {
+            statementValues($0).isEmpty || merchantValues($0).isEmpty
+        }
+        let groups = Dictionary(grouping: rules, by: mergeSignature)
+        var merged = 0
+        for group in groups.values where group.count > 1 {
+            let ordered = group.sorted { $0.createdAt < $1.createdAt }
+            let keeper = ordered[0]
+            var statements = Set(statementValues(keeper))
+            var merchants = Set(merchantValues(keeper))
+            for extra in ordered.dropFirst() {
+                statements.formUnion(statementValues(extra))
+                merchants.formUnion(merchantValues(extra))
+                keeper.timesApplied += extra.timesApplied
+                if let last = extra.lastAppliedAt, last > (keeper.lastAppliedAt ?? .distantPast) { keeper.lastAppliedAt = last }
+                context.delete(extra)
+                merged += 1
+            }
+            keeper.statementTexts = statements.sorted()
+            keeper.statementText = ""
+            keeper.merchantTexts = merchants.sorted()
+            keeper.merchantText = ""
+        }
+        if merged > 0 { try? context.save() }
+        return merged
+    }
+
+    /// Everything that must match for two rules to merge safely: same mode
+    /// and same non-text conditions, same actions. Only the text values
+    /// (which the merge unions with OR) are allowed to differ.
+    private static func mergeSignature(_ r: TransactionRule) -> String {
+        [r.isEnabled ? "1" : "0", r.statementMatch, r.merchantMatch, r.amountDirection, r.amountMatch,
+         String(r.amountValue), String(r.amountValue2), r.categoryIds.sorted().joined(separator: ","),
+         r.accountIds.sorted().joined(separator: ","), r.renameTo, r.setCategoryId ?? "", r.reviewAction,
+         r.hide ? "1" : "0", r.addTag].joined(separator: "|")
+    }
+
     /// A new rule pre-filled from a transaction: original statement contains
     /// its meaningful start, set to `category`. No account is pre-selected.
     static func seed(_ rule: TransactionRule, from tx: LocalTransaction, category: BudgetCategory?) {
         rule.statementMatch = "contains"
-        rule.statementText = statementPrefix(tx.transactionDescription)
+        rule.statementTexts = [statementPrefix(tx.transactionDescription)]
         rule.setCategoryId = category?.id ?? tx.categoryId
         // Made while reviewing: matching transactions should leave the queue.
         rule.reviewAction = "reviewed"
     }
 
     static func hasConditions(_ r: TransactionRule) -> Bool {
-        (!r.statementMatch.isEmpty && !r.statementText.isEmpty) || (!r.merchantMatch.isEmpty && !r.merchantText.isEmpty)
+        (!r.statementMatch.isEmpty && !statementValues(r).isEmpty) || (!r.merchantMatch.isEmpty && !merchantValues(r).isEmpty)
             || !r.amountDirection.isEmpty || !r.amountMatch.isEmpty || !r.categoryIds.isEmpty || !r.accountIds.isEmpty
     }
 
@@ -86,10 +151,12 @@ enum RuleEngine {
 
     static func matches(_ r: TransactionRule, _ tx: LocalTransaction) -> Bool {
         guard hasConditions(r) else { return false }
-        if !r.statementMatch.isEmpty && !r.statementText.isEmpty,
-           !text(tx.transactionDescription, r.statementMatch, r.statementText) { return false }
-        if !r.merchantMatch.isEmpty && !r.merchantText.isEmpty,
-           !text(tx.baseTitle, r.merchantMatch, r.merchantText) { return false }
+        let statements = statementValues(r)
+        if !r.statementMatch.isEmpty && !statements.isEmpty,
+           !statements.contains(where: { text(tx.transactionDescription, r.statementMatch, $0) }) { return false }
+        let merchants = merchantValues(r)
+        if !r.merchantMatch.isEmpty && !merchants.isEmpty,
+           !merchants.contains(where: { text(tx.baseTitle, r.merchantMatch, $0) }) { return false }
         if r.amountDirection == "debit" && tx.amount >= 0 { return false }
         if r.amountDirection == "credit" && tx.amount <= 0 { return false }
         let size = abs(tx.amount)
@@ -161,11 +228,15 @@ enum RuleEngine {
     /// One-line description of the conditions, Monarch style.
     static func conditionLines(_ r: TransactionRule, categories: [String: BudgetCategory], accounts: [String: String]) -> [String] {
         var lines: [String] = []
-        if !r.statementMatch.isEmpty && !r.statementText.isEmpty {
-            lines.append("If original statement \(r.statementMatch == "exact" ? "exactly matches" : "contains") \"\(r.statementText)\"")
+        let statements = statementValues(r)
+        if !r.statementMatch.isEmpty && !statements.isEmpty {
+            let verb = r.statementMatch == "exact" ? "exactly matches" : "contains"
+            lines.append("If original statement \(verb) \(statements.map { "\"\($0)\"" }.joined(separator: " or "))")
         }
-        if !r.merchantMatch.isEmpty && !r.merchantText.isEmpty {
-            lines.append("If merchant name \(r.merchantMatch == "exact" ? "exactly matches" : "contains") \"\(r.merchantText)\"")
+        let merchants = merchantValues(r)
+        if !r.merchantMatch.isEmpty && !merchants.isEmpty {
+            let verb = r.merchantMatch == "exact" ? "exactly matches" : "contains"
+            lines.append("If merchant name \(verb) \(merchants.map { "\"\($0)\"" }.joined(separator: " or "))")
         }
         if !r.amountDirection.isEmpty || !r.amountMatch.isEmpty {
             let kind = r.amountDirection == "debit" ? "debit" : r.amountDirection == "credit" ? "credit" : "amount"

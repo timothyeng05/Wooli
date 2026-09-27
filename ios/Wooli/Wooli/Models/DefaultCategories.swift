@@ -233,7 +233,7 @@ enum DefaultCategories {
             let rule = TransactionRule()
             rule.createdAt = Date.now.addingTimeInterval(Double(i - starterRules.count))
             rule.merchantMatch = "contains"
-            rule.merchantText = starter.merchant
+            rule.merchantTexts = [starter.merchant]
             rule.setCategoryId = category.id
             context.insert(rule)
         }

@@ -156,7 +156,6 @@ struct RuleEditor: View {
 
     @State private var draft = TransactionRule()
     @State private var tab = 0
-    @State private var applyToExisting = true
     @State private var loaded = false
     @State private var confirmDelete = false
 
@@ -202,9 +201,11 @@ struct RuleEditor: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 12) {
-                    Toggle("Apply to \(matches.count) existing transaction\(matches.count == 1 ? "" : "s")", isOn: $applyToExisting)
-                        .disabled(matches.isEmpty)
+                VStack(spacing: 8) {
+                    if !matches.isEmpty {
+                        Text("Also updates \(matches.count) existing transaction\(matches.count == 1 ? "" : "s")")
+                            .font(.footnote).foregroundStyle(Theme.textSecondary)
+                    }
                     Button {
                         save(matches: matches, categories: byId)
                     } label: {
@@ -236,18 +237,16 @@ struct RuleEditor: View {
         Form {
             Section("If the transaction matches…") {
                 NavigationLink {
-                    TextConditionEditor(title: "Original statement", mode: $draft.statementMatch, text: $draft.statementText,
-                                        suggestion: source?.transactionDescription)
+                    TextListConditionEditor(title: "Original statement", mode: $draft.statementMatch, values: $draft.statementTexts,
+                                            suggestion: source?.transactionDescription)
                 } label: {
-                    ConditionRow(title: "Original statement",
-                                 value: draft.statementText.isEmpty ? nil : "\(draft.statementMatch == "exact" ? "is" : "contains") \"\(draft.statementText)\"")
+                    ConditionRow(title: "Original statement", value: conditionSummary(draft.statementTexts, mode: draft.statementMatch))
                 }
                 NavigationLink {
-                    TextConditionEditor(title: "Merchant name", mode: $draft.merchantMatch, text: $draft.merchantText,
-                                        suggestion: source?.baseTitle)
+                    TextListConditionEditor(title: "Merchant name", mode: $draft.merchantMatch, values: $draft.merchantTexts,
+                                            suggestion: source?.baseTitle)
                 } label: {
-                    ConditionRow(title: "Merchant name",
-                                 value: draft.merchantText.isEmpty ? nil : "\(draft.merchantMatch == "exact" ? "is" : "contains") \"\(draft.merchantText)\"")
+                    ConditionRow(title: "Merchant name", value: conditionSummary(draft.merchantTexts, mode: draft.merchantMatch))
                 }
                 NavigationLink {
                     AmountConditionEditor(rule: draft)
@@ -301,6 +300,12 @@ struct RuleEditor: View {
         }
     }
 
+    private func conditionSummary(_ values: [String], mode: String) -> String? {
+        guard !values.isEmpty else { return nil }
+        let verb = mode == "exact" ? "is" : "contains"
+        return "\(verb) " + values.map { "\"\($0)\"" }.joined(separator: " or ")
+    }
+
     private func amountOnly(_ r: TransactionRule) -> TransactionRule {
         let copy = TransactionRule()
         copy.amountDirection = r.amountDirection
@@ -319,12 +324,13 @@ struct RuleEditor: View {
         guard !loaded else { return }
         loaded = true
         if let rule {
-            for (dst, src) in [(\TransactionRule.statementMatch, rule.statementMatch), (\.statementText, rule.statementText),
-                               (\.merchantMatch, rule.merchantMatch), (\.merchantText, rule.merchantText),
+            for (dst, src) in [(\TransactionRule.statementMatch, rule.statementMatch), (\.merchantMatch, rule.merchantMatch),
                                (\.amountDirection, rule.amountDirection), (\.amountMatch, rule.amountMatch),
                                (\.renameTo, rule.renameTo), (\.reviewAction, rule.reviewAction)] as [(ReferenceWritableKeyPath<TransactionRule, String>, String)] {
                 draft[keyPath: dst] = src
             }
+            draft.statementTexts = RuleEngine.statementValues(rule)
+            draft.merchantTexts = RuleEngine.merchantValues(rule)
             draft.amountValue = rule.amountValue
             draft.amountValue2 = rule.amountValue2
             draft.categoryIds = rule.categoryIds
@@ -333,7 +339,6 @@ struct RuleEditor: View {
             draft.hide = rule.hide
             draft.addTag = rule.addTag
             draft.isEnabled = rule.isEnabled
-            applyToExisting = false
         } else {
             prefill?(draft)
         }
@@ -347,10 +352,12 @@ struct RuleEditor: View {
             target = TransactionRule()
             context.insert(target)
         }
-        target.statementMatch = draft.statementText.isEmpty ? "" : (draft.statementMatch.isEmpty ? "contains" : draft.statementMatch)
-        target.statementText = draft.statementText
-        target.merchantMatch = draft.merchantText.isEmpty ? "" : (draft.merchantMatch.isEmpty ? "exact" : draft.merchantMatch)
-        target.merchantText = draft.merchantText
+        target.statementMatch = draft.statementTexts.isEmpty ? "" : (draft.statementMatch.isEmpty ? "contains" : draft.statementMatch)
+        target.statementTexts = draft.statementTexts
+        target.statementText = "" // fully migrated to statementTexts as of this save
+        target.merchantMatch = draft.merchantTexts.isEmpty ? "" : (draft.merchantMatch.isEmpty ? "exact" : draft.merchantMatch)
+        target.merchantTexts = draft.merchantTexts
+        target.merchantText = "" // fully migrated to merchantTexts as of this save
         target.amountDirection = draft.amountDirection
         target.amountMatch = draft.amountMatch
         target.amountValue = draft.amountValue
@@ -363,7 +370,7 @@ struct RuleEditor: View {
         target.hide = draft.hide
         target.addTag = draft.addTag.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "#", with: "")
         target.isEnabled = draft.isEnabled
-        if applyToExisting && target.isEnabled {
+        if target.isEnabled {
             RuleEngine.applyToExisting(target, transactions: matches, categories: categories)
         }
         try? context.save()
@@ -381,11 +388,14 @@ private struct ConditionRow: View {
     }
 }
 
-private struct TextConditionEditor: View {
+/// Matches if the transaction matches any one of several text values —
+/// e.g. statement contains "UBER" or "LYFT" — all under one shared match mode.
+private struct TextListConditionEditor: View {
     let title: String
     @Binding var mode: String
-    @Binding var text: String
+    @Binding var values: [String]
     var suggestion: String?
+    @State private var newValue = ""
 
     var body: some View {
         Form {
@@ -395,43 +405,72 @@ private struct TextConditionEditor: View {
                     Text("Exactly matches").tag("exact")
                 }
                 .pickerStyle(.segmented)
-                TextField(title, text: $text, axis: .vertical)
-                    .lineLimit(1...4)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
             } footer: {
-                Text("Trim it to the part that's the same every time — drop dates, store numbers and card digits.")
+                Text(values.count > 1 ? "Matches if it \(mode == "exact" ? "exactly equals" : "contains") any one of the values below."
+                                     : "Trim it to the part that's the same every time — drop dates, store numbers and card digits.")
             }
+
+            Section {
+                ForEach(values, id: \.self) { value in
+                    Text(value)
+                        .swipeActions {
+                            Button("Remove", systemImage: "trash", role: .destructive) {
+                                values.removeAll { $0 == value }
+                            }
+                        }
+                }
+                HStack {
+                    TextField("Add another value", text: $newValue, axis: .vertical)
+                        .lineLimit(1...4)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Button("Add", systemImage: "plus.circle.fill") { addNewValue() }
+                        .labelStyle(.iconOnly)
+                        .disabled(newValue.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } header: {
+                Text(title)
+            }
+
             if let suggestion, !suggestion.isEmpty {
                 Section("From this transaction") {
                     Button {
-                        text = suggestion
+                        addValue(suggestion)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(suggestion).font(.callout.monospaced()).foregroundStyle(Theme.text)
-                            Text("Use the full text, then edit").font(.caption).foregroundStyle(Theme.brand)
+                            Text("Add the full text").font(.caption).foregroundStyle(Theme.brand)
                         }
                     }
                     let prefix = RuleEngine.statementPrefix(suggestion)
                     if prefix != suggestion {
                         Button {
-                            text = prefix
+                            addValue(prefix)
                             mode = "contains"
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(prefix).font(.callout.monospaced()).foregroundStyle(Theme.text)
-                                Text("Use just the start (recommended)").font(.caption).foregroundStyle(Theme.brand)
+                                Text("Add just the start (recommended)").font(.caption).foregroundStyle(Theme.brand)
                             }
                         }
                     }
                 }
             }
-            if !text.isEmpty {
-                Button("Remove condition", role: .destructive) { text = ""; mode = "" }
-            }
         }
         .navigationTitle(title)
         .onAppear { if mode.isEmpty { mode = title == "Merchant name" ? "exact" : "contains" } }
+    }
+
+    private func addNewValue() {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        addValue(trimmed)
+        newValue = ""
+    }
+
+    private func addValue(_ value: String) {
+        guard !values.contains(value) else { return }
+        values.append(value)
     }
 }
 

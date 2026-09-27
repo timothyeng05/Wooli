@@ -136,10 +136,10 @@ struct QuickCategorySheet: View {
             let rule = TransactionRule()
             if ruleOnStatement {
                 rule.statementMatch = "contains"
-                rule.statementText = matchText
+                rule.statementTexts = [matchText]
             } else {
                 rule.merchantMatch = "exact"
-                rule.merchantText = matchText
+                rule.merchantTexts = [matchText]
             }
             rule.setCategoryId = category.id
             rule.reviewAction = "reviewed"

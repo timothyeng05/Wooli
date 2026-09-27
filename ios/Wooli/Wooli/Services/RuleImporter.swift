@@ -83,8 +83,8 @@ enum RuleImporter {
         for r in payload.removeRules ?? [] {
             let merchant = (r.merchantExact ?? r.merchantContains ?? "").lowercased()
             let statement = (r.statementContains ?? r.statementExact ?? "").lowercased()
-            for rule in existingRules where rule.merchantText.lowercased() == merchant
-                && rule.statementText.lowercased() == statement {
+            for rule in existingRules where RuleEngine.merchantValues(rule).map({ $0.lowercased() }) == (merchant.isEmpty ? [] : [merchant])
+                && RuleEngine.statementValues(rule).map({ $0.lowercased() }) == (statement.isEmpty ? [] : [statement]) {
                 context.delete(rule)
             }
         }
@@ -95,10 +95,10 @@ enum RuleImporter {
             let rule = TransactionRule()
             // Keep the file's order: older createdAt runs first.
             rule.createdAt = Date.now.addingTimeInterval(Double(i) - Double(rules.count))
-            if let m = r.merchantExact { rule.merchantMatch = "exact"; rule.merchantText = m }
-            if let m = r.merchantContains { rule.merchantMatch = "contains"; rule.merchantText = m }
-            if let s = r.statementContains { rule.statementMatch = "contains"; rule.statementText = s }
-            if let s = r.statementExact { rule.statementMatch = "exact"; rule.statementText = s }
+            if let m = r.merchantExact { rule.merchantMatch = "exact"; rule.merchantTexts = [m] }
+            if let m = r.merchantContains { rule.merchantMatch = "contains"; rule.merchantTexts = [m] }
+            if let s = r.statementContains { rule.statementMatch = "contains"; rule.statementTexts = [s] }
+            if let s = r.statementExact { rule.statementMatch = "exact"; rule.statementTexts = [s] }
             if let a = r.debitEquals { rule.amountDirection = "debit"; rule.amountMatch = "equals"; rule.amountValue = a }
             if let a = r.creditEquals { rule.amountDirection = "credit"; rule.amountMatch = "equals"; rule.amountValue = a }
             if let name = r.accountNameContains {
@@ -111,7 +111,7 @@ enum RuleImporter {
 
             guard RuleEngine.hasConditions(rule), RuleEngine.hasActions(rule) else { continue }
             let duplicate = remaining.contains {
-                $0.merchantText == rule.merchantText && $0.statementText == rule.statementText
+                RuleEngine.merchantValues($0) == RuleEngine.merchantValues(rule) && RuleEngine.statementValues($0) == RuleEngine.statementValues(rule)
                     && $0.setCategoryId == rule.setCategoryId && $0.renameTo == rule.renameTo
                     && $0.amountValue == rule.amountValue && $0.accountIds == rule.accountIds
             }

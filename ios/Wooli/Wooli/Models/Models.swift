@@ -238,9 +238,16 @@ final class TransactionRule {
 
     // Conditions ("" = not used)
     var statementMatch: String = ""   // "contains" | "exact"
+    /// Legacy single-value field, kept so rules created before multi-value
+    /// support still read correctly — see `RuleEngine.statementValues`.
     var statementText: String = ""
+    /// Matches if the statement matches any one of these (OR within this
+    /// condition; still AND'd against the rule's other conditions).
+    var statementTexts: [String] = []
     var merchantMatch: String = ""    // "contains" | "exact"
+    /// Legacy single-value field — see `RuleEngine.merchantValues`.
     var merchantText: String = ""
+    var merchantTexts: [String] = []
     var amountDirection: String = ""  // "debit" | "credit"
     var amountMatch: String = ""      // "equals" | "greater" | "less" | "between"
     var amountValue: Double = 0
