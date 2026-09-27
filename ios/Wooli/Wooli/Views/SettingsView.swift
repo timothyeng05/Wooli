@@ -61,6 +61,14 @@ struct SettingsView: View {
                     Text(AICategorizer.statusDescription + " Suggestions stay in your review queue until you confirm them.")
                 }
 
+                Section("Modules") {
+                    NavigationLink {
+                        ModulesSettingsView()
+                    } label: {
+                        Label("Modules", systemImage: "square.grid.2x2.fill")
+                    }
+                }
+
                 Section("Budget") {
                     NavigationLink {
                         RulesView()

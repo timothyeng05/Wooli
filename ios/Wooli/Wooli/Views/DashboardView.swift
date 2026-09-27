@@ -50,6 +50,8 @@ struct DashboardView: View {
                         ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
                     }
 
+                    ModuleHomeCards()
+
                     BudgetSummaryCard(month: thisMonth, summary: month,
                                       plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
 
@@ -84,6 +86,7 @@ struct DashboardView: View {
             }
             .pageBackground()
             .navigationTitle(greeting)
+            .navigationDestination(item: Binding(get: { app.openModule }, set: { app.openModule = $0 })) { moduleScreen($0) }
             .refreshable { await app.sync(context: context) }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { SyncButton() }

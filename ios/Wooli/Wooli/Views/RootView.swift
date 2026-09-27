@@ -38,10 +38,19 @@ struct RootView: View {
                 if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
             }
             if args.contains("-review") { app.showReview = true }
+            // `-module period|mood`: enable that module (seeding sample data) and open it.
+            if let i = args.firstIndex(of: "-module"), i + 1 < args.count, let module = WooliModule(rawValue: args[i + 1]) {
+                UserDefaults.standard.set(true, forKey: module.enabledKey)
+                if app.mode == .sample { ModuleSampleData.seed(module, context: context) }
+                app.selectedTab = .dashboard
+                app.openModule = module
+            }
             if args.contains("-selftest") { DebugSelfTest.run(context: context) }
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
+            // Face ID-protected modules lock again whenever the app leaves the screen.
+            if phase == .background { ModuleLock.shared.lockAll() }
             guard phase == .active else { return }
             // iCloud may have delivered copies of records while we were away.
             Deduplicator.run(context: context)

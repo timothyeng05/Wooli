@@ -23,6 +23,8 @@ final class AppModel {
     var selectedTab: AppTab = .dashboard
     var isCategorizing = false
     var showReview = false
+    /// A module screen to push on the Dashboard (debug launch args, deep links).
+    var openModule: WooliModule?
     /// The guided first-run review, shown once right after connecting a bank.
     var showCalibration = false
 
@@ -51,6 +53,7 @@ final class AppModel {
     func startSample(context: ModelContext) {
         DefaultCategories.seedIfNeeded(context)
         SampleData.load(into: context)
+        for module in WooliModule.allCases where module.isEnabled { ModuleSampleData.seed(module, context: context) }
         mode = .sample
         RecurringDetector.refresh(context: context)
         Task { await autoCategorize(context: context) }
@@ -110,6 +113,8 @@ final class AppModel {
         try? context.delete(model: CategoryRule.self)
         try? context.delete(model: TransactionRule.self)
         try? context.delete(model: RecurringItem.self)
+        try? context.delete(model: PeriodEntry.self)
+        try? context.delete(model: MoodEntry.self)
         try? context.save()
     }
 }

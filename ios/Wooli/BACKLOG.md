@@ -5,6 +5,8 @@ Direction (from research on Copilot, Monarch, Rocket Money, Lunch Money, YNAB):
 non-AI money-management features first.
 
 ## Up next
+- **Modules Phase 2 — Period predictions in Calendar** (see MODULES_SPEC.md): opt-in EventKit calendar ("Cycle"), discreet all-day free events, rewritten on every prediction change, deleted when turned off; optional HealthKit menstrual flow.
+- **Modules Phase 3 — Quick logging outside the app** (see MODULES_SPEC.md): widget extension + App Group, interactive mood widget, period status widget (Lock Screen shows no details), Control Center "Log mood", App Intents for Siri/Shortcuts, optional daily mood reminder.
 1. **Budget rollover** — unspent (or overspent) amounts carry into next month, per category (Copilot, YNAB).
 2. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).
 3. **Savings goals** — target amount/date linked to an account's balance (Monarch, YNAB).
@@ -20,3 +22,4 @@ non-AI money-management features first.
 - **Cycle 3 — Split transactions + skip review per merchant** — split a posted transaction into parts (own category + amount, must add up; original set aside, parts labelled; edit/undo). "Always <category> for <merchant> · skip review" creates a merchant rule that also marks reviewed and clears existing ones; behind press-and-hold on "Mark as reviewed" (review card and transaction screen) plus a switch in the quick category sheet, so it can't be tapped by accident.
 - **Cycle 4 — Tags + rule fixes** — tags on transactions (editor section, picker with create/reuse, shown in rows), Tags filter, Tags card in Reports, "Add tag" rule action, split parts keep tags. Rules created from a transaction or while reviewing now default to "Mark as reviewed" so matches leave the review queue (user report: "Apply to 5 existing" seemed to do nothing); quick sheet's two rule switches merged into one.
 - **Cycle 5 — Rules clean-up** (user request) — Rules screen grouped by category; group-targeted rules re-pointed at the same-named category; "Tidy up rules" (⋯ menu) lines up contains/exact and review status within a category and merges (builds on the Xcode assistant's lossless multi-value merge). User's phone: 13 → 9 rules.
+- **Modules Phase 1 — Period & Mood** (per MODULES_SPEC.md): opt-in modules (Settings → Modules, default off, Show on Home, Require Face ID, delete data), Home cards after the review card, Period (CycleMath port with local-day fix, calendar, stats, history, editor) and Mood (one-tap logging, one entry per day, 30-day chart, calendar, tag patterns, editor), Face ID gate that re-locks on background, dedupe, sample data, `-module` launch arg, CycleMath + mood self-tests.
