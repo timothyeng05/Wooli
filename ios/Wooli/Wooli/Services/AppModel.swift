@@ -103,6 +103,7 @@ final class AppModel {
         try? context.delete(model: BudgetCategory.self)
         try? context.delete(model: BalanceSnapshot.self)
         try? context.delete(model: CategoryRule.self)
+        try? context.delete(model: TransactionRule.self)
         try? context.save()
     }
 }

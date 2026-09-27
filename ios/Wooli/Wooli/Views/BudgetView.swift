@@ -99,6 +99,12 @@ struct BudgetView: View {
                     Button("Previous Month", systemImage: "chevron.left") { shift(-1) }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        NavigationLink { CategoriesSettingsView() } label: { Label("Edit Categories", systemImage: "square.grid.2x2") }
+                        NavigationLink { RulesView() } label: { Label("Rules", systemImage: "wand.and.stars") }
+                    } label: {
+                        Label("More", systemImage: "ellipsis")
+                    }
                     if !isCurrentMonth {
                         Button("Today") { withAnimation { month = .month(containing: .now) } }
                     }

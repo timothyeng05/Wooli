@@ -116,6 +116,8 @@ final class LocalTransaction {
     var aiSuggested: Bool = false
     /// The on-device model has already looked at this one (don't ask again).
     var aiAttempted: Bool = false
+    /// Display name set by a "Rename merchant" rule.
+    var customTitle: String = ""
 
     init(providerTransactionId: String, accountId: String, amount: Double, transactionDescription: String,
          payee: String?, transactedAt: Date, isPending: Bool) {
@@ -130,6 +132,11 @@ final class LocalTransaction {
     }
 
     var title: String {
+        customTitle.isEmpty ? baseTitle : customTitle
+    }
+
+    /// Merchant name before any rename rule — what rules match against.
+    var baseTitle: String {
         if let payee, !payee.trimmingCharacters(in: .whitespaces).isEmpty { return payee }
         let pretty = normalizedMerchant.split(separator: " ").map { $0.capitalized }.joined(separator: " ")
         return pretty.isEmpty ? transactionDescription : pretty
@@ -205,4 +212,35 @@ final class CategoryRule {
     init(text: String) {
         self.text = text
     }
+}
+
+/// A Monarch-style "if … then …" rule. All set conditions must match; every
+/// set action is applied. Runs before learned merchants, keywords and AI.
+@Model
+final class TransactionRule {
+    var id: String = UUID().uuidString
+    var isEnabled: Bool = true
+    var createdAt: Date = Date.now
+    var lastAppliedAt: Date?
+    var timesApplied: Int = 0
+
+    // Conditions ("" = not used)
+    var statementMatch: String = ""   // "contains" | "exact"
+    var statementText: String = ""
+    var merchantMatch: String = ""    // "contains" | "exact"
+    var merchantText: String = ""
+    var amountDirection: String = ""  // "debit" | "credit"
+    var amountMatch: String = ""      // "equals" | "greater" | "less" | "between"
+    var amountValue: Double = 0
+    var amountValue2: Double = 0
+    var categoryIds: [String] = []
+    var accountIds: [String] = []
+
+    // Actions
+    var renameTo: String = ""
+    var setCategoryId: String?
+    var reviewAction: String = ""     // "reviewed" | "needsReview"
+    var hide: Bool = false
+
+    init() {}
 }

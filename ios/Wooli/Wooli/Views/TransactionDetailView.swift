@@ -56,28 +56,34 @@ struct TransactionEditor: View {
     let suggestions: [BudgetCategory]
     let allCategories: [BudgetCategory]
     @State private var showPicker = false
-    /// Set when the user overrides an AI suggestion: offer to save a rule.
-    @State private var teachSuggestion: String?
+    /// Set when the user overrides an AI suggestion: offer a one-tap rule.
+    @State private var teachCategory: BudgetCategory?
+    @State private var customizeRule = false
     @Environment(\.modelContext) private var context
-    @Environment(AppModel.self) private var app
 
     private func pick(_ category: BudgetCategory?) {
         let overridingAI = transaction.aiSuggested && transaction.categoryId != category?.id
         withAnimation(.snappy) {
             Categorizer.assign(category, to: transaction)
-            if overridingAI, let category {
-                teachSuggestion = "\(transaction.title) is \(category.name)"
-            }
+            if overridingAI { teachCategory = category }
         }
     }
 
-    private func saveRule(_ text: String) {
-        guard !text.isEmpty else { return }
-        context.insert(CategoryRule(text: text))
+    private func prefill(_ rule: TransactionRule) {
+        rule.merchantMatch = "exact"
+        rule.merchantText = transaction.baseTitle
+        rule.setCategoryId = teachCategory?.id ?? transaction.categoryId
+    }
+
+    private func createRule() {
+        let rule = TransactionRule()
+        prefill(rule)
+        context.insert(rule)
+        let all = (try? context.fetch(FetchDescriptor<LocalTransaction>())) ?? []
+        let byId = Dictionary(allCategories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        RuleEngine.applyToExisting(rule, transactions: all, categories: byId)
         try? context.save()
-        withAnimation { teachSuggestion = nil }
-        AICategorizer.reconsiderUnreviewed(context: context)
-        Task { await app.autoCategorize(context: context) }
+        withAnimation { teachCategory = nil }
     }
 
     var body: some View {
@@ -99,9 +105,10 @@ struct TransactionEditor: View {
                     Label("Suggested by Apple Intelligence. Check it's right.", systemImage: "sparkles")
                         .font(.footnote).foregroundStyle(Theme.brand)
                 }
-                if let teachSuggestion {
-                    TeachWooliCard(suggestion: teachSuggestion, onSave: saveRule) {
-                        withAnimation { self.teachSuggestion = nil }
+                if let teachCategory {
+                    TeachWooliCard(merchant: transaction.baseTitle, category: teachCategory,
+                                   onCreate: createRule, onCustomize: { customizeRule = true }) {
+                        withAnimation { self.teachCategory = nil }
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -137,6 +144,9 @@ struct TransactionEditor: View {
                     .foregroundStyle(Theme.textSecondary)
                     .textSelection(.enabled)
             }
+        }
+        .sheet(isPresented: $customizeRule, onDismiss: { teachCategory = nil }) {
+            RuleEditor(rule: nil, prefill: prefill)
         }
         .sheet(isPresented: $showPicker) {
             NavigationStack {
@@ -390,6 +400,15 @@ struct CategoryPickerView: View {
                         }
                     } header: {
                         Text("\(parent.icon)  \(parent.name)")
+                    }
+                }
+            }
+            if query.isEmpty {
+                Section {
+                    NavigationLink {
+                        CategoriesSettingsView()
+                    } label: {
+                        Label("Edit Categories", systemImage: "square.grid.2x2")
                     }
                 }
             }

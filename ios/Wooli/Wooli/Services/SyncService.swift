@@ -66,6 +66,8 @@ enum SyncService {
             categories.filter { $0.parentId != nil }.map { ($0.name.lowercased(), $0) },
             uniquingKeysWith: { first, _ in first })
 
+        let userRules = (try context.fetch(FetchDescriptor<TransactionRule>(sortBy: [SortDescriptor(\.createdAt)])))
+            .filter(\.isEnabled)
         var summary = Summary(bankMessages: response.errors)
         var seenIds = Set<String>()
 
@@ -102,7 +104,10 @@ enum SyncService {
                         providerTransactionId: tx.id, accountId: remote.id, amount: amount,
                         transactionDescription: tx.description, payee: tx.payee,
                         transactedAt: date, isPending: isPending)
-                    if let suggested = Categorizer.suggest(merchant: new.normalizedMerchant, description: tx.description,
+                    // The user's own rules win; learned merchants and keywords fill gaps.
+                    RuleEngine.applyAll(userRules, to: new, categories: categoriesById)
+                    if new.categoryId == nil,
+                       let suggested = Categorizer.suggest(merchant: new.normalizedMerchant, description: tx.description,
                                                            rules: rules, categoriesByName: categoriesByName) {
                         Categorizer.assign(categoriesById[suggested], to: new)
                     }

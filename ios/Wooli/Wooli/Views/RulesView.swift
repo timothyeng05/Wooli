@@ -1,78 +1,131 @@
 import SwiftUI
 import SwiftData
 
-/// Plain-English rules the on-device categorizer follows.
+/// Transaction rules (Monarch-style "if … then …") plus plain-English
+/// instructions for Apple Intelligence.
 struct RulesView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
-    @Query(sort: \CategoryRule.createdAt) private var rules: [CategoryRule]
-    @State private var draft = ""
-    @FocusState private var focused: Bool
+    @Query(sort: \TransactionRule.createdAt, order: .reverse) private var rules: [TransactionRule]
+    @Query(sort: \CategoryRule.createdAt) private var instructions: [CategoryRule]
+    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @Query private var accounts: [LocalAccount]
+    @State private var search = ""
+    @State private var editing: TransactionRule?
+    @State private var creating = false
+    @State private var draftInstruction = ""
 
     var body: some View {
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let names = Dictionary(accounts.map { ($0.providerAccountId, $0.displayName) }, uniquingKeysWith: { a, _ in a })
+        let shown = rules.filter { rule in
+            search.isEmpty || (RuleEngine.conditionLines(rule, categories: byId, accounts: names)
+                + RuleEngine.actionLines(rule, categories: byId)).joined(separator: " ").localizedCaseInsensitiveContains(search)
+        }
+
         List {
             Section {
-                TextField("e.g. Rentaltoll charges are Car", text: $draft, axis: .vertical)
-                    .lineLimit(1...4)
-                    .focused($focused)
-                Button("Add Rule", systemImage: "plus") { add() }
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                ForEach(shown) { rule in
+                    Button { editing = rule } label: {
+                        RuleCard(rule: rule, categories: byId, accounts: names)
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions {
+                        Button("Delete", systemImage: "trash", role: .destructive) { context.delete(rule) }
+                        Button(rule.isEnabled ? "Pause" : "Resume", systemImage: rule.isEnabled ? "pause" : "play") {
+                            rule.isEnabled.toggle()
+                        }
+                        .tint(.gray)
+                    }
+                }
+                if rules.isEmpty {
+                    Text("Rules run on every new transaction, before anything else. Tap + to create one, or tap \"Create rule\" when you fix a transaction.")
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                }
             } header: {
-                Text("New Rule")
+                Text("\(rules.count) transaction rule\(rules.count == 1 ? "" : "s")")
+            }
+
+            Section {
+                ForEach(instructions) { rule in
+                    InstructionRow(rule: rule) { instructionsChanged() }
+                }
+                .onDelete { offsets in
+                    for i in offsets { context.delete(instructions[i]) }
+                    instructionsChanged()
+                }
+                HStack {
+                    TextField("e.g. Purchases in Japan are Travel", text: $draftInstruction, axis: .vertical)
+                        .lineLimit(1...3)
+                    Button("Add", systemImage: "plus.circle.fill") {
+                        let text = draftInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !text.isEmpty else { return }
+                        context.insert(CategoryRule(text: text))
+                        draftInstruction = ""
+                        instructionsChanged()
+                    }
+                    .labelStyle(.iconOnly)
+                    .font(.title3)
+                    .disabled(draftInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } header: {
+                Text("Instructions for Apple Intelligence")
             } footer: {
-                Text("Write it the way you'd tell a person. Apple Intelligence follows these on this iPhone when it suggests categories, and re-checks anything you haven't reviewed yet.")
-            }
-
-            if !rules.isEmpty {
-                Section("Your Rules") {
-                    ForEach(rules) { rule in
-                        RuleRow(rule: rule) { changed() }
-                    }
-                    .onDelete { offsets in
-                        for i in offsets { context.delete(rules[i]) }
-                        changed()
-                    }
-                }
-            }
-
-            Section("Examples") {
-                ForEach(Self.examples, id: \.self) { example in
-                    Button {
-                        draft = example
-                        focused = true
-                    } label: {
-                        Label(example, systemImage: "text.quote").foregroundStyle(Theme.text)
-                    }
-                }
+                Text("For fuzzier cases that exact rules can't catch. Apple Intelligence follows these on this iPhone when it suggests categories.")
             }
         }
-        .navigationTitle("Categorization Rules")
-        .toolbar { EditButton() }
+        .searchable(text: $search, prompt: "Search rules")
+        .navigationTitle("Rules")
+        .toolbar {
+            Button("Create rule", systemImage: "plus") { creating = true }
+        }
+        .sheet(isPresented: $creating) { RuleEditor(rule: nil) }
+        .sheet(item: $editing) { rule in RuleEditor(rule: rule) }
     }
 
-    static let examples = [
-        "Venmo payments to Maya are Rent",
-        "Anything from Target under $15 is Groceries",
-        "Transfers to Fidelity or Schwab are Transfer, not spending",
-        "Parking and tolls are Car",
-    ]
-
-    private func add() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        context.insert(CategoryRule(text: text))
-        draft = ""
-        changed()
-    }
-
-    private func changed() {
+    private func instructionsChanged() {
         try? context.save()
         AICategorizer.reconsiderUnreviewed(context: context)
         Task { await app.autoCategorize(context: context) }
     }
 }
 
-private struct RuleRow: View {
+private struct RuleCard: View {
+    let rule: TransactionRule
+    let categories: [String: BudgetCategory]
+    let accounts: [String: String]
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(RuleEngine.conditionLines(rule, categories: categories, accounts: accounts), id: \.self) {
+                    Text($0).font(.body.weight(.medium)).foregroundStyle(Theme.text)
+                }
+                ForEach(RuleEngine.actionLines(rule, categories: categories), id: \.self) {
+                    Text($0).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                }
+                Group {
+                    if !rule.isEnabled {
+                        Text("Paused")
+                    } else if let last = rule.lastAppliedAt {
+                        Text("\(rule.timesApplied) transaction\(rule.timesApplied == 1 ? "" : "s") updated · Last applied \(last.formatted(.relative(presentation: .named)))")
+                    } else {
+                        Text("Not applied yet")
+                    }
+                }
+                .font(.footnote.italic())
+                .foregroundStyle(Theme.textTertiary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.vertical, 6)
+        .opacity(rule.isEnabled ? 1 : 0.55)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct InstructionRow: View {
     @Bindable var rule: CategoryRule
     let onChange: () -> Void
 
@@ -84,35 +137,324 @@ private struct RuleRow: View {
     }
 }
 
-/// Shown after the user corrects an AI suggestion: offer to save the fix as a rule.
+// MARK: - Editor
+
+/// Create or edit a rule: Settings (conditions + actions) and Preview (matches).
+struct RuleEditor: View {
+    /// Nil to create a new rule.
+    let rule: TransactionRule?
+    /// Optional starting values when creating from a transaction.
+    var prefill: ((TransactionRule) -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
+    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @Query private var accounts: [LocalAccount]
+
+    @State private var draft = TransactionRule()
+    @State private var tab = 0
+    @State private var applyToExisting = true
+    @State private var loaded = false
+    @State private var confirmDelete = false
+
+    var body: some View {
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let matches = RuleEngine.hasConditions(draft) ? transactions.filter { RuleEngine.matches(draft, $0) } : []
+        let canSave = RuleEngine.hasConditions(draft) && RuleEngine.hasActions(draft)
+
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("View", selection: $tab) {
+                    Text("Settings").tag(0)
+                    Text("Preview (\(matches.count))").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+
+                if tab == 0 {
+                    settings(byId: byId)
+                } else {
+                    List(matches) { tx in
+                        TransactionRow(transaction: tx, category: tx.categoryId.flatMap { byId[$0] })
+                    }
+                    .overlay {
+                        if matches.isEmpty {
+                            ContentUnavailableView("No Matches", systemImage: "line.3.horizontal.decrease.circle",
+                                                   description: Text("Add a condition in Settings to see which transactions match."))
+                        }
+                    }
+                }
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(rule == nil ? "Create rule" : "Edit rule")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                }
+                if rule != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 12) {
+                    Toggle("Apply to \(matches.count) existing transaction\(matches.count == 1 ? "" : "s")", isOn: $applyToExisting)
+                        .disabled(matches.isEmpty)
+                    Button {
+                        save(matches: matches, categories: byId)
+                    } label: {
+                        Text(rule == nil ? "Create rule" : "Save rule").font(.headline)
+                            .frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!canSave)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(.bar)
+            }
+            .confirmationDialog("Delete this rule?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete Rule", role: .destructive) {
+                    if let rule { context.delete(rule) }
+                    dismiss()
+                }
+            } message: {
+                Text("Transactions it already changed stay as they are.")
+            }
+        }
+        .onAppear(perform: load)
+    }
+
+    @ViewBuilder
+    private func settings(byId: [String: BudgetCategory]) -> some View {
+        let accountNames = Dictionary(accounts.map { ($0.providerAccountId, $0.displayName) }, uniquingKeysWith: { a, _ in a })
+        Form {
+            Section("If the transaction matches…") {
+                NavigationLink {
+                    TextConditionEditor(title: "Original statement", mode: $draft.statementMatch, text: $draft.statementText)
+                } label: {
+                    ConditionRow(title: "Original statement",
+                                 value: draft.statementText.isEmpty ? nil : "\(draft.statementMatch == "exact" ? "is" : "contains") \"\(draft.statementText)\"")
+                }
+                NavigationLink {
+                    TextConditionEditor(title: "Merchant name", mode: $draft.merchantMatch, text: $draft.merchantText)
+                } label: {
+                    ConditionRow(title: "Merchant name",
+                                 value: draft.merchantText.isEmpty ? nil : "\(draft.merchantMatch == "exact" ? "is" : "contains") \"\(draft.merchantText)\"")
+                }
+                NavigationLink {
+                    AmountConditionEditor(rule: draft)
+                } label: {
+                    ConditionRow(title: "Amount", value: RuleEngine.conditionLines(amountOnly(draft), categories: byId, accounts: [:]).first?
+                        .replacingOccurrences(of: "If ", with: ""))
+                }
+                NavigationLink {
+                    MultiSelectList(title: "Categories", selection: setBinding(\.categoryIds),
+                                    options: [("", "Uncategorized", nil)] + categories.filter { $0.parentId != nil }
+                                        .map { ($0.id, "\($0.icon)  \($0.name)", nil) })
+                } label: {
+                    ConditionRow(title: "Categories", value: draft.categoryIds.isEmpty ? nil : "\(draft.categoryIds.count) selected")
+                }
+                NavigationLink {
+                    MultiSelectList(title: "Accounts", selection: setBinding(\.accountIds),
+                                    options: accounts.map { ($0.providerAccountId, $0.displayName, $0.institutionName) })
+                } label: {
+                    ConditionRow(title: "Accounts", value: draft.accountIds.isEmpty ? nil
+                                 : draft.accountIds.compactMap { accountNames[$0] }.joined(separator: ", "))
+                }
+            }
+
+            Section("Then apply these updates") {
+                LabeledContent("Rename merchant") {
+                    TextField("Keep name", text: $draft.renameTo).multilineTextAlignment(.trailing)
+                }
+                NavigationLink {
+                    CategoryPickerView(selectedId: draft.setCategoryId) { draft.setCategoryId = $0?.id }
+                } label: {
+                    ConditionRow(title: "Update category",
+                                 value: draft.setCategoryId.flatMap { byId[$0] }.map { "\($0.icon) \($0.name)" })
+                }
+                Picker("Review status", selection: $draft.reviewAction) {
+                    Text("No change").tag("")
+                    Text("Mark as reviewed").tag("reviewed")
+                    Text("Mark as needs review").tag("needsReview")
+                }
+                Toggle("Hide transaction", isOn: $draft.hide)
+            }
+
+            if rule != nil {
+                Section {
+                    Toggle("Rule is on", isOn: $draft.isEnabled)
+                }
+            }
+        }
+    }
+
+    private func amountOnly(_ r: TransactionRule) -> TransactionRule {
+        let copy = TransactionRule()
+        copy.amountDirection = r.amountDirection
+        copy.amountMatch = r.amountMatch
+        copy.amountValue = r.amountValue
+        copy.amountValue2 = r.amountValue2
+        return copy
+    }
+
+    private func setBinding(_ keyPath: ReferenceWritableKeyPath<TransactionRule, [String]>) -> Binding<Set<String>> {
+        Binding(get: { Set(draft[keyPath: keyPath]) }, set: { draft[keyPath: keyPath] = Array($0).sorted() })
+    }
+
+    /// The draft is an unsaved copy so Close discards changes.
+    private func load() {
+        guard !loaded else { return }
+        loaded = true
+        if let rule {
+            for (dst, src) in [(\TransactionRule.statementMatch, rule.statementMatch), (\.statementText, rule.statementText),
+                               (\.merchantMatch, rule.merchantMatch), (\.merchantText, rule.merchantText),
+                               (\.amountDirection, rule.amountDirection), (\.amountMatch, rule.amountMatch),
+                               (\.renameTo, rule.renameTo), (\.reviewAction, rule.reviewAction)] as [(ReferenceWritableKeyPath<TransactionRule, String>, String)] {
+                draft[keyPath: dst] = src
+            }
+            draft.amountValue = rule.amountValue
+            draft.amountValue2 = rule.amountValue2
+            draft.categoryIds = rule.categoryIds
+            draft.accountIds = rule.accountIds
+            draft.setCategoryId = rule.setCategoryId
+            draft.hide = rule.hide
+            draft.isEnabled = rule.isEnabled
+            applyToExisting = false
+        } else {
+            prefill?(draft)
+        }
+    }
+
+    private func save(matches: [LocalTransaction], categories: [String: BudgetCategory]) {
+        let target: TransactionRule
+        if let rule {
+            target = rule
+        } else {
+            target = TransactionRule()
+            context.insert(target)
+        }
+        target.statementMatch = draft.statementText.isEmpty ? "" : (draft.statementMatch.isEmpty ? "contains" : draft.statementMatch)
+        target.statementText = draft.statementText
+        target.merchantMatch = draft.merchantText.isEmpty ? "" : (draft.merchantMatch.isEmpty ? "exact" : draft.merchantMatch)
+        target.merchantText = draft.merchantText
+        target.amountDirection = draft.amountDirection
+        target.amountMatch = draft.amountMatch
+        target.amountValue = draft.amountValue
+        target.amountValue2 = draft.amountValue2
+        target.categoryIds = draft.categoryIds
+        target.accountIds = draft.accountIds
+        target.renameTo = draft.renameTo.trimmingCharacters(in: .whitespaces)
+        target.setCategoryId = draft.setCategoryId
+        target.reviewAction = draft.reviewAction
+        target.hide = draft.hide
+        target.isEnabled = draft.isEnabled
+        if applyToExisting && target.isEnabled {
+            RuleEngine.applyToExisting(target, transactions: matches, categories: categories)
+        }
+        try? context.save()
+        dismiss()
+    }
+}
+
+private struct ConditionRow: View {
+    let title: String
+    let value: String?
+    var body: some View {
+        LabeledContent(title) {
+            if let value { Text(value).foregroundStyle(Theme.brand).lineLimit(1) }
+        }
+    }
+}
+
+private struct TextConditionEditor: View {
+    let title: String
+    @Binding var mode: String
+    @Binding var text: String
+
+    var body: some View {
+        Form {
+            Picker("Match", selection: Binding(get: { mode.isEmpty ? "contains" : mode }, set: { mode = $0 })) {
+                Text("Contains").tag("contains")
+                Text("Exactly matches").tag("exact")
+            }
+            .pickerStyle(.segmented)
+            TextField(title, text: $text)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !text.isEmpty {
+                Button("Remove condition", role: .destructive) { text = ""; mode = "" }
+            }
+        }
+        .navigationTitle(title)
+        .onAppear { if mode.isEmpty { mode = title == "Merchant name" ? "exact" : "contains" } }
+    }
+}
+
+private struct AmountConditionEditor: View {
+    @Bindable var rule: TransactionRule
+
+    var body: some View {
+        Form {
+            Picker("Type", selection: $rule.amountDirection) {
+                Text("Any").tag("")
+                Text("Debit (money out)").tag("debit")
+                Text("Credit (money in)").tag("credit")
+            }
+            Picker("Amount", selection: $rule.amountMatch) {
+                Text("Any amount").tag("")
+                Text("Equals").tag("equals")
+                Text("Over").tag("greater")
+                Text("Under").tag("less")
+                Text("Between").tag("between")
+            }
+            if !rule.amountMatch.isEmpty {
+                LabeledContent(rule.amountMatch == "between" ? "From" : "Amount") {
+                    TextField("0", value: $rule.amountValue, format: .currency(code: "USD"))
+                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                }
+                if rule.amountMatch == "between" {
+                    LabeledContent("To") {
+                        TextField("0", value: $rule.amountValue2, format: .currency(code: "USD"))
+                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Amount")
+    }
+}
+
+/// Shown after the user overrides an AI suggestion: offer a one-tap rule.
 struct TeachWooliCard: View {
-    let suggestion: String
-    let onSave: (String) -> Void
+    let merchant: String
+    let category: BudgetCategory
+    let onCreate: () -> Void
+    let onCustomize: () -> Void
     let onDismiss: () -> Void
-    @State private var text = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Teach Wooli", systemImage: "sparkles").font(.subheadline.weight(.semibold))
+                Label("Create a rule?", systemImage: "wand.and.stars").font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.brand)
                 Spacer()
                 Button("Not now", systemImage: "xmark", action: onDismiss)
                     .labelStyle(.iconOnly).foregroundStyle(Theme.textTertiary)
             }
-            Text("Save this as a rule so Apple Intelligence gets it right next time.")
+            Text("Always put **\(merchant)** in \(category.icon) **\(category.name)**, including the ones you haven't reviewed yet.")
                 .font(.footnote).foregroundStyle(Theme.textSecondary)
-            TextField("Rule", text: $text, axis: .vertical)
-                .lineLimit(1...3)
-                .padding(10)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
-            Button("Save Rule") { onSave(text.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                .buttonStyle(.borderedProminent)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            HStack {
+                Button("Create rule", action: onCreate).buttonStyle(.borderedProminent)
+                Button("Customize…", action: onCustomize).buttonStyle(.bordered)
+            }
+            .controlSize(.small)
         }
         .padding(14)
         .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onAppear { text = suggestion }
     }
 }

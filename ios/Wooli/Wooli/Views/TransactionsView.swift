@@ -262,7 +262,7 @@ private struct FilterRow: View {
     }
 }
 
-private struct MultiSelectList: View {
+struct MultiSelectList: View {
     let title: String
     @Binding var selection: Set<String>
     let options: [(String, String, String?)]
