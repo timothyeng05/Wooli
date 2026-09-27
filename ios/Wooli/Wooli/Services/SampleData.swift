@@ -20,15 +20,36 @@ enum SampleData {
             ("sample-brokerage", "Individual Brokerage", "Fidelity", 32560.12, .investment),
         ]
         for a in accounts {
-            context.insert(LocalAccount(providerAccountId: a.id, name: a.name, institutionName: a.bank,
-                                        currency: "USD", balance: a.balance, balanceDate: .now, kind: a.kind))
+            let account = LocalAccount(providerAccountId: a.id, name: a.name, institutionName: a.bank,
+                                       currency: "USD", balance: a.balance, balanceDate: .now, kind: a.kind)
+            account.lastSyncedAt = Date.now.addingTimeInterval(-Double(a.id.count) * 1700)
+            context.insert(account)
+        }
+
+        // A year of daily balances, walking backwards from today's balance.
+        var walk = SeededGenerator(seed: 7)
+        let drift: [String: (Double, Double)] = [
+            "sample-checking": (0, 380), "sample-savings": (-18, 25),
+            "sample-credit": (0, 140), "sample-brokerage": (-55, 320),
+        ]
+        let startOfToday = Calendar.current.startOfDay(for: .now)
+        for a in accounts {
+            var balance = a.balance
+            let (trend, noise) = drift[a.id] ?? (0, 50)
+            for daysAgo in 0..<365 {
+                let day = Calendar.current.date(byAdding: .day, value: -daysAgo, to: startOfToday)!
+                context.insert(BalanceSnapshot(accountId: a.id, day: day, balance: (balance * 100).rounded() / 100))
+                balance += trend + Double.random(in: -noise...noise, using: &walk)
+                if a.kind == .credit { balance = min(balance, -50) }
+            }
         }
 
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let byName = Dictionary(categories.filter { $0.parentId != nil }.map { ($0.name.lowercased(), $0) },
                                 uniquingKeysWith: { a, _ in a })
-        let targets = ["Food & Dining": 800.0, "Home": 2400, "Travel": 300, "Personal": 400, "Other": 150]
+        let targets = ["Food & Dining": 800.0, "Home": 2400, "Travel": 300, "Personal": 400, "Other": 150,
+                       "Income": 6500]
         for c in categories where c.parentId == nil { c.monthlyTarget = targets[c.name] ?? 0 }
 
         var rng = SeededGenerator(seed: 42)

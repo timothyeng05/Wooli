@@ -14,13 +14,26 @@ financial data stays theirs:
 
 ## What's in it
 
+It's styled like the Wooli website (gray page, white bordered cards, uppercase
+labels, emoji category tiles, blue `#2563eb`, the sheep logo) but built from
+standard iOS components.
+
 | Tab | What it does |
 |---|---|
-| **Overview** | Net worth, this month's spending vs. target, spending donut, review shortcut, recent activity |
-| **Transactions** | Grouped by day, search, "To Review" filter, swipe right to mark reviewed, swipe left to hide |
-| **Budget** | Month navigation, left-to-spend, 6-month chart, per-group targets and breakdown, cash flow |
-| **Accounts** | Grouped by type, net worth, nickname/type/hide per account, per-account activity |
-| **Settings** | Connect/sync, category editor, privacy summary, disconnect and erase |
+| **Dashboard** | Greeting, review shortcut, budget card (income vs. planned, expenses vs. planned), net worth with 1M–All ranges, this-month vs. last-month spending, recent transactions |
+| **Accounts** | Net worth chart; Cash / Credit Cards / Investments / Loans cards with change over the range and % of assets or liabilities; bank logos; "Show N hidden accounts" |
+| **Transactions** | Day groups with daily totals, summary line, search, a filters sheet (date range, sort, accounts, categories, merchants, amounts), swipe to review or hide |
+| **Reports** | Income / spending / saved tiles, 6-month cash flow, spending by category, top merchants |
+| **Budget** | Month navigation, left to spend, planned income, per-group planned amounts, 6-month spending chart |
+
+**Review flow:** tap the checkmark button (or the Dashboard card) to go through
+transactions one at a time. "N remaining" shows at the top. Each card has the
+bank's original statement, suggested category chips, notes and a hide toggle,
+with **Skip for now** and **Mark as reviewed** buttons.
+
+**Net worth history:** SimpleFIN only reports today's balance, so each sync saves
+one balance per account per day. The charts fill in from the day you start using
+the app. Sample data includes a year of history.
 
 Ported from the web app:
 - The default category tree (`app/api/setup-budget/route.ts`).
@@ -41,7 +54,7 @@ rules, goals, CSV import, investments, household map.
 3. On the welcome screen, choose **Explore with Sample Data** or **Connect with SimpleFIN**.
 
 Debug-only launch arguments for quick Simulator checks: `-sampleData` skips onboarding,
-and `-tab N` opens tab N (0–3).
+`-tab N` opens tab N (0–4), and `-review` opens the review flow.
 
 ## Putting it on a real iPhone
 
@@ -78,7 +91,7 @@ CloudKit notes:
 ```
 Wooli/
   WooliApp.swift              app entry, SwiftData container
-  Models/Models.swift         LocalAccount, LocalTransaction, BudgetCategory, MerchantRule
+  Models/Models.swift         LocalAccount, LocalTransaction, BudgetCategory, MerchantRule, BalanceSnapshot
   Models/DefaultCategories    starter category tree
   SimpleFin/                  SimpleFIN protocol client + response models
   Services/
@@ -86,8 +99,10 @@ Wooli/
     Categorizer               merchant rules + keyword hints, review confirmation
     MerchantNormalizer        port of the web normalizer
     BudgetMath                month totals, currency formatting
+    History                   chart ranges, balance history, cumulative spending, transaction filters
     AppModel                  mode (onboarding / live / sample), sync state, erase
     KeychainHelper            device-only secret storage
     SampleData                6 months of realistic demo data
+  Views/Theme.swift           web design tokens, cards, badges, bank logos, sheep logo
   Views/                      SwiftUI screens (standard iOS components, SF Symbols, Swift Charts)
 ```

@@ -7,10 +7,20 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showConnect = false
     @State private var confirmErase = false
+    @AppStorage("displayName") private var displayName = ""
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    TextField("Your first name", text: $displayName)
+                        .textContentType(.givenName)
+                } header: {
+                    Text("Name")
+                } footer: {
+                    Text("Used in the dashboard greeting.")
+                }
+
                 Section("Bank Connection") {
                     if app.mode == .live {
                         LabeledContent {
@@ -109,7 +119,7 @@ struct CategoriesSettingsView: View {
                             editing = child
                         } label: {
                             HStack(spacing: 12) {
-                                CategoryBadge(category: child, size: 30)
+                                CategoryTile(category: child, size: 30)
                                 Text(child.name).foregroundStyle(.primary)
                             }
                         }

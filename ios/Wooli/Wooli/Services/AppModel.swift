@@ -4,6 +4,8 @@ import SwiftData
 
 /// App-wide state: whether we're connected to SimpleFIN, showing sample data,
 /// or not set up yet, plus the in-flight sync status.
+enum AppTab: Hashable { case dashboard, accounts, transactions, reports, budget }
+
 @MainActor
 @Observable
 final class AppModel {
@@ -18,6 +20,8 @@ final class AppModel {
     var syncError: String?
     var bankMessages: [String] = []
     var lastSyncAt: Date? = SyncService.lastSyncAt
+    var selectedTab: AppTab = .dashboard
+    var showReview = false
 
     init() {
         let stored = UserDefaults.standard.string(forKey: Self.modeKey).flatMap(Mode.init) ?? .onboarding
@@ -70,6 +74,7 @@ final class AppModel {
         try? context.delete(model: LocalAccount.self)
         try? context.delete(model: MerchantRule.self)
         try? context.delete(model: BudgetCategory.self)
+        try? context.delete(model: BalanceSnapshot.self)
         try? context.save()
     }
 }

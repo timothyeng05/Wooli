@@ -109,6 +109,8 @@ enum SyncService {
             }
         }
 
+        recordSnapshots(for: response.accounts, context: context)
+
         // A pending charge that posts often comes back under a new id. Drop
         // pending rows inside the fetched window that the bank no longer reports.
         let returnedAccounts = Set(response.accounts.map(\.id))
@@ -120,5 +122,20 @@ enum SyncService {
         try context.save()
         UserDefaults.standard.set(Date.now, forKey: lastSyncKey)
         return summary
+    }
+
+    /// Keep one balance reading per account per day for the net worth chart.
+    private static func recordSnapshots(for remote: [SimpleFinAccount], context: ModelContext) {
+        let today = Calendar.current.startOfDay(for: .now)
+        let existing = (try? context.fetch(FetchDescriptor<BalanceSnapshot>(predicate: #Predicate { $0.day == today }))) ?? []
+        let byAccount = Dictionary(existing.map { ($0.accountId, $0) }, uniquingKeysWith: { a, _ in a })
+        for account in remote {
+            let balance = Double(account.balance) ?? 0
+            if let snap = byAccount[account.id] {
+                snap.balance = balance
+            } else {
+                context.insert(BalanceSnapshot(accountId: account.id, day: today, balance: balance))
+            }
+        }
     }
 }

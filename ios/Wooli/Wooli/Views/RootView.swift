@@ -15,13 +15,19 @@ struct RootView: View {
             }
         }
         .animation(.default, value: app.mode)
+        .tint(Theme.brand)
         .task { syncIfStale() }
         #if DEBUG
         .task {
-            // `-sampleData` launch argument: skip onboarding (for Simulator checks).
-            if ProcessInfo.processInfo.arguments.contains("-sampleData"), app.mode == .onboarding {
-                app.startSample(context: context)
+            // Launch arguments for Simulator checks: `-sampleData` skips
+            // onboarding, `-tab N` opens a tab, `-review` opens the review flow.
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-sampleData"), app.mode == .onboarding { app.startSample(context: context) }
+            if let i = args.firstIndex(of: "-tab"), i + 1 < args.count, let n = Int(args[i + 1]) {
+                let tabs: [AppTab] = [.dashboard, .accounts, .transactions, .reports, .budget]
+                if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
             }
+            if args.contains("-review") { app.showReview = true }
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
@@ -40,6 +46,7 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
+    @Environment(AppModel.self) private var app
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
     @Query(filter: #Predicate<LocalAccount> { $0.isHidden })
@@ -50,32 +57,28 @@ struct MainTabView: View {
         return toReview.filter { !hidden.contains($0.accountId) }.count
     }
 
-    @State private var selection = MainTabView.initialTab
-
-    private static var initialTab: Int {
-        #if DEBUG
-        // `-tab N` launch argument opens a specific tab.
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "-tab"), i + 1 < args.count, let n = Int(args[i + 1]) { return n }
-        #endif
-        return 0
-    }
-
     var body: some View {
-        TabView(selection: $selection) {
-            Tab("Overview", systemImage: "chart.pie.fill", value: 0) {
-                OverviewView()
+        @Bindable var app = app
+        TabView(selection: $app.selectedTab) {
+            Tab("Dashboard", systemImage: "house", value: AppTab.dashboard) {
+                DashboardView()
             }
-            Tab("Transactions", systemImage: "list.bullet.rectangle.portrait.fill", value: 1) {
+            Tab("Accounts", systemImage: "square.stack.3d.up", value: AppTab.accounts) {
+                AccountsView()
+            }
+            Tab("Transactions", systemImage: "creditcard", value: AppTab.transactions) {
                 TransactionsView()
             }
             .badge(reviewCount)
-            Tab("Budget", systemImage: "gauge.with.dots.needle.67percent", value: 2) {
+            Tab("Reports", systemImage: "chart.pie", value: AppTab.reports) {
+                ReportsView()
+            }
+            Tab("Budget", systemImage: "map", value: AppTab.budget) {
                 BudgetView()
             }
-            Tab("Accounts", systemImage: "building.columns.fill", value: 3) {
-                AccountsView()
-            }
+        }
+        .fullScreenCover(isPresented: $app.showReview) {
+            ReviewView()
         }
     }
 }

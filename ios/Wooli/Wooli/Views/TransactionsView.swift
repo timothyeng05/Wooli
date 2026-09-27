@@ -2,26 +2,18 @@ import SwiftUI
 import SwiftData
 
 struct TransactionsView: View {
-    enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", review = "To Review"
-        var id: String { rawValue }
-    }
-
-    /// Open straight onto the review queue (from the Overview shortcut).
-    var startInReview = false
-    /// True when pushed inside another NavigationStack.
-    var embedded = false
-    /// Restrict to one account (from the account screen).
+    /// Restrict to one account or category (when pushed from elsewhere).
     var accountId: String?
+    var embedded = false
 
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var accounts: [LocalAccount]
-    @State private var filter: Filter = .all
+    @State private var filter = TransactionFilter()
     @State private var search = ""
-    @State private var didApplyStart = false
+    @State private var showFilters = false
 
     var body: some View {
         if embedded {
@@ -32,89 +24,308 @@ struct TransactionsView: View {
     }
 
     private var content: some View {
-        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let hidden = Set(accounts.filter(\.isHidden).map(\.providerAccountId))
-        let names = Dictionary(accounts.map { ($0.providerAccountId, $0.displayName) }, uniquingKeysWith: { a, _ in a })
+        let ledger = Ledger(categories: categories, accounts: accounts)
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let reviewCount = ledger.reviewQueue(transactions).count
 
-        let visible = transactions.filter { tx in
+        let visible = filter.sorted(transactions.filter { tx in
             if let accountId { if tx.accountId != accountId { return false } }
-            else if hidden.contains(tx.accountId) { return false }
-            if filter == .review && (!tx.needsReview || tx.isHidden) { return false }
+            else if !ledger.isVisible(tx) && !filter.accountIds.contains(tx.accountId) { return false }
+            guard filter.matches(tx) else { return false }
             guard !query.isEmpty else { return true }
-            let categoryName = tx.categoryId.flatMap { byId[$0]?.name.lowercased() } ?? "uncategorized"
+            let categoryName = ledger.category(for: tx)?.name.lowercased() ?? "uncategorized"
             return tx.title.lowercased().contains(query)
                 || tx.transactionDescription.lowercased().contains(query)
                 || categoryName.contains(query)
                 || tx.note.lowercased().contains(query)
-        }
-        let days = Dictionary(grouping: visible) { Calendar.current.startOfDay(for: $0.transactedAt) }
-            .sorted { $0.key > $1.key }
+        })
+        let groupByDay = filter.sort == .newest || filter.sort == .oldest
+        let days: [(Date, [LocalTransaction])] = groupByDay
+            ? Dictionary(grouping: visible) { Calendar.current.startOfDay(for: $0.transactedAt) }
+                .sorted { filter.sort == .newest ? $0.key > $1.key : $0.key < $1.key }
+                .map { ($0.key, $0.value) }
+            : []
+        let counted = visible.filter { !$0.isHidden && !$0.isTransfer }
+        let spent = counted.filter { $0.amount < 0 }.reduce(0) { $0 - $1.amount }
+        let income = counted.filter { $0.amount > 0 }.reduce(0) { $0 + $1.amount }
 
         return List {
-            if accountId == nil {
-                Section {
-                    Picker("Show", selection: $filter) {
-                        ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
+            Section {
+                HStack(spacing: 4) {
+                    Text("\(visible.count) transactions").fontWeight(.semibold).foregroundStyle(Theme.text)
+                    Text("· \(spent.currency()) spent").foregroundStyle(Theme.textSecondary)
+                    Text("· \(income.currency()) income").foregroundStyle(Theme.income)
                 }
+                .font(.caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
             }
 
-            ForEach(days, id: \.key) { day, items in
-                Section(day.dayHeader) {
-                    ForEach(items) { tx in
-                        NavigationLink {
-                            TransactionDetailView(transaction: tx)
-                        } label: {
-                            TransactionRow(transaction: tx, category: tx.categoryId.flatMap { byId[$0] },
-                                           accountName: accountId == nil ? names[tx.accountId] : nil)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            if tx.needsReview && tx.categoryId != nil {
-                                Button("Reviewed", systemImage: "checkmark") {
-                                    withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
-                                }
-                                .tint(.green)
-                            }
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(tx.isHidden ? "Unhide" : "Hide",
-                                   systemImage: tx.isHidden ? "eye" : "eye.slash") {
-                                withAnimation { tx.isHidden.toggle() }
-                            }
-                            .tint(.gray)
-                        }
+            if groupByDay {
+                ForEach(days, id: \.0) { day, items in
+                    Section {
+                        ForEach(items) { tx in row(tx, ledger: ledger) }
+                    } header: {
+                        DayHeader(day: day, total: items.filter { !$0.isHidden && !$0.isTransfer }.reduce(0) { $0 + $1.amount })
                     }
+                }
+            } else {
+                Section {
+                    ForEach(visible) { tx in row(tx, ledger: ledger) }
                 }
             }
         }
+        .listStyle(.plain)
+        .listSectionSpacing(0)
+        .pageBackground()
         .overlay {
             if visible.isEmpty {
                 if !query.isEmpty {
                     ContentUnavailableView.search(text: search)
-                } else if filter == .review {
-                    ContentUnavailableView("All Caught Up", systemImage: "checkmark.circle",
-                                           description: Text("You've reviewed every transaction."))
+                } else if filter.activeCount > 0 {
+                    ContentUnavailableView("No Matches", systemImage: "line.3.horizontal.decrease.circle",
+                                           description: Text("Try clearing some filters."))
                 } else {
-                    ContentUnavailableView("No Transactions", systemImage: "list.bullet.rectangle",
+                    ContentUnavailableView("No Transactions", systemImage: "creditcard",
                                            description: Text("Transactions from your banks appear here after a sync."))
                 }
             }
         }
-        .searchable(text: $search, prompt: "Merchant, category, or note")
-        .navigationTitle(accountId == nil ? (filter == .review && embedded ? "Review" : "Transactions") : "Activity")
+        .searchable(text: $search, prompt: "Search transactions")
+        .navigationTitle(accountId == nil ? "Transactions" : "Activity")
         .refreshable { await app.sync(context: context) }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { SyncButton() }
-        }
-        .onAppear {
-            if startInReview && !didApplyStart {
-                filter = .review
-                didApplyStart = true
+            if accountId == nil {
+                ToolbarItem(placement: .topBarTrailing) { ReviewButton(count: reviewCount) }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showFilters = true
+                } label: {
+                    Image(systemName: filter.activeCount > 0 ? "line.3.horizontal.decrease.circle.fill"
+                                                             : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel(filter.activeCount > 0 ? "Filters, \(filter.activeCount) active" : "Filters")
             }
         }
+        .sheet(isPresented: $showFilters) {
+            FiltersSheet(filter: $filter, transactions: transactions, accounts: accounts, categories: categories)
+        }
+    }
+
+    private func row(_ tx: LocalTransaction, ledger: Ledger) -> some View {
+        NavigationLink {
+            TransactionDetailView(transaction: tx)
+        } label: {
+            TransactionRow(transaction: tx, category: ledger.category(for: tx),
+                           accountName: accountId == nil ? ledger.accountNames[tx.accountId] : nil)
+        }
+        .listRowBackground(Theme.card)
+        .listRowSeparatorTint(Theme.border)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if tx.needsReview && tx.categoryId != nil {
+                Button("Reviewed", systemImage: "checkmark") {
+                    withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
+                }
+                .tint(Theme.income)
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button(tx.isHidden ? "Unhide" : "Hide", systemImage: tx.isHidden ? "eye" : "eye.slash") {
+                withAnimation { tx.isHidden.toggle() }
+            }
+            .tint(.gray)
+        }
+    }
+}
+
+private struct DayHeader: View {
+    let day: Date
+    let total: Double
+
+    var body: some View {
+        HStack {
+            Text(day.formatted(.dateTime.month(.wide).day().year()))
+            Spacer()
+            Text(total.signedCurrency()).monospacedDigit()
+                .foregroundStyle(total > 0 ? Theme.income : Theme.textTertiary)
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(Theme.textSecondary)
+        .textCase(nil)
+        .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Filters
+
+struct FiltersSheet: View {
+    @Binding var filter: TransactionFilter
+    let transactions: [LocalTransaction]
+    let accounts: [LocalAccount]
+    let categories: [BudgetCategory]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft = TransactionFilter()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Date Range") {
+                    Picker("Date range", selection: $draft.dateRange) {
+                        ForEach(TransactionFilter.DateRange.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .labelsHidden()
+                }
+
+                Section("Sort By") {
+                    Picker("Sort by", selection: $draft.sort) {
+                        ForEach(TransactionFilter.Sort.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Section("Filter By") {
+                    NavigationLink {
+                        MultiSelectList(title: "Accounts", selection: $draft.accountIds,
+                                        options: accounts.map { ($0.providerAccountId, $0.displayName, $0.institutionName) })
+                    } label: {
+                        FilterRow(title: "Accounts", count: draft.accountIds.count)
+                    }
+                    NavigationLink {
+                        MultiSelectList(title: "Categories", selection: $draft.categoryIds,
+                                        options: [("", "Uncategorized", nil)] + categories.filter { $0.parentId != nil }
+                                            .map { ($0.id, "\($0.icon)  \($0.name)", nil) })
+                    } label: {
+                        FilterRow(title: "Categories", count: draft.categoryIds.count)
+                    }
+                    NavigationLink {
+                        let merchants = Dictionary(grouping: transactions, by: \.title)
+                            .sorted { $0.value.count > $1.value.count }
+                            .map { ($0.key, $0.key, "\($0.value.count) transactions") }
+                        MultiSelectList(title: "Merchants", selection: $draft.merchants, options: merchants, searchable: true)
+                    } label: {
+                        FilterRow(title: "Merchants", count: draft.merchants.count)
+                    }
+                    NavigationLink {
+                        AmountFilter(minAmount: $draft.minAmount, maxAmount: $draft.maxAmount)
+                    } label: {
+                        FilterRow(title: "Amounts", count: draft.minAmount != nil || draft.maxAmount != nil ? 1 : 0)
+                    }
+                }
+            }
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 12) {
+                    Button {
+                        draft = TransactionFilter()
+                    } label: {
+                        Text("Clear all").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Theme.text)
+                    Button {
+                        filter = draft
+                        dismiss()
+                    } label: {
+                        Text("Apply").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .controlSize(.large)
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(.bar)
+            }
+        }
+        .onAppear { draft = filter }
+    }
+}
+
+private struct FilterRow: View {
+    let title: String
+    let count: Int
+    var body: some View {
+        LabeledContent(title) {
+            if count > 0 { Text("\(count) selected").foregroundStyle(Theme.brand) }
+        }
+    }
+}
+
+private struct MultiSelectList: View {
+    let title: String
+    @Binding var selection: Set<String>
+    let options: [(String, String, String?)]
+    var searchable = false
+    @State private var search = ""
+
+    var body: some View {
+        let shown = search.isEmpty ? options : options.filter { $0.1.localizedCaseInsensitiveContains(search) }
+        List {
+            ForEach(shown, id: \.0) { id, label, detail in
+                Button {
+                    if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(label).foregroundStyle(Theme.text)
+                            if let detail { Text(detail).font(.footnote).foregroundStyle(Theme.textTertiary) }
+                        }
+                        Spacer()
+                        Image(systemName: selection.contains(id) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selection.contains(id) ? Theme.brand : Theme.textTertiary)
+                            .font(.title3)
+                    }
+                }
+            }
+        }
+        .modifier(OptionalSearch(enabled: searchable, text: $search))
+        .navigationTitle(title)
+        .toolbar {
+            if !selection.isEmpty {
+                Button("Clear") { selection.removeAll() }
+            }
+        }
+    }
+}
+
+private struct OptionalSearch: ViewModifier {
+    let enabled: Bool
+    @Binding var text: String
+    func body(content: Content) -> some View {
+        if enabled { content.searchable(text: $text) } else { content }
+    }
+}
+
+private struct AmountFilter: View {
+    @Binding var minAmount: Double?
+    @Binding var maxAmount: Double?
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Minimum") {
+                    TextField("Any", value: $minAmount, format: .currency(code: "USD"))
+                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                }
+                LabeledContent("Maximum") {
+                    TextField("Any", value: $maxAmount, format: .currency(code: "USD"))
+                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                }
+            } footer: {
+                Text("Matches money in and money out by size.")
+            }
+        }
+        .navigationTitle("Amounts")
     }
 }

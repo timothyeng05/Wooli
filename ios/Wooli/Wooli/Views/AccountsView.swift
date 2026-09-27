@@ -1,87 +1,89 @@
 import SwiftUI
 import SwiftData
+import Charts
+
+/// Account groups shown on the Accounts page.
+enum AccountGroup: String, CaseIterable, Identifiable {
+    case cash = "Cash", credit = "Credit Cards", investments = "Investments", loans = "Loans"
+    var id: String { rawValue }
+
+    var kinds: [AccountKind] {
+        switch self {
+        case .cash: [.checking, .savings, .other]
+        case .credit: [.credit]
+        case .investments: [.investment]
+        case .loans: [.loan]
+        }
+    }
+
+    var isAsset: Bool { self == .cash || self == .investments }
+}
 
 struct AccountsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
     @Query(sort: \LocalAccount.name) private var accounts: [LocalAccount]
+    @Query private var snapshots: [BalanceSnapshot]
+    @State private var range: ChartRange = .month1
     @State private var showSettings = false
 
     var body: some View {
         let visible = accounts.filter { !$0.isHidden }
-        let hidden = accounts.filter(\.isHidden)
         let netWorth = visible.reduce(0) { $0 + $1.netWorthValue }
+        let history = BalanceHistory(snapshots: snapshots)
+        let start = range.startDate(earliest: history.earliest)
+        let series = history.series(for: visible, from: start) { a, b in a.kind.isAsset ? b : -abs(b) }
+        let totalAssets = visible.filter { $0.kind.isAsset }.reduce(0) { $0 + $1.balance }
+        let totalDebts = visible.filter { !$0.kind.isAsset }.reduce(0) { $0 + abs($1.balance) }
 
         NavigationStack {
-            List {
-                if app.mode == .sample || app.syncError != nil || !app.bankMessages.isEmpty {
-                    Section {
-                        StatusBanner()
-                        ForEach(app.bankMessages, id: \.self) { message in
-                            Label(message, systemImage: "building.columns")
-                                .font(.footnote).foregroundStyle(.orange)
-                        }
-                    }
-                }
+            ScrollView {
+                VStack(spacing: 16) {
+                    if StatusBanner.isVisible(app) { StatusBanner().card(padding: 14) }
 
-                Section {
-                    LabeledContent {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text(netWorth.currency())
-                            .font(.title3.weight(.semibold)).monospacedDigit()
-                            .foregroundStyle(.primary)
-                    } label: {
-                        Text("Net Worth").font(.title3.weight(.semibold))
+                            .font(.system(size: 34, weight: .bold)).monospacedDigit()
+                            .foregroundStyle(Theme.text)
+                            .contentTransition(.numericText())
+                        ChangeLabel(change: netWorth - (series.first?.value ?? netWorth), base: series.first?.value,
+                                    period: range.periodLabel)
+                        NetWorthChart(points: series, tint: Color(hex: "#0891b2"))
+                            .frame(height: 200)
+                            .padding(.vertical, 8)
+                        RangePicker(selection: $range)
                     }
-                }
+                    .padding(.horizontal, 4)
 
-                ForEach(AccountKind.allCases) { kind in
-                    let group = visible.filter { $0.kind == kind }
-                    if !group.isEmpty {
-                        Section {
-                            ForEach(group) { account in
-                                NavigationLink {
-                                    AccountDetailView(account: account)
-                                } label: {
-                                    AccountRow(account: account)
-                                }
-                            }
-                        } header: {
-                            HStack {
-                                Text(kind.label)
-                                Spacer()
-                                Text(group.reduce(0) { $0 + abs($1.balance) }.currency(cents: false))
-                                    .monospacedDigit()
-                            }
+                    ForEach(AccountGroup.allCases) { group in
+                        let members = accounts.filter { group.kinds.contains($0.kind) }
+                        if !members.isEmpty {
+                            AccountGroupCard(group: group, accounts: members, history: history, start: start,
+                                             periodLabel: range.periodLabel,
+                                             share: group.isAsset ? totalAssets : totalDebts)
                         }
                     }
-                }
 
-                if !hidden.isEmpty {
-                    Section {
-                        ForEach(hidden) { account in
-                            NavigationLink {
-                                AccountDetailView(account: account)
-                            } label: {
-                                AccountRow(account: account).opacity(0.5)
+                    if accounts.isEmpty {
+                        VStack(spacing: 8) {
+                            if app.isSyncing {
+                                ProgressView("Syncing with your banks…")
+                            } else {
+                                ContentUnavailableView("No Accounts", systemImage: "building.columns",
+                                                       description: Text("Pull down to sync from SimpleFIN."))
                             }
                         }
-                    } header: {
-                        Text("Hidden")
-                    } footer: {
-                        Text("Hidden accounts aren't included in net worth, budgets, or the review queue.")
+                        .card()
+                    }
+
+                    if let last = app.lastSyncAt, app.mode == .live {
+                        Text("Updated \(last, format: .relative(presentation: .named))")
+                            .font(.caption).foregroundStyle(Theme.textTertiary)
                     }
                 }
+                .padding(16)
             }
-            .overlay {
-                if accounts.isEmpty {
-                    if app.isSyncing {
-                        ProgressView("Syncing with your banks…")
-                    } else {
-                        ContentUnavailableView("No Accounts", systemImage: "building.columns",
-                                               description: Text("Pull down to sync from SimpleFIN."))
-                    }
-                }
-            }
+            .pageBackground()
             .navigationTitle("Accounts")
             .refreshable { await app.sync(context: context) }
             .toolbar {
@@ -90,72 +92,172 @@ struct AccountsView: View {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                if let last = app.lastSyncAt, app.mode == .live {
-                    Text("Updated \(last, format: .relative(presentation: .named))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(6)
-                }
-            }
             .sheet(isPresented: $showSettings) { SettingsView() }
         }
     }
 }
 
-private struct AccountRow: View {
+private struct AccountGroupCard: View {
+    let group: AccountGroup
+    let accounts: [LocalAccount]
+    let history: BalanceHistory
+    let start: Date
+    let periodLabel: String
+    let share: Double
+    @State private var showHidden = false
+
+    var body: some View {
+        let visible = accounts.filter { !$0.isHidden }
+        let hidden = accounts.filter(\.isHidden)
+        // Show the group as its natural sign: assets positive, debts as owed.
+        let total = visible.reduce(0) { $0 + (group.isAsset ? $1.balance : -abs($1.balance)) }
+        let series = history.series(for: visible, from: start) { _, b in group.isAsset ? b : -abs(b) }
+        let change = total - (series.first?.value ?? total)
+
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(group.rawValue).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                    Spacer()
+                    Text(total.currency()).font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.text)
+                }
+                HStack {
+                    ChangeLabel(change: change, base: series.first?.value, period: periodLabel)
+                    Spacer()
+                    if share > 0 {
+                        Text("\((abs(total) / share).formatted(.percent.precision(.fractionLength(0)))) of \(group.isAsset ? "assets" : "liabilities")")
+                            .font(.footnote).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
+            .padding(20)
+
+            ForEach(visible) { account in
+                Divider().overlay(Theme.border)
+                AccountLink(account: account)
+            }
+
+            if !hidden.isEmpty {
+                if showHidden {
+                    ForEach(hidden) { account in
+                        Divider().overlay(Theme.border)
+                        AccountLink(account: account).opacity(0.55)
+                    }
+                }
+                Divider().overlay(Theme.border)
+                Button {
+                    withAnimation { showHidden.toggle() }
+                } label: {
+                    Label(showHidden ? "Hide hidden accounts" : "Show \(hidden.count) hidden account\(hidden.count == 1 ? "" : "s")",
+                          systemImage: showHidden ? "eye.slash" : "eye")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20).padding(.vertical, 16)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .card(padding: 0)
+    }
+}
+
+private struct AccountLink: View {
     let account: LocalAccount
 
     var body: some View {
-        HStack(spacing: 12) {
-            SymbolTile(symbol: account.kind.symbol, tint: account.kind.isAsset ? .accentColor : .orange, size: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(account.displayName).lineLimit(1)
-                Text(account.institutionName).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+        NavigationLink {
+            AccountDetailView(account: account)
+        } label: {
+            HStack(spacing: 14) {
+                InstitutionLogo(name: account.institutionName, size: 44)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(account.displayName).font(.body.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
+                    Text(account.kind.singularLabel).font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(account.balance.currency(account.currency))
+                        .font(.body.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.text)
+                    Text(account.lastSyncedAt, format: .relative(presentation: .named))
+                        .font(.footnote).foregroundStyle(Theme.textTertiary)
+                }
             }
-            Spacer(minLength: 8)
-            Text(account.balance.currency(account.currency))
-                .monospacedDigit()
-                .foregroundStyle(account.kind.isAsset ? Color.primary : Color.red)
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 
 struct AccountDetailView: View {
     @Bindable var account: LocalAccount
+    @Query private var snapshots: [BalanceSnapshot]
+    @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
+    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @State private var range: ChartRange = .month3
 
     var body: some View {
-        List {
-            Section {
-                VStack(spacing: 6) {
-                    SymbolTile(symbol: account.kind.symbol, tint: account.kind.isAsset ? .accentColor : .orange, size: 56)
+        let mine = snapshots.filter { $0.accountId == account.providerAccountId }
+        let history = BalanceHistory(snapshots: mine)
+        let series = history.series(for: [account], from: range.startDate(earliest: history.earliest)) { _, b in b }
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let recent = transactions.filter { $0.accountId == account.providerAccountId }.prefix(25)
+
+        ScrollView {
+            VStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        InstitutionLogo(name: account.institutionName, size: 44)
+                        VStack(alignment: .leading) {
+                            Text(account.institutionName).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                            Text(account.kind.singularLabel).font(.footnote).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
                     Text(account.balance.currency(account.currency))
-                        .font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text("\(account.institutionName) · as of \(account.balanceDate.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.footnote).foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                        .font(.system(size: 32, weight: .bold)).monospacedDigit().foregroundStyle(Theme.text)
+                    ChangeLabel(change: account.balance - (series.first?.value ?? account.balance),
+                                base: series.first?.value, period: range.periodLabel, invert: !account.kind.isAsset)
+                    NetWorthChart(points: series).frame(height: 140).padding(.vertical, 6)
+                    RangePicker(selection: $range)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .listRowBackground(Color.clear)
-            }
+                .card()
 
-            Section {
-                TextField("Nickname", text: $account.nickname, prompt: Text(account.name))
-                Picker("Type", selection: $account.kindRaw) {
-                    ForEach(AccountKind.allCases) { Text($0.singularLabel).tag($0.rawValue) }
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionLabel("Settings").padding(.bottom, 10)
+                    TextField("Nickname", text: $account.nickname, prompt: Text(account.name))
+                        .padding(.vertical, 12)
+                    Divider()
+                    Picker("Type", selection: $account.kindRaw) {
+                        ForEach(AccountKind.allCases) { Text($0.singularLabel).tag($0.rawValue) }
+                    }
+                    .padding(.vertical, 6)
+                    Divider()
+                    Toggle("Hide account", isOn: $account.isHidden).padding(.vertical, 10)
+                    Text("Hidden accounts aren't counted in net worth, budgets, or the review queue.")
+                        .font(.footnote).foregroundStyle(Theme.textTertiary)
                 }
-                Toggle("Hide Account", isOn: $account.isHidden)
-            } footer: {
-                Text("Credit cards and loans count against your net worth.")
-            }
+                .card()
 
-            Section {
-                NavigationLink("Activity") {
-                    TransactionsView(embedded: true, accountId: account.providerAccountId)
+                VStack(alignment: .leading, spacing: 12) {
+                    CardHeader(title: "Recent transactions")
+                    if recent.isEmpty {
+                        Text("No transactions yet").font(.subheadline).foregroundStyle(Theme.textTertiary)
+                    }
+                    ForEach(recent) { tx in
+                        NavigationLink {
+                            TransactionDetailView(transaction: tx)
+                        } label: {
+                            TransactionRow(transaction: tx, category: tx.categoryId.flatMap { byId[$0] })
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .card()
             }
+            .padding(16)
         }
+        .pageBackground()
         .navigationTitle(account.displayName)
         .navigationBarTitleDisplayMode(.inline)
     }

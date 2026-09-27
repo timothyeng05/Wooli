@@ -174,3 +174,18 @@ final class MerchantRule {
         self.categoryId = categoryId
     }
 }
+
+/// One balance reading per account per day, recorded on each sync. SimpleFIN
+/// only reports today's balance, so this is how net-worth history builds up.
+@Model
+final class BalanceSnapshot {
+    var accountId: String = ""
+    var day: Date = Date.now
+    var balance: Double = 0
+
+    init(accountId: String, day: Date, balance: Double) {
+        self.accountId = accountId
+        self.day = day
+        self.balance = balance
+    }
+}

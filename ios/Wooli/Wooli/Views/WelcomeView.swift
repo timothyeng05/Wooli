@@ -1,62 +1,73 @@
 import SwiftUI
 import SwiftData
 
-/// First-run screen in the style of Apple's "Welcome to …" sheets.
+/// First-run screen — the web sign-in page's look: blue gradient, white card,
+/// sheep logo, blue "Wooli" wordmark.
 struct WelcomeView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
     @State private var showConnect = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            Theme.gradient.ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 36) {
-                    VStack(spacing: 16) {
-                        SymbolTile(symbol: "leaf.fill", size: 88)
-                            .shadow(color: .accentColor.opacity(0.3), radius: 16, y: 8)
-                        Text("Welcome to Wooli")
-                            .font(.largeTitle.bold())
-                            .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 28) {
+                    HStack(spacing: 10) {
+                        WooliLogo(size: 44)
+                        Text("Wooli")
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(Color(hex: "#2563eb"))
                     }
-                    .padding(.top, 56)
+                    Text("Your budget, private to you.")
+                        .font(.title3)
+                        .foregroundStyle(Color(hex: "#4b5563"))
 
-                    VStack(alignment: .leading, spacing: 28) {
-                        FeatureRow(symbol: "lock.shield.fill", tint: .green, title: "Private by design",
+                    VStack(alignment: .leading, spacing: 22) {
+                        FeatureRow(symbol: "lock.shield.fill", tint: Color(hex: "#16a34a"), title: "Private by design",
                                    detail: "Your accounts and transactions stay on this iPhone and in your own iCloud. There's no Wooli server.")
-                        FeatureRow(symbol: "building.columns.fill", tint: .blue, title: "Connect with SimpleFIN",
+                        FeatureRow(symbol: "building.columns.fill", tint: Color(hex: "#2563eb"), title: "Connect with SimpleFIN",
                                    detail: "Read-only access to your banks. Wooli can see balances and transactions but can never move money.")
-                        FeatureRow(symbol: "chart.pie.fill", tint: .orange, title: "Budget your way",
-                                   detail: "Review each transaction, set monthly targets, and see where your money goes.")
+                        FeatureRow(symbol: "checkmark.square.fill", tint: Color(hex: "#f97316"), title: "Review and budget",
+                                   detail: "Confirm each transaction, plan your month, and see where your money goes.")
                     }
-                    .padding(.horizontal, 8)
-                }
-                .padding(.horizontal, 24)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
-            }
 
-            VStack(spacing: 12) {
-                Button {
-                    showConnect = true
-                } label: {
-                    Text("Connect with SimpleFIN")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                    VStack(spacing: 12) {
+                        Button {
+                            showConnect = true
+                        } label: {
+                            Text("Connect with SimpleFIN")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
 
-                Button("Explore with Sample Data") {
-                    app.startSample(context: context)
+                        Button {
+                            app.startSample(context: context)
+                        } label: {
+                            Text("Explore with sample data")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Color(hex: "#374151"))
+                        .controlSize(.large)
+                    }
                 }
-                .font(.body.weight(.medium))
-                .padding(.vertical, 8)
+                .padding(28)
+                .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 24, y: 10)
+                .frame(maxWidth: 460)
+                .padding(20)
+                .frame(maxWidth: .infinity, minHeight: 0)
+                .containerRelativeFrame(.vertical, alignment: .center)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
-            .frame(maxWidth: 520)
+            .scrollBounceBehavior(.basedOnSize)
         }
+        .environment(\.colorScheme, .light)
         .sheet(isPresented: $showConnect) {
             ConnectSheet()
         }
@@ -70,15 +81,15 @@ private struct FeatureRow: View {
     let detail: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
-                .font(.title)
+                .font(.title2)
                 .foregroundStyle(tint)
-                .frame(width: 44)
+                .frame(width: 32)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline).foregroundStyle(Color(hex: "#111827"))
+                Text(detail).font(.subheadline).foregroundStyle(Color(hex: "#6b7280"))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
