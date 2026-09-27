@@ -30,9 +30,7 @@ actor BackgroundStore {
         let transactions = Dictionary(
             (try modelContext.fetch(FetchDescriptor<LocalTransaction>())).map { ($0.providerTransactionId, $0) },
             uniquingKeysWith: { first, _ in first })
-        let rules = Dictionary(
-            (try modelContext.fetch(FetchDescriptor<MerchantRule>())).map { ($0.merchant, $0) },
-            uniquingKeysWith: { first, _ in first })
+        let rules = Categorizer.groupRules(try modelContext.fetch(FetchDescriptor<MerchantRule>()))
         let categories = try modelContext.fetch(FetchDescriptor<BudgetCategory>())
         let categoriesById = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let categoriesByName = Categorizer.leavesByName(categories)

@@ -14,6 +14,8 @@ struct QuickCategorySheet: View {
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @State private var search = ""
     @State private var makeRule = false
+    @State private var ruleOnStatement = true
+    @State private var ruleText = ""
     @State private var markReviewed = false
 
     var body: some View {
@@ -38,11 +40,36 @@ struct QuickCategorySheet: View {
                         Text(transaction.amount.signedCurrency()).font(.headline).monospacedDigit()
                             .foregroundStyle(transaction.amount > 0 ? Theme.income : Theme.text)
                     }
-                    Toggle(isOn: $makeRule) {
+                    Toggle(isOn: $makeRule.animation()) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Always categorize \(transaction.baseTitle) this way")
+                            Text("Always categorize like this")
                             Text("Creates a rule for future transactions")
                                 .font(.caption).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                    if makeRule {
+                        Picker("Match on", selection: $ruleOnStatement) {
+                            Text("Original statement").tag(true)
+                            Text("Merchant name").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: ruleOnStatement) { _, onStatement in
+                            ruleText = onStatement ? RuleEngine.statementPrefix(transaction.transactionDescription)
+                                                   : transaction.baseTitle
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(ruleOnStatement ? "Statement contains" : "Merchant is")
+                                .font(.caption).foregroundStyle(Theme.textTertiary)
+                            TextField("Text to match", text: $ruleText, axis: .vertical)
+                                .lineLimit(1...3)
+                                .font(.callout.monospaced())
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                            if ruleOnStatement {
+                                Text(transaction.transactionDescription)
+                                    .font(.caption2.monospaced()).foregroundStyle(Theme.textTertiary)
+                                    .lineLimit(2)
+                            }
                         }
                     }
                     if transaction.needsReview {
@@ -82,6 +109,7 @@ struct QuickCategorySheet: View {
             }
         }
         .presentationDetents([.large])
+        .onAppear { ruleText = RuleEngine.statementPrefix(transaction.transactionDescription) }
     }
 
     private func row(_ category: BudgetCategory) -> some View {
@@ -103,10 +131,16 @@ struct QuickCategorySheet: View {
         Categorizer.assign(category, to: transaction)
         if markReviewed { transaction.needsReview = false }
         Categorizer.learn(from: transaction, categories: categories, context: context)
-        if makeRule {
+        let matchText = ruleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if makeRule && !matchText.isEmpty {
             let rule = TransactionRule()
-            rule.merchantMatch = "exact"
-            rule.merchantText = transaction.baseTitle
+            if ruleOnStatement {
+                rule.statementMatch = "contains"
+                rule.statementText = matchText
+            } else {
+                rule.merchantMatch = "exact"
+                rule.merchantText = matchText
+            }
             rule.setCategoryId = category.id
             context.insert(rule)
             let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })

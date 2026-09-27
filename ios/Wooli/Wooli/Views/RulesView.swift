@@ -145,6 +145,8 @@ struct RuleEditor: View {
     let rule: TransactionRule?
     /// Optional starting values when creating from a transaction.
     var prefill: ((TransactionRule) -> Void)?
+    /// The transaction the rule is being made from, to offer its text.
+    var source: LocalTransaction?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -234,13 +236,15 @@ struct RuleEditor: View {
         Form {
             Section("If the transaction matches…") {
                 NavigationLink {
-                    TextConditionEditor(title: "Original statement", mode: $draft.statementMatch, text: $draft.statementText)
+                    TextConditionEditor(title: "Original statement", mode: $draft.statementMatch, text: $draft.statementText,
+                                        suggestion: source?.transactionDescription)
                 } label: {
                     ConditionRow(title: "Original statement",
                                  value: draft.statementText.isEmpty ? nil : "\(draft.statementMatch == "exact" ? "is" : "contains") \"\(draft.statementText)\"")
                 }
                 NavigationLink {
-                    TextConditionEditor(title: "Merchant name", mode: $draft.merchantMatch, text: $draft.merchantText)
+                    TextConditionEditor(title: "Merchant name", mode: $draft.merchantMatch, text: $draft.merchantText,
+                                        suggestion: source?.baseTitle)
                 } label: {
                     ConditionRow(title: "Merchant name",
                                  value: draft.merchantText.isEmpty ? nil : "\(draft.merchantMatch == "exact" ? "is" : "contains") \"\(draft.merchantText)\"")
@@ -375,17 +379,47 @@ private struct TextConditionEditor: View {
     let title: String
     @Binding var mode: String
     @Binding var text: String
+    var suggestion: String?
 
     var body: some View {
         Form {
-            Picker("Match", selection: Binding(get: { mode.isEmpty ? "contains" : mode }, set: { mode = $0 })) {
-                Text("Contains").tag("contains")
-                Text("Exactly matches").tag("exact")
+            Section {
+                Picker("Match", selection: Binding(get: { mode.isEmpty ? "contains" : mode }, set: { mode = $0 })) {
+                    Text("Contains").tag("contains")
+                    Text("Exactly matches").tag("exact")
+                }
+                .pickerStyle(.segmented)
+                TextField(title, text: $text, axis: .vertical)
+                    .lineLimit(1...4)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+            } footer: {
+                Text("Trim it to the part that's the same every time — drop dates, store numbers and card digits.")
             }
-            .pickerStyle(.segmented)
-            TextField(title, text: $text)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
+            if let suggestion, !suggestion.isEmpty {
+                Section("From this transaction") {
+                    Button {
+                        text = suggestion
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(suggestion).font(.callout.monospaced()).foregroundStyle(Theme.text)
+                            Text("Use the full text, then edit").font(.caption).foregroundStyle(Theme.brand)
+                        }
+                    }
+                    let prefix = RuleEngine.statementPrefix(suggestion)
+                    if prefix != suggestion {
+                        Button {
+                            text = prefix
+                            mode = "contains"
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(prefix).font(.callout.monospaced()).foregroundStyle(Theme.text)
+                                Text("Use just the start (recommended)").font(.caption).foregroundStyle(Theme.brand)
+                            }
+                        }
+                    }
+                }
+            }
             if !text.isEmpty {
                 Button("Remove condition", role: .destructive) { text = ""; mode = "" }
             }
@@ -431,6 +465,7 @@ private struct AmountConditionEditor: View {
 
 /// Shown after the user overrides an AI suggestion: offer a one-tap rule.
 struct TeachWooliCard: View {
+    /// What the rule will match, e.g. the statement prefix.
     let merchant: String
     let category: BudgetCategory
     let onCreate: () -> Void
@@ -446,7 +481,7 @@ struct TeachWooliCard: View {
                 Button("Not now", systemImage: "xmark", action: onDismiss)
                     .labelStyle(.iconOnly).foregroundStyle(Theme.textTertiary)
             }
-            Text("Always put **\(merchant)** in \(category.icon) **\(category.name)**, including the ones you haven't reviewed yet.")
+            Text("Always put transactions containing **\(merchant)** in \(category.icon) **\(category.name)**, including the ones you haven't reviewed yet.")
                 .font(.footnote).foregroundStyle(Theme.textSecondary)
             HStack {
                 Button("Create rule", action: onCreate).buttonStyle(.borderedProminent)

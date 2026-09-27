@@ -8,10 +8,33 @@ import SwiftData
 enum Categorizer {
     /// Suggest a category id for a transaction, or nil.
     static func suggest(merchant: String, description: String, amount: Double = 0,
-                        rules: [String: MerchantRule], categoriesByName: [String: BudgetCategory]) -> String? {
-        if !merchant.isEmpty, let rule = rules[merchant] { return rule.categoryId }
+                        rules: [String: [MerchantRule]], categoriesByName: [String: BudgetCategory]) -> String? {
+        if !merchant.isEmpty, let id = learnedCategory(merchant: merchant, statement: statementKey(description), in: rules[merchant] ?? []) {
+            return id
+        }
         guard let kind = MerchantDirectory.kind(for: merchant + " " + description, amount: amount) else { return nil }
         return MerchantDirectory.category(forKind: kind, in: categoriesByName)?.id
+    }
+
+    /// First two meaningful words of the original statement, used with the
+    /// merchant to tell apart different kinds of transactions from one merchant.
+    static func statementKey(_ statement: String) -> String {
+        MerchantNormalizer.normalize(statement).split(separator: " ").prefix(2).joined(separator: " ")
+    }
+
+    /// What the user taught for this merchant: an exact merchant + statement
+    /// match wins; otherwise the merchant's category only if every lesson for
+    /// it agrees (e.g. Walmart store vs Walmart+ membership won't guess).
+    static func learnedCategory(merchant: String, statement: String, in rules: [MerchantRule]) -> String? {
+        guard !rules.isEmpty else { return nil }
+        if let exact = rules.first(where: { $0.statement == statement && !statement.isEmpty }) { return exact.categoryId }
+        let ids = Set(rules.map(\.categoryId))
+        return ids.count == 1 ? ids.first : nil
+    }
+
+    /// Merchant memory grouped by merchant, for `suggest`.
+    static func groupRules(_ rules: [MerchantRule]) -> [String: [MerchantRule]] {
+        Dictionary(grouping: rules, by: \.merchant)
     }
 
     /// Leaf categories keyed by lowercased name, for `suggest`.
@@ -69,12 +92,13 @@ enum Categorizer {
         let merchant = transaction.normalizedMerchant
         guard !merchant.isEmpty else { return 0 }
 
-        let ruleFetch = FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.merchant == merchant })
+        let statement = statementKey(transaction.transactionDescription)
+        let ruleFetch = FetchDescriptor<MerchantRule>(predicate: #Predicate { $0.merchant == merchant && $0.statement == statement })
         if let rule = try? context.fetch(ruleFetch).first {
             if rule.categoryId == categoryId { rule.timesConfirmed += 1 } else { rule.categoryId = categoryId; rule.timesConfirmed = 1 }
             rule.updatedAt = .now
         } else {
-            context.insert(MerchantRule(merchant: merchant, categoryId: categoryId))
+            context.insert(MerchantRule(merchant: merchant, statement: statement, categoryId: categoryId))
         }
 
         let category = categories.first { $0.id == categoryId }
@@ -95,6 +119,10 @@ enum Categorizer {
         let fetch = FetchDescriptor<LocalTransaction>(
             predicate: #Predicate { $0.normalizedMerchant == merchant && $0.needsReview && ($0.categoryId == nil || $0.aiSuggested) })
         let me = transaction.persistentModelID
-        return ((try? context.fetch(fetch)) ?? []).filter { $0.persistentModelID != me }
+        let statement = statementKey(transaction.transactionDescription)
+        // Only the same kind of transaction from this merchant follows along.
+        return ((try? context.fetch(fetch)) ?? []).filter {
+            $0.persistentModelID != me && statementKey($0.transactionDescription) == statement
+        }
     }
 }

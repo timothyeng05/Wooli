@@ -176,12 +176,17 @@ final class BudgetCategory {
 @Model
 final class MerchantRule {
     var merchant: String = ""
+    /// Start of the original statement (see `Categorizer.statementKey`), so
+    /// one merchant can mean different things ("schwab direct deposit" vs
+    /// "schwab transfer funds"). Empty for older entries.
+    var statement: String = ""
     var categoryId: String = ""
     var timesConfirmed: Int = 1
     var updatedAt: Date = Date.now
 
-    init(merchant: String, categoryId: String) {
+    init(merchant: String, statement: String = "", categoryId: String) {
         self.merchant = merchant
+        self.statement = statement
         self.categoryId = categoryId
     }
 }

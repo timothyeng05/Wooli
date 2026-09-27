@@ -13,7 +13,7 @@ enum Deduplicator {
         }
         dedupe(FetchDescriptor<BalanceSnapshot>(), key: { "\($0.accountId)|\($0.day.timeIntervalSince1970)" },
                context: context) { _, _ in true }
-        dedupe(FetchDescriptor<MerchantRule>(), key: \.merchant, context: context) { a, b in a.updatedAt >= b.updatedAt }
+        dedupe(FetchDescriptor<MerchantRule>(), key: { "\($0.merchant)|\($0.statement)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
         try? context.save()
     }
 

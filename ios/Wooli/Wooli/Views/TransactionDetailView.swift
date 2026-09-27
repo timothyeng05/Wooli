@@ -73,9 +73,7 @@ struct TransactionEditor: View {
     }
 
     private func prefill(_ rule: TransactionRule) {
-        rule.merchantMatch = "exact"
-        rule.merchantText = transaction.baseTitle
-        rule.setCategoryId = teachCategory?.id ?? transaction.categoryId
+        RuleEngine.seed(rule, from: transaction, category: teachCategory)
     }
 
     private func createRule() {
@@ -109,7 +107,7 @@ struct TransactionEditor: View {
                         .font(.footnote).foregroundStyle(Theme.brand)
                 }
                 if let teachCategory {
-                    TeachWooliCard(merchant: transaction.baseTitle, category: teachCategory,
+                    TeachWooliCard(merchant: RuleEngine.statementPrefix(transaction.transactionDescription), category: teachCategory,
                                    onCreate: createRule, onCustomize: { customizeRule = true }) {
                         withAnimation { self.teachCategory = nil }
                     }
@@ -146,10 +144,17 @@ struct TransactionEditor: View {
                     .font(.callout)
                     .foregroundStyle(Theme.textSecondary)
                     .textSelection(.enabled)
+                Button {
+                    customizeRule = true
+                } label: {
+                    Label("Create rule from this transaction", systemImage: "wand.and.stars")
+                        .font(.subheadline.weight(.medium))
+                }
+                .padding(.top, 4)
             }
         }
         .sheet(isPresented: $customizeRule, onDismiss: { teachCategory = nil }) {
-            RuleEditor(rule: nil, prefill: prefill)
+            RuleEditor(rule: nil, prefill: prefill, source: transaction)
         }
         .sheet(isPresented: $showPicker) {
             NavigationStack {
@@ -230,7 +235,9 @@ enum CategorySuggestions {
             guard let id, let c = byId[id], !result.contains(where: { $0.id == id }) else { return }
             result.append(c)
         }
-        add(rules.first { $0.merchant == tx.normalizedMerchant }?.categoryId)
+        add(Categorizer.learnedCategory(merchant: tx.normalizedMerchant,
+                                        statement: Categorizer.statementKey(tx.transactionDescription),
+                                        in: rules.filter { $0.merchant == tx.normalizedMerchant }))
         let sameDirection = history.filter { !$0.needsReview && ($0.amount > 0) == (tx.amount > 0) }
         let counts = Dictionary(grouping: sameDirection.compactMap(\.categoryId), by: { $0 }).mapValues(\.count)
         for (id, _) in counts.sorted(by: { $0.value > $1.value }) where result.count < limit { add(id) }

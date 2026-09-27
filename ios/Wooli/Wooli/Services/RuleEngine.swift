@@ -3,6 +3,42 @@ import SwiftData
 
 /// Matching and applying `TransactionRule`s.
 enum RuleEngine {
+    /// The meaningful start of a bank statement, for a "contains" rule:
+    /// everything before the first id, card mask, date or store number.
+    /// "TST* JOE'S PIZZA 0123 NEW YORK" → "TST* JOE'S PIZZA".
+    static func statementPrefix(_ statement: String) -> String {
+        // Split into runs of words separated by ids/dates/store numbers, then
+        // take the first run that names something (not just "POS DEBIT").
+        // Runs are contiguous in the original, so "contains" still matches.
+        var runs: [[Substring]] = [[]]
+        for token in statement.split(separator: " ") {
+            let digits = token.filter(\.isNumber).count
+            let looksLikeId = digits >= 4 || token.contains("#") || token.uppercased().contains("XXX")
+                || (token.contains("/") && digits >= 2)
+            if looksLikeId {
+                if !(runs.last?.isEmpty ?? true) { runs.append([]) }
+            } else {
+                runs[runs.count - 1].append(token)
+            }
+        }
+        let run = runs.first { run in run.contains { !fillerWords.contains($0.lowercased()) } } ?? runs.first ?? []
+        let prefix = run.prefix(6).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return prefix.isEmpty ? statement : prefix
+    }
+
+    private static let fillerWords: Set<String> = [
+        "pos", "debit", "credit", "purchase", "card", "checkcard", "ach", "visa", "mastercard", "recurring",
+        "online", "web", "withdrawal", "deposit", "payment", "pmt", "dbt", "crd", "sq", "tst*", "sq*",
+    ]
+
+    /// A new rule pre-filled from a transaction: original statement contains
+    /// its meaningful start, set to `category`. No account is pre-selected.
+    static func seed(_ rule: TransactionRule, from tx: LocalTransaction, category: BudgetCategory?) {
+        rule.statementMatch = "contains"
+        rule.statementText = statementPrefix(tx.transactionDescription)
+        rule.setCategoryId = category?.id ?? tx.categoryId
+    }
+
     static func hasConditions(_ r: TransactionRule) -> Bool {
         (!r.statementMatch.isEmpty && !r.statementText.isEmpty) || (!r.merchantMatch.isEmpty && !r.merchantText.isEmpty)
             || !r.amountDirection.isEmpty || !r.amountMatch.isEmpty || !r.categoryIds.isEmpty || !r.accountIds.isEmpty
