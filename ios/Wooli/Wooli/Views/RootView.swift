@@ -18,6 +18,7 @@ struct RootView: View {
         .tint(Theme.brand)
         .task {
             if app.mode == .live { ReviewWindow.pruneOlderTransactions(context: context) }
+            DefaultCategories.injectStarterRulesIfMissing(context: context)
             RolloverService.closeMonths(context: context)
             RuleImporter.importIfPresent(context: context)
             RuleEngine.consolidate(context: context)

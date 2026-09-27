@@ -241,6 +241,28 @@ enum DefaultCategories {
         ("autopay", "Credit Card Payment"),
     ]
 
+    static func injectStarterRulesIfMissing(context: ModelContext) {
+        guard !UserDefaults.standard.bool(forKey: "didV1StarterRulesInject_v2") else { return }
+        UserDefaults.standard.set(true, forKey: "didV1StarterRulesInject_v2")
+        
+        let existingRules = (try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []
+        // Only inject a rule if they don't already have one with that exact merchant string
+        let existingMerchants = Set(existingRules.flatMap { $0.merchantTexts })
+        
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        for (i, starter) in starterRules.enumerated() {
+            guard !existingMerchants.contains(starter.merchant) else { continue }
+            guard let category = categories.first(where: { $0.parentId != nil && $0.name == starter.category }) else { continue }
+            let rule = TransactionRule()
+            rule.createdAt = Date.now.addingTimeInterval(Double(i - starterRules.count))
+            rule.merchantMatch = "contains"
+            rule.merchantTexts = [starter.merchant]
+            rule.setCategoryId = category.id
+            context.insert(rule)
+        }
+        try? context.save()
+    }
+
     private static func seedStarterRules(_ context: ModelContext) {
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         for (i, starter) in starterRules.enumerated() {
