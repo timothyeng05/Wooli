@@ -225,14 +225,14 @@ enum DefaultCategories {
         ("mcdonald's", "Restaurants"),
         ("whole foods", "Groceries"),
         ("safeway", "Groceries"),
-        ("target", "General Shopping"),
-        ("amazon", "Amazon"),
+        ("target", "Shopping"),
+        ("amazon", "Shopping"),
         ("netflix", "Subscriptions"),
         ("spotify", "Subscriptions"),
         ("pg&e", "Utilities & Internet"),
         ("comcast", "Utilities & Internet"),
-        ("uber ", "Rideshare & Taxis"),
-        ("lyft ", "Rideshare & Taxis"),
+        ("uber ", "Rideshare & Taxi"),
+        ("lyft ", "Rideshare & Taxi"),
         ("delta air", "Flights"),
         ("united airlines", "Flights"),
         ("e-zpass", "Parking & Tolls"),
@@ -243,13 +243,17 @@ enum DefaultCategories {
 
     static func injectStarterRulesIfMissing(context: ModelContext) {
         guard !UserDefaults.standard.bool(forKey: "didV1StarterRulesInject_v2") else { return }
+
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        // Nothing to attach rules to yet (e.g. still onboarding) — try again next launch,
+        // rather than burning the one-time flag before any category exists.
+        guard !categories.isEmpty else { return }
         UserDefaults.standard.set(true, forKey: "didV1StarterRulesInject_v2")
-        
+
         let existingRules = (try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []
         // Only inject a rule if they don't already have one with that exact merchant string
         let existingMerchants = Set(existingRules.flatMap { $0.merchantTexts })
-        
-        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+
         for (i, starter) in starterRules.enumerated() {
             guard !existingMerchants.contains(starter.merchant) else { continue }
             guard let category = categories.first(where: { $0.parentId != nil && $0.name == starter.category }) else { continue }

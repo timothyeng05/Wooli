@@ -20,8 +20,11 @@ struct PeopleSettingsView: View {
                     }
                 }
                 .onDelete { indices in
+                    let accounts = (try? context.fetch(FetchDescriptor<LocalAccount>())) ?? []
                     for index in indices {
-                        context.delete(people[index])
+                        let person = people[index]
+                        for account in accounts where account.ownerId == person.id { account.ownerId = nil }
+                        context.delete(person)
                     }
                 }
             }
@@ -49,13 +52,11 @@ struct PersonEditView: View {
     let person: Person
     @State private var name: String
     @State private var icon: String
-    @State private var colorHex: String
 
     init(person: Person) {
         self.person = person
         self._name = State(initialValue: person.name)
         self._icon = State(initialValue: person.icon)
-        self._colorHex = State(initialValue: person.colorHex)
     }
 
     var body: some View {
@@ -76,7 +77,6 @@ struct PersonEditView: View {
         .onDisappear {
             person.name = name.trimmingCharacters(in: .whitespaces)
             person.icon = icon.isEmpty ? "👤" : String(icon.prefix(1))
-            // colorHex could also be updated here
         }
     }
 }

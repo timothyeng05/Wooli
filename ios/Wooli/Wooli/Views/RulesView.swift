@@ -417,7 +417,11 @@ struct RuleEditor: View {
             RuleEngine.applyToExisting(target, transactions: matches, categories: categories)
         }
         try? context.save()
-        _ = RuleEngine.tidy(context: context)
+        // Lossless only: merges this rule with others that are identical
+        // except for which text they match. Broadening "exact" to "contains"
+        // stays behind the explicit "Tidy up rules" confirmation, since that
+        // can change what someone else's rule matches.
+        _ = RuleEngine.consolidate(context: context)
         dismiss()
     }
 }

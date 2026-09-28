@@ -114,7 +114,6 @@ final class LocalTransaction {
     /// Only an explicit confirmation clears it (same rule as the web app).
     var needsReview: Bool = true
     var isHidden: Bool = false
-    var hideTransactions: Bool = false
 
     var normalizedMerchant: String = ""
     var note: String = ""

@@ -17,14 +17,6 @@ struct WelcomeView: View {
         ZStack {
             Theme.gradient.ignoresSafeArea()
             VStack(spacing: 16) {
-                HStack {
-                    Spacer()
-                    // Forced review of intro screens
-                    if page < pageCount - 1 {
-                        Text("").frame(height: 20)
-                    }
-                }
-
                 TabView(selection: $page) {
                     welcomePage.tag(0)
                     SimpleTourPage(symbol: "house", tint: Color(hex: "#2563eb"), title: "Dashboard",
@@ -44,6 +36,10 @@ struct WelcomeView: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(height: 420)
+                // Swiping past a page is the same as skipping it, so lock
+                // paging until "Continue" is tapped — the disabled TabView
+                // still accepts programmatic selection changes.
+                .disabled(page < pageCount - 1)
 
                 HStack(spacing: 6) {
                     ForEach(0..<pageCount, id: \.self) { i in

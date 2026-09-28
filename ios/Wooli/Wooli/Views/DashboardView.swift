@@ -118,7 +118,6 @@ struct DashboardView: View {
 
 /// Income vs. planned and expenses vs. planned, like the web dashboard.
 struct BudgetSummaryCard: View {
-    @Environment(AppModel.self) private var app
     let month: DateInterval
     let summary: MonthSummary
     let plannedIncome: Double
@@ -126,7 +125,9 @@ struct BudgetSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Button { app.selectedTab = .menu } label: {
+            NavigationLink {
+                BudgetView()
+            } label: {
                 CardHeader(title: "Budget") {
                     HStack(spacing: 4) {
                         Text(month.start.formatted(.dateTime.month(.wide).year()))
