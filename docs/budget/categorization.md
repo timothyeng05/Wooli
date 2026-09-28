@@ -20,8 +20,7 @@ a last-resort fallback. Every transaction records which layer categorized it
 4. **Lexical similarity** — `match_similar_category` RPC (pg_trgm). Nearest previously
    categorized transaction by trigram similarity. Accepted at ≥ 0.90.
 5. **Groq fallback** — `groq-fallback.ts`. Only the rows that miss every layer above.
-   Returns category + confidence + reasoning. Below 0.75 → Uncategorized +
-   `needs_review = true`.
+   Returns category + confidence + reasoning. All Groq pre-categorized rows (and misses below 0.75) are marked with `needs_review = true` so the user can verify them.
 
 _User-defined rules (the `categorization_rules` table) were removed 2026-07 — the deterministic
 pipeline no longer has a rules layer._

@@ -76,6 +76,19 @@ See `docs/LESSONS_LEARNED.md` for full details.
 
 ---
 
+## Live Database & Financial Data Access
+
+- **Credentials:** Live in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+- **Read Access (Autonomous):** You are permitted and encouraged to query Supabase (and the SimpleFIN Bridge API) to read live user data, accounts, balances, transactions, and holdings when answering questions.
+- **Write/Edit Access (Approval Required):** NEVER perform modifying operations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, or running destructive migrations/scripts) on Supabase without explicitly presenting the exact changes to the user and waiting for their explicit approval first.
+- **Financial Schema Mapping:**
+  - `accounts`: Manual accounts (e.g. Health Equity HSA).
+  - `synced_accounts`: Synced account balances and institution metadata.
+  - `bank_connections`: SimpleFIN Bridge connection URLs (`access_url`).
+  - **Holdings & Positions:** Querying `<access_url>/accounts` from `bank_connections` returns live holding-level securities, quantities, cost basis, and tickers (e.g. Charles Schwab, Fidelity).
+
+---
+
 ## Three-Agent Review Pipeline
 
 Use this when reviewing or improving an existing feature (not for greenfield builds).
