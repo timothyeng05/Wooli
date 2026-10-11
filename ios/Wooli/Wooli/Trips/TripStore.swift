@@ -51,6 +51,7 @@ final class TripStore: CKSyncEngineDelegate {
         guard privateEngine == nil else { return }
         load()
         startEngines()
+        importPendingFile()
         Task { await refreshAccountStatus() }
     }
 
@@ -89,6 +90,32 @@ final class TripStore: CKSyncEngineDelegate {
             try JSONEncoder().encode(saved).write(to: Self.fileURL, options: .atomic)
         } catch {
             log.error("Couldn't save trips: \(error)")
+        }
+    }
+
+    // MARK: - Import
+
+    /// A trip handed over as a file, e.g. converted from the Wooli web app.
+    struct ImportBundle: Codable {
+        var trip: Trip
+        var items: [TripItem]
+    }
+
+    private static var importURL: URL { URL.documentsDirectory.appending(path: "trip-import.json") }
+
+    /// Imports `Documents/trip-import.json` if present (one bundle or a list),
+    /// through the normal save path so it syncs, then deletes the file.
+    /// Trips that already exist are skipped, so a re-run is harmless.
+    private func importPendingFile() {
+        guard let data = try? Data(contentsOf: Self.importURL) else { return }
+        defer { try? FileManager.default.removeItem(at: Self.importURL) }
+        let bundles = (try? JSONDecoder().decode([ImportBundle].self, from: data))
+            ?? (try? JSONDecoder().decode(ImportBundle.self, from: data)).map { [$0] } ?? []
+        if bundles.isEmpty { log.error("Trip import file couldn't be read") }
+        for bundle in bundles where trip(bundle.trip.id) == nil {
+            save(bundle.trip)
+            for item in bundle.items { save(item) }
+            log.info("Imported trip \(bundle.trip.name) with \(bundle.items.count) items")
         }
     }
 

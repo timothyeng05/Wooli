@@ -160,7 +160,8 @@ struct TripDetailView: View {
         let placed = store.items(in: trip.id).filter { $0.place != nil }
 
         return ScrollView {
-            VStack(spacing: 16) {
+            // Lazy: long trips have dozens of day cards.
+            LazyVStack(spacing: 16) {
                 header(trip, dayCount: days.count)
 
                 if !placed.isEmpty {
@@ -258,7 +259,8 @@ struct TripDetailView: View {
         let dayItems = store.items(in: trip.id, day: day)
         let date = DayKey.date(day)
         return VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: "Day \(number)", subtitle: date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
+            CardHeader(title: trip.dayTitles[day].map { "Day \(number) · \($0)" } ?? "Day \(number)",
+                       subtitle: date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
                 HStack(spacing: 14) {
                     if dayItems.contains(where: { $0.place != nil }) {
                         Button("Map", systemImage: "map") { dayMap = day }.labelStyle(.iconOnly)

@@ -28,6 +28,8 @@ struct Trip: Identifiable, Codable, Hashable {
     var startDay: String = DayKey.key(.now)
     var endDay: String = DayKey.key(.now)
     var notes: String = ""
+    /// Optional name per day ("Fukuoka → Kagoshima"), keyed by day.
+    var dayTitles: [String: String] = [:]
     /// Empty for trips in your own iCloud; the owner's user record name for
     /// trips shared with you.
     var zoneOwner: String = ""
@@ -55,6 +57,35 @@ struct Trip: Identifiable, Codable, Hashable {
     var dateRangeText: String {
         let start = DayKey.date(startDay), end = DayKey.date(endDay)
         return (start..<max(end, start).addingTimeInterval(1)).formatted(.interval.month(.abbreviated).day().year())
+    }
+
+    // Older saved files have no `dayTitles`; decode it as optional.
+    enum CodingKeys: String, CodingKey {
+        case id, name, destination, startDay, endDay, notes, dayTitles, zoneOwner, isShared, systemFields
+    }
+
+    init(id: String = UUID().uuidString, name: String = "", destination: String = "", startDay: String = DayKey.key(.now),
+         endDay: String = DayKey.key(.now), notes: String = "") {
+        self.id = id
+        self.name = name
+        self.destination = destination
+        self.startDay = startDay
+        self.endDay = endDay
+        self.notes = notes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        destination = try c.decode(String.self, forKey: .destination)
+        startDay = try c.decode(String.self, forKey: .startDay)
+        endDay = try c.decode(String.self, forKey: .endDay)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        dayTitles = try c.decodeIfPresent([String: String].self, forKey: .dayTitles) ?? [:]
+        zoneOwner = try c.decodeIfPresent(String.self, forKey: .zoneOwner) ?? ""
+        isShared = try c.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
+        systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
     }
 
     static let zonePrefix = "trip-"
@@ -168,6 +199,7 @@ extension Trip {
         r["startDay"] = startDay
         r["endDay"] = endDay
         r["notes"] = notes
+        r["dayTitles"] = (try? JSONEncoder().encode(dayTitles)).flatMap { String(data: $0, encoding: .utf8) }
         return r
     }
 
@@ -177,6 +209,9 @@ extension Trip {
         startDay = r["startDay"] as? String ?? startDay
         endDay = r["endDay"] as? String ?? endDay
         notes = r["notes"] as? String ?? notes
+        if let json = r["dayTitles"] as? String, let titles = try? JSONDecoder().decode([String: String].self, from: Data(json.utf8)) {
+            dayTitles = titles
+        }
         systemFields = r.encodedSystemFields
     }
 }
