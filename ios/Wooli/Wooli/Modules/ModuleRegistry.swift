@@ -5,34 +5,30 @@ import LocalAuthentication
 /// Built-in, opt-in "mini apps". Self-contained: no budget types in here, so
 /// a module can later move into a Swift package or a standalone app.
 enum WooliModule: String, CaseIterable, Identifiable {
-    case period, mood
+    case period
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .period: "Period"
-        case .mood: "Mood"
         }
     }
 
     var systemImage: String {
         switch self {
         case .period: "drop.fill"
-        case .mood: "face.smiling"
         }
     }
 
     var tint: Color {
         switch self {
         case .period: Color(hex: "#ef4444")
-        case .mood: Color(hex: "#eab308")
         }
     }
 
     var summary: String {
         switch self {
         case .period: "Track your cycle and see predictions. Stays on this iPhone and your iCloud."
-        case .mood: "Log how you feel each day in one tap and spot patterns."
         }
     }
 
@@ -109,12 +105,9 @@ struct ModuleGate<Content: View>: View {
 struct ModuleHomeCards: View {
     @AppStorage(WooliModule.period.enabledKey) private var periodOn = false
     @AppStorage(WooliModule.period.showOnHomeKey) private var periodHome = true
-    @AppStorage(WooliModule.mood.enabledKey) private var moodOn = false
-    @AppStorage(WooliModule.mood.showOnHomeKey) private var moodHome = true
 
     var body: some View {
         if periodOn && periodHome { PeriodHomeCard() }
-        if moodOn && moodHome { MoodHomeCard() }
     }
 }
 
@@ -137,7 +130,6 @@ struct LockedModuleCard: View {
 func moduleScreen(_ module: WooliModule) -> some View {
     switch module {
     case .period: ModuleGate(module: .period) { PeriodView() }
-    case .mood: ModuleGate(module: .mood) { MoodView() }
     }
 }
 
@@ -210,7 +202,6 @@ enum ModuleData {
     static func deleteAll(_ module: WooliModule, context: ModelContext) {
         switch module {
         case .period: try? context.delete(model: PeriodEntry.self)
-        case .mood: try? context.delete(model: MoodEntry.self)
         }
         try? context.save()
     }

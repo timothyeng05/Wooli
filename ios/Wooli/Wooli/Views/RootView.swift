@@ -17,7 +17,9 @@ struct RootView: View {
         .animation(.default, value: app.mode)
         .tint(Theme.brand)
         .task {
+            TripStore.shared.start()
             if app.mode == .live { ReviewWindow.pruneOlderTransactions(context: context) }
+            if app.mode == .sample { SampleData.rollForward(context: context) }
             DefaultCategories.injectStarterRulesIfMissing(context: context)
             RolloverService.closeMonths(context: context)
             RuleImporter.importIfPresent(context: context)
@@ -33,6 +35,8 @@ struct RootView: View {
         .task {
             // Launch arguments for Simulator checks: `-sampleData` skips
             // onboarding, `-tab N` opens a tab, `-review` opens the review flow.
+            // For a true first launch, delete the app and run
+            // `xcrun simctl keychain booted reset` (the SimpleFIN key survives deletion).
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-sampleData"), app.mode == .onboarding { app.startSample(context: context) }
             if let i = args.firstIndex(of: "-tab"), i + 1 < args.count, let n = Int(args[i + 1]) {
@@ -40,7 +44,9 @@ struct RootView: View {
                 if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
             }
             if args.contains("-review") { app.showReview = true }
-            // `-module period|mood`: enable that module (seeding sample data) and open it.
+            // `-calibration`: the first-run review shown after connecting a bank.
+            if args.contains("-calibration") { app.showCalibration = true }
+            // `-module period`: enable that module (seeding sample data) and open it.
             if let i = args.firstIndex(of: "-module"), i + 1 < args.count, let module = WooliModule(rawValue: args[i + 1]) {
                 UserDefaults.standard.set(true, forKey: module.enabledKey)
                 if app.mode == .sample { ModuleSampleData.seed(module, context: context) }
@@ -48,6 +54,10 @@ struct RootView: View {
                 app.openModule = module
             }
             if args.contains("-selftest") { DebugSelfTest.run(context: context) }
+            // `-sampleTrip`: add a demo trip (stays on this device unless iCloud is signed in).
+            if args.contains("-sampleTrip") { TripStore.shared.addSampleTrip() }
+            // `-openTrip`: open the first trip straight away.
+            if args.contains("-openTrip") { TripStore.shared.tripToOpen = TripStore.shared.trips.first?.id }
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
@@ -72,6 +82,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     @Environment(AppModel.self) private var app
+    @State private var trips = TripStore.shared
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
     @Query(filter: #Predicate<LocalAccount> { $0.isHidden || $0.hideTransactions })
@@ -108,6 +119,20 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $app.showCalibration) {
             ReviewView(isCalibration: true)
         }
+        // A trip someone just invited you to.
+        .sheet(item: Binding(get: { trips.tripToOpen.map(TripRoute.init) }, set: { trips.tripToOpen = $0?.id })) { route in
+            NavigationStack {
+                TripDetailView(tripID: route.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Close") { trips.tripToOpen = nil } }
+                    }
+            }
+        }
+        .alert("Trips", isPresented: Binding(get: { trips.lastError != nil }, set: { if !$0 { trips.lastError = nil } })) {
+            Button("OK") { trips.lastError = nil }
+        } message: {
+            Text(trips.lastError ?? "")
+        }
     }
 }
 
@@ -128,6 +153,12 @@ struct MenuView: View {
                         Label("Send Feedback", systemImage: "envelope")
                     }
                     .foregroundStyle(Theme.text)
+                }
+
+                Section("Plan") {
+                    NavigationLink(value: "trips") {
+                        Label("Trips", systemImage: "suitcase")
+                    }
                 }
 
                 Section("Budget & Settings") {
@@ -158,6 +189,7 @@ struct MenuView: View {
                 case "categories": CategoriesSettingsView()
                 case "rules": RulesView()
                 case "recurring": RecurringView()
+                case "trips": TripsListView()
                 default: EmptyView()
                 }
             }

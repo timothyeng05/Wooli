@@ -1,3 +1,5 @@
+> **2026-10-11:** the Mood module was removed at the user's request. Mood sections below are historical; Period remains.
+
 # Modules spec — Period & Mood (built-in mini apps)
 
 Owner request (2026-09-27): add WeChat-style "mini apps" to Wooli iOS, built as

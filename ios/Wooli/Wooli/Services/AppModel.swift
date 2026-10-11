@@ -115,7 +115,6 @@ final class AppModel {
         try? context.delete(model: TransactionRule.self)
         try? context.delete(model: RecurringItem.self)
         try? context.delete(model: PeriodEntry.self)
-        try? context.delete(model: MoodEntry.self)
         try? context.save()
     }
 }

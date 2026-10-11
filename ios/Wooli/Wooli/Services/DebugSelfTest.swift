@@ -10,13 +10,6 @@ enum DebugSelfTest {
         let cycleFailures = CycleMath.selfTest()
         print(cycleFailures.isEmpty ? "SELFTEST CycleMath: pass" : "SELFTEST CycleMath FAIL: \(cycleFailures)")
         UserDefaults.standard.set(cycleFailures.joined(separator: "; "), forKey: "selftest.cycleMath")
-        // Mood: logging twice on one day keeps one entry with the latest score.
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: .now)!
-        MoodScale.log(score: 2, on: yesterday, context: context)
-        MoodScale.log(score: 5, on: yesterday, context: context)
-        let start = Calendar.current.startOfDay(for: yesterday)
-        let sameDay = (try? context.fetch(FetchDescriptor<MoodEntry>(predicate: #Predicate { $0.day == start }))) ?? []
-        UserDefaults.standard.set("\(sameDay.count)|\(sameDay.first?.score ?? 0)", forKey: "selftest.moodSameDay")
         let txs = (try? context.fetch(FetchDescriptor<LocalTransaction>(sortBy: [SortDescriptor(\.transactedAt, order: .reverse)]))) ?? []
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         guard let groceries = categories.first(where: { $0.name == "Groceries" }),

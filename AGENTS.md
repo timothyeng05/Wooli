@@ -22,6 +22,12 @@ Run each agent sequentially (foreground). Do not start the next agent until the 
 
 ---
 
+## iOS app (`ios/Wooli`)
+
+The native iPhone app is where active product work happens. **Before any iOS work, read `ios/Wooli/BACKLOG.md`** — the shared roadmap and backlog for every agent (Claude, Gemini, Xcode assistant). It has the collaboration rules (claim → build → log in Done), the current phase, and feature specs. Update it in the same commit as your change.
+
+---
+
 ## Module focus (context efficiency)
 
 Each major module has a **CLAUDE.md** in its route directory and a doc in `docs/modules/`. When working on one module, load only that module's context.
