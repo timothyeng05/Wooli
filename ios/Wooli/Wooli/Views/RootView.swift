@@ -72,6 +72,7 @@ struct RootView: View {
 
 struct MainTabView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
     @Query(filter: #Predicate<LocalAccount> { $0.isHidden || $0.hideTransactions })
@@ -107,6 +108,10 @@ struct MainTabView: View {
         }
         .fullScreenCover(isPresented: $app.showCalibration) {
             ReviewView(isCalibration: true)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .background else { return }
+            ReviewReminder.scheduleOrCancel(reviewCount: reviewCount)
         }
     }
 }

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var confirmErase = false
     @AppStorage("displayName") private var displayName = ""
     @AppStorage(AICategorizer.enabledKey) private var aiEnabled = true
+    @AppStorage(ReviewReminder.enabledKey) private var reviewRemindersEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -45,6 +46,14 @@ struct SettingsView: View {
                         LabeledContent("Status", value: "Sample Data")
                         Button("Connect with SimpleFIN", systemImage: "link") { showConnect = true }
                     }
+                }
+
+                Section {
+                    Toggle(isOn: $reviewRemindersEnabled) {
+                        Label("Remind me to review", systemImage: "bell")
+                    }
+                } footer: {
+                    Text("If transactions are still waiting for a category when you leave the app, you'll get a reminder the next morning.")
                 }
 
                 Section {
