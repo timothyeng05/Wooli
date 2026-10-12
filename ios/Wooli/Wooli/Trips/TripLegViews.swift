@@ -1,72 +1,94 @@
 import SwiftUI
 import CoreLocation
 
-/// The trip page as a sequence: travel to the first stop, each leg with its
-/// days, travel between legs, and the trip home. Days outside every leg are
-/// listed on their own.
-enum TripSegment: Identifiable {
-    case leg(TripLeg, number: Int, days: [(day: String, number: Int)])
-    case looseDay(day: String, number: Int)
-    case travel(from: TripLeg?, to: TripLeg?, day: String, items: [TripItem])
+/// One day card on the trip page. A day you move on also carries the
+/// travel (shown inside the card) and, when you arrive somewhere new, that
+/// leg's header as a divider: plans before the departure time sit above
+/// the travel, the rest below the header.
+struct TripDayBlock: Identifiable {
+    let day: String
+    let number: Int
+    /// The leg the day (or its later part) belongs to; nil outside every leg.
+    let leg: TripLeg?
 
-    var id: String {
-        switch self {
-        case .leg(let leg, _, _): "leg-\(leg.id)"
-        case .looseDay(let day, _): "day-\(day)"
-        case .travel(let from, let to, let day, _): "travel-\(from?.id ?? "start")-\(to?.id ?? "end")-\(day)"
-        }
-    }
+    /// Arriving at `leg` today: travel from `travelFrom` (nil = from home),
+    /// which may have started on an earlier day (an overnight flight).
+    var arriving = false
+    var travelFrom: TripLeg?
+    var travelStart: String?
+    var travel: [TripItem] = []
+    /// Departure time; plans before it are shown above the travel.
+    var departure: Int?
 
-    /// Travel items on the day you move between legs (plus the first and
-    /// last day of the trip) go on a travel card instead of a day card.
-    static func build(trip: Trip, items: [TripItem]) -> (segments: [TripSegment], onTravelCards: Set<String>) {
+    /// Heading home at the end of the trip.
+    var homeTravel: [TripItem] = []
+
+    var id: String { day }
+}
+
+enum TripLayout {
+    /// The day cards for a trip, plus the travel items shown inside them
+    /// (so they aren't listed again among the day's plans).
+    static func blocks(trip: Trip, items: [TripItem]) -> (blocks: [TripDayBlock], travelIDs: Set<String>) {
         let days = trip.days
         guard !trip.legs.isEmpty else {
-            return (days.enumerated().map { .looseDay(day: $1, number: $0 + 1) }, [])
+            return (days.enumerated().map { TripDayBlock(day: $1, number: $0 + 1, leg: nil) }, [])
         }
-        func travel(on day: String) -> [TripItem] {
+        func transit(on day: String) -> [TripItem] {
             items.filter { $0.day == day && $0.kind == .transit }
                 .sorted { ($0.time ?? Int.max, $0.createdAt) < ($1.time ?? Int.max, $1.createdAt) }
         }
+        func hasOtherPlans(_ day: String) -> Bool { items.contains { $0.day == day && $0.kind != .transit } }
 
-        // Group consecutive days by leg.
-        var groups: [(leg: TripLeg?, days: [(day: String, number: Int)])] = []
-        for (index, day) in days.enumerated() {
-            let leg = trip.leg(for: day)
-            if let last = groups.last, last.leg?.id == leg?.id, leg != nil {
-                groups[groups.count - 1].days.append((day, index + 1))
-            } else {
-                groups.append((leg, [(day, index + 1)]))
-            }
-        }
-
-        var segments: [TripSegment] = []
+        var blocks: [TripDayBlock] = []
         var used = Set<String>()
         var previousLeg: TripLeg?
-        for (i, group) in groups.enumerated() {
-            if let leg = group.leg, let first = group.days.first {
-                // Arriving at this leg: from the previous leg, or the trip start.
-                let moving = travel(on: first.day)
-                if previousLeg != nil || (i == 0 && !moving.isEmpty) {
-                    segments.append(.travel(from: previousLeg, to: leg, day: first.day, items: moving))
-                    used.formUnion(moving.map(\.id))
+        // Travel on days outside every leg (an overnight flight), carried to the next arrival.
+        var carried: [TripItem] = []
+        var carriedFrom: String?
+
+        for (index, day) in days.enumerated() {
+            guard let leg = trip.leg(for: day) else {
+                let hop = transit(on: day)
+                if !hop.isEmpty {
+                    carried += hop
+                    carriedFrom = carriedFrom ?? day
+                    used.formUnion(hop.map(\.id))
                 }
-                let number = (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1
-                segments.append(.leg(leg, number: number, days: group.days))
+                // A day that's only travel folds into the next card.
+                if hop.isEmpty || hasOtherPlans(day) {
+                    blocks.append(TripDayBlock(day: day, number: index + 1, leg: nil))
+                }
+                continue
+            }
+            var block = TripDayBlock(day: day, number: index + 1, leg: leg)
+            if leg.id != previousLeg?.id {
+                let hop = transit(on: day)
+                block.arriving = true
+                block.travelFrom = previousLeg
+                block.travelStart = carriedFrom ?? day
+                block.travel = carried + hop
+                // Split the day at departure if it starts in the leg you're leaving.
+                if previousLeg != nil, carried.isEmpty, let departure = hop.compactMap(\.time).min() {
+                    block.departure = departure
+                }
+                used.formUnion(hop.map(\.id))
+                carried = []
+                carriedFrom = nil
                 previousLeg = leg
-            } else {
-                segments.append(contentsOf: group.days.map { .looseDay(day: $0.day, number: $0.number) })
+            }
+            blocks.append(block)
+        }
+
+        // Heading home from the last leg's last day (plus any travel after it).
+        if let lastLeg = previousLeg, let i = blocks.lastIndex(where: { $0.leg?.id == lastLeg.id }) {
+            let home = transit(on: blocks[i].day).filter { !used.contains($0.id) } + carried
+            if !home.isEmpty {
+                blocks[i].homeTravel = home
+                used.formUnion(home.map(\.id))
             }
         }
-        // Heading home from the last leg.
-        if let lastLeg = previousLeg, let lastDay = days.last, lastLeg.contains(lastDay) {
-            let moving = travel(on: lastDay).filter { !used.contains($0.id) }
-            if !moving.isEmpty {
-                segments.append(.travel(from: lastLeg, to: nil, day: lastDay, items: moving))
-                used.formUnion(moving.map(\.id))
-            }
-        }
-        return (segments, used)
+        return (blocks, used)
     }
 }
 
@@ -142,6 +164,8 @@ struct TripTravelCard: View {
     let fromHex: String
     let toHex: String
     let day: String
+    /// Day you arrive, when the trip there runs overnight.
+    var endDay: String? = nil
     let items: [TripItem]
     let distanceKm: Double?
     let onSelect: (TripItem) -> Void
@@ -156,7 +180,7 @@ struct TripTravelCard: View {
                 route(symbol: mode.symbol)
                 endpoint(toName ?? "Home", caption: toName == nil ? "Heading home" : "To", alignment: .trailing)
             }
-            Text([DayKey.date(day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
+            Text([dateText,
                   mode.label, distanceKm.map { "~\(Int($0.rounded()).formatted()) km" }]
                 .compactMap { $0 }.joined(separator: " · "))
                 .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.85))
@@ -210,11 +234,18 @@ struct TripTravelCard: View {
         .padding(.vertical, 4)
     }
 
+    private var dateText: String {
+        let start = DayKey.date(day)
+        guard let endDay, endDay != day else { return start.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) }
+        let style = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+        return "\(start.formatted(style)) → \(DayKey.date(endDay).formatted(style))"
+    }
+
     private func endpoint(_ name: String, caption: String, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 2) {
             Text(caption.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.white.opacity(0.7))
-            Text(name).font(.headline.weight(.bold)).foregroundStyle(.white).lineLimit(2)
-                .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+            Text(name).font(.headline.weight(.bold)).foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
     }
@@ -228,7 +259,7 @@ struct TripTravelCard: View {
                 .background(.white, in: Circle())
             dashes
         }
-        .frame(width: 110)
+        .frame(width: 84)
     }
 
     private var dashes: some View {
@@ -246,7 +277,13 @@ struct TripTravelCard: View {
     static func mode(for items: [TripItem]) -> (symbol: String, label: String?) {
         let text = items.map { " \($0.title) \($0.notes) " }.joined().lowercased()
         func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
-        if has(["flight", "fly ", "airport", "✈", " hnd", " nrt", " kix", " icn", " gmp", " jfk", " fuk", "airline", "boarding"]) { return ("airplane", "Flight") }
+        // A flight number like "CX928" or "UA 7923" counts as a flight too.
+        let flightNumber = items.contains { $0.title.range(of: #"\b[A-Z][A-Z0-9] ?\d{2,4}\b"#, options: .regularExpression) != nil }
+        if flightNumber || has(["flight", "fly ", "airport", "✈", "airline", "airways", "boarding",
+                                "(hnd", "(nrt", "(kix", "(icn", "(jfk", "(hkg", "(ckg", "(pvg", "(pek", "(lgw", "(lhr",
+                                " hnd", " nrt", " kix", " icn", " gmp", " jfk", " fuk", " hkg", " ckg", " pvg"]) {
+            return ("airplane", "Flight")
+        }
         if has(["shinkansen", "train", " jr ", "rail", "station", "ktx", "express"]) { return ("tram.fill", "Train") }
         if has(["ferry", "boat", "cruise"]) { return ("ferry.fill", "Ferry") }
         if has(["drive", "rental car", "car ", "road trip"]) { return ("car.fill", "Drive") }

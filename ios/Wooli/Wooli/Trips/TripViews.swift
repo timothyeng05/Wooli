@@ -219,7 +219,7 @@ struct TripDetailView: View {
             .sorted { $0.createdAt < $1.createdAt }
         let allItems = store.items(in: trip.id)
         let placed = allItems.filter { $0.place != nil }
-        let (segments, onTravelCards) = TripSegment.build(trip: trip, items: allItems)
+        let (blocks, travelIDs) = TripLayout.blocks(trip: trip, items: allItems)
         let collapsed = collapsedLegs ?? defaultCollapsed(trip)
 
         return ScrollView {
@@ -235,23 +235,9 @@ struct TripDetailView: View {
 
                 ideasCard(trip, ideas: ideas)
 
-                ForEach(segments) { segment in
-                    switch segment {
-                    case .looseDay(let day, let number):
-                        dayCard(trip, day: day, number: number, hiding: onTravelCards)
-                    case .travel(let from, let to, let day, let items):
-                        TripTravelCard(fromName: from?.name, toName: to?.name,
-                                       fromHex: from.map(trip.colorHex) ?? "#334155",
-                                       toHex: to.map(trip.colorHex) ?? "#334155",
-                                       day: day, items: items,
-                                       distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: allItems),
-                                       onSelect: { editingItem = $0 },
-                                       onAdd: { editingItem = TripItem(tripID: trip.id, day: day, kind: .transit,
-                                                                       title: to.map { "To \($0.name)" } ?? "Home") })
-                    case .leg(let leg, let number, let legDays):
-                        legSection(trip, leg: leg, number: number, days: legDays, items: allItems,
-                                   isCollapsed: collapsed.contains(leg.id), hiding: onTravelCards)
-                    }
+                // A collapsed leg keeps the day you arrive (it holds the leg's header).
+                ForEach(blocks.filter { block in !(block.leg.map { collapsed.contains($0.id) } ?? false) || block.arriving }) { block in
+                    dayBlock(trip, block, items: allItems, travelIDs: travelIDs, collapsed: collapsed)
                 }
             }
             .padding(16)
@@ -342,37 +328,6 @@ struct TripDetailView: View {
         .card()
     }
 
-    private func legSection(_ trip: Trip, leg: TripLeg, number: Int, days: [(day: String, number: Int)],
-                            items: [TripItem], isCollapsed: Bool, hiding: Set<String>) -> some View {
-        let color = Color(hex: trip.colorHex(of: leg))
-        let today = DayKey.key(.now)
-        let plans = items.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == leg.id }.count
-        return VStack(spacing: 12) {
-            Button {
-                withAnimation(.snappy) { toggle(leg, trip: trip) }
-            } label: {
-                TripLegHeader(leg: leg, number: number, colorHex: trip.colorHex(of: leg), planCount: plans,
-                              isCollapsed: isCollapsed, isNow: leg.contains(today))
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: isCollapsed)
-
-            if !isCollapsed {
-                VStack(spacing: 12) {
-                    ForEach(days, id: \.day) { day in
-                        dayCard(trip, day: day.day, number: day.number, hiding: hiding)
-                    }
-                }
-                // The leg's days hang off a line in its color.
-                .padding(.leading, 14)
-                .overlay(alignment: .leading) {
-                    Capsule().fill(color.opacity(0.35)).frame(width: 3).padding(.vertical, 4).padding(.leading, 2)
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-    }
-
     /// Past trips start collapsed; during a trip, legs already finished do.
     private func defaultCollapsed(_ trip: Trip) -> Set<String> {
         let today = DayKey.key(.now)
@@ -392,26 +347,80 @@ struct TripDetailView: View {
         UserDefaults.standard.set(Array(set), forKey: collapsedKey)
     }
 
-    private func dayCard(_ trip: Trip, day: String, number: Int, hiding: Set<String> = []) -> some View {
-        let dayItems = store.items(in: trip.id, day: day).filter { !hiding.contains($0.id) }
-        let date = DayKey.date(day)
+    /// One day: its plans, and on a day you move, the travel and the new
+    /// leg's header as a divider (plans before departure above, the rest below).
+    private func dayBlock(_ trip: Trip, _ block: TripDayBlock, items: [TripItem], travelIDs: Set<String>,
+                          collapsed: Set<String>) -> some View {
+        let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) }
+        let beforeIDs = Set(block.departure.map { cutoff in plans.filter { ($0.time ?? Int.max) < cutoff }.map(\.id) } ?? [])
+        let homeCutoff = block.homeTravel.compactMap(\.time).min()
+        let afterHomeIDs = Set(homeCutoff.map { cutoff in plans.filter { ($0.time ?? -1) >= cutoff }.map(\.id) } ?? [])
+        let before = plans.filter { beforeIDs.contains($0.id) }
+        let main = plans.filter { !beforeIDs.contains($0.id) && !afterHomeIDs.contains($0.id) }
+        let afterHome = plans.filter { afterHomeIDs.contains($0.id) }
+        let date = DayKey.date(block.day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+        let base = "Day \(block.number)"
+        let today = DayKey.key(.now)
+
         return VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: trip.dayTitles[day].map { "Day \(number) · \($0)" } ?? "Day \(number)",
-                       subtitle: date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
+            CardHeader(title: trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base, subtitle: date) {
                 HStack(spacing: 14) {
-                    if dayItems.contains(where: { $0.place != nil }) {
-                        Button("Map", systemImage: "map") { dayMap = day }.labelStyle(.iconOnly)
+                    if plans.contains(where: { $0.place != nil }) {
+                        Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
                     }
-                    Button("Add", systemImage: "plus") { editingItem = TripItem(tripID: trip.id, day: day) }.labelStyle(.iconOnly)
+                    Button("Add", systemImage: "plus") { editingItem = TripItem(tripID: trip.id, day: block.day) }
+                        .labelStyle(.iconOnly)
                 }
                 .font(.body.weight(.medium))
             }
-            if dayItems.isEmpty {
+
+            ForEach(before) { itemRow($0, trip: trip) }
+
+            if block.arriving, let leg = block.leg {
+                if !block.travel.isEmpty || block.travelFrom != nil {
+                    travelCard(trip, from: block.travelFrom, to: leg, start: block.travelStart ?? block.day,
+                               end: block.day, items: block.travel, all: items)
+                }
+                Button {
+                    withAnimation(.snappy) { toggle(leg, trip: trip) }
+                } label: {
+                    TripLegHeader(leg: leg, number: (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1,
+                                  colorHex: trip.colorHex(of: leg),
+                                  planCount: items.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == leg.id }.count,
+                                  isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(today))
+                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
+            }
+
+            if plans.isEmpty {
                 Text("Nothing planned yet").font(.footnote).foregroundStyle(Theme.textTertiary)
             }
-            ForEach(dayItems) { item in itemRow(item, trip: trip) }
+            ForEach(main) { itemRow($0, trip: trip) }
+
+            if !block.homeTravel.isEmpty {
+                travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day, items: block.homeTravel, all: items)
+                ForEach(afterHome) { itemRow($0, trip: trip) }
+            }
         }
         .card()
+        // The day's leg color down the left edge.
+        .overlay(alignment: .leading) {
+            if let leg = block.leg {
+                Capsule().fill(Color(hex: trip.colorHex(of: leg)).gradient).frame(width: 4).padding(.vertical, 22)
+            }
+        }
+    }
+
+    private func travelCard(_ trip: Trip, from: TripLeg?, to: TripLeg?, start: String, end: String,
+                            items: [TripItem], all: [TripItem]) -> some View {
+        TripTravelCard(fromName: from?.name, toName: to?.name,
+                       fromHex: from.map(trip.colorHex) ?? "#334155", toHex: to.map(trip.colorHex) ?? "#334155",
+                       day: start, endDay: end, items: items,
+                       distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: all),
+                       onSelect: { editingItem = $0 },
+                       onAdd: { editingItem = TripItem(tripID: trip.id, day: end, kind: .transit,
+                                                       title: to.map { "To \($0.name)" } ?? "Home") })
     }
 
     private func itemRow(_ item: TripItem, trip: Trip) -> some View {
