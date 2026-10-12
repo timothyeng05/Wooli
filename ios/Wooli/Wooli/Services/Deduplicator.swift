@@ -8,12 +8,16 @@ import SwiftData
 enum Deduplicator {
     static func run(context: ModelContext) {
         dedupeTransactions(context)
+        dedupeCategories(context)
         dedupe(FetchDescriptor<LocalAccount>(), key: \.providerAccountId, context: context) { a, b in
             a.nickname.count + (a.isHidden ? 1 : 0) >= b.nickname.count + (b.isHidden ? 1 : 0)
         }
         dedupe(FetchDescriptor<BalanceSnapshot>(), key: { "\($0.accountId)|\($0.day.timeIntervalSince1970)" },
                context: context) { _, _ in true }
         dedupe(FetchDescriptor<MerchantRule>(), key: { "\($0.merchant)|\($0.statement)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
+        dedupe(FetchDescriptor<TransactionRule>(), key: { "\($0.statementMatch)|\($0.statementText)|\($0.statementTexts.joined(separator: ","))" },
+               context: context) { a, b in a.timesApplied >= b.timesApplied }
+        dedupe(FetchDescriptor<RecurringItem>(), key: { "\($0.merchant)|\($0.title)" }, context: context) { a, b in a.createdAt >= b.createdAt }
         // Modules: one period per start day, one mood per day; keep the newest edit.
         dedupe(FetchDescriptor<PeriodEntry>(), key: { "\($0.startDay.timeIntervalSince1970)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
         dedupe(FetchDescriptor<MoodEntry>(), key: { "\($0.day.timeIntervalSince1970)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
@@ -26,6 +30,18 @@ enum Deduplicator {
             (t.needsReview ? 0 : 4) + (t.categoryId != nil ? 2 : 0) + (t.note.isEmpty ? 0 : 1)
         }
         dedupe(FetchDescriptor<LocalTransaction>(), key: \.providerTransactionId, context: context) { a, b in
+            score(a) >= score(b)
+        }
+    }
+
+    private static func dedupeCategories(_ context: ModelContext) {
+        // If the same category exists across devices, preserve the one with a budget target set.
+        func score(_ c: BudgetCategory) -> Int {
+            (c.monthlyTarget > 0 ? 10 : 0) + (c.rolloverEnabled ? 2 : 0) + (c.rolloverBalance != 0 ? 1 : 0)
+        }
+        dedupe(FetchDescriptor<BudgetCategory>(),
+               key: { "\($0.parentId ?? "root")|\($0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())" },
+               context: context) { a, b in
             score(a) >= score(b)
         }
     }

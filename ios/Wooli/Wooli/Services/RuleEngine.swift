@@ -68,6 +68,7 @@ enum RuleEngine {
         rule.isEnabled = true
 
         Categorizer.assign(category, to: tx)
+        tx.ruleApplied = true
         tx.needsReview = false
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         Categorizer.learn(from: tx, categories: categories, context: context)
@@ -226,6 +227,7 @@ enum RuleEngine {
         if !r.renameTo.isEmpty && tx.customTitle != r.renameTo { tx.customTitle = r.renameTo; changed = true }
         if let id = r.setCategoryId, let category = categories[id], tx.categoryId != id || tx.aiSuggested {
             Categorizer.assign(category, to: tx)
+            tx.ruleApplied = true
             changed = true
         }
         switch r.reviewAction {

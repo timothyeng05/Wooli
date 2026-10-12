@@ -5,10 +5,16 @@ import SwiftData
 /// month, what's still coming, and anything that seems to have stopped.
 struct RecurringView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \RecurringItem.nextDate) private var items: [RecurringItem]
+    @Query(sort: \RecurringItem.nextDate) private var allItems: [RecurringItem]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @Query private var accounts: [LocalAccount]
     @State private var editing: RecurringItem?
     @State private var showStopped = false
+
+    private var items: [RecurringItem] {
+        let hidden = Set(accounts.filter { $0.isHidden || $0.hideTransactions }.map(\.providerAccountId))
+        return allItems.filter { !hidden.contains($0.accountId) }
+    }
 
     var body: some View {
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -219,8 +225,14 @@ struct RecurringEditor: View {
 
 /// Dashboard card: what's still due this month and the next few charges.
 struct RecurringCard: View {
-    @Query(sort: \RecurringItem.nextDate) private var items: [RecurringItem]
+    @Query(sort: \RecurringItem.nextDate) private var allItems: [RecurringItem]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @Query private var accounts: [LocalAccount]
+
+    private var items: [RecurringItem] {
+        let hidden = Set(accounts.filter { $0.isHidden || $0.hideTransactions }.map(\.providerAccountId))
+        return allItems.filter { !hidden.contains($0.accountId) }
+    }
 
     var body: some View {
         let month = RecurringMonth(items: items)
