@@ -190,6 +190,7 @@ Options:
 
 ## Done
 
+- **2026-10-12 · Claude** — Category editor blocks duplicate names (category names unique across all groups, group names unique among groups; case-insensitive). Not built — no Xcode in the session.
 - **2026-10-11 · Claude** — CloudKit environment fixes after a TestFlight build (production) was installed over an Xcode build (development): sharing failed ("Zone does not exist"), the invitee saw "Trip not available", and an apparent account switch wiped all trips on the phone (restored from a backup taken minutes earlier; both trips now in production). Fixes: re-upload owned trips on environment change; ensure a trip is in iCloud before sharing; never delete trips on account change (keep on sign-out, back up before clearing on a switch).
 - **2026-10-11 · Claude** — Trip page is now one card per day: the day you move holds the travel card and the new leg's header as a divider (plans before departure above, the rest below); leg color bar on each day; collapsing a leg hides its later days. Travel-only days outside legs (overnight flights) fold into the arrival card ("Wed Mar 31 → Thu Apr 1"). Flight detection recognizes flight numbers and more airport codes.
 - **2026-10-11 · Claude** — Trip legs ("stops"): collapsible colored leg sections with a timeline, boarding-pass travel cards between legs (mode guessed from bookings, straight-line distance), Home cards at start/end; stops editor in Edit trip; place search biased to the day's leg. Collapsed state remembered per trip.
@@ -210,4 +211,5 @@ Options:
 
 ## Inbox (found while working — not yet prioritized)
 
-- _empty_
+- `Deduplicator.dedupeCategories` deletes the losing same-named category without moving its transactions/rules to the kept one (ids are UUIDs, so they're left pointing at nothing). The editor now blocks user-made duplicates, but two devices seeding starter categories before iCloud catches up can still hit it.
+- Onboarding: ask how much history to pull (last month + this month vs. ~90 days). Only useful together with O1 — `pruneOlderTransactions` deletes anything older than last month on every launch.
