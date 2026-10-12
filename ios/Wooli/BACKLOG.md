@@ -26,6 +26,11 @@ Read this before starting any iOS work. Update it in the same commit as the work
 - Match existing style: small comments that explain *why*, `Theme` colors, `.card()` containers, `Ledger` for hidden-account / category lookups.
 - Don't leave stray blank lines or re-indented modifiers in files you didn't mean to change.
 
+### Release checklist (TestFlight / App Store)
+1. **CloudKit schema:** if this release adds or changes synced fields (trip fields, new record types), open the CloudKit Console → `iCloud.com.timothyeng.wooli` → **Deploy Schema Changes** to Production *before* the build goes out. Otherwise saves of that data fail for every user.
+2. Bump the build number (Xcode Cloud does this automatically).
+3. Don't mix Xcode-installed and TestFlight builds on the same phone for trip testing: they use different CloudKit environments (development vs production). The app re-uploads owned trips when it notices a switch (`TripStore.moveToNewEnvironment`) and backs up `trips.json` before clearing anything, but shared trips need a fresh invite.
+
 ---
 
 ## Product direction
@@ -185,6 +190,7 @@ Options:
 
 ## Done
 
+- **2026-10-11 · Claude** — CloudKit environment fixes after a TestFlight build (production) was installed over an Xcode build (development): sharing failed ("Zone does not exist"), the invitee saw "Trip not available", and an apparent account switch wiped all trips on the phone (restored from a backup taken minutes earlier; both trips now in production). Fixes: re-upload owned trips on environment change; ensure a trip is in iCloud before sharing; never delete trips on account change (keep on sign-out, back up before clearing on a switch).
 - **2026-10-11 · Claude** — Trip page is now one card per day: the day you move holds the travel card and the new leg's header as a divider (plans before departure above, the rest below); leg color bar on each day; collapsing a leg hides its later days. Travel-only days outside legs (overnight flights) fold into the arrival card ("Wed Mar 31 → Thu Apr 1"). Flight detection recognizes flight numbers and more airport codes.
 - **2026-10-11 · Claude** — Trip legs ("stops"): collapsible colored leg sections with a timeline, boarding-pass travel cards between legs (mode guessed from bookings, straight-line distance), Home cards at start/end; stops editor in Edit trip; place search biased to the day's leg. Collapsed state remembered per trip.
 - **2026-10-11 · Claude** — Trips v1 on CloudKit (Menu → Plan → Trips): CKSyncEngine sync, iCloud invites, Ideas + days, Apple Maps search (kept to the destination), day map with routes and walk/drive times, day titles. Imported the web "Japan + Seoul 2026" trip onto the user's iPhone (216 items) via `Documents/trip-import.json` (`TripStore.importPendingFile`). **Not yet tested: invites between two Apple Accounts** — needs TestFlight on both phones plus the CloudKit schema deployed to Production.
