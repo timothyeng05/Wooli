@@ -217,18 +217,47 @@ final class TripStore: CKSyncEngineDelegate {
     // MARK: - Sharing
 
     /// The trip's share, creating it the first time. The zone has to exist
-    /// in iCloud first, so pending changes are sent before sharing.
+    /// in iCloud first, so pending changes are sent before sharing. If the
+    /// server-side zone is gone (e.g. a CloudKit reset during testing) while
+    /// the device still thinks the trip is synced, recreate it and push the
+    /// trip again before sharing, the same recovery `handleFailedSave` does
+    /// for ordinary record saves.
     func share(for trip: Trip) async throws -> CKShare {
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: trip.zoneID)
         let database = trip.isMine ? container.privateCloudDatabase : container.sharedCloudDatabase
-        if let existing = try? await database.record(for: shareID) as? CKShare { return existing }
+        do {
+            if let existing = try await database.record(for: shareID) as? CKShare { return existing }
+        } catch let error as CKError where error.code == .zoneNotFound {
+            guard trip.isMine else { throw error }
+            try await recreateZone(for: trip)
+        } catch is CKError {
+            // No share yet (e.g. unknownItem): fall through to create one.
+        }
         guard trip.isMine else { throw CKError(.unknownItem) }
         try await privateEngine?.sendChanges()
+        do {
+            return try await createShare(for: trip)
+        } catch let error as CKError where error.code == .zoneNotFound {
+            try await recreateZone(for: trip)
+            return try await createShare(for: trip)
+        }
+    }
+
+    private func createShare(for trip: Trip) async throws -> CKShare {
         let share = CKShare(recordZoneID: trip.zoneID)
         share[CKShare.SystemFieldKey.title] = trip.name
         _ = try await container.privateCloudDatabase.modifyRecords(saving: [share], deleting: [])
         setShared(true, tripID: trip.id)
         return share
+    }
+
+    /// Recreates a trip's zone and pushes its record plus items back up.
+    private func recreateZone(for trip: Trip) async throws {
+        guard let engine = privateEngine else { return }
+        engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
+        engine.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)]
+            + items(in: trip.id).map { .saveRecord(CKRecord.ID(recordName: $0.id, zoneID: trip.zoneID)) })
+        try await engine.sendChanges()
     }
 
     func setShared(_ shared: Bool, tripID: String) {

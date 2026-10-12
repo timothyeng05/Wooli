@@ -52,7 +52,7 @@ struct TripsListView: View {
         .toolbar {
             Button("New trip", systemImage: "plus") { newTrip = Trip() }
         }
-        .sheet(item: $newTrip) { TripEditor(trip: $0) }
+        .sheet(item: $newTrip) { NewTripFlow(trip: $0) }
         .refreshable { await store.fetchChanges() }
     }
 
@@ -77,6 +77,128 @@ struct TripsListView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - New trip flow
+
+/// A short step-by-step flow for creating a trip. Dates come before stops
+/// because each stop's date range is clamped to the trip's — picking a stop
+/// date first left nothing to choose from (it defaulted to a single day).
+struct NewTripFlow: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var trip: Trip
+    @State private var start: Date
+    @State private var end: Date
+    @State private var step = Step.basics
+
+    private enum Step: Int { case basics, dates, stops, notes }
+
+    init(trip: Trip) {
+        _trip = State(initialValue: trip)
+        _start = State(initialValue: DayKey.date(trip.startDay))
+        _end = State(initialValue: DayKey.date(trip.endDay))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                switch step {
+                case .basics:
+                    Section {
+                        TextField("Trip name", text: $trip.name, prompt: Text("e.g. Japan in spring"))
+                        TextField("Destination", text: $trip.destination, prompt: Text("e.g. Tokyo & Kyoto"))
+                    } footer: {
+                        Text("The destination helps Apple Maps find places nearby.")
+                    }
+                case .dates:
+                    Section {
+                        DatePicker("Starts", selection: $start, displayedComponents: .date)
+                        DatePicker("Ends", selection: $end, in: start..., displayedComponents: .date)
+                    }
+                case .stops:
+                    Section {
+                        ForEach($trip.legs) { $leg in
+                            NavigationLink {
+                                TripLegEditor(leg: $leg, tripStart: start, tripEnd: max(end, start))
+                            } label: {
+                                HStack {
+                                    Text(leg.emoji.isEmpty ? "📍" : leg.emoji)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(leg.name.isEmpty ? "Untitled stop" : leg.name)
+                                        Text("\(DayKey.date(leg.startDay).formatted(.dateTime.month(.abbreviated).day())) – \(DayKey.date(leg.endDay).formatted(.dateTime.month(.abbreviated).day()))")
+                                            .font(.caption).foregroundStyle(Theme.textSecondary)
+                                    }
+                                }
+                            }
+                        }
+                        .onDelete { trip.legs.remove(atOffsets: $0) }
+                        Button("Add a stop", systemImage: "plus") {
+                            let startDay = trip.legs.last.map { DayKey.key(Calendar.current.date(byAdding: .day, value: 1, to: DayKey.date($0.endDay))!) }
+                                ?? DayKey.key(start)
+                            let clamped = min(startDay, DayKey.key(max(end, start)))
+                            trip.legs.append(TripLeg(startDay: clamped, endDay: DayKey.key(max(end, start))))
+                        }
+                    } header: {
+                        Text("Stops")
+                    } footer: {
+                        Text("Split a multi-city trip into stops (\"Tokyo\", \"Kyoto\"). Each stop gets its own section, and travel between them shows as a card. Optional — skip if it's a single place.")
+                    }
+                case .notes:
+                    Section("Notes") {
+                        TextField("Flights, budget, anything", text: $trip.notes, axis: .vertical).lineLimit(2...6)
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(step == .basics ? "Cancel" : "Back") { back() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(step == .notes ? "Create" : "Next") { advance() }
+                        .disabled(!canAdvance)
+                }
+            }
+        }
+    }
+
+    private var title: String {
+        switch step {
+        case .basics: "New trip"
+        case .dates: "When?"
+        case .stops: "Stops"
+        case .notes: "Notes"
+        }
+    }
+
+    private var canAdvance: Bool {
+        switch step {
+        case .basics: !trip.name.trimmingCharacters(in: .whitespaces).isEmpty
+        default: true
+        }
+    }
+
+    private func back() {
+        if let previous = Step(rawValue: step.rawValue - 1) {
+            step = previous
+        } else {
+            dismiss()
+        }
+    }
+
+    private func advance() {
+        guard let next = Step(rawValue: step.rawValue + 1) else {
+            trip.name = trip.name.trimmingCharacters(in: .whitespaces)
+            trip.startDay = DayKey.key(start)
+            trip.endDay = DayKey.key(max(end, start))
+            trip.legs.sort { $0.startDay < $1.startDay }
+            TripStore.shared.save(trip)
+            dismiss()
+            return
+        }
+        step = next
     }
 }
 
