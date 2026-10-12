@@ -25,11 +25,22 @@ struct SimpleFINExplainer: View {
                             .foregroundStyle(Theme.textSecondary)
                     }
 
+                    section("What SimpleFIN can and can't do", symbol: "building.columns") {
+                        can("Connects to your banks through MX, a bank-data company that holds your bank logins. SimpleFIN's own servers never store them.")
+                        can("Reads account names, balances, and transactions, and shares them only with apps you give a setup token to.")
+                        can("Lets you cut off an app's access any time from your SimpleFIN account.")
+                        can("Alerts you whenever your data is accessed from a new IP address.")
+                        cannot("Can't move money — SimpleFIN access is read-only.")
+                        cannot("Its staff can't see your transactions unless you grant temporary debugging access.")
+                    }
+
                     section("What Wooli can and can't do", symbol: "lock.shield") {
-                        bullet("checkmark.circle.fill", "Can see account names, balances, and transactions.", tint: Theme.income)
-                        bullet("xmark.circle.fill", "Can't move money, pay bills, or make transfers.", tint: Theme.expense)
-                        bullet("xmark.circle.fill", "Never sees your bank passwords — you sign in to banks on SimpleFIN's site, not in Wooli.", tint: Theme.expense)
-                        Text("Your bank data passes through SimpleFIN on its way to your iPhone. After that it lives only on your iPhone and in your own iCloud. Wooli's access key is kept in your iCloud Keychain.")
+                        can("Reads account names, balances, and transactions from SimpleFIN.")
+                        can("Keeps them only on your iPhone and in your own iCloud.")
+                        cannot("Can't move money, pay bills, or make transfers.")
+                        cannot("Never sees your bank logins — you sign in to banks on SimpleFIN's site, not in Wooli.")
+                        cannot("Never sends your bank data anywhere else — Wooli has no server.")
+                        Text("Wooli's SimpleFIN access key is kept in your iCloud Keychain, end-to-end encrypted like your saved passwords.")
                             .foregroundStyle(Theme.textSecondary)
                     }
 
@@ -85,6 +96,14 @@ struct SimpleFINExplainer: View {
             Image(systemName: symbol).foregroundStyle(tint).frame(width: 20)
             Text(text)
         }
+    }
+
+    private func can(_ text: String) -> some View {
+        bullet("checkmark.circle.fill", text, tint: Theme.income)
+    }
+
+    private func cannot(_ text: String) -> some View {
+        bullet("xmark.circle.fill", text, tint: Theme.expense)
     }
 
     private func step(_ number: Int, _ text: String) -> some View {
