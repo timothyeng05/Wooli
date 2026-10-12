@@ -92,6 +92,54 @@ enum TripLayout {
     }
 }
 
+/// What the trip page lists, in order: day cards (a travel day split into
+/// "1 of 2" in the city you leave and "2 of 2" where you arrive), travel
+/// cards, and each leg's header.
+enum TripRow: Identifiable {
+    enum Half: Hashable { case whole, first, second }
+
+    case day(TripDayBlock, half: Half, leg: TripLeg?)
+    case travel(from: TripLeg?, to: TripLeg?, start: String, end: String, items: [TripItem])
+    case legHeader(TripLeg)
+
+    var id: String {
+        switch self {
+        case .day(let block, let half, _): "day-\(block.day)-\(half)"
+        case .travel(let from, let to, let start, _, _): "travel-\(from?.id ?? "home")-\(to?.id ?? "home")-\(start)"
+        case .legHeader(let leg): "leg-\(leg.id)"
+        }
+    }
+
+    static func rows(blocks: [TripDayBlock], items: [TripItem], collapsed: Set<String>) -> [TripRow] {
+        func hidden(_ leg: TripLeg?) -> Bool { leg.map { collapsed.contains($0.id) } ?? false }
+        var rows: [TripRow] = []
+        for block in blocks {
+            if block.arriving, let leg = block.leg {
+                // "1 of 2" when you're still in the last city that morning.
+                let split = block.departure.map { departure in
+                    (block.travelFrom.map { $0.endDay >= block.day } ?? false)
+                        || items.contains { $0.day == block.day && $0.kind != .transit && ($0.time ?? Int.max) < departure }
+                } ?? false
+                if split && !hidden(block.travelFrom) {
+                    rows.append(.day(block, half: .first, leg: block.travelFrom))
+                }
+                if !block.travel.isEmpty || block.travelFrom != nil {
+                    rows.append(.travel(from: block.travelFrom, to: leg, start: block.travelStart ?? block.day,
+                                        end: block.day, items: block.travel))
+                }
+                rows.append(.legHeader(leg))
+                if !hidden(leg) { rows.append(.day(block, half: split ? .second : .whole, leg: leg)) }
+            } else if !hidden(block.leg) {
+                rows.append(.day(block, half: .whole, leg: block.leg))
+            }
+            if !block.homeTravel.isEmpty {
+                rows.append(.travel(from: block.leg, to: nil, start: block.day, end: block.day, items: block.homeTravel))
+            }
+        }
+        return rows
+    }
+}
+
 // MARK: - Leg header
 
 struct TripLegHeader: View {

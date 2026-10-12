@@ -220,6 +220,7 @@ struct TripDetailView: View {
         let allItems = store.items(in: trip.id)
         let placed = allItems.filter { $0.place != nil }
         let (blocks, travelIDs) = TripLayout.blocks(trip: trip, items: allItems)
+        let planCounts = Self.planCounts(blocks: blocks, items: allItems)
         let collapsed = collapsedLegs ?? defaultCollapsed(trip)
 
         return ScrollView {
@@ -235,9 +236,24 @@ struct TripDetailView: View {
 
                 ideasCard(trip, ideas: ideas)
 
-                // A collapsed leg keeps the day you arrive (it holds the leg's header).
-                ForEach(blocks.filter { block in !(block.leg.map { collapsed.contains($0.id) } ?? false) || block.arriving }) { block in
-                    dayBlock(trip, block, items: allItems, travelIDs: travelIDs, collapsed: collapsed)
+                ForEach(TripRow.rows(blocks: blocks, items: allItems, collapsed: collapsed)) { row in
+                    switch row {
+                    case .day(let block, let half, let leg):
+                        dayCard(trip, block, half: half, leg: leg, travelIDs: travelIDs)
+                    case .travel(let from, let to, let start, let end, let items):
+                        travelCard(trip, from: from, to: to, start: start, end: end, items: items, all: allItems)
+                    case .legHeader(let leg):
+                        Button {
+                            withAnimation(.snappy) { toggle(leg, trip: trip) }
+                        } label: {
+                            TripLegHeader(leg: leg, number: (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1,
+                                          colorHex: trip.colorHex(of: leg),
+                                          planCount: planCounts[leg.id] ?? 0,
+                                          isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(DayKey.key(.now)))
+                        }
+                        .buttonStyle(.plain)
+                        .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
+                    }
                 }
             }
             .padding(16)
@@ -347,69 +363,68 @@ struct TripDetailView: View {
         UserDefaults.standard.set(Array(set), forKey: collapsedKey)
     }
 
-    /// One day: its plans, and on a day you move, the travel and the new
-    /// leg's header as a divider (plans before departure above, the rest below).
-    private func dayBlock(_ trip: Trip, _ block: TripDayBlock, items: [TripItem], travelIDs: Set<String>,
-                          collapsed: Set<String>) -> some View {
-        let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) }
-        let beforeIDs = Set(block.departure.map { cutoff in plans.filter { ($0.time ?? Int.max) < cutoff }.map(\.id) } ?? [])
-        let homeCutoff = block.homeTravel.compactMap(\.time).min()
-        let afterHomeIDs = Set(homeCutoff.map { cutoff in plans.filter { ($0.time ?? -1) >= cutoff }.map(\.id) } ?? [])
-        let before = plans.filter { beforeIDs.contains($0.id) }
-        let main = plans.filter { !beforeIDs.contains($0.id) && !afterHomeIDs.contains($0.id) }
-        let afterHome = plans.filter { afterHomeIDs.contains($0.id) }
+    /// A day's plans. On a travel day, "1 of 2" holds plans before the
+    /// departure (still in the city you're leaving) and "2 of 2" the rest.
+    private func dayCard(_ trip: Trip, _ block: TripDayBlock, half: TripRow.Half, leg: TripLeg?,
+                         travelIDs: Set<String>) -> some View {
+        let departure = block.departure ?? Int.max
+        let plans = store.items(in: trip.id, day: block.day).filter { item in
+            guard !travelIDs.contains(item.id) else { return false }
+            switch half {
+            case .whole: return true
+            case .first: return (item.time ?? Int.max) < departure
+            case .second: return (item.time ?? Int.max) >= departure
+            }
+        }
         let date = DayKey.date(block.day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         let base = "Day \(block.number)"
-        let today = DayKey.key(.now)
+        let title: String = switch half {
+        case .whole: trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base
+        case .first: "\(base) · 1 of 2"
+        case .second: "\(base) · 2 of 2"
+        }
+        let subtitle = half == .whole ? date : [date, leg?.name].compactMap { $0 }.joined(separator: " · ")
 
         return VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base, subtitle: date) {
+            CardHeader(title: title, subtitle: subtitle) {
                 HStack(spacing: 14) {
                     if plans.contains(where: { $0.place != nil }) {
                         Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
                     }
-                    Button("Add", systemImage: "plus") { editingItem = TripItem(tripID: trip.id, day: block.day) }
-                        .labelStyle(.iconOnly)
+                    Button("Add", systemImage: "plus") {
+                        // "1 of 2" needs a time before departure to stay there.
+                        let time = half == .first ? max(min(9 * 60, departure - 60), 0) : nil
+                        editingItem = TripItem(tripID: trip.id, day: block.day, time: time)
+                    }
+                    .labelStyle(.iconOnly)
                 }
                 .font(.body.weight(.medium))
             }
-
-            ForEach(before) { itemRow($0, trip: trip) }
-
-            if block.arriving, let leg = block.leg {
-                if !block.travel.isEmpty || block.travelFrom != nil {
-                    travelCard(trip, from: block.travelFrom, to: leg, start: block.travelStart ?? block.day,
-                               end: block.day, items: block.travel, all: items)
-                }
-                Button {
-                    withAnimation(.snappy) { toggle(leg, trip: trip) }
-                } label: {
-                    TripLegHeader(leg: leg, number: (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1,
-                                  colorHex: trip.colorHex(of: leg),
-                                  planCount: items.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == leg.id }.count,
-                                  isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(today))
-                }
-                .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
-            }
-
             if plans.isEmpty {
                 Text("Nothing planned yet").font(.footnote).foregroundStyle(Theme.textTertiary)
             }
-            ForEach(main) { itemRow($0, trip: trip) }
-
-            if !block.homeTravel.isEmpty {
-                travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day, items: block.homeTravel, all: items)
-                ForEach(afterHome) { itemRow($0, trip: trip) }
-            }
+            ForEach(plans) { itemRow($0, trip: trip) }
         }
         .card()
         // The day's leg color down the left edge.
         .overlay(alignment: .leading) {
-            if let leg = block.leg {
+            if let leg {
                 Capsule().fill(Color(hex: trip.colorHex(of: leg)).gradient).frame(width: 4).padding(.vertical, 22)
             }
         }
+    }
+
+    /// Plans per leg, not counting travel. On a travel day, plans before the
+    /// departure count for the city you're leaving.
+    private static func planCounts(blocks: [TripDayBlock], items: [TripItem]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for block in blocks {
+            for item in items where item.day == block.day && item.kind != .transit {
+                let early = block.departure.map { (item.time ?? Int.max) < $0 } ?? false
+                if let leg = early ? block.travelFrom : block.leg { counts[leg.id, default: 0] += 1 }
+            }
+        }
+        return counts
     }
 
     private func travelCard(_ trip: Trip, from: TripLeg?, to: TripLeg?, start: String, end: String,
