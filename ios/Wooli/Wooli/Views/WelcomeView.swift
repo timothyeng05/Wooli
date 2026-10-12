@@ -50,18 +50,23 @@ struct WelcomeView: View {
                 }
                 .animation(.default, value: page)
 
-                if page < pageCount - 1 {
-                    Button {
+                // One button in a fixed spot: Continue through the tour, then
+                // the same button connects — the card keeps its height.
+                Button {
+                    if page < pageCount - 1 {
                         withAnimation { page += 1 }
-                    } label: {
-                        Text("Continue")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                    } else {
+                        showConnect = true
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                } label: {
+                    Text(page < pageCount - 1 ? "Continue" : "Connect with SimpleFIN")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .contentTransition(.opacity)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
             .padding(28)
             .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -115,30 +120,17 @@ struct WelcomeView: View {
                 .foregroundStyle(Color(hex: "#6b7280"))
                 .multilineTextAlignment(.center)
             Spacer()
-            VStack(spacing: 12) {
-                Button {
-                    showConnect = true
-                } label: {
-                    Text("Connect with SimpleFIN")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
-                Button {
-                    app.startSample(context: context)
-                } label: {
-                    Text("Explore with sample data")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.bordered)
-                .tint(Color(hex: "#374151"))
-                .controlSize(.large)
+            Button {
+                app.startSample(context: context)
+            } label: {
+                Text("Explore with sample data")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
             }
+            .buttonStyle(.bordered)
+            .tint(Color(hex: "#374151"))
+            .controlSize(.large)
         }
     }
 }
@@ -171,15 +163,18 @@ private struct SimpleTourPage: View {
     }
 }
 
-/// The Budget tour page also previews the starter category groups, since
+/// The Budget tour page also previews the starter spending groups, since
 /// budgeting is the one tab that benefits from a concrete look at what's
-/// already set up.
+/// already set up. A grid rather than a scrolling row: paging is locked on
+/// tour pages, which would also freeze a horizontal scroll inside one.
 private struct BudgetTourPage: View {
+    private let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
+        VStack(spacing: 12) {
+            Spacer(minLength: 0)
             Image(systemName: "map")
-                .font(.system(size: 52))
+                .font(.system(size: 44))
                 .foregroundStyle(Color(hex: "#2563eb"))
             Text("Budget")
                 .font(.system(size: 26, weight: .bold))
@@ -190,28 +185,25 @@ private struct BudgetTourPage: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(DefaultCategories.groups, id: \.name) { group in
-                        VStack(spacing: 4) {
-                            Text(group.icon).font(.title2)
-                            Text(group.name)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(Color(hex: "#111827"))
-                                .lineLimit(1)
-                            Text("\(group.children.count) categories")
-                                .font(.caption2)
-                                .foregroundStyle(Color(hex: "#9ca3af"))
-                        }
-                        .frame(width: 96)
-                        .padding(.vertical, 12)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(hex: "#E5E7EB")))
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(DefaultCategories.groups.filter { !$0.isIncome && !$0.isTransfer }, id: \.name) { group in
+                    HStack(spacing: 6) {
+                        Text(group.icon)
+                        Text(group.name)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color(hex: "#111827"))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(hex: "#E5E7EB")))
                 }
-                .padding(.horizontal, 2).padding(.vertical, 4)
             }
-            Spacer()
+            .padding(.top, 4)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
     }

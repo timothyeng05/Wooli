@@ -320,6 +320,20 @@ enum Cadence: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The charge before `date` — approximate for twice a month, which
+    /// doesn't step evenly.
+    func previous(before date: Date) -> Date {
+        let cal = Calendar.current
+        switch self {
+        case .weekly: return cal.date(byAdding: .day, value: -7, to: date)!
+        case .biweekly: return cal.date(byAdding: .day, value: -14, to: date)!
+        case .semimonthly: return cal.date(byAdding: .day, value: -15, to: date)!
+        case .monthly: return cal.date(byAdding: .month, value: -1, to: date)!
+        case .quarterly: return cal.date(byAdding: .month, value: -3, to: date)!
+        case .yearly: return cal.date(byAdding: .year, value: -1, to: date)!
+        }
+    }
+
     /// Classify an interval in days, or nil if it isn't a regular cadence.
     static func from(days: Double) -> Cadence? {
         switch days {

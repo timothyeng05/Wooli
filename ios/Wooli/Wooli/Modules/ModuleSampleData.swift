@@ -1,13 +1,13 @@
 import Foundation
 import SwiftData
 
-/// Demo data for modules in sample mode: ~6 months of periods and ~40 moods.
+/// Demo data for modules in sample mode: ~6 months of periods.
 /// Only seeds when the module has no data yet.
 enum ModuleSampleData {
     static func seed(_ module: WooliModule, context: ModelContext) {
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
-        var rng = SeededRNG(seed: module == .period ? 11 : 23)
+        var rng = SeededRNG(seed: 11)
         switch module {
         case .period:
             guard ((try? context.fetchCount(FetchDescriptor<PeriodEntry>())) ?? 0) == 0 else { return }
@@ -21,19 +21,6 @@ enum ModuleSampleData {
                 e.symptoms = Array(CycleMath.symptoms.shuffled(using: &rng).prefix(Int.random(in: 0...3, using: &rng)))
                 context.insert(e)
                 start = cal.date(byAdding: .day, value: -Int.random(in: 27...30, using: &rng), to: start)!
-            }
-        case .mood:
-            guard ((try? context.fetchCount(FetchDescriptor<MoodEntry>())) ?? 0) == 0 else { return }
-            for back in 1...55 where Int.random(in: 0...3, using: &rng) != 0 {
-                let day = cal.date(byAdding: .day, value: -back, to: today)!
-                let weekend = cal.isDateInWeekend(day)
-                let score = min(5, max(1, (weekend ? 4 : 3) + Int.random(in: -2...1, using: &rng)))
-                let e = MoodEntry(day: day, score: score)
-                var tags: [String] = []
-                if score >= 4 { tags += ["exercise", "social", "sleep"].shuffled(using: &rng).prefix(2) }
-                if score <= 2 { tags += ["work", "sleep", "health"].shuffled(using: &rng).prefix(2) }
-                e.tags = tags
-                context.insert(e)
             }
         }
         try? context.save()

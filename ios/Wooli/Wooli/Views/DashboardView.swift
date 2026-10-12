@@ -10,6 +10,7 @@ struct DashboardView: View {
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var snapshots: [BalanceSnapshot]
     @Query(sort: \Person.name) private var people: [Person]
+    @Query private var recurringItems: [RecurringItem]
     @State private var selectedPersonId: String? = nil
 
     @AppStorage("displayName") private var displayName = ""
@@ -60,7 +61,8 @@ struct DashboardView: View {
                         .contentTransition(.numericText())
                     }
 
-                    PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses)
+                    PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
+                             recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
 
                     if !reviewItems.isEmpty {
                         ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
@@ -184,14 +186,16 @@ struct PlanRow: View {
     }
 }
 
-/// Cumulative spend this month against a dashed "even pace" line — the one
-/// number that answers "am I on track?" Until flex budgeting exists, "pace"
-/// is measured against all planned expenses rather than a flex-only subset.
+/// Cumulative spend this month against a dashed "usual pace" line — the one
+/// number that answers "am I on track?" The line follows how a month
+/// normally goes (bills on their days, the rest by weekday habits; see
+/// `SpendingPace`) and ends at all planned expenses.
 struct PaceCard: View {
     let transactions: [LocalTransaction]
     let ledger: Ledger
     let month: DateInterval
     let target: Double
+    let recurring: [RecurringItem]
 
     var body: some View {
         let current = cumulativeSpending(transactions, in: month, through: .now,
@@ -199,8 +203,9 @@ struct PaceCard: View {
         let spent = current.last?.value ?? 0
         let daysInMonth = Calendar.current.range(of: .day, in: .month, for: month.start)?.count ?? 30
         let dayOfMonth = min(current.count, daysInMonth)
-        let evenPaceToday = target > 0 ? target * Double(dayOfMonth) / Double(daysInMonth) : 0
-        let paceDiff = evenPaceToday - spent
+        let pace = SpendingPace(target: target, month: month, items: recurring, transactions: transactions, ledger: ledger)
+        let expectedToday = target > 0 && dayOfMonth > 0 ? pace.expected[min(dayOfMonth, pace.expected.count) - 1] : 0
+        let paceDiff = expectedToday - spent
         let over = target > 0 && spent > target
         let tint = over ? Theme.expense : Theme.income
 
@@ -222,18 +227,21 @@ struct PaceCard: View {
 
             Chart {
                 if target > 0 {
-                    ForEach([(1, 0.0), (daysInMonth, target)], id: \.0) { day, value in
+                    // Starts from 0 before the 1st so a bill on day 1 shows as a step.
+                    ForEach(Array(([0.0] + pace.expected).enumerated()), id: \.offset) { day, value in
                         LineMark(x: .value("Day", day), y: .value("Pace", value), series: .value("Series", "Pace"))
                             .foregroundStyle(Theme.textTertiary)
                             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                            .interpolationMethod(.monotone)
                     }
                 }
-                ForEach(Array(current.enumerated()), id: \.offset) { i, point in
-                    AreaMark(x: .value("Day", i + 1), y: .value("Spent", point.value))
+                // Same 0 start as the pace line, so day-1 bills read as a step in both.
+                ForEach(Array(([0.0] + current.map(\.value)).enumerated()).dropFirst(target > 0 ? 0 : 1), id: \.offset) { day, value in
+                    AreaMark(x: .value("Day", day), y: .value("Spent", value))
                         .foregroundStyle(LinearGradient(colors: [tint.opacity(0.18), tint.opacity(0)],
                                                         startPoint: .top, endPoint: .bottom))
                         .interpolationMethod(.monotone)
-                    LineMark(x: .value("Day", i + 1), y: .value("Spent", point.value), series: .value("Series", "Actual"))
+                    LineMark(x: .value("Day", day), y: .value("Spent", value), series: .value("Series", "Actual"))
                         .foregroundStyle(tint)
                         .lineStyle(StrokeStyle(lineWidth: 2.5))
                         .interpolationMethod(.monotone)
@@ -244,20 +252,29 @@ struct PaceCard: View {
                         .symbolSize(50)
                 }
             }
-            .chartXScale(domain: 1...max(daysInMonth, 2))
+            .chartXScale(domain: (target > 0 ? 0 : 1)...max(daysInMonth, 2))
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .frame(height: 120)
 
             if target > 0 {
-                Text("\(abs(paceDiff).currency(cents: false)) \(paceDiff >= 0 ? "under pace" : "over pace") · dashed line is an even spend")
-                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+                Text("\(abs(paceDiff).currency(cents: false)) \(paceDiff >= 0 ? "under" : "over") your usual pace")
+                    .font(.footnote.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                Text(paceCaption(pace))
+                    .font(.caption).foregroundStyle(Theme.textTertiary)
             } else {
                 Text("Set a budget on the Budget tab to see your pace this month.")
                     .font(.footnote).foregroundStyle(Theme.textSecondary)
             }
         }
         .card()
+    }
+
+    /// What shaped the dashed line, so it doesn't feel arbitrary.
+    private func paceCaption(_ pace: SpendingPace) -> String {
+        let bills = pace.bills > 0 ? "\(pace.bills.currency(cents: false)) of bills on their usual days" : nil
+        let rest = pace.usesHabits ? "the rest by how you spend on each weekday" : "the rest spread evenly"
+        return "Dashed line: " + [bills, rest].compactMap { $0 }.joined(separator: ", ")
     }
 }
 

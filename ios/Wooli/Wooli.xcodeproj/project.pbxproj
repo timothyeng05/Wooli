@@ -195,7 +195,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Wooli;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period and Mood.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -234,7 +234,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Wooli;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period and Mood.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

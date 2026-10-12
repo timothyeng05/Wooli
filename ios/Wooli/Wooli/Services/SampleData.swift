@@ -12,7 +12,45 @@ enum SampleData {
         let everyDays: Int
     }
 
+    /// The day the sample dates were generated against (see `rollForward`).
+    private static let anchorKey = "sampleDataDay"
+
+    /// Sample dates are generated relative to the day they're loaded, so a
+    /// session started last month would show nothing for this month. Shift
+    /// every sample record forward by the days since then — keeping any edits
+    /// made while exploring. Module entries move too: in sample mode they're
+    /// demo data as well.
+    static func rollForward(context: ModelContext, now: Date = .now) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let transactions = ((try? context.fetch(FetchDescriptor<LocalTransaction>())) ?? [])
+            .filter { $0.providerTransactionId.hasPrefix("sample-") }
+        let stored = UserDefaults.standard.object(forKey: anchorKey) as? Date
+        // Sessions from before the anchor was stored: the newest sample
+        // transaction was dated the day they were loaded.
+        guard let anchor = stored ?? transactions.map(\.transactedAt).max().map({ cal.startOfDay(for: $0) }) else { return }
+        let days = cal.dateComponents([.day], from: anchor, to: today).day ?? 0
+        guard days > 0 else { return }
+
+        func shift(_ date: Date) -> Date { cal.date(byAdding: .day, value: days, to: date)! }
+        for tx in transactions { tx.transactedAt = shift(tx.transactedAt) }
+        for snapshot in (try? context.fetch(FetchDescriptor<BalanceSnapshot>())) ?? [] where snapshot.accountId.hasPrefix("sample-") {
+            snapshot.day = shift(snapshot.day)
+        }
+        for item in (try? context.fetch(FetchDescriptor<RecurringItem>())) ?? [] {
+            item.lastDate = shift(item.lastDate)
+            item.nextDate = shift(item.nextDate)
+        }
+        for entry in (try? context.fetch(FetchDescriptor<PeriodEntry>())) ?? [] {
+            entry.startDay = shift(entry.startDay)
+            entry.endDay = entry.endDay.map(shift)
+        }
+        UserDefaults.standard.set(today, forKey: anchorKey)
+        try? context.save()
+    }
+
     static func load(into context: ModelContext) {
+        UserDefaults.standard.set(Calendar.current.startOfDay(for: .now), forKey: anchorKey)
         let accounts: [(id: String, name: String, bank: String, balance: Double, kind: AccountKind)] = [
             ("sample-checking", "Everyday Checking", "Chase", 4218.55, .checking),
             ("sample-savings", "High-Yield Savings", "Ally Bank", 18400.00, .savings),
