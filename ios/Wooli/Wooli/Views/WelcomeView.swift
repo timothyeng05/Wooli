@@ -286,8 +286,8 @@ struct WelcomeView: View {
                     withAnimation(.snappy) { bankChoice = .manual }
                 }
                 BankOption(isSelected: bankChoice == .simpleFIN, symbol: "building.columns.fill", tint: Color(hex: "#2563eb"),
-                           title: "Import from your bank", price: "$15/yr",
-                           detail: "Balances and transactions arrive automatically through SimpleFIN, a separate read-only service.") {
+                           title: "Import from your bank", price: "$15/yr + tax, paid to SimpleFIN",
+                           detail: "Balances and transactions arrive automatically through SimpleFIN, a separate read-only service. Wooli doesn't charge you anything.") {
                     withAnimation(.snappy) { bankChoice = .simpleFIN }
                 }
 
@@ -494,7 +494,7 @@ struct ConnectSheet: View {
                 } header: {
                     Text("How to Connect")
                 } footer: {
-                    Text("SimpleFIN Bridge is a separate, paid service (about $15 a year) that links your banks to apps like Wooli. You'll need an account there before you can get a token.")
+                    Text("SimpleFIN Bridge is a separate service that links your banks to apps like Wooli. It costs $15 a year plus tax, paid to SimpleFIN — not to Wooli. You'll need an account there before you can get a token.")
                 }
 
                 Section {

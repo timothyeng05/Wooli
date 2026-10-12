@@ -16,7 +16,7 @@ struct SimpleFINExplainer: View {
                     }
 
                     section("What the $15 a year pays for", symbol: "creditcard") {
-                        Text("SimpleFIN charges **$15 a year** (or $1.50 a month), plus tax. You pay SimpleFIN directly — Wooli gets none of it, and Wooli itself stays free.")
+                        Text("SimpleFIN charges **$15 a year plus tax** (or $1.50 a month plus tax). **You pay SimpleFIN directly, not Wooli** — Wooli receives none of it and doesn't charge you anything.")
                         bullet("arrow.down.circle", "Balances and transactions import automatically — no typing.")
                         bullet("building.columns", "Connect up to 25 banks and cards.")
                         bullet("app.connected.to.app.below.fill", "Use the same subscription with up to 25 apps.")
@@ -101,7 +101,7 @@ struct SimpleFINExplainer: View {
 
 private struct ComparisonTable: View {
     private let rows: [(String, String, String)] = [
-        ("Cost", "Free", "$15 / year"),
+        ("Cost", "Free", "$15/yr + tax, to SimpleFIN"),
         ("Transactions", "You type each one", "Automatic"),
         ("Balances", "You update them", "Automatic"),
         ("Setup", "1 minute", "About 10 minutes"),
