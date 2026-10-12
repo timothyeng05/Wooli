@@ -266,6 +266,7 @@ struct TransactionDetailView: View {
     @Query private var rules: [MerchantRule]
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @State private var showSameMerchant = false
+    @State private var confirmDelete = false
 
     var body: some View {
         let category = transaction.categoryId.flatMap { id in categories.first { $0.id == id } }
@@ -288,6 +289,26 @@ struct TransactionDetailView: View {
         .pageBackground()
         .navigationTitle("Transaction")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Only typed-in transactions can be deleted; bank ones would come back on the next sync.
+            if transaction.isManual {
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                }
+            }
+        }
+        .confirmationDialog("Delete this transaction?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete Transaction", role: .destructive) {
+                dismiss()
+                // Delete after the pop finishes so this screen never draws a deleted record.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    ManualEntry.delete(transaction, context: context)
+                }
+            }
+        } message: {
+            Text("Its amount is taken back out of the account balance.")
+        }
         .safeAreaInset(edge: .bottom) {
             if transaction.needsReview {
                 let category = transaction.categoryId.flatMap { id in categories.first { $0.id == id } }

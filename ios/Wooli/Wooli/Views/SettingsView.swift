@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var showConnect = false
+    @State private var showExplainer = false
     @State private var confirmErase = false
     @State private var pushStatusMessage: String?
     @AppStorage("displayName") private var displayName = ""
@@ -48,8 +49,9 @@ struct SettingsView: View {
                         }
                         .disabled(app.isSyncing)
                     } else {
-                        LabeledContent("Status", value: app.mode == .sample ? "Sample Data" : "Not Connected")
+                        LabeledContent("Status", value: app.mode == .sample ? "Sample Data" : "Manual Entry")
                         Button("Connect with SimpleFIN", systemImage: "link") { showConnect = true }
+                        Button("How SimpleFIN works", systemImage: "info.circle") { showExplainer = true }
                     }
                 }
 
@@ -164,6 +166,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showConnect) {
                 ConnectSheet()
+            }
+            .sheet(isPresented: $showExplainer) {
+                SimpleFINExplainer()
             }
             .confirmationDialog(
                 "Reset all data?",

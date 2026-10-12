@@ -92,7 +92,8 @@ struct TransactionsView: View {
                                            description: Text("Try clearing some filters."))
                 } else {
                     ContentUnavailableView("No Transactions", systemImage: "creditcard",
-                                           description: Text("Transactions from your banks appear here after a sync."))
+                                           description: Text(app.mode == .live ? "Transactions from your banks appear here after a sync."
+                                                             : "Tap + to add a transaction."))
                 }
             }
         }
@@ -110,6 +111,7 @@ struct TransactionsView: View {
             if accountId == nil {
                 ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
                 ToolbarItem(placement: .topBarTrailing) { ReviewButton(count: reviewCount) }
+                ToolbarItem(placement: .topBarTrailing) { ManualAddMenu() }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

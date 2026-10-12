@@ -226,6 +226,8 @@ Options:
 
 ## Done
 
+- **2026-10-12 · Claude** — Manual entry for Budget (no SimpleFIN needed): onboarding's bank step is now a choice — "Enter them yourself" (free) or "Import from your bank" (SimpleFIN, $15/yr) — with a "How SimpleFIN works" deep dive (`SimpleFINExplainer`: what it is, what the fee pays for, can/can't do, manual-vs-SimpleFIN table, setup steps, what happens if you stop paying), also linked from the Connect sheet and Settings. Manual accounts/transactions (`Views/ManualEntry.swift`) use `manual-` ids so sync never touches them; they work alongside SimpleFIN too (e.g. cash). + menu on Accounts and Transactions; manual accounts get Add transaction / edit balance / delete; manual transactions can be deleted (balance adjusts). Manual mode = `Mode.local`; Settings shows "Manual Entry". Checked in Simulator: choice page + explainer. *Not tap-tested:* add/edit/delete sheets. Prices/limits from beta-bridge.simplefin.org on 2026-10-12 ($1.50/mo or $15/yr + tax; 25 institutions, 25 apps).
+
 - **2026-10-12 · Claude** — O1 5-year retention + one-time 90-day backfill; S2 Edit Today (rank, hide cards, long-press menu); S3 retired the dashboard Modules card. Verified in the Simulator: hide + drag in Edit Today, Today/grid order, values saved across relaunch, Budget dashboard without Modules card. Not verified: the backfill against a real SimpleFIN account; the long-press menu.
 
 - **2026-10-12 · Claude** — S8 onboarding app picker + ranking, Budget optional (no-bank `local` mode), Settings → Apps rank list.
@@ -251,5 +253,8 @@ Options:
 ---
 
 ## Inbox (found while working — not yet prioritized)
+
+- Manual transactions: no edit for amount/date/account after saving (category, note, tags edit as usual) — delete and re-add for now.
+- Manual entry has no quick-add from Today or a widget yet.
 
 - _empty_

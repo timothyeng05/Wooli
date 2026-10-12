@@ -79,7 +79,11 @@ struct WelcomeView: View {
     @State private var lineup = AppLineup.shared
     @State private var page = 0
     @State private var showConnect = false
+    @State private var showExplainer = false
+    /// How Budget gets transactions; chosen on the last page.
+    @State private var bankChoice: BankChoice?
 
+    private enum BankChoice { case manual, simpleFIN }
     private enum Page: Hashable { case welcome, apps, dashboard, accounts, transactions, reports, budget, connect, ready }
 
     /// The Budget tour and bank connection only appear if Budget was picked.
@@ -119,12 +123,16 @@ struct WelcomeView: View {
                     if !isLast {
                         withAnimation { page += 1 }
                     } else if lineup.isEnabled(.budget) {
-                        showConnect = true
+                        switch bankChoice {
+                        case .simpleFIN: showConnect = true
+                        case .manual: app.startWithoutBank(context: context)
+                        case nil: break
+                        }
                     } else {
                         app.startWithoutBank(context: context)
                     }
                 } label: {
-                    Text(!isLast ? "Continue" : lineup.isEnabled(.budget) ? "Connect with SimpleFIN" : "Start using Wooli")
+                    Text(finishTitle)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -132,7 +140,8 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(pages[min(page, pages.count - 1)] == .apps && lineup.installed.isEmpty)
+                .disabled(pages[min(page, pages.count - 1)] == .apps && lineup.installed.isEmpty
+                          || isLast && lineup.isEnabled(.budget) && bankChoice == nil)
             }
             .padding(28)
             .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -146,13 +155,27 @@ struct WelcomeView: View {
         .sheet(isPresented: $showConnect) {
             ConnectSheet()
         }
+        .sheet(isPresented: $showExplainer) {
+            SimpleFINExplainer()
+        }
         #if DEBUG
-        // `-onboardingPage N`: jump to a page (1 = app picker).
+        // `-onboardingPage N`: jump to a page (1 = app picker). `-simplefinExplainer`: open the deep dive.
         .task {
             let args = ProcessInfo.processInfo.arguments
             if let i = args.firstIndex(of: "-onboardingPage"), i + 1 < args.count, let n = Int(args[i + 1]) { page = n }
+            if args.contains("-simplefinExplainer") { showExplainer = true }
         }
         #endif
+    }
+
+    private var finishTitle: String {
+        if !isLast { return "Continue" }
+        guard lineup.isEnabled(.budget) else { return "Start using Wooli" }
+        switch bankChoice {
+        case .manual: return "Start with manual entry"
+        case .simpleFIN: return "Connect with SimpleFIN"
+        case nil: return "Choose one to continue"
+        }
     }
 
     @ViewBuilder
@@ -165,7 +188,7 @@ struct WelcomeView: View {
                            detail: "See your net worth, this month's budget, and recent transactions at a glance.")
         case .accounts:
             SimpleTourPage(symbol: "square.stack.3d.up", tint: Color(hex: "#16a34a"), title: "Accounts",
-                           detail: "Every account you connect, kept in sync with your bank automatically.")
+                           detail: "Every account in one place — imported from your bank, or entered by you.")
         case .transactions:
             SimpleTourPage(symbol: "creditcard", tint: Color(hex: "#f97316"), title: "Transactions",
                            detail: "Search, filter, and fix any transaction's category in a couple of taps.")
@@ -213,7 +236,7 @@ struct WelcomeView: View {
             Text("You're all set")
                 .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(Color(hex: "#111827"))
-            Text("Your apps are ready. Add Budget any time from Settings → Apps — it connects to your bank with SimpleFIN.")
+            Text("Your apps are ready. Add Budget any time from Settings → Apps.")
                 .font(.subheadline)
                 .foregroundStyle(Color(hex: "#6b7280"))
                 .multilineTextAlignment(.center)
@@ -240,38 +263,96 @@ struct WelcomeView: View {
                                detail: "Budget, Trips, and more in one place. Pick yours next.")
                     FeatureRow(symbol: "lock.shield.fill", tint: Color(hex: "#16a34a"), title: "Private by design",
                                detail: "Your data stays on this iPhone and your own iCloud.")
-                    FeatureRow(symbol: "building.columns.fill", tint: Color(hex: "#f97316"), title: "Read-only bank access",
-                               detail: "Budget uses SimpleFIN, which can never move money.")
+                    FeatureRow(symbol: "building.columns.fill", tint: Color(hex: "#f97316"), title: "Your choice of bank access",
+                               detail: "Type transactions in yourself, or import them read-only.")
                 }
             }
         }
         .scrollBounceBehavior(.basedOnSize)
     }
 
+    /// How Budget gets transactions: typed in (free) or imported with SimpleFIN ($15/yr).
     private var ctaPage: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            WooliLogo(size: 40)
-            Text("Ready when you are")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(Color(hex: "#111827"))
-            Text("Connect your bank with SimpleFIN, or explore first with sample data.")
-                .font(.subheadline)
-                .foregroundStyle(Color(hex: "#6b7280"))
-                .multilineTextAlignment(.center)
-            Spacer()
-            Button {
-                app.startSample(context: context)
-            } label: {
-                Text("Explore with sample data")
-                    .font(.headline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("How should Budget get your transactions?")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Color(hex: "#111827"))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                BankOption(isSelected: bankChoice == .manual, symbol: "square.and.pencil", tint: Color(hex: "#16a34a"),
+                           title: "Enter them yourself", price: "Free",
+                           detail: "Add accounts and transactions by hand. Nothing leaves your iPhone.") {
+                    withAnimation(.snappy) { bankChoice = .manual }
+                }
+                BankOption(isSelected: bankChoice == .simpleFIN, symbol: "building.columns.fill", tint: Color(hex: "#2563eb"),
+                           title: "Import from your bank", price: "$15/yr",
+                           detail: "Balances and transactions arrive automatically through SimpleFIN, a separate read-only service.") {
+                    withAnimation(.snappy) { bankChoice = .simpleFIN }
+                }
+
+                Button {
+                    showExplainer = true
+                } label: {
+                    Label("How SimpleFIN works and what the $15 pays for", systemImage: "info.circle")
+                        .font(.subheadline.weight(.medium))
+                }
+                .padding(.top, 2)
+
+                Button("Or explore with sample data") { app.startSample(context: context) }
+                    .font(.subheadline)
+                    .foregroundStyle(Color(hex: "#6b7280"))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.top, 6)
             }
-            .buttonStyle(.bordered)
-            .tint(Color(hex: "#374151"))
-            .controlSize(.large)
         }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+}
+
+/// A selectable option card on the bank-choice page.
+private struct BankOption: View {
+    let isSelected: Bool
+    let symbol: String
+    let tint: Color
+    let title: String
+    let price: String
+    let detail: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .foregroundStyle(tint)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.headline).foregroundStyle(Color(hex: "#111827"))
+                    Text(detail)
+                        .font(.footnote)
+                        .foregroundStyle(Color(hex: "#6b7280"))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(price)
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(tint.opacity(0.12), in: Capsule())
+                        .foregroundStyle(tint)
+                        .padding(.top, 3)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? tint : Color(hex: "#d1d5db"))
+            }
+            .padding(14)
+            .background(isSelected ? tint.opacity(0.06) : .white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isSelected ? tint : Color(hex: "#E5E7EB"), lineWidth: isSelected ? 2 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -395,6 +476,7 @@ struct ConnectSheet: View {
     @State private var token = ""
     @State private var isConnecting = false
     @State private var errorMessage: String?
+    @State private var showExplainer = false
 
     private var trimmed: String { token.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -408,6 +490,7 @@ struct ConnectSheet: View {
                     Link(destination: URL(string: "https://beta-bridge.simplefin.org")!) {
                         Label("Open SimpleFIN Bridge", systemImage: "safari")
                     }
+                    Button("How SimpleFIN works", systemImage: "info.circle") { showExplainer = true }
                 } header: {
                     Text("How to Connect")
                 } footer: {
@@ -456,6 +539,7 @@ struct ConnectSheet: View {
                 }
             }
             .interactiveDismissDisabled(isConnecting)
+            .sheet(isPresented: $showExplainer) { SimpleFINExplainer() }
         }
     }
 

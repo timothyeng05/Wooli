@@ -70,7 +70,8 @@ struct AccountsView: View {
                                 ProgressView("Syncing with your banks…")
                             } else {
                                 ContentUnavailableView("No Accounts", systemImage: "building.columns",
-                                                       description: Text("Pull down to sync from SimpleFIN."))
+                                                       description: Text(app.mode == .live ? "Pull down to sync from SimpleFIN."
+                                                                         : "Tap + to add an account you keep track of yourself."))
                             }
                         }
                         .card()
@@ -90,6 +91,7 @@ struct AccountsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
                 ToolbarItem(placement: .topBarTrailing) { SyncButton() }
+                ToolbarItem(placement: .topBarTrailing) { ManualAddMenu() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
                 }
@@ -258,6 +260,8 @@ struct AccountDetailView: View {
                         .font(.footnote).foregroundStyle(Theme.textTertiary)
                 }
                 .card()
+
+                if account.isManual { ManualAccountControls(account: account) }
 
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(title: "Recent transactions")

@@ -18,8 +18,8 @@ enum SidebarDestination: String, Identifiable {
 @MainActor
 @Observable
 final class AppModel {
-    /// `local`: set up without a bank — the user didn't pick Budget, or
-    /// hasn't connected yet. Other apps work normally.
+    /// `local`: no bank connection — the user enters accounts and
+    /// transactions by hand, or didn't pick Budget. Can connect SimpleFIN later.
     enum Mode: String { case onboarding, live, sample, local }
 
     /// Whether onboarding still needs to check iCloud for existing data from
@@ -110,8 +110,8 @@ final class AppModel {
         Task { await autoCategorize(context: context) }
     }
 
-    /// Finish onboarding without a bank (Budget off). Categories are seeded
-    /// so Budget is ready if it's turned on later.
+    /// Finish onboarding without a bank: manual entry, or Budget off.
+    /// Categories are seeded so Budget is ready either way.
     func startWithoutBank(context: ModelContext) {
         DefaultCategories.seedIfNeeded(context)
         mode = .local

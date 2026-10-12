@@ -168,9 +168,6 @@ struct StatusBanner: View {
             if app.mode == .sample {
                 Label("You're looking at sample data. Connect your bank in Settings.", systemImage: "sparkles")
                     .foregroundStyle(Theme.textSecondary)
-            } else if app.mode == .local {
-                Label("No bank connected yet. Connect with SimpleFIN in Settings to fill your budget.", systemImage: "building.columns")
-                    .foregroundStyle(Theme.textSecondary)
             } else if let error = app.syncError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Theme.pending)
@@ -185,7 +182,7 @@ struct StatusBanner: View {
     }
 
     static func isVisible(_ app: AppModel) -> Bool {
-        app.mode == .sample || app.mode == .local || app.syncError != nil || !app.bankMessages.isEmpty
+        app.mode == .sample || app.syncError != nil || !app.bankMessages.isEmpty
     }
 }
 
