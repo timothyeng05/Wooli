@@ -37,7 +37,26 @@ final class TripStore: CKSyncEngineDelegate {
         var items: [TripItem]
         var privateState: CKSyncEngine.State.Serialization?
         var sharedState: CKSyncEngine.State.Serialization?
+        /// CloudKit environment the sync state belongs to; nil in files
+        /// written before this was stored (always development builds).
+        var environment: String?
+        /// Trips still need uploading to this environment (kept until an
+        /// upload goes through, e.g. once the production schema is deployed).
+        var needsFullUpload: Bool?
     }
+
+    /// Builds installed from Xcode sync with CloudKit's development
+    /// environment; TestFlight and App Store builds with production. On a
+    /// device only development-signed builds carry an embedded provisioning
+    /// profile; the Simulator always uses development.
+    private static let environment: String = {
+        #if targetEnvironment(simulator)
+        return "development"
+        #else
+        return Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") == nil ? "production" : "development"
+        #endif
+    }()
+    @ObservationIgnored private var needsFullUpload = false
 
     private static var fileURL: URL {
         let dir = URL.applicationSupportDirectory.appending(path: "Trips", directoryHint: .isDirectory)
@@ -51,6 +70,7 @@ final class TripStore: CKSyncEngineDelegate {
         guard privateEngine == nil else { return }
         load()
         startEngines()
+        if needsFullUpload { uploadEverythingMine() }
         importPendingFile()
         Task { await refreshAccountStatus() }
     }
@@ -82,10 +102,61 @@ final class TripStore: CKSyncEngineDelegate {
         items = saved.items
         privateState = saved.privateState
         sharedState = saved.sharedState
+        needsFullUpload = saved.needsFullUpload ?? false
+        if (saved.environment ?? "development") != Self.environment { moveToNewEnvironment() }
+    }
+
+    /// This build syncs with the other CloudKit environment (e.g. a TestFlight
+    /// build installed over one from Xcode): none of these trips exist there
+    /// yet. Forget the old sync bookkeeping and upload the trips you own;
+    /// trips shared with you lived in the old environment and need a new invite.
+    private func moveToNewEnvironment() {
+        log.info("CloudKit environment changed to \(Self.environment); re-uploading trips")
+        backUpLocalTrips(reason: "environment-\(Self.environment)")
+        privateState = nil
+        sharedState = nil
+        let sharedWithMe = Set(trips.filter { !$0.isMine }.map(\.id))
+        trips = trips.filter(\.isMine).map { trip in
+            var trip = trip
+            trip.systemFields = nil
+            trip.isShared = false
+            return trip
+        }
+        items = items.filter { !sharedWithMe.contains($0.tripID) }.map { item in
+            var item = item
+            item.systemFields = nil
+            return item
+        }
+        needsFullUpload = true
+        persist()
+    }
+
+    /// Copies the local trips file aside (Application Support/Trips/backups)
+    /// before anything clears it, keeping the five most recent copies.
+    private func backUpLocalTrips(reason: String) {
+        guard !trips.isEmpty, let data = try? Data(contentsOf: Self.fileURL) else { return }
+        let dir = Self.fileURL.deletingLastPathComponent().appending(path: "backups", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let stamp = Date.now.formatted(.iso8601).replacingOccurrences(of: ":", with: "-")
+        try? data.write(to: dir.appending(path: "trips-\(stamp)-\(reason).json"))
+        let old = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }.dropFirst(5)
+        for url in old { try? FileManager.default.removeItem(at: url) }
+        log.info("Backed up \(self.trips.count) trips before \(reason)")
+    }
+
+    /// Queue every trip you own (zone, trip and items) for upload.
+    private func uploadEverythingMine() {
+        for trip in trips where trip.isMine {
+            privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
+            privateEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)]
+                + items(in: trip.id).map { .saveRecord(CKRecord.ID(recordName: $0.id, zoneID: trip.zoneID)) })
+        }
     }
 
     private func persist() {
-        let saved = Saved(trips: trips, items: items, privateState: privateState, sharedState: sharedState)
+        let saved = Saved(trips: trips, items: items, privateState: privateState, sharedState: sharedState,
+                          environment: Self.environment, needsFullUpload: needsFullUpload)
         do {
             try JSONEncoder().encode(saved).write(to: Self.fileURL, options: .atomic)
         } catch {
@@ -234,6 +305,9 @@ final class TripStore: CKSyncEngineDelegate {
             // No share yet (e.g. unknownItem): fall through to create one.
         }
         guard trip.isMine else { throw CKError(.unknownItem) }
+        // The zone and records have to be in iCloud before they can be shared.
+        privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
+        privateEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)])
         try await privateEngine?.sendChanges()
         do {
             return try await createShare(for: trip)
@@ -310,6 +384,7 @@ final class TripStore: CKSyncEngineDelegate {
         case .sentRecordZoneChanges(let sent):
             for record in sent.savedRecords { storeSystemFields(of: record) }
             for failure in sent.failedRecordSaves { handleFailedSave(failure, engine: syncEngine) }
+            if needsFullUpload && !sent.savedRecords.isEmpty && sent.failedRecordSaves.isEmpty { needsFullUpload = false }
             persist()
 
         case .sentDatabaseChanges, .willFetchChanges, .willFetchRecordZoneChanges, .didFetchRecordZoneChanges,
@@ -405,13 +480,20 @@ final class TripStore: CKSyncEngineDelegate {
         case .signIn:
             // Trips made before signing in: send them up.
             iCloudAvailable = true
-            for trip in trips where trip.isMine {
-                privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
-                privateEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)]
-                    + items(in: trip.id).map { .saveRecord(CKRecord.ID(recordName: $0.id, zoneID: trip.zoneID)) })
-            }
-        case .signOut, .switchAccounts:
-            // These trips belong to the other iCloud account.
+            uploadEverythingMine()
+        case .signOut:
+            // Keep the trips on this iPhone; they sync again on sign-in.
+            iCloudAvailable = false
+            privateState = nil
+            sharedState = nil
+            needsFullUpload = true
+            persist()
+            startEngines()
+        case .switchAccounts:
+            // Someone else's iCloud now: their trips aren't these. Never just
+            // delete — a mistaken "switch" (seen when a TestFlight build met
+            // data from an Xcode build) wiped trips. Keep a copy first.
+            backUpLocalTrips(reason: "account-switch")
             trips = []
             items = []
             privateState = nil
