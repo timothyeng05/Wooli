@@ -105,16 +105,27 @@ final class TripStore: CKSyncEngineDelegate {
 
     /// Imports `Documents/trip-import.json` if present (one bundle or a list),
     /// through the normal save path so it syncs, then deletes the file.
-    /// Trips that already exist are skipped, so a re-run is harmless.
+    /// Saves are by id, so importing a corrected file again updates the trip
+    /// and its items in place instead of adding copies.
     private func importPendingFile() {
         guard let data = try? Data(contentsOf: Self.importURL) else { return }
         defer { try? FileManager.default.removeItem(at: Self.importURL) }
         let bundles = (try? JSONDecoder().decode([ImportBundle].self, from: data))
             ?? (try? JSONDecoder().decode(ImportBundle.self, from: data)).map { [$0] } ?? []
         if bundles.isEmpty { log.error("Trip import file couldn't be read") }
-        for bundle in bundles where trip(bundle.trip.id) == nil {
-            save(bundle.trip)
-            for item in bundle.items { save(item) }
+        for bundle in bundles {
+            var trip = bundle.trip
+            // Keep this device's sync bookkeeping for a trip it already has.
+            if let existing = self.trip(trip.id) {
+                trip.systemFields = existing.systemFields
+                trip.zoneOwner = existing.zoneOwner
+                trip.isShared = existing.isShared
+            }
+            save(trip)
+            for var item in bundle.items {
+                item.systemFields = items.first { $0.id == item.id }?.systemFields
+                save(item)
+            }
             log.info("Imported trip \(bundle.trip.name) with \(bundle.items.count) items")
         }
     }

@@ -21,6 +21,26 @@ enum DayKey {
     }
 }
 
+/// One stop of a trip ("Kyushu", Jun 2–11). Days between legs' dates belong
+/// to that leg; moving from one leg to the next is shown as a travel card.
+struct TripLeg: Identifiable, Codable, Hashable {
+    var id: String = UUID().uuidString
+    var name: String = ""
+    /// Shown on the leg's badge; empty (or the generic 📍) shows its number.
+    var emoji: String = ""
+    var startDay: String
+    var endDay: String
+
+    func contains(_ day: String) -> Bool { day >= startDay && day <= endDay }
+
+    var nights: Int {
+        max(Calendar.current.dateComponents([.day], from: DayKey.date(startDay), to: DayKey.date(endDay)).day ?? 0, 0)
+    }
+
+    /// Leg colors, matching the web app's leg palette.
+    static let colorHexes = ["#2563eb", "#0d9488", "#e11d48", "#7c3aed", "#4f46e5", "#d97706"]
+}
+
 struct Trip: Identifiable, Codable, Hashable {
     var id: String = UUID().uuidString
     var name: String = ""
@@ -30,6 +50,8 @@ struct Trip: Identifiable, Codable, Hashable {
     var notes: String = ""
     /// Optional name per day ("Fukuoka → Kagoshima"), keyed by day.
     var dayTitles: [String: String] = [:]
+    /// Stops in date order; empty for a single-place trip.
+    var legs: [TripLeg] = []
     /// Empty for trips in your own iCloud; the owner's user record name for
     /// trips shared with you.
     var zoneOwner: String = ""
@@ -61,7 +83,7 @@ struct Trip: Identifiable, Codable, Hashable {
 
     // Older saved files have no `dayTitles`; decode it as optional.
     enum CodingKeys: String, CodingKey {
-        case id, name, destination, startDay, endDay, notes, dayTitles, zoneOwner, isShared, systemFields
+        case id, name, destination, startDay, endDay, notes, dayTitles, legs, zoneOwner, isShared, systemFields
     }
 
     init(id: String = UUID().uuidString, name: String = "", destination: String = "", startDay: String = DayKey.key(.now),
@@ -83,6 +105,7 @@ struct Trip: Identifiable, Codable, Hashable {
         endDay = try c.decode(String.self, forKey: .endDay)
         notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
         dayTitles = try c.decodeIfPresent([String: String].self, forKey: .dayTitles) ?? [:]
+        legs = try c.decodeIfPresent([TripLeg].self, forKey: .legs) ?? []
         zoneOwner = try c.decodeIfPresent(String.self, forKey: .zoneOwner) ?? ""
         isShared = try c.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
         systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
@@ -90,6 +113,14 @@ struct Trip: Identifiable, Codable, Hashable {
 
     static let zonePrefix = "trip-"
     static let recordType = "Trip"
+
+    /// The leg a day belongs to (the first match if legs overlap).
+    func leg(for day: String) -> TripLeg? { legs.first { $0.contains(day) } }
+
+    func colorHex(of leg: TripLeg) -> String {
+        let index = legs.firstIndex { $0.id == leg.id } ?? 0
+        return TripLeg.colorHexes[index % TripLeg.colorHexes.count]
+    }
 
     static func tripID(from zoneID: CKRecordZone.ID) -> String? {
         zoneID.zoneName.hasPrefix(zonePrefix) ? String(zoneID.zoneName.dropFirst(zonePrefix.count)) : nil
@@ -200,6 +231,7 @@ extension Trip {
         r["endDay"] = endDay
         r["notes"] = notes
         r["dayTitles"] = (try? JSONEncoder().encode(dayTitles)).flatMap { String(data: $0, encoding: .utf8) }
+        r["legs"] = (try? JSONEncoder().encode(legs)).flatMap { String(data: $0, encoding: .utf8) }
         return r
     }
 
@@ -211,6 +243,9 @@ extension Trip {
         notes = r["notes"] as? String ?? notes
         if let json = r["dayTitles"] as? String, let titles = try? JSONDecoder().decode([String: String].self, from: Data(json.utf8)) {
             dayTitles = titles
+        }
+        if let json = r["legs"] as? String, let decoded = try? JSONDecoder().decode([TripLeg].self, from: Data(json.utf8)) {
+            legs = decoded
         }
         systemFields = r.encodedSystemFields
     }

@@ -109,6 +109,34 @@ struct TripEditor: View {
                     DatePicker("Starts", selection: $start, displayedComponents: .date)
                     DatePicker("Ends", selection: $end, in: start..., displayedComponents: .date)
                 }
+                Section {
+                    ForEach($trip.legs) { $leg in
+                        NavigationLink {
+                            TripLegEditor(leg: $leg, tripStart: start, tripEnd: max(end, start))
+                        } label: {
+                            HStack {
+                                Text(leg.emoji.isEmpty ? "📍" : leg.emoji)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(leg.name.isEmpty ? "Untitled stop" : leg.name)
+                                    Text("\(DayKey.date(leg.startDay).formatted(.dateTime.month(.abbreviated).day())) – \(DayKey.date(leg.endDay).formatted(.dateTime.month(.abbreviated).day()))")
+                                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                    .onDelete { trip.legs.remove(atOffsets: $0) }
+                    Button("Add a stop", systemImage: "plus") {
+                        let startDay = trip.legs.last.map { DayKey.key(Calendar.current.date(byAdding: .day, value: 1, to: DayKey.date($0.endDay))!) }
+                            ?? DayKey.key(start)
+                        let clamped = min(startDay, DayKey.key(max(end, start)))
+                        trip.legs.append(TripLeg(startDay: clamped, endDay: DayKey.key(max(end, start))))
+                    }
+                } header: {
+                    Text("Stops")
+                } footer: {
+                    Text("Split a multi-city trip into stops (\"Tokyo\", \"Kyoto\"). Each stop gets its own section, and travel between them shows as a card.")
+                }
+
                 Section("Notes") {
                     TextField("Flights, budget, anything", text: $trip.notes, axis: .vertical).lineLimit(2...6)
                 }
@@ -122,6 +150,7 @@ struct TripEditor: View {
                         trip.name = trip.name.trimmingCharacters(in: .whitespaces)
                         trip.startDay = DayKey.key(start)
                         trip.endDay = DayKey.key(max(end, start))
+                        trip.legs.sort { $0.startDay < $1.startDay }
                         TripStore.shared.save(trip)
                         dismiss()
                     }
@@ -129,6 +158,33 @@ struct TripEditor: View {
                 }
             }
         }
+    }
+}
+
+struct TripLegEditor: View {
+    @Binding var leg: TripLeg
+    let tripStart: Date
+    let tripEnd: Date
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("City or region", text: $leg.name, prompt: Text("e.g. Kyoto"))
+                TextField("Emoji (optional)", text: Binding(get: { leg.emoji }, set: { leg.emoji = String($0.prefix(1)) }))
+            }
+            Section {
+                DatePicker("Arrive", selection: Binding(get: { DayKey.date(leg.startDay) }, set: {
+                    leg.startDay = DayKey.key($0)
+                    if leg.endDay < leg.startDay { leg.endDay = leg.startDay }
+                }), in: tripStart...tripEnd, displayedComponents: .date)
+                DatePicker("Leave", selection: Binding(get: { DayKey.date(leg.endDay) }, set: { leg.endDay = DayKey.key($0) }),
+                           in: DayKey.date(leg.startDay)...max(tripEnd, DayKey.date(leg.startDay)), displayedComponents: .date)
+            } footer: {
+                Text("The day you arrive is shown as a travel day from the previous stop.")
+            }
+        }
+        .navigationTitle(leg.name.isEmpty ? "Stop" : leg.name)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -142,7 +198,11 @@ struct TripDetailView: View {
     @State private var dayMap: String?
     @State private var preparingShare = false
     @State private var confirmDelete = false
+    /// Collapsed legs; nil until the user changes something (then remembered).
+    @State private var collapsedLegs: Set<String>?
     @Environment(\.dismiss) private var dismiss
+
+    private var collapsedKey: String { "trip.collapsedLegs.\(tripID)" }
 
     var body: some View {
         if let trip = store.trip(tripID) {
@@ -157,7 +217,10 @@ struct TripDetailView: View {
         let days = trip.days
         let ideas = store.items(in: trip.id).filter { $0.day.map { !days.contains($0) } ?? true }
             .sorted { $0.createdAt < $1.createdAt }
-        let placed = store.items(in: trip.id).filter { $0.place != nil }
+        let allItems = store.items(in: trip.id)
+        let placed = allItems.filter { $0.place != nil }
+        let (segments, onTravelCards) = TripSegment.build(trip: trip, items: allItems)
+        let collapsed = collapsedLegs ?? defaultCollapsed(trip)
 
         return ScrollView {
             // Lazy: long trips have dozens of day cards.
@@ -172,8 +235,20 @@ struct TripDetailView: View {
 
                 ideasCard(trip, ideas: ideas)
 
-                ForEach(Array(days.enumerated()), id: \.element) { index, day in
-                    dayCard(trip, day: day, number: index + 1)
+                ForEach(segments) { segment in
+                    switch segment {
+                    case .looseDay(let day, let number):
+                        dayCard(trip, day: day, number: number, hiding: onTravelCards)
+                    case .travel(let from, let to, let day, let items):
+                        TripTravelCard(fromName: from?.name, toName: to?.name,
+                                       fromHex: from.map(trip.colorHex) ?? "#334155",
+                                       toHex: to.map(trip.colorHex) ?? "#334155",
+                                       day: day, items: items,
+                                       distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: allItems)) { editingItem = $0 }
+                    case .leg(let leg, let number, let legDays):
+                        legSection(trip, leg: leg, number: number, days: legDays, items: allItems,
+                                   isCollapsed: collapsed.contains(leg.id), hiding: onTravelCards)
+                    }
                 }
             }
             .padding(16)
@@ -192,6 +267,10 @@ struct TripDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("More", systemImage: "ellipsis") {
                     Button("Edit trip", systemImage: "pencil") { editingTrip = trip }
+                    if !trip.legs.isEmpty {
+                        Button("Expand all", systemImage: "rectangle.expand.vertical") { setCollapsed([]) }
+                        Button("Collapse all", systemImage: "rectangle.compress.vertical") { setCollapsed(Set(trip.legs.map(\.id))) }
+                    }
                     Button(trip.isMine ? "Delete trip" : "Leave trip", systemImage: trip.isMine ? "trash" : "rectangle.portrait.and.arrow.right",
                            role: .destructive) { confirmDelete = true }
                 }
@@ -209,6 +288,11 @@ struct TripDetailView: View {
             }
         } message: {
             Text(trip.isMine ? "This deletes the trip for everyone you've shared it with." : "You'll need a new invite to join again.")
+        }
+        .onAppear {
+            if collapsedLegs == nil, let saved = UserDefaults.standard.stringArray(forKey: collapsedKey) {
+                collapsedLegs = Set(saved)
+            }
         }
         .overlay {
             if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) }
@@ -255,8 +339,58 @@ struct TripDetailView: View {
         .card()
     }
 
-    private func dayCard(_ trip: Trip, day: String, number: Int) -> some View {
-        let dayItems = store.items(in: trip.id, day: day)
+    private func legSection(_ trip: Trip, leg: TripLeg, number: Int, days: [(day: String, number: Int)],
+                            items: [TripItem], isCollapsed: Bool, hiding: Set<String>) -> some View {
+        let color = Color(hex: trip.colorHex(of: leg))
+        let today = DayKey.key(.now)
+        let plans = items.filter { $0.day.map(leg.contains) ?? false }.count
+        return VStack(spacing: 12) {
+            Button {
+                withAnimation(.snappy) { toggle(leg, trip: trip) }
+            } label: {
+                TripLegHeader(leg: leg, number: number, colorHex: trip.colorHex(of: leg), planCount: plans,
+                              isCollapsed: isCollapsed, isNow: leg.contains(today))
+            }
+            .buttonStyle(.plain)
+            .sensoryFeedback(.selection, trigger: isCollapsed)
+
+            if !isCollapsed {
+                VStack(spacing: 12) {
+                    ForEach(days, id: \.day) { day in
+                        dayCard(trip, day: day.day, number: day.number, hiding: hiding)
+                    }
+                }
+                // The leg's days hang off a line in its color.
+                .padding(.leading, 14)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(color.opacity(0.35)).frame(width: 3).padding(.vertical, 4).padding(.leading, 2)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    /// Past trips start collapsed; during a trip, legs already finished do.
+    private func defaultCollapsed(_ trip: Trip) -> Set<String> {
+        let today = DayKey.key(.now)
+        if trip.endDay < today { return Set(trip.legs.map(\.id)) }
+        if trip.startDay <= today { return Set(trip.legs.filter { $0.endDay < today }.map(\.id)) }
+        return []
+    }
+
+    private func toggle(_ leg: TripLeg, trip: Trip) {
+        var set = collapsedLegs ?? defaultCollapsed(trip)
+        if set.contains(leg.id) { set.remove(leg.id) } else { set.insert(leg.id) }
+        setCollapsed(set)
+    }
+
+    private func setCollapsed(_ set: Set<String>) {
+        withAnimation(.snappy) { collapsedLegs = set }
+        UserDefaults.standard.set(Array(set), forKey: collapsedKey)
+    }
+
+    private func dayCard(_ trip: Trip, day: String, number: Int, hiding: Set<String> = []) -> some View {
+        let dayItems = store.items(in: trip.id, day: day).filter { !hiding.contains($0.id) }
         let date = DayKey.date(day)
         return VStack(alignment: .leading, spacing: 12) {
             CardHeader(title: trip.dayTitles[day].map { "Day \(number) · \($0)" } ?? "Day \(number)",
@@ -398,7 +532,7 @@ struct TripItemEditor: View {
                         Button("Remove place", role: .destructive) { item.place = nil }
                     }
                     NavigationLink {
-                        PlaceSearchView(near: trip.destination) { place in
+                        PlaceSearchView(near: item.day.flatMap { trip.leg(for: $0)?.name } ?? trip.destination) { place in
                             item.place = place
                         }
                     } label: {

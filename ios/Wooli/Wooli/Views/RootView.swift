@@ -56,8 +56,11 @@ struct RootView: View {
             if args.contains("-selftest") { DebugSelfTest.run(context: context) }
             // `-sampleTrip`: add a demo trip (stays on this device unless iCloud is signed in).
             if args.contains("-sampleTrip") { TripStore.shared.addSampleTrip() }
-            // `-openTrip`: open the first trip straight away.
-            if args.contains("-openTrip") { TripStore.shared.tripToOpen = TripStore.shared.trips.first?.id }
+            // `-openTrip [name]`: open a trip (the first, or one whose name contains `name`) straight away.
+            if let i = args.firstIndex(of: "-openTrip") {
+                let name = i + 1 < args.count && !args[i + 1].hasPrefix("-") ? args[i + 1] : ""
+                TripStore.shared.tripToOpen = TripStore.shared.trips.first { name.isEmpty || $0.name.localizedCaseInsensitiveContains(name) }?.id
+            }
         }
         #endif
         .onChange(of: scenePhase) { _, phase in
