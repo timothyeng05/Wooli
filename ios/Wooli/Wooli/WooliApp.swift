@@ -12,10 +12,10 @@ struct WooliApp: App {
         let schema = Schema([LocalAccount.self, LocalTransaction.self, BudgetCategory.self, MerchantRule.self, BalanceSnapshot.self,
                              CategoryRule.self, TransactionRule.self, RecurringItem.self,
                              PeriodEntry.self, Person.self])
-        // `.automatic` syncs through the user's own private iCloud database once
-        // the iCloud/CloudKit capability is added (see README); without it the
-        // store is simply local to this device.
-        let configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            cloudKitDatabase: .private("iCloud.com.timothyeng.wooli")
+        )
         do {
             container = try ModelContainer(for: schema, configurations: [configuration])
         } catch {

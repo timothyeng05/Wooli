@@ -108,6 +108,7 @@ struct TransactionsView: View {
         .refreshable { await app.sync(context: context) }
         .toolbar {
             if accountId == nil {
+                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
                 ToolbarItem(placement: .topBarTrailing) { ReviewButton(count: reviewCount) }
             }
             ToolbarItem(placement: .topBarTrailing) {

@@ -121,6 +121,8 @@ final class LocalTransaction {
     var aiSuggested: Bool = false
     /// The on-device model has already looked at this one (don't ask again).
     var aiAttempted: Bool = false
+    /// The current category was set by a TransactionRule.
+    var ruleApplied: Bool = false
     /// Display name set by a "Rename merchant" rule.
     var customTitle: String = ""
     /// This transaction was split into parts (it's kept, but set aside so it
@@ -396,3 +398,4 @@ final class Person {
         self.colorHex = colorHex
     }
 }
+

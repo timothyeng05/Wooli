@@ -7,9 +7,11 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showConnect = false
     @State private var confirmErase = false
+    @State private var pushStatusMessage: String?
     @AppStorage("displayName") private var displayName = ""
     @AppStorage(AICategorizer.enabledKey) private var aiEnabled = true
     @AppStorage(ReviewReminder.enabledKey) private var reviewRemindersEnabled = true
+    private var cloud = ICloudSyncMonitor.shared
 
     var body: some View {
         NavigationStack {
@@ -38,7 +40,10 @@ struct SettingsView: View {
                         } label: {
                             HStack {
                                 Label("Sync Now", systemImage: "arrow.clockwise")
-                                if app.isSyncing { Spacer(); ProgressView() }
+                                if app.isSyncing {
+                                    Spacer()
+                                    ProgressView()
+                                }
                             }
                         }
                         .disabled(app.isSyncing)
@@ -46,6 +51,60 @@ struct SettingsView: View {
                         LabeledContent("Status", value: "Sample Data")
                         Button("Connect with SimpleFIN", systemImage: "link") { showConnect = true }
                     }
+                }
+
+                Section {
+                    LabeledContent {
+                        HStack(spacing: 5) {
+                            Image(systemName: cloud.iconName)
+                                .symbolEffect(.pulse, isActive: cloud.isSyncing)
+                            Text(cloud.shortLabel.replacingOccurrences(of: "iCloud: ", with: ""))
+                        }
+                        .foregroundStyle(cloud.statusColor)
+                    } label: {
+                        Label("Status", systemImage: "icloud.fill")
+                    }
+
+                    if let lastSync = cloud.lastSyncAt {
+                        LabeledContent("Last Synced", value: lastSync.formatted(date: .abbreviated, time: .shortened))
+                    }
+
+                    if let error = cloud.lastError {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sync Issue").font(.caption.weight(.semibold)).foregroundStyle(.red)
+                            Text(error).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button {
+                        Task { await cloud.checkAccountStatus() }
+                    } label: {
+                        Label("Check iCloud Status", systemImage: "arrow.clockwise")
+                    }
+
+                    Button {
+                        let count = ICloudSyncService.pushAllLocalData(context: context)
+                        pushStatusMessage = "Queued \(count) items to upload to iCloud."
+                    } label: {
+                        Label("Push All Data to iCloud", systemImage: "icloud.and.arrow.up")
+                    }
+
+                    Button {
+                        Deduplicator.run(context: context)
+                        pushStatusMessage = "Merged duplicates and synced local records."
+                    } label: {
+                        Label("Merge & Deduplicate", systemImage: "arrow.triangle.merge")
+                    }
+
+                    if let msg = pushStatusMessage {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("iCloud Sync")
+                } footer: {
+                    Text("Push All Data marks all local categories, targets, rules, and reviewed transactions for immediate upload to iCloud. Merge & Deduplicate reconciles records across devices.")
                 }
 
                 Section {
@@ -82,69 +141,43 @@ struct SettingsView: View {
                     NavigationLink {
                         PeopleSettingsView()
                     } label: {
-                        Label("People", systemImage: "person.2.fill")
-                    }
-                }
-
-                Section("Budget") {
-                    NavigationLink {
-                        RulesView()
-                    } label: {
-                        Label("Rules", systemImage: "wand.and.stars")
-                    }
-                    NavigationLink {
-                        CategoriesSettingsView()
-                    } label: {
-                        Label("Categories", systemImage: "square.grid.2x2")
+                        Label("People", systemImage: "person.2")
                     }
                 }
 
                 Section {
-                    PrivacyRow(symbol: "iphone", text: "Accounts and transactions are stored on this iPhone.")
-                    PrivacyRow(symbol: "icloud", text: "They sync only to your own private iCloud. Turn on Advanced Data Protection in iCloud settings for end-to-end encryption.")
-                    PrivacyRow(symbol: "key", text: "Your SimpleFIN access key is kept in your iCloud Keychain, end-to-end encrypted like your saved passwords, so a new iPhone connects automatically.")
-                    PrivacyRow(symbol: "eye.slash", text: "No analytics, no ads, and no Wooli server.")
-                } header: {
-                    Text("Privacy")
-                }
-
-                Section {
-                    Button(app.mode == .live ? "Disconnect and Erase All Data" : "Erase Sample Data", role: .destructive) {
+                    Button(role: .destructive) {
                         confirmErase = true
+                    } label: {
+                        Label("Reset All Data", systemImage: "trash")
                     }
                 } footer: {
-                    Text("Removes the SimpleFIN connection and everything Wooli stored on this iPhone, in your iCloud, and on your other devices.")
+                    Text("Removes your bank connection and deletes all cached accounts, transactions, and categories.")
                 }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
             }
-            .confirmationDialog("Erase all Wooli data?", isPresented: $confirmErase, titleVisibility: .visible) {
-                Button("Erase All Data", role: .destructive) {
+            .sheet(isPresented: $showConnect) {
+                ConnectSheet()
+            }
+            .confirmationDialog(
+                "Reset all data?",
+                isPresented: $confirmErase,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Everything", role: .destructive) {
                     dismiss()
                     app.disconnectAndErase(context: context)
                 }
+                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This can't be undone. Your bank accounts themselves aren't affected.")
+                Text("This removes your SimpleFIN credentials and clears all transactions, accounts, and categories. You'll need to reconnect your bank to use live data again.")
             }
-            .sheet(isPresented: $showConnect) { ConnectSheet() }
-        }
-    }
-}
-
-private struct PrivacyRow: View {
-    let symbol: String
-    let text: String
-
-    var body: some View {
-        Label {
-            Text(text).font(.subheadline)
-        } icon: {
-            Image(systemName: symbol).foregroundStyle(Color.accentColor)
         }
     }
 }

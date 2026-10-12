@@ -4,23 +4,45 @@ import SwiftData
 
 /// App-wide state: whether we're connected to SimpleFIN, showing sample data,
 /// or not set up yet, plus the in-flight sync status.
-enum AppTab: Hashable { case dashboard, accounts, transactions, reports, menu }
+enum AppTab: Hashable { case dashboard, accounts, transactions, reports, budget }
+
+/// Screens reached from the hamburger sidebar, each opened as its own sheet
+/// rather than a tab — keeps every screen's navigation container unambiguous
+/// (a past attempt that routed these through the tab machinery caused double
+/// back-arrows when a screen was reachable both as a "tab" and a push target).
+enum SidebarDestination: String, Identifiable {
+    case trips, categories, rules, recurring, settings
+    var id: String { rawValue }
+}
 
 @MainActor
 @Observable
 final class AppModel {
     enum Mode: String { case onboarding, live, sample }
 
+    /// Whether onboarding still needs to check iCloud for existing data from
+    /// another device before showing the welcome tour. Only relevant while
+    /// `mode == .onboarding` — irrelevant (and never shown) once there's a
+    /// Keychain credential, since that path already jumps straight to `.live`.
+    /// `.foundExistingData` lets a relaunch show the "use iCloud data?"
+    /// prompt again immediately, without re-waiting on CloudKit.
+    enum OnboardingStage { case checkingICloud, foundExistingData, readyToShow }
+
     private static let modeKey = "appMode"
+    private static let icloudCheckDoneKey = "didCheckICloudOnboarding"
+    private static let icloudDataFoundKey = "icloudDataFoundOnboarding"
 
     var mode: Mode {
         didSet { UserDefaults.standard.set(mode.rawValue, forKey: Self.modeKey) }
     }
+    var onboardingStage: OnboardingStage = .checkingICloud
     var isSyncing = false
     var syncError: String?
     var bankMessages: [String] = []
     var lastSyncAt: Date? = SyncService.lastSyncAt
     var selectedTab: AppTab = .dashboard
+    var isSidebarOpen = false
+    var sidebarDestination: SidebarDestination?
 
     var isCategorizing = false
     var showReview = false
@@ -40,6 +62,26 @@ final class AppModel {
             // No key (iCloud Keychain off, or disconnected): reconnect.
             mode = stored == .sample ? .sample : .onboarding
         }
+        if mode == .onboarding {
+            if !UserDefaults.standard.bool(forKey: Self.icloudCheckDoneKey) {
+                onboardingStage = .checkingICloud
+            } else if UserDefaults.standard.bool(forKey: Self.icloudDataFoundKey) {
+                // Found data on a previous launch but the user never tapped
+                // Continue — show the prompt again without re-waiting.
+                onboardingStage = .foundExistingData
+            } else {
+                onboardingStage = .readyToShow
+            }
+        }
+    }
+
+    /// Records the one-time iCloud check's result so later launches don't
+    /// wait on CloudKit again. `found == true` keeps re-showing the "use
+    /// iCloud data?" prompt (instantly) until the user acts on it.
+    func recordICloudCheckResult(found: Bool) {
+        UserDefaults.standard.set(true, forKey: Self.icloudCheckDoneKey)
+        UserDefaults.standard.set(found, forKey: Self.icloudDataFoundKey)
+        onboardingStage = found ? .foundExistingData : .readyToShow
     }
 
     func connect(setupToken: String, context: ModelContext) async throws {
@@ -102,6 +144,11 @@ final class AppModel {
         lastSyncAt = nil
         bankMessages = []
         syncError = nil
+        // Recheck iCloud fresh next time — this device's view of "is there
+        // existing data" just changed.
+        UserDefaults.standard.removeObject(forKey: Self.icloudCheckDoneKey)
+        UserDefaults.standard.removeObject(forKey: Self.icloudDataFoundKey)
+        onboardingStage = .checkingICloud
         mode = .onboarding
     }
 

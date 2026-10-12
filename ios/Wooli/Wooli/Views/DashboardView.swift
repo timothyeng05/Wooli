@@ -11,11 +11,24 @@ struct DashboardView: View {
     @Query private var snapshots: [BalanceSnapshot]
     @Query(sort: \Person.name) private var people: [Person]
     @Query private var recurringItems: [RecurringItem]
+    @State private var layoutRows: [DashboardLayoutRow] = DashboardLayoutStore.load()
     @State private var selectedPersonId: String? = nil
 
     @AppStorage("displayName") private var displayName = ""
     @State private var showSettings = false
+    @State private var showCustomize = false
     @State private var range: ChartRange = .month3
+    private var cloud = ICloudSyncMonitor.shared
+
+    /// Visible cards in the user's chosen order. Any card not yet represented
+    /// in `layoutRows` (a fresh install, or a card added in a later update)
+    /// is appended at the end rather than silently disappearing.
+    private var orderedCards: [DashboardCard] {
+        let visible = layoutRows.filter { !$0.isHidden }.compactMap { DashboardCard(rawValue: $0.cardId) }
+        let known = Set(layoutRows.map(\.cardId))
+        let missing = DashboardCard.allCases.filter { !known.contains($0.rawValue) }
+        return visible + missing
+    }
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
@@ -51,69 +64,246 @@ struct DashboardView: View {
 
                     if StatusBanner.isVisible(app) { StatusBanner().card(padding: 14) }
 
-                    if app.mode == .live, let lastSyncAt = app.lastSyncAt {
-                        HStack(spacing: 4) {
+                    if app.mode == .live {
+                        HStack(spacing: 12) {
                             Spacer()
-                            Text(app.isSyncing ? "Syncing…" : "Synced \(lastSyncAt.formatted(.relative(presentation: .named)))")
+                            if let lastSyncAt = app.lastSyncAt {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "building.columns")
+                                    Text(app.isSyncing ? "Bank syncing…" : "Bank: \(lastSyncAt.formatted(.relative(presentation: .named)))")
+                                }
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: cloud.iconName)
+                                    .symbolEffect(.pulse, isActive: cloud.isSyncing)
+                                Text(cloud.shortLabel)
+                            }
+                            .foregroundStyle(cloud.statusColor)
                         }
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(Theme.textTertiary)
                         .contentTransition(.numericText())
                     }
 
-                    PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
-                             recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
-
-                    if !reviewItems.isEmpty {
-                        ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
+                    ForEach(orderedCards) { card in
+                        cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
+                                plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
+                                reviewItems: reviewItems, relevantTransactions: relevantTransactions)
                     }
-
-                    ModuleHomeCards()
-
-                    BudgetSummaryCard(month: thisMonth, summary: month,
-                                      plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
-
-                    RecurringCard()
-
-                    NetWorthCard(accounts: accounts, snapshots: snapshots, range: $range)
-
-                    SpendingComparisonCard(transactions: relevantTransactions, ledger: ledger)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        CardHeader(title: "Transactions") {
-                            Button("See all") { app.selectedTab = .transactions }
-                                .font(.subheadline.weight(.medium))
-                        }
-                        let recent = relevantTransactions.filter { !$0.isHidden && ledger.isVisible($0) }.prefix(5)
-                        if recent.isEmpty {
-                            Text("No transactions yet").font(.subheadline).foregroundStyle(Theme.textTertiary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 16)
-                        }
-                        ForEach(recent) { tx in
-                            NavigationLink {
-                                TransactionDetailView(transaction: tx)
-                            } label: {
-                                TransactionRow(transaction: tx, category: ledger.category(for: tx))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .card()
                 }
                 .padding(16)
             }
             .pageBackground()
-            
+
             .navigationTitle(greeting)
             .navigationDestination(item: Binding(get: { app.openModule }, set: { app.openModule = $0 })) { moduleScreen($0) }
             .refreshable { await app.sync(context: context) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
                 ToolbarItem(placement: .topBarTrailing) { SyncButton() }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Settings", systemImage: "gearshape") { showSettings = true }
+                    Menu {
+                        Button("Edit Home", systemImage: "slider.horizontal.3") { showCustomize = true }
+                        Button("Settings", systemImage: "gearshape") { showSettings = true }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
+            .sheet(isPresented: $showCustomize) { DashboardCustomizeView(layoutRows: $layoutRows) }
+            .onAppear { layoutRows = DashboardLayoutStore.load() }
             .sheet(isPresented: $showSettings) { SettingsView() }
+        }
+    }
+
+    @ViewBuilder
+    private func cardView(for card: DashboardCard, ledger: Ledger, thisMonth: DateInterval, month: MonthSummary,
+                          plan: BudgetPlan, plannedIncome: Double, plannedExpenses: Double,
+                          reviewItems: [LocalTransaction], relevantTransactions: [LocalTransaction]) -> some View {
+        let visibleAccountIds = Set(accounts.filter { selectedPersonId == nil || $0.ownerId == selectedPersonId }.map(\.providerAccountId))
+        switch card {
+        case .pace:
+            PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
+                     recurring: recurringItems.filter { selectedPersonId == nil || visibleAccountIds.contains($0.accountId) })
+        case .review:
+            if !reviewItems.isEmpty {
+                ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
+            }
+        case .modules:
+            ModuleHomeCards()
+        case .budget:
+            BudgetSummaryCard(month: thisMonth, summary: month, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
+        case .recurring:
+            RecurringCard()
+        case .netWorth:
+            NetWorthCard(accounts: accounts, snapshots: snapshots, range: $range)
+        case .spending:
+            SpendingComparisonCard(transactions: relevantTransactions, ledger: ledger)
+        case .transactions:
+            VStack(alignment: .leading, spacing: 12) {
+                CardHeader(title: "Transactions") {
+                    Button("See all") { app.selectedTab = .transactions }
+                        .font(.subheadline.weight(.medium))
+                }
+                let recent = relevantTransactions.filter { !$0.isHidden && ledger.isVisible($0) }.prefix(5)
+                if recent.isEmpty {
+                    Text("No transactions yet").font(.subheadline).foregroundStyle(Theme.textTertiary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                }
+                ForEach(recent) { tx in
+                    NavigationLink {
+                        TransactionDetailView(transaction: tx)
+                    } label: {
+                        TransactionRow(transaction: tx, category: ledger.category(for: tx))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .card()
+        }
+    }
+}
+
+/// A card on the Dashboard the user can reorder or hide from "Edit Home".
+enum DashboardCard: String, CaseIterable, Identifiable {
+    case pace, review, modules, budget, recurring, netWorth, spending, transactions
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .pace: "Spending Pace"
+        case .review: "To Review"
+        case .modules: "Modules"
+        case .budget: "Budget"
+        case .recurring: "Recurring"
+        case .netWorth: "Net Worth"
+        case .spending: "Spending Comparison"
+        case .transactions: "Recent Transactions"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .pace: "This month's spend vs. an even pace"
+        case .review: "Transactions waiting for a category"
+        case .modules: "Period and other modules you've enabled"
+        case .budget: "Income and expenses vs. planned"
+        case .recurring: "Bills, subscriptions, and paychecks"
+        case .netWorth: "Chart with ranges"
+        case .spending: "This month vs. last month"
+        case .transactions: "Last 5"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pace: "gauge.with.needle"
+        case .review: "checkmark.square"
+        case .modules: "square.grid.2x2"
+        case .budget: "map"
+        case .recurring: "arrow.triangle.2.circlepath"
+        case .netWorth: "chart.line.uptrend.xyaxis"
+        case .spending: "chart.bar"
+        case .transactions: "list.bullet"
+        }
+    }
+}
+
+struct DashboardLayoutRow: Codable, Identifiable, Equatable {
+    var id: String { cardId }
+    var cardId: String
+    var sortOrder: Int
+    var isHidden: Bool
+
+    init(cardId: String, sortOrder: Int, isHidden: Bool = false) {
+        self.cardId = cardId
+        self.sortOrder = sortOrder
+        self.isHidden = isHidden
+    }
+}
+
+enum DashboardLayoutStore {
+    private static let key = "dashboardLayout_v1"
+
+    static func load() -> [DashboardLayoutRow] {
+        if let data = UserDefaults.standard.data(forKey: key),
+           let list = try? JSONDecoder().decode([DashboardLayoutRow].self, from: data) {
+            return ensureSeeded(existing: list)
+        }
+        return defaultRows()
+    }
+
+    static func save(_ rows: [DashboardLayoutRow]) {
+        if let data = try? JSONEncoder().encode(rows) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    private static func defaultRows() -> [DashboardLayoutRow] {
+        DashboardCard.allCases.enumerated().map { idx, card in
+            DashboardLayoutRow(cardId: card.rawValue, sortOrder: idx, isHidden: false)
+        }
+    }
+
+    private static func ensureSeeded(existing: [DashboardLayoutRow]) -> [DashboardLayoutRow] {
+        var rows = existing
+        let known = Set(rows.map(\.cardId))
+        let missing = DashboardCard.allCases.filter { !known.contains($0.rawValue) }
+        var nextOrder = (rows.map(\.sortOrder).max() ?? -1) + 1
+        for card in missing {
+            rows.append(DashboardLayoutRow(cardId: card.rawValue, sortOrder: nextOrder, isHidden: false))
+            nextOrder += 1
+        }
+        return rows.sorted { $0.sortOrder < $1.sortOrder }
+    }
+}
+
+/// "Edit Home": drag to reorder, toggle to show/hide.
+struct DashboardCustomizeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var layoutRows: [DashboardLayoutRow]
+    @State private var movedPulse = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach($layoutRows) { $row in
+                        if let card = DashboardCard(rawValue: row.cardId) {
+                            Toggle(isOn: Binding(get: { !row.isHidden }, set: {
+                                row.isHidden = !$0
+                                DashboardLayoutStore.save(layoutRows)
+                            })) {
+                                Label {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(card.title).foregroundStyle(Theme.text)
+                                        Text(card.subtitle).font(.caption).foregroundStyle(Theme.textTertiary)
+                                    }
+                                } icon: {
+                                    Image(systemName: card.icon).foregroundStyle(Theme.brand)
+                                }
+                            }
+                        }
+                    }
+                    .onMove { from, to in
+                        layoutRows.move(fromOffsets: from, toOffset: to)
+                        for (i, _) in layoutRows.enumerated() { layoutRows[i].sortOrder = i }
+                        DashboardLayoutStore.save(layoutRows)
+                        movedPulse.toggle()
+                    }
+                } footer: {
+                    Text("Drag to reorder. Turn off what you don't use.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .sensoryFeedback(.selection, trigger: movedPulse)
+            .navigationTitle("Edit Home")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

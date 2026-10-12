@@ -88,6 +88,7 @@ struct AccountsView: View {
             .navigationTitle("Accounts")
             .refreshable { await app.sync(context: context) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
                 ToolbarItem(placement: .topBarTrailing) { SyncButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }

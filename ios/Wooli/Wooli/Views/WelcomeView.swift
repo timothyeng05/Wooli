@@ -1,6 +1,74 @@
 import SwiftUI
 import SwiftData
 
+/// Shown first, before the welcome tour, only while there's no SimpleFIN
+/// credential yet (otherwise AppModel already jumped straight to `.live`).
+/// Gives CloudKit a few seconds to report any existing data from another
+/// device on the same Apple ID, so a returning user on a new iPhone doesn't
+/// get funneled through onboarding past data that's already on its way.
+struct ICloudCheckView: View {
+    private enum Phase { case checking, foundData, noData }
+
+    @Environment(AppModel.self) private var app
+    @Environment(\.modelContext) private var context
+    @State private var phase: Phase = .checking
+
+    var body: some View {
+        ZStack {
+            Theme.gradient.ignoresSafeArea()
+            VStack(spacing: 20) {
+                switch phase {
+                case .checking, .noData:
+                    // .noData renders identically for the instant before the
+                    // parent swaps to the welcome tour, so nothing flashes.
+                    ProgressView()
+                        .tint(.white)
+                        .controlSize(.large)
+                    Text("Checking iCloud for your data…")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.9))
+                case .foundData:
+                    Image(systemName: "icloud.fill")
+                        .font(.system(size: 52))
+                        .foregroundStyle(.white)
+                    Text("We found your Wooli data in iCloud")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                    Text("Looks like you've used Wooli on another device with this Apple ID. Continue to pick up right where you left off.")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                    Button("Continue") {
+                        app.mode = .live
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.white)
+                    .foregroundStyle(Theme.brand)
+                    .controlSize(.large)
+                    .padding(.top, 8)
+                }
+            }
+            .padding(32)
+        }
+        .task {
+            // A relaunch after finding data (but before the user tapped
+            // Continue) skips straight to the prompt — no re-wait needed.
+            if app.onboardingStage == .foundExistingData {
+                phase = .foundData
+                return
+            }
+            let found = await CloudKitImportWatcher.checkForExistingData(context: context)
+            if found {
+                withAnimation { phase = .foundData }
+            } else {
+                phase = .noData
+            }
+            app.recordICloudCheckResult(found: found)
+        }
+    }
+}
+
 /// First-run screen — the web sign-in page's look: blue gradient, white card,
 /// sheep logo, blue "Wooli" wordmark. A swipeable tour (one page per tab,
 /// plus a peek at the starter categories) runs before the connect step, so

@@ -20,10 +20,12 @@ enum RecurringDetector {
                                                                "Transit", "Car", "Hotels", "Flights", "Vacation"]
 
     static func refresh(context: ModelContext) {
+        let hiddenAccountIds = Set(((try? context.fetch(FetchDescriptor<LocalAccount>())) ?? [])
+            .filter { $0.isHidden || $0.hideTransactions }.map(\.providerAccountId))
         let transactions = ((try? context.fetch(FetchDescriptor<LocalTransaction>(
             sortBy: [SortDescriptor(\.transactedAt)]))) ?? [])
             .filter { !$0.isHidden && !$0.isTransfer && !$0.isPending && $0.splitParentId.isEmpty
-                && abs($0.amount) >= 1 && !$0.normalizedMerchant.isEmpty }
+                && abs($0.amount) >= 1 && !$0.normalizedMerchant.isEmpty && !hiddenAccountIds.contains($0.accountId) }
         var items = (try? context.fetch(FetchDescriptor<RecurringItem>())) ?? []
 
         if UserDefaults.standard.integer(forKey: versionKey) < version {

@@ -17,12 +17,16 @@ struct TransactionRow: View {
                 Button { showQuick = true } label: {
                     CategoryTile(category: category, size: 40)
                         .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.system(size: 14))
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, Theme.brand)
-                                .background(Circle().fill(Theme.card).padding(-1.5))
-                                .offset(x: 2, y: 2)
+                            if transaction.ruleApplied && !transaction.needsReview {
+                                Image(systemName: "forward.fill")
+                                    .font(.system(size: 10))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, Theme.brand)
+                                    .padding(3)
+                                    .background(Circle().fill(Theme.card))
+                                    .offset(x: 2, y: 2)
+                                    .accessibilityLabel("Categorized by a rule")
+                            }
                         }
                 }
                 .buttonStyle(.borderless)
@@ -98,6 +102,18 @@ struct TransactionRow: View {
 }
 
 /// Toolbar sync button that shows a spinner while syncing.
+/// Toolbar button that opens the hamburger sidebar (Categories/Rules/Recurring/Settings).
+struct HamburgerButton: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        Button("Menu", systemImage: "line.3.horizontal") {
+            withAnimation(.snappy) { app.isSidebarOpen = true }
+        }
+        .labelStyle(.iconOnly)
+    }
+}
+
 struct SyncButton: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context

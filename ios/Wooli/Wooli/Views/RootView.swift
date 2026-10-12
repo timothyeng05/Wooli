@@ -18,6 +18,7 @@ struct RootView: View {
         .tint(Theme.brand)
         .task {
             TripStore.shared.start()
+            ICloudSyncService.autoPushOnceIfNeeded(context: context)
             if app.mode == .live { ReviewWindow.pruneOlderTransactions(context: context) }
             if app.mode == .sample { SampleData.rollForward(context: context) }
             DefaultCategories.injectStarterRulesIfMissing(context: context)
@@ -40,7 +41,7 @@ struct RootView: View {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-sampleData"), app.mode == .onboarding { app.startSample(context: context) }
             if let i = args.firstIndex(of: "-tab"), i + 1 < args.count, let n = Int(args[i + 1]) {
-                let tabs: [AppTab] = [.dashboard, .accounts, .transactions, .reports, .menu]
+                let tabs: [AppTab] = [.dashboard, .accounts, .transactions, .reports, .budget]
                 if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
             }
             if args.contains("-review") { app.showReview = true }
@@ -99,22 +100,84 @@ struct MainTabView: View {
 
     var body: some View {
         @Bindable var app = app
-        TabView(selection: $app.selectedTab) {
-            Tab("Dashboard", systemImage: "house", value: AppTab.dashboard) {
-                DashboardView()
+        ZStack(alignment: .leading) {
+            TabView(selection: $app.selectedTab) {
+                Tab("Dashboard", systemImage: "house", value: AppTab.dashboard) {
+                    DashboardView()
+                }
+                Tab("Accounts", systemImage: "square.stack.3d.up", value: AppTab.accounts) {
+                    AccountsView()
+                }
+                Tab("Transactions", systemImage: "creditcard", value: AppTab.transactions) {
+                    TransactionsView()
+                }
+                .badge(reviewCount)
+                Tab("Reports", systemImage: "chart.pie", value: AppTab.reports) {
+                    ReportsView()
+                }
+                Tab("Budget", systemImage: "map", value: AppTab.budget) {
+                    BudgetView()
+                }
             }
-            Tab("Accounts", systemImage: "square.stack.3d.up", value: AppTab.accounts) {
-                AccountsView()
+
+            if app.isSidebarOpen {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            app.isSidebarOpen = false
+                        }
+                    }
+                    .transition(.opacity)
+
+                SidebarDrawer()
+                    .frame(width: 290)
+                    .ignoresSafeArea(edges: .vertical)
+                    .transition(.move(edge: .leading))
+                    .zIndex(1)
             }
-            Tab("Transactions", systemImage: "creditcard", value: AppTab.transactions) {
-                TransactionsView()
-            }
-            .badge(reviewCount)
-            Tab("Reports", systemImage: "chart.pie", value: AppTab.reports) {
-                ReportsView()
-            }
-            Tab("Menu", systemImage: "line.3.horizontal", value: AppTab.menu) {
-                MenuView()
+        }
+        .animation(.easeInOut(duration: 0.25), value: app.isSidebarOpen)
+        .sheet(item: $app.sidebarDestination) { dest in
+            switch dest {
+            case .categories:
+                NavigationStack {
+                    CategoriesSettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { app.sidebarDestination = nil }
+                            }
+                        }
+                }
+            case .rules:
+                NavigationStack {
+                    RulesView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { app.sidebarDestination = nil }
+                            }
+                        }
+                }
+            case .recurring:
+                NavigationStack {
+                    RecurringView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { app.sidebarDestination = nil }
+                            }
+                        }
+                }
+            case .trips:
+                NavigationStack {
+                    TripsListView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { app.sidebarDestination = nil }
+                            }
+                        }
+                }
+            case .settings:
+                SettingsView()
             }
         }
         .fullScreenCover(isPresented: $app.showReview) {
@@ -144,64 +207,138 @@ struct MainTabView: View {
     }
 }
 
-struct MenuView: View {
-    @State private var showSettings = false
+struct SidebarDrawer: View {
+    @Environment(AppModel.self) private var app
+    @AppStorage("displayName") private var displayName = ""
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Feedback") {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(Theme.brand)
+                    Text("Wooli")
+                        .font(.title2.bold())
+                        .foregroundStyle(Theme.text)
+                    Spacer()
                     Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            app.isSidebarOpen = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+
+                if !displayName.isEmpty {
+                    Text("Hello, \(displayName)")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 64)
+            .padding(.bottom, 20)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("MANAGE")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 4)
+
+                    sidebarButton(title: "Trips", systemImage: "suitcase", destination: .trips)
+                    sidebarButton(title: "Categories", systemImage: "square.grid.2x2", destination: .categories)
+                    sidebarButton(title: "Rules", systemImage: "wand.and.stars", destination: .rules)
+                    sidebarButton(title: "Recurring", systemImage: "arrow.triangle.2.circlepath", destination: .recurring)
+
+                    Divider()
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                    Text("APP")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 4)
+
+                    sidebarButton(title: "Settings", systemImage: "gearshape", destination: .settings)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            app.isSidebarOpen = false
+                        }
                         if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
                             #if os(iOS)
                             UIApplication.shared.open(url)
                             #endif
                         }
                     } label: {
-                        Label("Send Feedback", systemImage: "envelope")
+                        HStack(spacing: 14) {
+                            Image(systemName: "envelope")
+                                .font(.body)
+                                .frame(width: 24)
+                                .foregroundStyle(Theme.textSecondary)
+                            Text("Send Feedback")
+                                .font(.body)
+                                .foregroundStyle(Theme.text)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(Theme.text)
+                    .buttonStyle(.plain)
                 }
-
-                Section("Plan") {
-                    NavigationLink(value: "trips") {
-                        Label("Trips", systemImage: "suitcase")
-                    }
-                }
-
-                Section("Budget & Settings") {
-                    NavigationLink(value: "budget") {
-                        Label("Budget", systemImage: "map")
-                    }
-                    NavigationLink(value: "categories") {
-                        Label("Categories", systemImage: "square.grid.2x2")
-                    }
-                    NavigationLink(value: "rules") {
-                        Label("Rules", systemImage: "wand.and.stars")
-                    }
-                    NavigationLink(value: "recurring") {
-                        Label("Recurring", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    .foregroundStyle(Theme.text)
-                }
+                .padding(.vertical, 8)
             }
-            .navigationTitle("Menu")
-            .navigationDestination(for: String.self) { val in
-                switch val {
-                case "budget": BudgetView()
-                case "categories": CategoriesSettingsView()
-                case "rules": RulesView()
-                case "recurring": RecurringView()
-                case "trips": TripsListView()
-                default: EmptyView()
-                }
-            }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(Color(UIColor.systemBackground))
+        .gesture(
+            DragGesture().onEnded { val in
+                if val.translation.width < -40 {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        app.isSidebarOpen = false
+                    }
+                }
+            }
+        )
+    }
+
+    private func sidebarButton(title: String, systemImage: String, destination: SidebarDestination) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                app.isSidebarOpen = false
+            }
+            app.sidebarDestination = destination
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.body)
+                    .frame(width: 24)
+                    .foregroundStyle(Theme.brand)
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

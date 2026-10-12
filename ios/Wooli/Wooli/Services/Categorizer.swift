@@ -68,6 +68,9 @@ enum Categorizer {
         transaction.categoryId = category?.id
         transaction.isTransfer = category?.isTransfer ?? false
         transaction.aiSuggested = byAI && category != nil
+        // Reset here; RuleEngine sets this back to true right after calling
+        // assign(), so a rule's own category-set still ends up flagged.
+        transaction.ruleApplied = false
     }
 
     /// The user confirmed this transaction. Requires a category (same rule as

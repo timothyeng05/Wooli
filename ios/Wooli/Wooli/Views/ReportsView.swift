@@ -76,6 +76,9 @@ struct ReportsView: View {
             
             .navigationTitle("Reports")
             .refreshable { await app.sync(context: context) }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
+            }
         }
     }
 }
