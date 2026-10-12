@@ -2,6 +2,28 @@ import SwiftUI
 import SwiftData
 
 private func entries(_ periods: [PeriodEntry]) -> [CycleMath.Entry] { periods.map(\.cycleEntry) }
+
+/// Headline + detail for the cycle right now — shared by the Period Home card and Today.
+enum PeriodStatus {
+    /// `periods` sorted newest first.
+    static func text(_ periods: [PeriodEntry], today: Date = .now) -> (headline: String, detail: String) {
+        let list = entries(periods)
+        if periods.isEmpty { return ("Log your first period", "Wooli will start predicting after a couple of cycles.") }
+        if let ongoing = periods.first(where: { $0.endDay == nil }) {
+            return ("Period day \(CycleMath.days(from: ongoing.startDay, to: today) + 1)", "Tap \"Period ended\" when it's over.")
+        }
+        guard let cycleDay = CycleMath.cycleDay(list, today: today) else { return ("Cycle", "") }
+        let nextText: String = {
+            guard let next = CycleMath.predictedNextStart(list) else { return "" }
+            let daysToNext = CycleMath.days(from: today, to: next)
+            if daysToNext > 1 { return "Next period in about \(daysToNext) days" }
+            if daysToNext == 1 { return "Next period expected tomorrow" }
+            if daysToNext == 0 { return "Next period expected today" }
+            return "Period is \(-daysToNext) day\(daysToNext == -1 ? "" : "s") later than predicted"
+        }()
+        return ("Day \(cycleDay)", nextText)
+    }
+}
 private func flowColor(_ flow: String) -> Color { Color(hex: CycleMath.flowColors[flow] ?? "#ef4444") }
 
 // MARK: - Home card
@@ -22,26 +44,10 @@ struct PeriodHomeCard: View {
 
     private var card: some View {
         let list = entries(periods)
-        let today = Date.now
         let ongoing = periods.first { $0.endDay == nil }
-        let cycleDay = CycleMath.cycleDay(list, today: today)
+        let cycleDay = CycleMath.cycleDay(list, today: .now)
         let average = CycleMath.averageCycleLength(list)
-        let next = CycleMath.predictedNextStart(list)
-        let daysToNext = next.map { CycleMath.days(from: today, to: $0) }
-
-        let (headline, detail): (String, String) = {
-            if periods.isEmpty { return ("Log your first period", "Wooli will start predicting after a couple of cycles.") }
-            if let ongoing { return ("Period day \(CycleMath.days(from: ongoing.startDay, to: today) + 1)", "Tap \"Period ended\" when it's over.") }
-            guard let cycleDay else { return ("Cycle", "") }
-            let nextText: String = {
-                guard let daysToNext else { return "" }
-                if daysToNext > 1 { return "Next period in about \(daysToNext) days" }
-                if daysToNext == 1 { return "Next period expected tomorrow" }
-                if daysToNext == 0 { return "Next period expected today" }
-                return "Period is \(-daysToNext) day\(daysToNext == -1 ? "" : "s") later than predicted"
-            }()
-            return ("Day \(cycleDay)", nextText)
-        }()
+        let (headline, detail) = PeriodStatus.text(periods)
 
         return NavigationLink {
             moduleScreen(.period)

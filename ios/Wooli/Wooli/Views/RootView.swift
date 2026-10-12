@@ -35,24 +35,33 @@ struct RootView: View {
         #if DEBUG
         .task {
             // Launch arguments for Simulator checks: `-sampleData` skips
-            // onboarding, `-tab N` opens a tab, `-review` opens the review flow.
+            // onboarding, `-tab N` opens a Budget tab, `-review` opens the review flow.
             // For a true first launch, delete the app and run
             // `xcrun simctl keychain booted reset` (the SimpleFIN key survives deletion).
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-sampleData"), app.mode == .onboarding { app.startSample(context: context) }
             if let i = args.firstIndex(of: "-tab"), i + 1 < args.count, let n = Int(args[i + 1]) {
                 let tabs: [AppTab] = [.dashboard, .accounts, .transactions, .reports, .budget]
-                if tabs.indices.contains(n) { app.selectedTab = tabs[n] }
+                if tabs.indices.contains(n) { app.space = .budget; app.selectedTab = tabs[n] }
             }
+            // `-space trips`: open that app instead of Today.
+            if let i = args.firstIndex(of: "-space"), i + 1 < args.count, let space = AppSpace(rawValue: args[i + 1]) { app.space = space }
             if args.contains("-review") { app.showReview = true }
+            // `-drawer`: open the ☰ app switcher.
+            if args.contains("-drawer") { app.isSidebarOpen = true }
             // `-calibration`: the first-run review shown after connecting a bank.
             if args.contains("-calibration") { app.showCalibration = true }
             // `-module period`: enable that module (seeding sample data) and open it.
             if let i = args.firstIndex(of: "-module"), i + 1 < args.count, let module = WooliModule(rawValue: args[i + 1]) {
                 UserDefaults.standard.set(true, forKey: module.enabledKey)
                 if app.mode == .sample { ModuleSampleData.seed(module, context: context) }
-                app.selectedTab = .dashboard
-                app.openModule = module
+                if let space = AppSpace.allCases.first(where: { $0.module == module }) {
+                    app.space = space
+                } else {
+                    app.space = .budget
+                    app.selectedTab = .dashboard
+                    app.openModule = module
+                }
             }
             if args.contains("-selftest") { DebugSelfTest.run(context: context) }
             // `-sampleTrip`: add a demo trip (stays on this device unless iCloud is signed in).
@@ -84,6 +93,9 @@ struct RootView: View {
     }
 }
 
+/// The super-app shell: shows the current app (`AppSpace`) and hosts what's
+/// shared by every app — the ☰ app-switcher drawer, review/calibration flows,
+/// trip invites.
 struct MainTabView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
@@ -101,24 +113,9 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var app = app
         ZStack(alignment: .leading) {
-            TabView(selection: $app.selectedTab) {
-                Tab("Dashboard", systemImage: "house", value: AppTab.dashboard) {
-                    DashboardView()
-                }
-                Tab("Accounts", systemImage: "square.stack.3d.up", value: AppTab.accounts) {
-                    AccountsView()
-                }
-                Tab("Transactions", systemImage: "creditcard", value: AppTab.transactions) {
-                    TransactionsView()
-                }
-                .badge(reviewCount)
-                Tab("Reports", systemImage: "chart.pie", value: AppTab.reports) {
-                    ReportsView()
-                }
-                Tab("Budget", systemImage: "map", value: AppTab.budget) {
-                    BudgetView()
-                }
-            }
+            SpaceRoot(space: app.space.isAvailable ? app.space : .today, reviewCount: reviewCount)
+                .id(app.space)
+                .transition(.opacity)
 
             if app.isSidebarOpen {
                 Color.black.opacity(0.35)
@@ -138,6 +135,7 @@ struct MainTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: app.isSidebarOpen)
+        .animation(.easeInOut(duration: 0.2), value: app.space)
         .sheet(item: $app.sidebarDestination) { dest in
             switch dest {
             case .categories:
@@ -161,15 +159,6 @@ struct MainTabView: View {
             case .recurring:
                 NavigationStack {
                     RecurringView()
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Done") { app.sidebarDestination = nil }
-                            }
-                        }
-                }
-            case .trips:
-                NavigationStack {
-                    TripsListView()
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
                                 Button("Done") { app.sidebarDestination = nil }
@@ -207,6 +196,66 @@ struct MainTabView: View {
     }
 }
 
+/// The root screen of each app. Budget keeps its own tab bar; the others are
+/// a single navigation stack with the ☰ switcher in the top-left.
+private struct SpaceRoot: View {
+    let space: AppSpace
+    let reviewCount: Int
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        switch space {
+        case .today:
+            TodayView()
+        case .budget:
+            BudgetTabView(reviewCount: reviewCount)
+        case .trips:
+            NavigationStack {
+                TripsListView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+            }
+        case .period:
+            NavigationStack {
+                moduleScreen(.period)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+            }
+        }
+    }
+}
+
+/// The Budget app: the original five tabs.
+private struct BudgetTabView: View {
+    let reviewCount: Int
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        @Bindable var app = app
+        TabView(selection: $app.selectedTab) {
+            Tab("Dashboard", systemImage: "house", value: AppTab.dashboard) {
+                DashboardView()
+            }
+            Tab("Accounts", systemImage: "square.stack.3d.up", value: AppTab.accounts) {
+                AccountsView()
+            }
+            Tab("Transactions", systemImage: "creditcard", value: AppTab.transactions) {
+                TransactionsView()
+            }
+            .badge(reviewCount)
+            Tab("Reports", systemImage: "chart.pie", value: AppTab.reports) {
+                ReportsView()
+            }
+            Tab("Budget", systemImage: "map", value: AppTab.budget) {
+                // BudgetView is also pushed from the Dashboard, so the tab supplies its own stack.
+                NavigationStack {
+                    BudgetView()
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
+            }
+        }
+    }
+}
+
+/// ☰ drawer: switch apps at the top, then tools for the current app, then app-wide items.
 struct SidebarDrawer: View {
     @Environment(AppModel.self) private var app
     @AppStorage("displayName") private var displayName = ""
@@ -216,9 +265,7 @@ struct SidebarDrawer: View {
             // Header
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(Theme.brand)
+                    WooliLogo(size: 30)
                     Text("Wooli")
                         .font(.title2.bold())
                         .foregroundStyle(Theme.text)
@@ -248,27 +295,28 @@ struct SidebarDrawer: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("MANAGE")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, 4)
+                    sectionTitle("APPS").padding(.top, 16)
 
-                    sidebarButton(title: "Trips", systemImage: "suitcase", destination: .trips)
-                    sidebarButton(title: "Categories", systemImage: "square.grid.2x2", destination: .categories)
-                    sidebarButton(title: "Rules", systemImage: "wand.and.stars", destination: .rules)
-                    sidebarButton(title: "Recurring", systemImage: "arrow.triangle.2.circlepath", destination: .recurring)
+                    spaceButton(.today)
+                    ForEach(AppSpace.installed) { spaceButton($0) }
+
+                    if app.space == .budget {
+                        Divider()
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+
+                        sectionTitle("BUDGET TOOLS")
+
+                        sidebarButton(title: "Categories", systemImage: "square.grid.2x2", destination: .categories)
+                        sidebarButton(title: "Rules", systemImage: "wand.and.stars", destination: .rules)
+                        sidebarButton(title: "Recurring", systemImage: "arrow.triangle.2.circlepath", destination: .recurring)
+                    }
 
                     Divider()
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
 
-                    Text("APP")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 4)
+                    sectionTitle("WOOLI")
 
                     sidebarButton(title: "Settings", systemImage: "gearshape", destination: .settings)
 
@@ -313,6 +361,41 @@ struct SidebarDrawer: View {
                 }
             }
         )
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(Theme.textTertiary)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 4)
+    }
+
+    private func spaceButton(_ space: AppSpace) -> some View {
+        let isCurrent = app.space == space
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { app.open(space) }
+        } label: {
+            HStack(spacing: 12) {
+                AppIconTile(space, size: 30)
+                Text(space.title)
+                    .font(.body.weight(isCurrent ? .semibold : .medium))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.brand)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isCurrent ? Theme.brandSoft : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 
     private func sidebarButton(title: String, systemImage: String, destination: SidebarDestination) -> some View {

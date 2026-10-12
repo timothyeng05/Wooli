@@ -142,14 +142,14 @@ struct ModulesSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Text("Extra tools built into Wooli. Everything stays on this iPhone and your own iCloud, like your budget. Turning a module off hides it — your data stays until you delete it.")
+                Text("Optional apps inside Wooli. Turn one on to add it to Today and the ☰ app switcher. Everything stays on this iPhone and your own iCloud, like your budget. Turning a module off hides it — your data stays until you delete it.")
                     .font(.footnote).foregroundStyle(Theme.textSecondary)
             }
             ForEach(WooliModule.allCases) { module in
                 ModuleSettingsSection(module: module, isSample: app.mode == .sample)
             }
         }
-        .navigationTitle("Modules")
+        .navigationTitle("Apps")
     }
 }
 
@@ -185,7 +185,7 @@ private struct ModuleSettingsSection: View {
                 if on && isSample { ModuleSampleData.seed(module, context: context) }
             }
             if enabled {
-                Toggle("Show on Home", isOn: $showOnHome)
+                Toggle("Show on Budget dashboard", isOn: $showOnHome)
                 Toggle("Require Face ID", isOn: $requireFaceID)
             }
             Button("Delete all \(module.title) data", role: .destructive) { confirmDelete = true }

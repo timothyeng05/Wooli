@@ -166,6 +166,32 @@ Options:
 - **Live Activity** on trip days: "Next up: Louvre at 2:00 · 14 min walk".
 - **Widgets / App Intents**: "What's next on my trip?"
 
+## Phase S — Super app (branch `ios/super-app-shell`, started 2026-10-11)
+
+**Goal:** Wooli becomes a home for personal apps. Budget and Trips are the main apps, Period is secondary (opt-in), and more can follow (date tracker, outfit tracker).
+
+**Shell (✅ built, Claude 2026-10-11):**
+- **Today** (`Hub/TodayView.swift`) is the launch screen: one card per app (tap = open that app), then a "Your apps" grid with an Add tile (→ Settings → Apps). Budget leads because people adopt one core service first.
+- **`AppSpace`** (`Hub/AppSpace.swift`) lists the apps. Each app keeps its own navigation: Budget keeps its five tabs, Trips and Period are single stacks.
+- **☰ drawer = app switcher:** Apps on top (current one checked), then tools for the current app (Budget tools only in Budget), then Settings/Feedback.
+- Settings → "Modules" renamed **Apps**. Optional apps still use `WooliModule` for on/off + Face ID; a locked app shows "Locked" on Today.
+- Debug: `-space <today|budget|trips|period>`, `-drawer` (open the switcher), `-futureApps` (mock Dates + Outfits cards/tiles to preview growth — DEBUG only, not real features).
+
+**Adding an app (the recipe):** a case in `AppSpace` (+ a `WooliModule` case if it's optional), a Today card in `TodayView`, its root in `SpaceRoot` (`RootView.swift`), its models in the `Schema` + `Deduplicator`. Keep app code self-contained (no budget types), same as `MODULES_SPEC.md`.
+
+**Next (not started):**
+| ID | Item | Status |
+|----|------|--------|
+| S1 | User tests the shell on device; decide Today vs. Budget as launch screen long-term | ⏳ waiting on user |
+| S2 | Edit Today: reorder/hide cards (reuse the `DashboardLayoutStore` pattern) | todo |
+| S3 | Retire the Budget dashboard's "Modules" card (Today replaces it); rename "Show on Home" | todo |
+| S4 | **Dates** app — spec with user: what to track (date nights? ideas list? anniversaries?), link spend to a Budget tag | idea |
+| S5 | **Outfits** app — spec with user: photo wardrobe, log what you wore, "last worn", WeatherKit suggestion | idea |
+| S6 | Cross-app links: trip spend from Budget tags (T5), date-night spend | idea |
+| S7 | iPad: switch the drawer to a `sidebarAdaptable` TabView with a `TabSection` per app | idea |
+
+---
+
 ## Phase 2 — Existing backlog (carried over)
 
 1. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).
@@ -181,6 +207,8 @@ Options:
 
 ## Decisions
 
+- **2026-10-11** — Super app direction (branch `ios/super-app-shell`): Today hub as launch screen, ☰ drawer as app switcher, each app keeps its own navigation. Budget + Trips primary, Period secondary/opt-in.
+
 - **2026-10-11** — Mood module removed at the user's request (code, model, sample data, self-test). Period stays. SwiftData drops the `MoodEntry` table on next launch (verified in Simulator).
 - **2026-10-11** — Priority: optimize (Phase 0) before new features. Next features are F1 + F2 (spending patterns, largest transactions).
 - **2026-09-26** — Keep only last month + month to date of transactions (`ReviewWindow`). Under review in O1.
@@ -189,6 +217,8 @@ Options:
 ---
 
 ## Done
+
+- **2026-10-11 · Claude** — Phase S shell: Today hub, `AppSpace`, ☰ app switcher, Trips/Period as full apps, Settings → Apps. Also fixed: the Budget tab had no navigation bar (no month arrows) because `BudgetView` has no stack of its own — the tab now wraps it. Verified in the Simulator with `-sampleData`; not yet on a device.
 
 - **2026-10-11 · Claude** — CloudKit environment fixes after a TestFlight build (production) was installed over an Xcode build (development): sharing failed ("Zone does not exist"), the invitee saw "Trip not available", and an apparent account switch wiped all trips on the phone (restored from a backup taken minutes earlier; both trips now in production). Fixes: re-upload owned trips on environment change; ensure a trip is in iCloud before sharing; never delete trips on account change (keep on sign-out, back up before clearing on a switch).
 - **2026-10-11 · Claude** — Trip page is now one card per day: the day you move holds the travel card and the new leg's header as a divider (plans before departure above, the rest below); leg color bar on each day; collapsing a leg hides its later days. Travel-only days outside legs (overnight flights) fold into the arrival card ("Wed Mar 31 → Thu Apr 1"). Flight detection recognizes flight numbers and more airport codes.

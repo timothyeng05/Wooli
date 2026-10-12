@@ -11,7 +11,7 @@ enum AppTab: Hashable { case dashboard, accounts, transactions, reports, budget 
 /// (a past attempt that routed these through the tab machinery caused double
 /// back-arrows when a screen was reachable both as a "tab" and a push target).
 enum SidebarDestination: String, Identifiable {
-    case trips, categories, rules, recurring, settings
+    case categories, rules, recurring, settings
     var id: String { rawValue }
 }
 
@@ -40,6 +40,8 @@ final class AppModel {
     var syncError: String?
     var bankMessages: [String] = []
     var lastSyncAt: Date? = SyncService.lastSyncAt
+    /// Which app is on screen. Always opens on Today.
+    var space: AppSpace = .today
     var selectedTab: AppTab = .dashboard
     var isSidebarOpen = false
     var sidebarDestination: SidebarDestination?
@@ -50,6 +52,12 @@ final class AppModel {
     var openModule: WooliModule?
     /// The guided first-run review, shown once right after connecting a bank.
     var showCalibration = false
+
+    /// Switch apps (from the drawer or a Today card).
+    func open(_ space: AppSpace) {
+        isSidebarOpen = false
+        self.space = space
+    }
 
     init() {
         let stored = UserDefaults.standard.string(forKey: Self.modeKey).flatMap(Mode.init) ?? .onboarding
