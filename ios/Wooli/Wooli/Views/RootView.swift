@@ -19,7 +19,7 @@ struct RootView: View {
         .task {
             TripStore.shared.start()
             ICloudSyncService.autoPushOnceIfNeeded(context: context)
-            if app.mode == .live { ReviewWindow.pruneOlderTransactions(context: context) }
+            if app.mode == .live { TransactionRetention.pruneOlderTransactions(context: context) }
             if app.mode == .sample { SampleData.rollForward(context: context) }
             DefaultCategories.injectStarterRulesIfMissing(context: context)
             RolloverService.closeMonths(context: context)
@@ -57,11 +57,6 @@ struct RootView: View {
                 if let space = AppSpace.allCases.first(where: { $0.module == module }) {
                     AppLineup.shared.setEnabled(space, true)
                     app.space = space
-                } else {
-                    UserDefaults.standard.set(true, forKey: module.enabledKey)
-                    app.space = .budget
-                    app.selectedTab = .dashboard
-                    app.openModule = module
                 }
             }
             if args.contains("-selftest") { DebugSelfTest.run(context: context) }

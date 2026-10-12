@@ -30,7 +30,7 @@ enum RolloverService {
             while month < thisMonth {
                 let interval = cal.dateInterval(of: .month, for: month)!
                 // Only months whose transactions are still on the phone count.
-                if month >= ReviewWindow.start {
+                if month >= TransactionRetention.start {
                     let summary = MonthSummary(transactions: transactions, in: interval, categories: byId, hiddenAccounts: hidden)
                     let spent = category.parentId == nil ? (summary.spendingByGroup[category.id] ?? 0)
                                                           : (summary.spendingByCategory[category.id] ?? 0)

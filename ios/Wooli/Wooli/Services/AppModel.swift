@@ -50,8 +50,6 @@ final class AppModel {
 
     var isCategorizing = false
     var showReview = false
-    /// A module screen to push on the Dashboard (debug launch args, deep links).
-    var openModule: WooliModule?
     /// The guided first-run review, shown once right after connecting a bank.
     var showCalibration = false
 
@@ -126,7 +124,7 @@ final class AppModel {
         defer { isSyncing = false }
         do {
             let summary = try await SyncService.sync(context: context)
-            ReviewWindow.pruneOlderTransactions(context: context)
+            TransactionRetention.pruneOlderTransactions(context: context)
             bankMessages = summary.bankMessages
             lastSyncAt = SyncService.lastSyncAt
         } catch {

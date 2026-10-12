@@ -47,7 +47,7 @@ Ordered by priority.
 
 | ID | Item | Status |
 |----|------|--------|
-| O1 | History retention vs. Reports (decision needed — see below) | ⏳ waiting on user |
+| O1 | History retention vs. Reports | ✅ done — keep 5 years |
 | O2 | Household / People filter fixes | todo |
 | O3 | Navigation clean-up (duplicate entry points) | todo |
 | O4 | Add a unit-test target for the money math | todo |
@@ -58,7 +58,7 @@ Ordered by priority.
 | O9 | Slow first launch | 🟡 launch screen fixed; verify on device |
 | O10 | Onboarding polish | ✅ done (tour visuals = idea) |
 
-**O1 — History retention vs. Reports.** Since `7120327` the app deletes every transaction older than the start of last month (`ReviewWindow.pruneOlderTransactions`, run on launch and after each sync). But Reports still offers "Last 3 months", "Last 6 months", "This year", and the Cash flow card always draws 6 months — those show only ~2 months of data, which looks broken. The `ReviewWindow` doc comment even says older data "stays in the store for charts and reports" — it doesn't. This also blocks month-over-month insights (F1, F2).
+**O1 — History retention vs. Reports.** ✅ **Decided 2026-10-12: keep transactions for 5 years** (user). `TransactionRetention` (5 years) now does the pruning; `ReviewWindow` (last month + this month) only scopes review and the default Transactions filter. The first sync after updating re-fetches SimpleFIN's ~90 days once (`historyBackfill.v1`) so recently deleted months come back; anything older is gone. A re-fetched transaction comes back with rules/categorizer applied, not any manual category it had before. *Original problem:* since `7120327` the app deletes every transaction older than the start of last month (`ReviewWindow.pruneOlderTransactions`, run on launch and after each sync). But Reports still offers "Last 3 months", "Last 6 months", "This year", and the Cash flow card always draws 6 months — those show only ~2 months of data, which looks broken. The `ReviewWindow` doc comment even says older data "stays in the store for charts and reports" — it doesn't. This also blocks month-over-month insights (F1, F2).
 Options:
 - **A (recommended):** keep the 2-month raw window for review/lists, but before pruning, roll each finished week/month into a small `PeriodSummary` model (spend by category, income, transaction count, top ~10 largest transactions). Reports and insights read summaries for older periods. Small store, keeps history forever.
 - **B:** keep raw transactions longer (e.g. 13 months). Simplest code; bigger iCloud store. SimpleFIN only gives ~90 days back, so history builds up from now either way.
@@ -182,13 +182,15 @@ Options:
 **Onboarding picks the apps (✅ S8, Claude 2026-10-12):** after the welcome page, "Make Wooli yours" lists every app with a switch and a drag handle (`AppLineupRows`). `AppLineup` stores the choice (`app.<id>.enabled`, or the module key for optional apps) and the rank (`apps.order`); the rank orders Today's cards, the app grid, and the ☰ switcher. The Budget tour + SimpleFIN step only appear if Budget is on; otherwise the flow ends on "You're all set" and the app runs in the new `Mode.local` (no bank; categories seeded so Budget works if turned on later — Settings shows "Not Connected" + Connect). Settings → Apps uses the same rows. Debug: `-onboardingPage N`. The swipe pager was replaced by a button-driven page view because the old TabView was `.disabled` on tour pages, which would also block the switches.
 *Not verified by tap (Simulator can't tap from scripts):* dragging rows, the "Start using Wooli" button, Settings → Apps screen. State changes were checked by writing the same defaults and relaunching.
 
-**Next (not started):**
+**Edit Today (✅ S2 + S3, Claude 2026-10-12):** the sliders button on Today (or long-press a card → Edit Today / Hide from Today) opens a sheet listing the enabled apps: drag to rank (same rank as Settings → Apps, via `AppLineup.moveInstalled`), switch a card off to keep the app in the grid without a card (`today.hiddenCards`). The Budget dashboard's Modules card, `PeriodHomeCard`, `LockedModuleCard` and `AppModel.openModule` are gone; Settings → Apps' "Also show on Budget dashboard" is now "Show card on Today", and an old "off" carries over.
+
+**Next:**
 | ID | Item | Status |
 |----|------|--------|
 | S1 | User tests the shell on device; decide Today vs. Budget as launch screen long-term | ⏳ waiting on user |
 | S8 | Onboarding: pick + rank apps | ✅ done |
-| S2 | Edit Today: reorder/hide cards (reuse the `DashboardLayoutStore` pattern) | todo |
-| S3 | Retire the Budget dashboard's "Modules" card (Today replaces it); rename "Show on Home" | todo |
+| S2 | Edit Today: reorder/hide cards | ✅ done |
+| S3 | Retire the Budget dashboard's "Modules" card (Today replaces it); rename "Show on Home" | ✅ done |
 | S4 | **Dates** app — spec with user: what to track (date nights? ideas list? anniversaries?), link spend to a Budget tag | idea |
 | S5 | **Outfits** app — spec with user: photo wardrobe, log what you wore, "last worn", WeatherKit suggestion | idea |
 | S6 | Cross-app links: trip spend from Budget tags (T5), date-night spend | idea |
@@ -211,6 +213,8 @@ Options:
 
 ## Decisions
 
+- **2026-10-12** — Keep transactions for 5 years (replaces the 2026-09-26 two-month rule). Review stays scoped to last month + this month.
+
 - **2026-10-11** — Super app direction (branch `ios/super-app-shell`): Today hub as launch screen, ☰ drawer as app switcher, each app keeps its own navigation. Budget + Trips primary, Period secondary/opt-in.
 
 - **2026-10-11** — Mood module removed at the user's request (code, model, sample data, self-test). Period stays. SwiftData drops the `MoodEntry` table on next launch (verified in Simulator).
@@ -221,6 +225,8 @@ Options:
 ---
 
 ## Done
+
+- **2026-10-12 · Claude** — O1 5-year retention + one-time 90-day backfill; S2 Edit Today (rank, hide cards, long-press menu); S3 retired the dashboard Modules card. Verified in the Simulator: hide + drag in Edit Today, Today/grid order, values saved across relaunch, Budget dashboard without Modules card. Not verified: the backfill against a real SimpleFIN account; the long-press menu.
 
 - **2026-10-12 · Claude** — S8 onboarding app picker + ranking, Budget optional (no-bank `local` mode), Settings → Apps rank list.
 

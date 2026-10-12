@@ -96,7 +96,6 @@ struct DashboardView: View {
             .pageBackground()
 
             .navigationTitle(greeting)
-            .navigationDestination(item: Binding(get: { app.openModule }, set: { app.openModule = $0 })) { moduleScreen($0) }
             .refreshable { await app.sync(context: context) }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
@@ -129,8 +128,6 @@ struct DashboardView: View {
             if !reviewItems.isEmpty {
                 ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
             }
-        case .modules:
-            ModuleHomeCards()
         case .budget:
             BudgetSummaryCard(month: thisMonth, summary: month, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
         case .recurring:
@@ -166,14 +163,13 @@ struct DashboardView: View {
 
 /// A card on the Dashboard the user can reorder or hide from "Edit Home".
 enum DashboardCard: String, CaseIterable, Identifiable {
-    case pace, review, modules, budget, recurring, netWorth, spending, transactions
+    case pace, review, budget, recurring, netWorth, spending, transactions
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .pace: "Spending Pace"
         case .review: "To Review"
-        case .modules: "Modules"
         case .budget: "Budget"
         case .recurring: "Recurring"
         case .netWorth: "Net Worth"
@@ -186,7 +182,6 @@ enum DashboardCard: String, CaseIterable, Identifiable {
         switch self {
         case .pace: "This month's spend vs. an even pace"
         case .review: "Transactions waiting for a category"
-        case .modules: "Period and other modules you've enabled"
         case .budget: "Income and expenses vs. planned"
         case .recurring: "Bills, subscriptions, and paychecks"
         case .netWorth: "Chart with ranges"
@@ -199,7 +194,6 @@ enum DashboardCard: String, CaseIterable, Identifiable {
         switch self {
         case .pace: "gauge.with.needle"
         case .review: "checkmark.square"
-        case .modules: "square.grid.2x2"
         case .budget: "map"
         case .recurring: "arrow.triangle.2.circlepath"
         case .netWorth: "chart.line.uptrend.xyaxis"
@@ -246,7 +240,8 @@ enum DashboardLayoutStore {
     }
 
     private static func ensureSeeded(existing: [DashboardLayoutRow]) -> [DashboardLayoutRow] {
-        var rows = existing
+        // Drop cards that were retired (Modules moved to Today).
+        var rows = existing.filter { DashboardCard(rawValue: $0.cardId) != nil }
         let known = Set(rows.map(\.cardId))
         let missing = DashboardCard.allCases.filter { !known.contains($0.rawValue) }
         var nextOrder = (rows.map(\.sortOrder).max() ?? -1) + 1

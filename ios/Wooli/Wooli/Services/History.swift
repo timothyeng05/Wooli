@@ -113,8 +113,9 @@ func cumulativeSpending(_ transactions: [LocalTransaction], in month: DateInterv
 
 // MARK: - Transaction filters
 
-/// The window the app shows and asks the user to review: last month plus
-/// month to date. Older synced data stays in the store for charts and reports.
+/// The window the app asks the user to review and lists by default: last
+/// month plus month to date. Older transactions stay on the phone (see
+/// `TransactionRetention`) for charts and reports.
 enum ReviewWindow {
     static var start: Date {
         let cal = Calendar.current
@@ -123,10 +124,21 @@ enum ReviewWindow {
     }
 
     static func contains(_ date: Date) -> Bool { date >= start }
+}
 
-    /// Delete transactions older than the window, so the app only ever holds
-    /// last month and this month. Balances, net-worth history and learned
-    /// merchant rules are kept.
+/// How long transactions are kept: five years, so Reports and insights can
+/// compare months and years. Balances, net-worth history and learned
+/// merchant rules are kept regardless.
+enum TransactionRetention {
+    static let years = 5
+
+    static var start: Date {
+        let cal = Calendar.current
+        let thisMonth = cal.dateInterval(of: .month, for: .now)!.start
+        return cal.date(byAdding: .year, value: -years, to: thisMonth)!
+    }
+
+    /// Delete transactions older than the retention window.
     @MainActor
     static func pruneOlderTransactions(context: ModelContext) {
         let cutoff = start

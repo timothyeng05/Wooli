@@ -32,13 +32,14 @@ enum WooliModule: String, CaseIterable, Identifiable {
         }
     }
 
-    // Settings keys (all default off except showOnHome once enabled).
+    // Settings keys (all default off).
     var enabledKey: String { "module.\(rawValue).enabled" }
+    /// Old "Also show on Budget dashboard" switch; only read to carry the
+    /// choice over to Today (`AppLineup.hiddenCards`).
     var showOnHomeKey: String { "module.\(rawValue).showOnHome" }
     var requireFaceIDKey: String { "module.\(rawValue).requireFaceID" }
 
     var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
-    var showsOnHome: Bool { UserDefaults.standard.object(forKey: showOnHomeKey) as? Bool ?? true }
     var requiresFaceID: Bool { UserDefaults.standard.bool(forKey: requireFaceIDKey) }
 }
 
@@ -101,31 +102,7 @@ struct ModuleGate<Content: View>: View {
     }
 }
 
-/// Home cards for enabled modules, in registry order.
-struct ModuleHomeCards: View {
-    @AppStorage(WooliModule.period.enabledKey) private var periodOn = false
-    @AppStorage(WooliModule.period.showOnHomeKey) private var periodHome = true
-
-    var body: some View {
-        if periodOn && periodHome { PeriodHomeCard() }
-    }
-}
-
-/// Card shown instead of details while a module is locked.
-struct LockedModuleCard: View {
-    let module: WooliModule
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: module.systemImage).foregroundStyle(module.tint).font(.title3)
-            Text(module.title).font(.headline).foregroundStyle(Theme.text)
-            Spacer()
-            Image(systemName: "lock.fill").foregroundStyle(Theme.textTertiary)
-        }
-        .card(padding: 16)
-    }
-}
-
-/// The screen a module card opens.
+/// A module's full screen, behind its Face ID gate.
 @ViewBuilder
 func moduleScreen(_ module: WooliModule) -> some View {
     switch module {
@@ -148,7 +125,7 @@ struct ModulesSettingsView: View {
                 Text("Drag to rank them — the order sets Today and the ☰ app switcher. Turning an app off hides it; your data stays until you delete it. Everything stays on this iPhone and your own iCloud.")
             }
             ForEach(AppSpace.allCases.filter { $0.module != nil }) { space in
-                ModuleSettingsSection(module: space.module!, isEnabled: lineup.isEnabled(space))
+                ModuleSettingsSection(space: space, module: space.module!, isEnabled: lineup.isEnabled(space))
             }
         }
         .environment(\.editMode, .constant(.active))
@@ -158,24 +135,26 @@ struct ModulesSettingsView: View {
 
 /// Privacy options and delete for one optional app.
 private struct ModuleSettingsSection: View {
+    let space: AppSpace
     let module: WooliModule
     let isEnabled: Bool
     @Environment(\.modelContext) private var context
-    @AppStorage private var showOnHome: Bool
+    @State private var lineup = AppLineup.shared
     @AppStorage private var requireFaceID: Bool
     @State private var confirmDelete = false
 
-    init(module: WooliModule, isEnabled: Bool) {
+    init(space: AppSpace, module: WooliModule, isEnabled: Bool) {
+        self.space = space
         self.module = module
         self.isEnabled = isEnabled
-        _showOnHome = AppStorage(wrappedValue: true, module.showOnHomeKey)
         _requireFaceID = AppStorage(wrappedValue: false, module.requireFaceIDKey)
     }
 
     var body: some View {
         Section(module.title) {
             if isEnabled {
-                Toggle("Also show on Budget dashboard", isOn: $showOnHome)
+                Toggle("Show card on Today", isOn: Binding(get: { lineup.showsCard(space) },
+                                                            set: { lineup.setShowsCard(space, $0) }))
                 Toggle("Require Face ID", isOn: $requireFaceID)
             }
             Button("Delete all \(module.title) data", role: .destructive) { confirmDelete = true }

@@ -14,8 +14,11 @@ actor BackgroundStore {
             throw SimpleFinError.notConnected
         }
 
-        let lastSyncAt = UserDefaults.standard.object(forKey: "lastSimpleFinSyncAt") as? Date
-        let oldestAllowed = max(Calendar.current.date(byAdding: .day, value: -89, to: .now)!, ReviewWindow.start)
+        // Until 2026-10 the app kept only two months; fetch SimpleFIN's full
+        // ~90 days once so those deleted transactions come back.
+        let backfilled = UserDefaults.standard.bool(forKey: Self.historyBackfillKey)
+        let lastSyncAt = backfilled ? UserDefaults.standard.object(forKey: "lastSimpleFinSyncAt") as? Date : nil
+        let oldestAllowed = max(Calendar.current.date(byAdding: .day, value: -89, to: .now)!, TransactionRetention.start)
         let startDate = lastSyncAt.map { max(Calendar.current.date(byAdding: .day, value: -7, to: $0)!, oldestAllowed) }
             ?? oldestAllowed
 
@@ -97,8 +100,11 @@ actor BackgroundStore {
         try modelContext.save()
         Deduplicator.run(context: modelContext) // we can call this safely from background thread now
         UserDefaults.standard.set(Date.now, forKey: "lastSimpleFinSyncAt")
+        UserDefaults.standard.set(true, forKey: Self.historyBackfillKey)
         return summary
     }
+
+    private static let historyBackfillKey = "historyBackfill.v1"
 
     private func recordSnapshots(for remote: [SimpleFinAccount]) {
         let today = Calendar.current.startOfDay(for: .now)

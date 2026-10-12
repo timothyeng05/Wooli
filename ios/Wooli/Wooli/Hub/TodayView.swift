@@ -7,6 +7,7 @@ struct TodayView: View {
     @Environment(AppModel.self) private var app
     @AppStorage("displayName") private var displayName = ""
     @State private var lineup = AppLineup.shared
+    @State private var showEdit = false
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
@@ -24,13 +25,30 @@ struct TodayView: View {
                         .padding(.horizontal, 4)
 
                     // In the order the user ranked them.
-                    ForEach(lineup.installed) { space in
-                        switch space {
-                        case .budget: BudgetTodayCard()
-                        case .trips: TripsTodayCard()
-                        case .period: PeriodTodayCard()
-                        case .today: EmptyView()
+                    ForEach(lineup.todayCards) { space in
+                        Group {
+                            switch space {
+                            case .budget: BudgetTodayCard()
+                            case .trips: TripsTodayCard()
+                            case .period: PeriodTodayCard()
+                            case .today: EmptyView()
+                            }
                         }
+                        .contextMenu {
+                            Button("Hide from Today", systemImage: "eye.slash") {
+                                withAnimation { lineup.setShowsCard(space, false) }
+                            }
+                            Button("Edit Today", systemImage: "slider.horizontal.3") { showEdit = true }
+                        }
+                    }
+                    if lineup.todayCards.isEmpty && !lineup.installed.isEmpty {
+                        Button { showEdit = true } label: {
+                            Label("All cards are hidden. Edit Today", systemImage: "slider.horizontal.3")
+                                .font(.subheadline.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .card(padding: 16)
+                        }
+                        .buttonStyle(.plain)
                     }
                     #if DEBUG
                     if FutureAppsPreview.isOn { FutureAppsPreview.cards }
@@ -43,7 +61,61 @@ struct TodayView: View {
             }
             .pageBackground()
             .navigationTitle(greeting)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit Today", systemImage: "slider.horizontal.3") { showEdit = true }
+                }
+            }
+            .sheet(isPresented: $showEdit) { EditTodayView() }
+        }
+    }
+}
+
+/// Edit Today: drag to rank the apps, switch a card off to keep the app in
+/// the grid without a card. The rank is the same one Settings → Apps sets.
+struct EditTodayView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
+    @State private var lineup = AppLineup.shared
+    @State private var movedPulse = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(lineup.installed) { space in
+                        Toggle(isOn: Binding(get: { lineup.showsCard(space) },
+                                             set: { on in withAnimation { lineup.setShowsCard(space, on) } })) {
+                            HStack(spacing: 12) {
+                                AppIconTile(space, size: 32)
+                                Text(space.title).font(.body.weight(.semibold))
+                            }
+                        }
+                    }
+                    .onMove { from, to in
+                        withAnimation { lineup.moveInstalled(fromOffsets: from, toOffset: to) }
+                        movedPulse.toggle()
+                    }
+                } header: {
+                    Text("Cards")
+                } footer: {
+                    Text("Drag to reorder — this also orders the app grid and the ☰ switcher. Hidden cards' apps stay in Your apps.")
+                }
+                Section {
+                    Button("Add or remove apps", systemImage: "square.grid.2x2") {
+                        dismiss()
+                        app.sidebarDestination = .settings
+                    }
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .sensoryFeedback(.selection, trigger: movedPulse)
+            .navigationTitle("Edit Today")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
         }
     }
 }

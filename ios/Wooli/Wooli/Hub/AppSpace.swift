@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// The apps inside Wooli. Today is the hub; each other space is a full app
 /// with its own navigation (Budget keeps its five tabs). Switch between them
@@ -66,15 +67,18 @@ enum AppSpace: String, CaseIterable, Identifiable {
 
 /// Which apps the user turned on and how they ranked them — chosen in
 /// onboarding, editable in Settings → Apps. The order drives Today's cards,
-/// the app grid, and the ☰ switcher.
+/// the app grid, and the ☰ switcher. An app can also keep its spot in the
+/// grid but hide its card from Today (Edit Today).
 @MainActor
 @Observable
 final class AppLineup {
     static let shared = AppLineup()
     private static let orderKey = "apps.order"
+    private static let hiddenCardsKey = "today.hiddenCards"
 
     private(set) var order: [AppSpace]
     private(set) var enabled: Set<AppSpace>
+    private(set) var hiddenCards: Set<AppSpace>
 
     private init() {
         let apps = AppSpace.allCases.filter { $0 != .today }
@@ -83,10 +87,28 @@ final class AppLineup {
         // Apps added in a later update go at the end.
         order = stored + apps.filter { !stored.contains($0) }
         enabled = Set(apps.filter(\.storedEnabled))
+        if let stored = UserDefaults.standard.string(forKey: Self.hiddenCardsKey) {
+            hiddenCards = Set(stored.split(separator: ",").compactMap { AppSpace(rawValue: String($0)) })
+        } else {
+            // Carry over the old "Also show on Budget dashboard" switch.
+            hiddenCards = Set(apps.filter { space in
+                space.module.map { UserDefaults.standard.object(forKey: $0.showOnHomeKey) as? Bool == false } ?? false
+            })
+        }
     }
 
     /// Enabled apps, most important first.
     var installed: [AppSpace] { order.filter(enabled.contains) }
+
+    /// Enabled apps that show a card on Today, in rank order.
+    var todayCards: [AppSpace] { installed.filter { !hiddenCards.contains($0) } }
+
+    func showsCard(_ space: AppSpace) -> Bool { !hiddenCards.contains(space) }
+
+    func setShowsCard(_ space: AppSpace, _ on: Bool) {
+        if on { hiddenCards.remove(space) } else { hiddenCards.insert(space) }
+        UserDefaults.standard.set(hiddenCards.map(\.rawValue).sorted().joined(separator: ","), forKey: Self.hiddenCardsKey)
+    }
 
     func isEnabled(_ space: AppSpace) -> Bool { space == .today || enabled.contains(space) }
 
@@ -98,6 +120,20 @@ final class AppLineup {
 
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
         order.move(fromOffsets: source, toOffset: destination)
+        saveOrder()
+    }
+
+    /// Reorder within the enabled apps only (Edit Today lists just those);
+    /// apps that are off keep their slots in the full ranking.
+    func moveInstalled(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var ranked = installed
+        ranked.move(fromOffsets: source, toOffset: destination)
+        var next = ranked.makeIterator()
+        order = order.map { enabled.contains($0) ? next.next()! : $0 }
+        saveOrder()
+    }
+
+    private func saveOrder() {
         UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","), forKey: Self.orderKey)
     }
 }
