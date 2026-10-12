@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Source_Serif_4, Manrope } from "next/font/google";
 import "./globals.css";
 import Nav from "@/app/components/Nav";
 import ToastProvider from '@/app/components/ui/ToastProvider';
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase-server';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -54,7 +54,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${sourceSerif.variable} ${manrope.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Nav fullAccess={fullAccess} isLoggedIn={isLoggedIn} tripsEnabled={tripsEnabled} />

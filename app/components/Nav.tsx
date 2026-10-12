@@ -94,7 +94,7 @@ export default function Nav({ fullAccess = true, isLoggedIn = true, tripsEnabled
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <WooliLogo size={28} />
-            <span className="font-bold text-lg text-blue-600 tracking-tight">Wooli</span>
+            <span className="font-serif font-bold text-lg text-blue-700 tracking-tight">Wooli</span>
           </Link>
           <Link
             href="/login"
@@ -114,7 +114,7 @@ export default function Nav({ fullAccess = true, isLoggedIn = true, tripsEnabled
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-8">
           <Link href="/" className="flex items-center gap-2">
             <WooliLogo size={28} />
-            <span className="font-bold text-lg text-blue-600 tracking-tight">Wooli</span>
+            <span className="font-serif font-bold text-lg text-blue-700 tracking-tight">Wooli</span>
           </Link>
 
           {/* Desktop nav: Budget, Trips, More */}
