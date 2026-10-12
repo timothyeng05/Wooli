@@ -18,7 +18,9 @@ enum SidebarDestination: String, Identifiable {
 @MainActor
 @Observable
 final class AppModel {
-    enum Mode: String { case onboarding, live, sample }
+    /// `local`: set up without a bank — the user didn't pick Budget, or
+    /// hasn't connected yet. Other apps work normally.
+    enum Mode: String { case onboarding, live, sample, local }
 
     /// Whether onboarding still needs to check iCloud for existing data from
     /// another device before showing the welcome tour. Only relevant while
@@ -68,7 +70,7 @@ final class AppModel {
             mode = .live
         } else {
             // No key (iCloud Keychain off, or disconnected): reconnect.
-            mode = stored == .sample ? .sample : .onboarding
+            mode = stored == .sample || stored == .local ? stored : .onboarding
         }
         if mode == .onboarding {
             if !UserDefaults.standard.bool(forKey: Self.icloudCheckDoneKey) {
@@ -108,6 +110,13 @@ final class AppModel {
         mode = .sample
         RecurringDetector.refresh(context: context)
         Task { await autoCategorize(context: context) }
+    }
+
+    /// Finish onboarding without a bank (Budget off). Categories are seeded
+    /// so Budget is ready if it's turned on later.
+    func startWithoutBank(context: ModelContext) {
+        DefaultCategories.seedIfNeeded(context)
+        mode = .local
     }
 
     func sync(context: ModelContext) async {

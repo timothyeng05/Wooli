@@ -76,41 +76,36 @@ struct ICloudCheckView: View {
 struct WelcomeView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
+    @State private var lineup = AppLineup.shared
     @State private var page = 0
     @State private var showConnect = false
 
-    private let pageCount = 7
+    private enum Page: Hashable { case welcome, apps, dashboard, accounts, transactions, reports, budget, connect, ready }
+
+    /// The Budget tour and bank connection only appear if Budget was picked.
+    private var pages: [Page] {
+        [.welcome, .apps] + (lineup.isEnabled(.budget)
+            ? [.dashboard, .accounts, .transactions, .reports, .budget, .connect]
+            : [.ready])
+    }
+
+    private var isLast: Bool { page >= pages.count - 1 }
 
     var body: some View {
         ZStack {
             Theme.gradient.ignoresSafeArea()
             VStack(spacing: 16) {
-                TabView(selection: $page) {
-                    welcomePage.tag(0)
-                    SimpleTourPage(symbol: "house", tint: Color(hex: "#2563eb"), title: "Dashboard",
-                                   detail: "See your net worth, this month's budget, and recent transactions at a glance.")
-                        .tag(1)
-                    SimpleTourPage(symbol: "square.stack.3d.up", tint: Color(hex: "#16a34a"), title: "Accounts",
-                                   detail: "Every account you connect, kept in sync with your bank automatically.")
-                        .tag(2)
-                    SimpleTourPage(symbol: "creditcard", tint: Color(hex: "#f97316"), title: "Transactions",
-                                   detail: "Search, filter, and fix any transaction's category in a couple of taps.")
-                        .tag(3)
-                    SimpleTourPage(symbol: "chart.pie", tint: Color(hex: "#ec4899"), title: "Reports",
-                                   detail: "See where your money goes with spending breakdowns and trends over time.")
-                        .tag(4)
-                    BudgetTourPage().tag(5)
-                    ctaPage.tag(6)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 420)
-                // Swiping past a page is the same as skipping it, so lock
-                // paging until "Continue" is tapped — the disabled TabView
-                // still accepts programmatic selection changes.
-                .disabled(page < pageCount - 1)
+                // One page at a time, advanced only by the button: swiping
+                // past a page would skip it, and the app picker needs taps.
+                pageView(pages[min(page, pages.count - 1)])
+                    .id(page)
+                    .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
+                        .combined(with: .opacity))
+                    .frame(height: 420)
+                    .clipped()
 
                 HStack(spacing: 6) {
-                    ForEach(0..<pageCount, id: \.self) { i in
+                    ForEach(pages.indices, id: \.self) { i in
                         Capsule()
                             .fill(i == page ? Color(hex: "#2563eb") : Color(hex: "#2563eb").opacity(0.2))
                             .frame(width: i == page ? 16 : 6, height: 6)
@@ -119,15 +114,17 @@ struct WelcomeView: View {
                 .animation(.default, value: page)
 
                 // One button in a fixed spot: Continue through the tour, then
-                // the same button connects — the card keeps its height.
+                // the same button finishes — the card keeps its height.
                 Button {
-                    if page < pageCount - 1 {
+                    if !isLast {
                         withAnimation { page += 1 }
-                    } else {
+                    } else if lineup.isEnabled(.budget) {
                         showConnect = true
+                    } else {
+                        app.startWithoutBank(context: context)
                     }
                 } label: {
-                    Text(page < pageCount - 1 ? "Continue" : "Connect with SimpleFIN")
+                    Text(!isLast ? "Continue" : lineup.isEnabled(.budget) ? "Connect with SimpleFIN" : "Start using Wooli")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -135,6 +132,7 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .disabled(pages[min(page, pages.count - 1)] == .apps && lineup.installed.isEmpty)
             }
             .padding(28)
             .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -148,6 +146,80 @@ struct WelcomeView: View {
         .sheet(isPresented: $showConnect) {
             ConnectSheet()
         }
+        #if DEBUG
+        // `-onboardingPage N`: jump to a page (1 = app picker).
+        .task {
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-onboardingPage"), i + 1 < args.count, let n = Int(args[i + 1]) { page = n }
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private func pageView(_ page: Page) -> some View {
+        switch page {
+        case .welcome: welcomePage
+        case .apps: appsPage
+        case .dashboard:
+            SimpleTourPage(symbol: "house", tint: Color(hex: "#2563eb"), title: "Dashboard",
+                           detail: "See your net worth, this month's budget, and recent transactions at a glance.")
+        case .accounts:
+            SimpleTourPage(symbol: "square.stack.3d.up", tint: Color(hex: "#16a34a"), title: "Accounts",
+                           detail: "Every account you connect, kept in sync with your bank automatically.")
+        case .transactions:
+            SimpleTourPage(symbol: "creditcard", tint: Color(hex: "#f97316"), title: "Transactions",
+                           detail: "Search, filter, and fix any transaction's category in a couple of taps.")
+        case .reports:
+            SimpleTourPage(symbol: "chart.pie", tint: Color(hex: "#ec4899"), title: "Reports",
+                           detail: "See where your money goes with spending breakdowns and trends over time.")
+        case .budget: BudgetTourPage()
+        case .connect: ctaPage
+        case .ready: readyPage
+        }
+    }
+
+    /// Pick apps and rank them. The order sets Today and the ☰ switcher.
+    private var appsPage: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Make Wooli yours")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(Color(hex: "#111827"))
+            Text("Turn on the apps you'll use, then drag to put what matters most first.")
+                .font(.subheadline)
+                .foregroundStyle(Color(hex: "#6b7280"))
+                .fixedSize(horizontal: false, vertical: true)
+            List {
+                AppLineupRows()
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .environment(\.editMode, .constant(.active))
+            Text("You can change this any time in Settings → Apps.")
+                .font(.caption)
+                .foregroundStyle(Color(hex: "#9ca3af"))
+        }
+    }
+
+    /// Last page when Budget wasn't picked: no bank needed.
+    private var readyPage: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            HStack(spacing: 12) {
+                ForEach(lineup.installed) { AppIconTile($0, size: 52) }
+            }
+            Text("You're all set")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(Color(hex: "#111827"))
+            Text("Your apps are ready. Add Budget any time from Settings → Apps — it connects to your bank with SimpleFIN.")
+                .font(.subheadline)
+                .foregroundStyle(Color(hex: "#6b7280"))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
     }
 
     private var welcomePage: some View {
@@ -159,17 +231,17 @@ struct WelcomeView: View {
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(Color(hex: "#2563eb"))
                 }
-                Text("Your budget, private to you.")
+                Text("Your money, trips, and more — private to you.")
                     .font(.title3)
                     .foregroundStyle(Color(hex: "#4b5563"))
 
                 VStack(alignment: .leading, spacing: 18) {
+                    FeatureRow(symbol: "square.grid.2x2.fill", tint: Color(hex: "#2563eb"), title: "Apps for your life",
+                               detail: "Budget, Trips, and more in one place. Pick yours next.")
                     FeatureRow(symbol: "lock.shield.fill", tint: Color(hex: "#16a34a"), title: "Private by design",
-                               detail: "Your accounts and transactions stay on this iPhone and in your own iCloud. There's no Wooli server.")
-                    FeatureRow(symbol: "building.columns.fill", tint: Color(hex: "#2563eb"), title: "Connect with SimpleFIN",
-                               detail: "Read-only access to your banks. Wooli can see balances and transactions but can never move money.")
-                    FeatureRow(symbol: "checkmark.square.fill", tint: Color(hex: "#f97316"), title: "Review and budget",
-                               detail: "Confirm each transaction, plan your month, and see where your money goes.")
+                               detail: "Your data stays on this iPhone and your own iCloud.")
+                    FeatureRow(symbol: "building.columns.fill", tint: Color(hex: "#f97316"), title: "Read-only bank access",
+                               detail: "Budget uses SimpleFIN, which can never move money.")
                 }
             }
         }

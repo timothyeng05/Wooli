@@ -48,7 +48,7 @@ struct SettingsView: View {
                         }
                         .disabled(app.isSyncing)
                     } else {
-                        LabeledContent("Status", value: "Sample Data")
+                        LabeledContent("Status", value: app.mode == .sample ? "Sample Data" : "Not Connected")
                         Button("Connect with SimpleFIN", systemImage: "link") { showConnect = true }
                     }
                 }

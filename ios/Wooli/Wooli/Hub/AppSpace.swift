@@ -37,7 +37,17 @@ enum AppSpace: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The opt-in module behind an optional app; nil = always available.
+    /// One line for onboarding and Settings → Apps.
+    var pitch: String {
+        switch self {
+        case .today: "Everything at a glance."
+        case .budget: "Connect your bank, plan each month, and see where your money goes."
+        case .trips: "Plan trips day by day on Apple Maps — together, if you like."
+        case .period: "Track your cycle with private predictions."
+        }
+    }
+
+    /// The opt-in module behind an optional app (Face ID, sample data); nil = core app.
     var module: WooliModule? {
         switch self {
         case .period: .period
@@ -45,10 +55,80 @@ enum AppSpace: String, CaseIterable, Identifiable {
         }
     }
 
-    var isAvailable: Bool { module?.isEnabled ?? true }
+    /// Optional apps reuse their module's key so existing settings carry over.
+    var enabledKey: String { module?.enabledKey ?? "app.\(rawValue).enabled" }
 
-    /// Apps listed in the switcher and Today's grid, in order (Today itself excluded).
-    static var installed: [AppSpace] { allCases.filter { $0 != .today && $0.isAvailable } }
+    /// Core apps default on, optional ones off.
+    fileprivate var storedEnabled: Bool {
+        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? (module == nil)
+    }
+}
+
+/// Which apps the user turned on and how they ranked them — chosen in
+/// onboarding, editable in Settings → Apps. The order drives Today's cards,
+/// the app grid, and the ☰ switcher.
+@MainActor
+@Observable
+final class AppLineup {
+    static let shared = AppLineup()
+    private static let orderKey = "apps.order"
+
+    private(set) var order: [AppSpace]
+    private(set) var enabled: Set<AppSpace>
+
+    private init() {
+        let apps = AppSpace.allCases.filter { $0 != .today }
+        let stored = (UserDefaults.standard.string(forKey: Self.orderKey) ?? "")
+            .split(separator: ",").compactMap { AppSpace(rawValue: String($0)) }.filter(apps.contains)
+        // Apps added in a later update go at the end.
+        order = stored + apps.filter { !stored.contains($0) }
+        enabled = Set(apps.filter(\.storedEnabled))
+    }
+
+    /// Enabled apps, most important first.
+    var installed: [AppSpace] { order.filter(enabled.contains) }
+
+    func isEnabled(_ space: AppSpace) -> Bool { space == .today || enabled.contains(space) }
+
+    func setEnabled(_ space: AppSpace, _ on: Bool) {
+        guard space != .today else { return }
+        if on { enabled.insert(space) } else { enabled.remove(space) }
+        UserDefaults.standard.set(on, forKey: space.enabledKey)
+    }
+
+    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        order.move(fromOffsets: source, toOffset: destination)
+        UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","), forKey: Self.orderKey)
+    }
+}
+
+/// Rank + toggle list for apps. Used in onboarding and Settings → Apps; the
+/// containing List must be in edit mode for the drag handles.
+struct AppLineupRows: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.modelContext) private var context
+    @State private var lineup = AppLineup.shared
+
+    var body: some View {
+        ForEach(lineup.order) { space in
+            Toggle(isOn: Binding(get: { lineup.isEnabled(space) }, set: { on in
+                withAnimation { lineup.setEnabled(space, on) }
+                if on, app.mode == .sample, let module = space.module { ModuleSampleData.seed(module, context: context) }
+            })) {
+                HStack(spacing: 12) {
+                    AppIconTile(space, size: 36)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(space.title).font(.body.weight(.semibold))
+                        Text(space.pitch).font(.caption).foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.trailing, 8)
+            .opacity(lineup.isEnabled(space) ? 1 : 0.6)
+        }
+        .onMove { lineup.move(fromOffsets: $0, toOffset: $1) }
+    }
 }
 
 /// Rounded app-icon tile, used in the drawer, Today cards, and the app grid.

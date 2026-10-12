@@ -53,11 +53,12 @@ struct RootView: View {
             if args.contains("-calibration") { app.showCalibration = true }
             // `-module period`: enable that module (seeding sample data) and open it.
             if let i = args.firstIndex(of: "-module"), i + 1 < args.count, let module = WooliModule(rawValue: args[i + 1]) {
-                UserDefaults.standard.set(true, forKey: module.enabledKey)
                 if app.mode == .sample { ModuleSampleData.seed(module, context: context) }
                 if let space = AppSpace.allCases.first(where: { $0.module == module }) {
+                    AppLineup.shared.setEnabled(space, true)
                     app.space = space
                 } else {
+                    UserDefaults.standard.set(true, forKey: module.enabledKey)
                     app.space = .budget
                     app.selectedTab = .dashboard
                     app.openModule = module
@@ -100,6 +101,7 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
     @State private var trips = TripStore.shared
+    @State private var lineup = AppLineup.shared
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
     @Query(filter: #Predicate<LocalAccount> { $0.isHidden || $0.hideTransactions })
@@ -113,7 +115,7 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var app = app
         ZStack(alignment: .leading) {
-            SpaceRoot(space: app.space.isAvailable ? app.space : .today, reviewCount: reviewCount)
+            SpaceRoot(space: lineup.isEnabled(app.space) ? app.space : .today, reviewCount: reviewCount)
                 .id(app.space)
                 .transition(.opacity)
 
@@ -258,6 +260,7 @@ private struct BudgetTabView: View {
 /// ☰ drawer: switch apps at the top, then tools for the current app, then app-wide items.
 struct SidebarDrawer: View {
     @Environment(AppModel.self) private var app
+    @State private var lineup = AppLineup.shared
     @AppStorage("displayName") private var displayName = ""
 
     var body: some View {
@@ -298,7 +301,7 @@ struct SidebarDrawer: View {
                     sectionTitle("APPS").padding(.top, 16)
 
                     spaceButton(.today)
-                    ForEach(AppSpace.installed) { spaceButton($0) }
+                    ForEach(lineup.installed) { spaceButton($0) }
 
                     if app.space == .budget {
                         Divider()

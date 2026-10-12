@@ -2,22 +2,16 @@ import SwiftUI
 import SwiftData
 
 /// The hub: one glanceable card per app, then the app grid. Tapping a card
-/// switches into that app. Budget leads — it's the app people adopt first —
-/// and optional apps follow in registry order.
+/// switches into that app. Cards follow the user's ranking (`AppLineup`).
 struct TodayView: View {
     @Environment(AppModel.self) private var app
     @AppStorage("displayName") private var displayName = ""
-    @AppStorage(WooliModule.period.enabledKey) private var periodOn = false
+    @State private var lineup = AppLineup.shared
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
         let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
         return displayName.isEmpty ? part : "\(part), \(displayName)"
-    }
-
-    /// Apps shown in the grid. Reads `periodOn` so toggling a module updates Today live.
-    private var installed: [AppSpace] {
-        AppSpace.allCases.filter { $0 != .today && ($0 != .period || periodOn) }
     }
 
     var body: some View {
@@ -29,15 +23,21 @@ struct TodayView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, 4)
 
-                    BudgetTodayCard()
-                    TripsTodayCard()
-                    if periodOn { PeriodTodayCard() }
+                    // In the order the user ranked them.
+                    ForEach(lineup.installed) { space in
+                        switch space {
+                        case .budget: BudgetTodayCard()
+                        case .trips: TripsTodayCard()
+                        case .period: PeriodTodayCard()
+                        case .today: EmptyView()
+                        }
+                    }
                     #if DEBUG
                     if FutureAppsPreview.isOn { FutureAppsPreview.cards }
                     #endif
 
                     SectionLabel("Your apps").padding(.top, 8).padding(.horizontal, 4)
-                    AppGrid(apps: installed)
+                    AppGrid(apps: lineup.installed)
                 }
                 .padding(16)
             }

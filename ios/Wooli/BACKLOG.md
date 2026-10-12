@@ -179,10 +179,14 @@ Options:
 
 **Adding an app (the recipe):** a case in `AppSpace` (+ a `WooliModule` case if it's optional), a Today card in `TodayView`, its root in `SpaceRoot` (`RootView.swift`), its models in the `Schema` + `Deduplicator`. Keep app code self-contained (no budget types), same as `MODULES_SPEC.md`.
 
+**Onboarding picks the apps (✅ S8, Claude 2026-10-12):** after the welcome page, "Make Wooli yours" lists every app with a switch and a drag handle (`AppLineupRows`). `AppLineup` stores the choice (`app.<id>.enabled`, or the module key for optional apps) and the rank (`apps.order`); the rank orders Today's cards, the app grid, and the ☰ switcher. The Budget tour + SimpleFIN step only appear if Budget is on; otherwise the flow ends on "You're all set" and the app runs in the new `Mode.local` (no bank; categories seeded so Budget works if turned on later — Settings shows "Not Connected" + Connect). Settings → Apps uses the same rows. Debug: `-onboardingPage N`. The swipe pager was replaced by a button-driven page view because the old TabView was `.disabled` on tour pages, which would also block the switches.
+*Not verified by tap (Simulator can't tap from scripts):* dragging rows, the "Start using Wooli" button, Settings → Apps screen. State changes were checked by writing the same defaults and relaunching.
+
 **Next (not started):**
 | ID | Item | Status |
 |----|------|--------|
 | S1 | User tests the shell on device; decide Today vs. Budget as launch screen long-term | ⏳ waiting on user |
+| S8 | Onboarding: pick + rank apps | ✅ done |
 | S2 | Edit Today: reorder/hide cards (reuse the `DashboardLayoutStore` pattern) | todo |
 | S3 | Retire the Budget dashboard's "Modules" card (Today replaces it); rename "Show on Home" | todo |
 | S4 | **Dates** app — spec with user: what to track (date nights? ideas list? anniversaries?), link spend to a Budget tag | idea |
@@ -217,6 +221,8 @@ Options:
 ---
 
 ## Done
+
+- **2026-10-12 · Claude** — S8 onboarding app picker + ranking, Budget optional (no-bank `local` mode), Settings → Apps rank list.
 
 - **2026-10-11 · Claude** — Phase S shell: Today hub, `AppSpace`, ☰ app switcher, Trips/Period as full apps, Settings → Apps. Also fixed: the Budget tab had no navigation bar (no month arrows) because `BudgetView` has no stack of its own — the tab now wraps it. Verified in the Simulator with `-sampleData`; not yet on a device.
 

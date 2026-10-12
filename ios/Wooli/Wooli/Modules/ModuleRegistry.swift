@@ -136,56 +136,46 @@ func moduleScreen(_ module: WooliModule) -> some View {
 // MARK: - Settings → Modules
 
 struct ModulesSettingsView: View {
-    @Environment(AppModel.self) private var app
-    @Environment(\.modelContext) private var context
+    @State private var lineup = AppLineup.shared
 
     var body: some View {
-        Form {
+        List {
             Section {
-                Text("Optional apps inside Wooli. Turn one on to add it to Today and the ☰ app switcher. Everything stays on this iPhone and your own iCloud, like your budget. Turning a module off hides it — your data stays until you delete it.")
-                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+                AppLineupRows()
+            } header: {
+                Text("Your apps")
+            } footer: {
+                Text("Drag to rank them — the order sets Today and the ☰ app switcher. Turning an app off hides it; your data stays until you delete it. Everything stays on this iPhone and your own iCloud.")
             }
-            ForEach(WooliModule.allCases) { module in
-                ModuleSettingsSection(module: module, isSample: app.mode == .sample)
+            ForEach(AppSpace.allCases.filter { $0.module != nil }) { space in
+                ModuleSettingsSection(module: space.module!, isEnabled: lineup.isEnabled(space))
             }
         }
+        .environment(\.editMode, .constant(.active))
         .navigationTitle("Apps")
     }
 }
 
+/// Privacy options and delete for one optional app.
 private struct ModuleSettingsSection: View {
     let module: WooliModule
-    let isSample: Bool
+    let isEnabled: Bool
     @Environment(\.modelContext) private var context
-    @AppStorage private var enabled: Bool
     @AppStorage private var showOnHome: Bool
     @AppStorage private var requireFaceID: Bool
     @State private var confirmDelete = false
 
-    init(module: WooliModule, isSample: Bool) {
+    init(module: WooliModule, isEnabled: Bool) {
         self.module = module
-        self.isSample = isSample
-        _enabled = AppStorage(wrappedValue: false, module.enabledKey)
+        self.isEnabled = isEnabled
         _showOnHome = AppStorage(wrappedValue: true, module.showOnHomeKey)
         _requireFaceID = AppStorage(wrappedValue: false, module.requireFaceIDKey)
     }
 
     var body: some View {
-        Section {
-            Toggle(isOn: $enabled.animation()) {
-                HStack(spacing: 12) {
-                    ModuleIconTile(symbol: module.systemImage, tint: module.tint, size: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(module.title)
-                        Text(module.summary).font(.caption).foregroundStyle(Theme.textTertiary)
-                    }
-                }
-            }
-            .onChange(of: enabled) { _, on in
-                if on && isSample { ModuleSampleData.seed(module, context: context) }
-            }
-            if enabled {
-                Toggle("Show on Budget dashboard", isOn: $showOnHome)
+        Section(module.title) {
+            if isEnabled {
+                Toggle("Also show on Budget dashboard", isOn: $showOnHome)
                 Toggle("Require Face ID", isOn: $requireFaceID)
             }
             Button("Delete all \(module.title) data", role: .destructive) { confirmDelete = true }
@@ -204,19 +194,5 @@ enum ModuleData {
         case .period: try? context.delete(model: PeriodEntry.self)
         }
         try? context.save()
-    }
-}
-
-/// Small square SF Symbol tile (module icon in Settings).
-private struct ModuleIconTile: View {
-    let symbol: String
-    let tint: Color
-    var size: CGFloat = 30
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(tint.gradient, in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
     }
 }
