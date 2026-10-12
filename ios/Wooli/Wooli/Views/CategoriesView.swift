@@ -172,6 +172,11 @@ private struct CategoryEditor: View {
                         TextField(isGroup ? "Group name" : "Category name", text: $name)
                             .font(.title3.weight(.semibold))
                     }
+                } footer: {
+                    if nameTaken {
+                        Text("You already have a \(isGroup ? "group" : "category") called \(name.trimmingCharacters(in: .whitespaces)).")
+                            .foregroundStyle(Theme.expense)
+                    }
                 }
 
                 Section("Icon") {
@@ -247,7 +252,7 @@ private struct CategoryEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save(groups: groups) }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || nameTaken)
                 }
             }
             .confirmationDialog("Delete \(name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -258,6 +263,17 @@ private struct CategoryEditor: View {
             }
         }
         .onAppear { load() }
+    }
+
+    /// Names must be unique (groups among groups, categories across all
+    /// groups): the categorizer and AI look categories up by name, and the
+    /// Deduplicator merges same-named siblings as iCloud copies.
+    private var nameTaken: Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return categories.contains { c in
+            c.id != existing?.id && (c.parentId == nil) == isGroup
+                && c.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(trimmed) == .orderedSame
+        }
     }
 
     private func currentColor(_ groups: [BudgetCategory]) -> String {

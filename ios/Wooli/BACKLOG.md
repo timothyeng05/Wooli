@@ -226,6 +226,8 @@ Options:
 
 ## Done
 
+- **2026-10-12 · Claude** — Category editor blocks duplicate names (category names unique across all groups, group names unique among groups; case-insensitive). Not built — no Xcode in the session.
+
 - **2026-10-12 · Claude** — Manual entry for Budget (no SimpleFIN needed): onboarding's bank step is now a choice — "Enter them yourself" (free) or "Import from your bank" (SimpleFIN, $15/yr) — with a "How SimpleFIN works" deep dive (`SimpleFINExplainer`: what it is, what the fee pays for, can/can't do, manual-vs-SimpleFIN table, setup steps, what happens if you stop paying), also linked from the Connect sheet and Settings. Manual accounts/transactions (`Views/ManualEntry.swift`) use `manual-` ids so sync never touches them; they work alongside SimpleFIN too (e.g. cash). + menu on Accounts and Transactions; manual accounts get Add transaction / edit balance / delete; manual transactions can be deleted (balance adjusts). Manual mode = `Mode.local`; Settings shows "Manual Entry". Checked in Simulator: choice page + explainer. *Not tap-tested:* add/edit/delete sheets. Prices/limits from beta-bridge.simplefin.org on 2026-10-12 ($1.50/mo or $15/yr + tax; 25 institutions, 25 apps).
 
 - **2026-10-12 · Claude** — O1 5-year retention + one-time 90-day backfill; S2 Edit Today (rank, hide cards, long-press menu); S3 retired the dashboard Modules card. Verified in the Simulator: hide + drag in Edit Today, Today/grid order, values saved across relaunch, Budget dashboard without Modules card. Not verified: the backfill against a real SimpleFIN account; the long-press menu.
@@ -233,7 +235,6 @@ Options:
 - **2026-10-12 · Claude** — S8 onboarding app picker + ranking, Budget optional (no-bank `local` mode), Settings → Apps rank list.
 
 - **2026-10-11 · Claude** — Phase S shell: Today hub, `AppSpace`, ☰ app switcher, Trips/Period as full apps, Settings → Apps. Also fixed: the Budget tab had no navigation bar (no month arrows) because `BudgetView` has no stack of its own — the tab now wraps it. Verified in the Simulator with `-sampleData`; not yet on a device.
-
 - **2026-10-11 · Claude** — CloudKit environment fixes after a TestFlight build (production) was installed over an Xcode build (development): sharing failed ("Zone does not exist"), the invitee saw "Trip not available", and an apparent account switch wiped all trips on the phone (restored from a backup taken minutes earlier; both trips now in production). Fixes: re-upload owned trips on environment change; ensure a trip is in iCloud before sharing; never delete trips on account change (keep on sign-out, back up before clearing on a switch).
 - **2026-10-11 · Claude** — Trip page is now one card per day: the day you move holds the travel card and the new leg's header as a divider (plans before departure above, the rest below); leg color bar on each day; collapsing a leg hides its later days. Travel-only days outside legs (overnight flights) fold into the arrival card ("Wed Mar 31 → Thu Apr 1"). Flight detection recognizes flight numbers and more airport codes.
 - **2026-10-11 · Claude** — Trip legs ("stops"): collapsible colored leg sections with a timeline, boarding-pass travel cards between legs (mode guessed from bookings, straight-line distance), Home cards at start/end; stops editor in Edit trip; place search biased to the day's leg. Collapsed state remembered per trip.
@@ -256,5 +257,5 @@ Options:
 
 - Manual transactions: no edit for amount/date/account after saving (category, note, tags edit as usual) — delete and re-add for now.
 - Manual entry has no quick-add from Today or a widget yet.
-
-- _empty_
+- `Deduplicator.dedupeCategories` deletes the losing same-named category without moving its transactions/rules to the kept one (ids are UUIDs, so they're left pointing at nothing). The editor now blocks user-made duplicates, but two devices seeding starter categories before iCloud catches up can still hit it.
+- Months outside the review window (e.g. the 3rd month of the 90-day fetch) never get AI suggestions — `runCategorizer` only looks back to `ReviewWindow.start` — so anything rules and the merchant directory miss stays uncategorized in Reports. Option: let AI categorize back to `TransactionRetention.start` while review stays two months.
