@@ -112,6 +112,7 @@ final class TripStore: CKSyncEngineDelegate {
     /// trips shared with you lived in the old environment and need a new invite.
     private func moveToNewEnvironment() {
         log.info("CloudKit environment changed to \(Self.environment); re-uploading trips")
+        backUpLocalTrips(reason: "environment-\(Self.environment)")
         privateState = nil
         sharedState = nil
         let sharedWithMe = Set(trips.filter { !$0.isMine }.map(\.id))
@@ -128,6 +129,20 @@ final class TripStore: CKSyncEngineDelegate {
         }
         needsFullUpload = true
         persist()
+    }
+
+    /// Copies the local trips file aside (Application Support/Trips/backups)
+    /// before anything clears it, keeping the five most recent copies.
+    private func backUpLocalTrips(reason: String) {
+        guard !trips.isEmpty, let data = try? Data(contentsOf: Self.fileURL) else { return }
+        let dir = Self.fileURL.deletingLastPathComponent().appending(path: "backups", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let stamp = Date.now.formatted(.iso8601).replacingOccurrences(of: ":", with: "-")
+        try? data.write(to: dir.appending(path: "trips-\(stamp)-\(reason).json"))
+        let old = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }.dropFirst(5)
+        for url in old { try? FileManager.default.removeItem(at: url) }
+        log.info("Backed up \(self.trips.count) trips before \(reason)")
     }
 
     /// Queue every trip you own (zone, trip and items) for upload.
@@ -437,8 +452,19 @@ final class TripStore: CKSyncEngineDelegate {
             // Trips made before signing in: send them up.
             iCloudAvailable = true
             uploadEverythingMine()
-        case .signOut, .switchAccounts:
-            // These trips belong to the other iCloud account.
+        case .signOut:
+            // Keep the trips on this iPhone; they sync again on sign-in.
+            iCloudAvailable = false
+            privateState = nil
+            sharedState = nil
+            needsFullUpload = true
+            persist()
+            startEngines()
+        case .switchAccounts:
+            // Someone else's iCloud now: their trips aren't these. Never just
+            // delete — a mistaken "switch" (seen when a TestFlight build met
+            // data from an Xcode build) wiped trips. Keep a copy first.
+            backUpLocalTrips(reason: "account-switch")
             trips = []
             items = []
             privateState = nil
