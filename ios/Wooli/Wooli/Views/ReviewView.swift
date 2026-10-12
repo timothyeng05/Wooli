@@ -240,10 +240,14 @@ struct ReviewView: View {
     private func advance(skipping tx: LocalTransaction, pending: [LocalTransaction]) {
         direction = .trailing
         history.append((tx.persistentModelID, false))
+        skipped.insert(tx.persistentModelID)
+        // Everything left has been skipped — end the session rather than loop.
+        // Skipped ones stay unreviewed and show up next time.
+        if pending.allSatisfy({ skipped.contains($0.persistentModelID) }) {
+            dismiss()
+            return
+        }
         withAnimation(.snappy) {
-            skipped.insert(tx.persistentModelID)
-            // Once everything has been skipped, start another pass.
-            if pending.allSatisfy({ skipped.contains($0.persistentModelID) }) { skipped.removeAll() }
             // Move the skipped one to the back of the line.
             if let i = queue.firstIndex(of: tx.persistentModelID) {
                 queue.append(queue.remove(at: i))
