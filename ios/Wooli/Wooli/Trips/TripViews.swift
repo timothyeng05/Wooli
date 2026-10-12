@@ -244,7 +244,10 @@ struct TripDetailView: View {
                                        fromHex: from.map(trip.colorHex) ?? "#334155",
                                        toHex: to.map(trip.colorHex) ?? "#334155",
                                        day: day, items: items,
-                                       distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: allItems)) { editingItem = $0 }
+                                       distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: allItems),
+                                       onSelect: { editingItem = $0 },
+                                       onAdd: { editingItem = TripItem(tripID: trip.id, day: day, kind: .transit,
+                                                                       title: to.map { "To \($0.name)" } ?? "Home") })
                     case .leg(let leg, let number, let legDays):
                         legSection(trip, leg: leg, number: number, days: legDays, items: allItems,
                                    isCollapsed: collapsed.contains(leg.id), hiding: onTravelCards)
@@ -343,7 +346,7 @@ struct TripDetailView: View {
                             items: [TripItem], isCollapsed: Bool, hiding: Set<String>) -> some View {
         let color = Color(hex: trip.colorHex(of: leg))
         let today = DayKey.key(.now)
-        let plans = items.filter { $0.day.map(leg.contains) ?? false }.count
+        let plans = items.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == leg.id }.count
         return VStack(spacing: 12) {
             Button {
                 withAnimation(.snappy) { toggle(leg, trip: trip) }

@@ -114,8 +114,12 @@ struct Trip: Identifiable, Codable, Hashable {
     static let zonePrefix = "trip-"
     static let recordType = "Trip"
 
-    /// The leg a day belongs to (the first match if legs overlap).
-    func leg(for day: String) -> TripLeg? { legs.first { $0.contains(day) } }
+    /// The leg a day belongs to. A day that ends one leg and starts the next
+    /// (leave Hong Kong, arrive Chongqing) is the travel day, so it goes to
+    /// the leg you arrive at.
+    func leg(for day: String) -> TripLeg? {
+        legs.first { $0.startDay == day } ?? legs.first { $0.contains(day) }
+    }
 
     func colorHex(of leg: TripLeg) -> String {
         let index = legs.firstIndex { $0.id == leg.id } ?? 0

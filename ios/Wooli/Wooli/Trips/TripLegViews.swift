@@ -145,6 +145,8 @@ struct TripTravelCard: View {
     let items: [TripItem]
     let distanceKm: Double?
     let onSelect: (TripItem) -> Void
+    /// Add a booking for this hop (shown when there are none yet).
+    let onAdd: () -> Void
 
     var body: some View {
         let mode = Self.mode(for: items)
@@ -159,7 +161,15 @@ struct TripTravelCard: View {
                 .compactMap { $0 }.joined(separator: " · "))
                 .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.85))
 
-            if !items.isEmpty {
+            if items.isEmpty {
+                Button(action: onAdd) {
+                    Label("Add how you're getting there", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
                 VStack(spacing: 0) {
                     ForEach(items) { item in
                         Button { onSelect(item) } label: {
