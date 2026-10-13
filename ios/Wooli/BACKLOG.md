@@ -159,7 +159,7 @@ Options:
 - "Invite" → `ShareLink` with the universal link (Messages / AirDrop). Members list with initials. Remove a member (owner only).
 - Live updates via Realtime. "Edited by Maya just now" on changed items.
 
-### T6 — Flight & train editor  · 🔨 in progress — Claude, 2026-10-13
+### T6 — Flight & train editor  · ✅ written, not yet built — Claude, 2026-10-13
 Tapping a travel booking opens an editor built for that mode instead of the generic form. **Flight:** flight number (airline from its code), from/to airport picked from a bundled list (`Trips/airports.tsv`, 3,180 airports with scheduled service, OurAirports + mwgg time zones), departure/arrival time and terminal, arrival day offset, flight time worked out across time zones, cabin, seats, booking code; a map with the great-circle arc. **Train:** from/to station via Apple Maps, times, seats, booking code; a map with both stations. Bus/ferry/car keep the generic form ("Other"). Old notes aren't parsed (user will move them later). Adds a synced `transport` field on `TripItem` → deploy the CloudKit schema before release.
 
 ### T5 — Apple extras (pick and order later)
@@ -229,6 +229,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-13 · Claude** — T6 flight & train editor (`Trips/TripTransport.swift`, `TripTransportViews.swift`, `airports.tsv`). A travel booking now has a Flight / Train / Other switch. Flight: flight number (airline guessed from the code), airport search (code, city, name or keyword like "Tokyo" or "NYC"), departure/arrival day, time and terminal, cabin, seats, booking code. The header shows the great-circle arc on a map and a boarding-pass strip with both codes, times, "+1" for next-day arrival, and flight time across time zones. Train: stations via Apple Maps search, times, seats, booking code. Existing bookings open as Flight/Train when their wording reads that way, otherwise as Other; notes are untouched. Travel cards take their icon from the saved mode. Synced as a JSON string field `transport` on `TripItem`. **Not built — no Xcode in the session**: build, then check in the Simulator (new flight, old CX831 booking, train, switching to Other, dark mode). **Deploy the CloudKit schema** (new `TripItem.transport` field) before the next TestFlight.
+
 - **2026-10-12 · Claude** — Category editor blocks duplicate names (category names unique across all groups, group names unique among groups; case-insensitive). Not built — no Xcode in the session.
 
 - **2026-10-12 · Claude** — Manual entry for Budget (no SimpleFIN needed): onboarding's bank step is now a choice — "Enter them yourself" (free) or "Import from your bank" (SimpleFIN, $15/yr) — with a "How SimpleFIN works" deep dive (`SimpleFINExplainer`: what it is, what the fee pays for, can/can't do, manual-vs-SimpleFIN table, setup steps, what happens if you stop paying), also linked from the Connect sheet and Settings. Manual accounts/transactions (`Views/ManualEntry.swift`) use `manual-` ids so sync never touches them; they work alongside SimpleFIN too (e.g. cash). + menu on Accounts and Transactions; manual accounts get Add transaction / edit balance / delete; manual transactions can be deleted (balance adjusts). Manual mode = `Mode.local`; Settings shows "Manual Entry". Checked in Simulator: choice page + explainer. *Not tap-tested:* add/edit/delete sheets. Prices/limits from beta-bridge.simplefin.org on 2026-10-12 ($1.50/mo or $15/yr + tax; 25 institutions, 25 apps).
@@ -258,6 +260,9 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Inbox (found while working — not yet prioritized)
 
+- Add an Acknowledgements screen before release: `Trips/airports.tsv` uses mwgg/Airports time zones (MIT — needs its copyright notice) and OurAirports data (public domain, credit is polite).
+- Trip travel cards still estimate distance from the legs' places; they could use the booking's airports/stations (`TripTransport.distanceKm`) when set, and show flight time.
+- Old flight bookings keep their details in Notes; the user plans to move them into the new fields later.
 - Manual transactions: no edit for amount/date/account after saving (category, note, tags edit as usual) — delete and re-add for now.
 - Manual entry has no quick-add from Today or a widget yet.
 - `Deduplicator.dedupeCategories` deletes the losing same-named category without moving its transactions/rules to the kept one (ids are UUIDs, so they're left pointing at nothing). The editor now blocks user-made duplicates, but two devices seeding starter categories before iCloud catches up can still hit it.

@@ -193,6 +193,8 @@ struct TripItem: Identifiable, Codable, Hashable {
     var time: Int?
     var place: TripPlace?
     var notes: String = ""
+    /// Flight or train details, for travel items; nil uses the plain form.
+    var transport: TripTransport?
     var createdAt: Date = .now
     var systemFields: Data?
 
@@ -202,6 +204,64 @@ struct TripItem: Identifiable, Codable, Hashable {
         guard let time else { return nil }
         let date = Calendar.current.date(bySettingHour: time / 60, minute: time % 60, second: 0, of: .now) ?? .now
         return date.formatted(date: .omitted, time: .shortened)
+    }
+}
+
+/// A flight or train booking. It departs on the item's `day` at its `time`.
+struct TripTransport: Codable, Hashable {
+    enum Mode: String, Codable, CaseIterable, Identifiable {
+        case flight, train
+        var id: String { rawValue }
+        var label: String { self == .flight ? "Flight" : "Train" }
+        var symbol: String { self == .flight ? "airplane" : "tram.fill" }
+    }
+
+    var mode: Mode = .flight
+    // Flight
+    var flightNumber: String = ""
+    var airline: String = ""
+    /// IATA codes ("JFK").
+    var fromAirport: String = ""
+    var toAirport: String = ""
+    var departTerminal: String = ""
+    var arriveTerminal: String = ""
+    var cabin: String = ""
+    // Train
+    var fromStation: TripPlace?
+    var toStation: TripPlace?
+    // Both
+    /// Minutes after midnight, local time where you arrive.
+    var arriveTime: Int?
+    /// Days after departure that you arrive (overnight flights).
+    var arriveDayOffset: Int = 0
+    var seats: String = ""
+    var confirmation: String = ""
+
+    init(mode: Mode = .flight) { self.mode = mode }
+
+    // Decode field by field so a record saved by a newer version (with
+    // fields this one doesn't know) or an older one still opens.
+    enum CodingKeys: String, CodingKey {
+        case mode, flightNumber, airline, fromAirport, toAirport, departTerminal, arriveTerminal, cabin,
+             fromStation, toStation, arriveTime, arriveDayOffset, seats, confirmation
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode = (try? c.decodeIfPresent(Mode.self, forKey: .mode)) ?? .flight
+        flightNumber = try c.decodeIfPresent(String.self, forKey: .flightNumber) ?? ""
+        airline = try c.decodeIfPresent(String.self, forKey: .airline) ?? ""
+        fromAirport = try c.decodeIfPresent(String.self, forKey: .fromAirport) ?? ""
+        toAirport = try c.decodeIfPresent(String.self, forKey: .toAirport) ?? ""
+        departTerminal = try c.decodeIfPresent(String.self, forKey: .departTerminal) ?? ""
+        arriveTerminal = try c.decodeIfPresent(String.self, forKey: .arriveTerminal) ?? ""
+        cabin = try c.decodeIfPresent(String.self, forKey: .cabin) ?? ""
+        fromStation = try c.decodeIfPresent(TripPlace.self, forKey: .fromStation)
+        toStation = try c.decodeIfPresent(TripPlace.self, forKey: .toStation)
+        arriveTime = try c.decodeIfPresent(Int.self, forKey: .arriveTime)
+        arriveDayOffset = try c.decodeIfPresent(Int.self, forKey: .arriveDayOffset) ?? 0
+        seats = try c.decodeIfPresent(String.self, forKey: .seats) ?? ""
+        confirmation = try c.decodeIfPresent(String.self, forKey: .confirmation) ?? ""
     }
 }
 
@@ -269,6 +329,7 @@ extension TripItem {
         r["latitude"] = place?.latitude
         r["longitude"] = place?.longitude
         r["mapItemID"] = place?.mapItemID
+        r["transport"] = transport.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
         return r
     }
 
@@ -283,6 +344,9 @@ extension TripItem {
         if let name = r["placeName"] as? String, let lat = r["latitude"] as? Double, let lon = r["longitude"] as? Double {
             place = TripPlace(name: name, address: r["placeAddress"] as? String ?? "", latitude: lat, longitude: lon,
                               mapItemID: r["mapItemID"] as? String ?? "")
+        }
+        if let json = r["transport"] as? String {
+            transport = try? JSONDecoder().decode(TripTransport.self, from: Data(json.utf8))
         }
         systemFields = r.encodedSystemFields
     }

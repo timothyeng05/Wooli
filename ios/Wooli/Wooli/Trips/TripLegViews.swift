@@ -323,6 +323,7 @@ struct TripTravelCard: View {
 
     /// Best guess at how you're travelling, from the bookings' wording.
     static func mode(for items: [TripItem]) -> (symbol: String, label: String?) {
+        if let mode = items.lazy.compactMap(\.transport?.mode).first { return (mode.symbol, mode.label) }
         let text = items.map { " \($0.title) \($0.notes) " }.joined().lowercased()
         func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
         // A flight number like "CX928" or "UA 7923" counts as a flight too.
