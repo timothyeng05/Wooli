@@ -196,8 +196,9 @@ struct AirportLabel: View {
                 .frame(width: 52, height: 34)
                 .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text([airport.place, Locale.current.localizedString(forRegionCode: airport.country)]
-                    .compactMap { $0 }.joined(separator: ", "))
+                // "Hong Kong", not "Hong Kong, Hong Kong" (same for Singapore, Macao…).
+                let country = Locale.current.localizedString(forRegionCode: airport.country)
+                Text([airport.place, country == airport.place ? nil : country].compactMap { $0 }.joined(separator: ", "))
                     .font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
                 Text(airport.name).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
