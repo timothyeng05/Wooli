@@ -159,6 +159,9 @@ Options:
 - "Invite" → `ShareLink` with the universal link (Messages / AirDrop). Members list with initials. Remove a member (owner only).
 - Live updates via Realtime. "Edited by Maya just now" on changed items.
 
+### T6 — Flight & train editor  · 🔨 in progress — Claude, 2026-10-13
+Tapping a travel booking opens an editor built for that mode instead of the generic form. **Flight:** flight number (airline from its code), from/to airport picked from a bundled list (`Trips/airports.tsv`, 3,180 airports with scheduled service, OurAirports + mwgg time zones), departure/arrival time and terminal, arrival day offset, flight time worked out across time zones, cabin, seats, booking code; a map with the great-circle arc. **Train:** from/to station via Apple Maps, times, seats, booking code; a map with both stations. Bus/ferry/car keep the generic form ("Other"). Old notes aren't parsed (user will move them later). Adds a synced `transport` field on `TripItem` → deploy the CloudKit schema before release.
+
 ### T5 — Apple extras (pick and order later)
 - **WeatherKit** forecast on each day (needs the WeatherKit capability).
 - **Calendar** (EventKit): add a trip's timed items to a calendar.
