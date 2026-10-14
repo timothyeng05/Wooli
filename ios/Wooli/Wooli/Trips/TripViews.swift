@@ -643,8 +643,8 @@ struct TripItemEditor: View {
     @State private var transport: TripTransport
     /// nil = "Other" (bus, ferry, car…), which uses the plain form.
     @State private var transportMode: TripTransport.Mode?
-    @State private var hasArrival: Bool
-    @State private var arrival: Date
+    /// Arrival clock time on the ticket; nil = not set.
+    @State private var arrival: Date?
     @Environment(\.dismiss) private var dismiss
 
     init(item: TripItem, trip: Trip) {
@@ -653,24 +653,13 @@ struct TripItemEditor: View {
         self.isNew = isNew
         _item = State(initialValue: item)
         _hasTime = State(initialValue: item.time != nil)
-        let minutes = item.time ?? 12 * 60
-        _time = State(initialValue: Self.clock(minutes))
+        _time = State(initialValue: TripTransport.clock(item.time ?? 12 * 60))
         // Existing bookings without details keep their look unless they read
         // like a flight or train; new ones start as a flight.
         let mode = item.transport?.mode ?? Self.guessMode(item) ?? (isNew ? .flight : nil)
         _transport = State(initialValue: item.transport ?? TripTransport(mode: mode ?? .flight))
         _transportMode = State(initialValue: mode)
-        _hasArrival = State(initialValue: item.transport?.arriveTime != nil)
-        _arrival = State(initialValue: Self.clock(item.transport?.arriveTime ?? (minutes + 120) % (24 * 60)))
-    }
-
-    private static func clock(_ minutes: Int) -> Date {
-        Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
-    }
-
-    private static func minutes(_ date: Date) -> Int {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        _arrival = State(initialValue: item.transport?.arriveTime.map(TripTransport.clock))
     }
 
     private static func guessMode(_ item: TripItem) -> TripTransport.Mode? {
@@ -682,92 +671,28 @@ struct TripItemEditor: View {
         }
     }
 
-    /// The flight / train form being shown, if any.
+    /// The flight / train ticket being shown, if any.
     private var transportForm: TripTransport.Mode? { item.kind == .transit ? transportMode : nil }
 
-    /// What would be saved, for the route header and the suggested title.
+    /// What would be saved, with the arrival day worked out.
     private var draft: TripTransport {
         var t = transport
-        t.mode = transportForm ?? t.mode
-        t.arriveTime = hasArrival ? Self.minutes(arrival) : nil
-        return t
+        t.arriveTime = arrival.map(TripTransport.minutes)
+        return t.inferringArrivalDay(departDay: item.day, departTime: hasTime ? TripTransport.minutes(time) : nil)
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker("Type", selection: $item.kind) {
-                        ForEach(TripItem.Kind.allCases) { kind in
-                            Image(systemName: kind.symbol).tag(kind).accessibilityLabel(kind.label)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    if item.kind == .transit {
-                        Picker("Travel by", selection: $transportMode.animation()) {
-                            ForEach(TripTransport.Mode.allCases) { Text($0.label).tag(TripTransport.Mode?.some($0)) }
-                            Text("Other").tag(TripTransport.Mode?.none)
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    TextField("Title", text: $item.title, prompt: Text(titlePrompt))
-                }
-
-                if let mode = transportForm {
-                    Section {
-                        TransportHero(transport: draft, departDay: item.day, departTime: hasTime ? Self.minutes(time) : nil)
-                            .listRowInsets(EdgeInsets())
-                    }
-                    if mode == .flight { flightSections } else { trainSections }
-                } else {
-                    Section("Place") {
-                        if let place = item.place {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(place.name)
-                                    if !place.address.isEmpty {
-                                        Text(place.address).font(.caption).foregroundStyle(Theme.textSecondary)
-                                    }
-                                }
-                                Spacer()
-                                if let url = place.mapsURL {
-                                    Link(destination: url) { Image(systemName: "arrow.up.right.square") }
-                                        .accessibilityLabel("Open in Apple Maps")
-                                }
-                            }
-                            Button("Remove place", role: .destructive) { item.place = nil }
-                        }
-                        NavigationLink {
-                            PlaceSearchView(near: item.day.flatMap { trip.leg(for: $0)?.name } ?? trip.destination) { place in
-                                item.place = place
-                            }
-                        } label: {
-                            Label(item.place == nil ? "Find on Apple Maps" : "Change place", systemImage: "magnifyingglass")
-                        }
-                    }
-
-                    Section("When") {
-                        dayAndTime
-                    }
-                }
-
-                Section("Notes") {
-                    TextField("Booking number, what to order…", text: $item.notes, axis: .vertical).lineLimit(2...6)
-                }
-
-                if !isNew {
-                    Section {
-                        Button("Delete", role: .destructive) {
-                            TripStore.shared.delete(item)
-                            dismiss()
-                        }
-                    }
-                }
+            Group {
+                if transportForm != nil { ticket } else { form }
             }
             .navigationTitle(isNew ? "Add to trip" : "Edit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                if transportForm != nil {
+                    ToolbarItem(placement: .principal) { modePicker.frame(width: 230) }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(item.title.trimmingCharacters(in: .whitespaces).isEmpty && item.place == nil
@@ -775,82 +700,133 @@ struct TripItemEditor: View {
                 }
             }
         }
-    }
-
-    private var titlePrompt: String {
-        switch transportForm {
-        case .flight: draft.suggestedTitle.isEmpty ? "e.g. CX831 to Hong Kong" : draft.suggestedTitle
-        case .train: draft.suggestedTitle.isEmpty ? "e.g. Shinkansen to Kyoto" : draft.suggestedTitle
-        case nil: item.place?.name ?? "e.g. Dinner, Museum, Train to Kyoto"
+        // The ticket lives on a night sky, whatever the phone's appearance.
+        .preferredColorScheme(transportForm == nil ? nil : .dark)
+        .onChange(of: transportMode) { _, mode in
+            if let mode { transport.mode = mode }
         }
     }
 
-    private var dayAndTime: some View {
-        Group {
-            Picker("Day", selection: $item.day) {
-                Text("Ideas · no day yet").tag(String?.none)
-                ForEach(Array(trip.days.enumerated()), id: \.element) { i, day in
-                    Text("Day \(i + 1) · \(DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
-                        .tag(String?.some(day))
+    private var modePicker: some View {
+        Picker("Travel by", selection: $transportMode.animation()) {
+            ForEach(TripTransport.Mode.allCases) { Text($0.label).tag(TripTransport.Mode?.some($0)) }
+            Text("Other").tag(TripTransport.Mode?.none)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    // MARK: Plain form (activities, food, stays, notes, other travel)
+
+    private var form: some View {
+        Form {
+            Section {
+                Picker("Type", selection: $item.kind) {
+                    ForEach(TripItem.Kind.allCases) { kind in
+                        Image(systemName: kind.symbol).tag(kind).accessibilityLabel(kind.label)
+                    }
+                }
+                .pickerStyle(.segmented)
+                if item.kind == .transit { modePicker }
+                TextField("Title", text: $item.title, prompt: Text(item.place?.name ?? "e.g. Dinner, Museum, Train to Kyoto"))
+            }
+
+            Section("Place") {
+                if let place = item.place {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(place.name)
+                            if !place.address.isEmpty {
+                                Text(place.address).font(.caption).foregroundStyle(Theme.textSecondary)
+                            }
+                        }
+                        Spacer()
+                        if let url = place.mapsURL {
+                            Link(destination: url) { Image(systemName: "arrow.up.right.square") }
+                                .accessibilityLabel("Open in Apple Maps")
+                        }
+                    }
+                    Button("Remove place", role: .destructive) { item.place = nil }
+                }
+                NavigationLink {
+                    PlaceSearchView(near: arrivingLeg ?? trip.destination) { place in
+                        item.place = place
+                    }
+                } label: {
+                    Label(item.place == nil ? "Find on Apple Maps" : "Change place", systemImage: "magnifyingglass")
                 }
             }
-            if item.day != nil {
-                Toggle("Set a time", isOn: $hasTime.animation())
-                if hasTime {
-                    DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+
+            Section("When") {
+                Picker("Day", selection: $item.day) {
+                    Text("Ideas · no day yet").tag(String?.none)
+                    ForEach(Array(trip.days.enumerated()), id: \.element) { i, day in
+                        Text("Day \(i + 1) · \(DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
+                            .tag(String?.some(day))
+                    }
+                }
+                if item.day != nil {
+                    Toggle("Set a time", isOn: $hasTime.animation())
+                    if hasTime {
+                        DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                    }
+                }
+            }
+
+            Section("Notes") {
+                TextField("Booking number, what to order…", text: $item.notes, axis: .vertical).lineLimit(2...6)
+            }
+
+            if !isNew {
+                Section {
+                    Button("Delete", role: .destructive, action: delete)
                 }
             }
         }
     }
 
-    // MARK: Flight & train
+    // MARK: Flight & train ticket
 
-    @ViewBuilder
-    private var flightSections: some View {
-        Section("Flight") {
-            field("Flight number", text: $transport.flightNumber, prompt: "CX831", code: true)
-            field("Airline", text: $transport.airline, prompt: Airlines.name(forFlight: transport.flightNumber) ?? "Cathay Pacific")
-            airportLink("From", code: $transport.fromAirport)
-            airportLink("To", code: $transport.toAirport)
-        }
-        Section("Departure") {
-            dayAndTime
-            field("Terminal", text: $transport.departTerminal, prompt: "8")
-        }
-        arrivalSection {
-            field("Terminal", text: $transport.arriveTerminal, prompt: "1")
-        }
-        Section("Booking") {
-            Picker("Cabin", selection: $transport.cabin) {
-                Text("—").tag("")
-                ForEach(Self.cabins, id: \.self) { Text($0).tag($0) }
-                // Keep a cabin typed elsewhere (another device, an import) selectable.
-                if !transport.cabin.isEmpty && !Self.cabins.contains(transport.cabin) {
-                    Text(transport.cabin).tag(transport.cabin)
+    private var ticket: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                RouteBackdrop(transport: draft, focus: tripFocus)
+                    .frame(height: 380)
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, TransportTicket.night], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 100)
+                    }
+                TransportTicket(transport: $transport, day: $item.day, departure: departure, arrival: $arrival,
+                                days: trip.days, stationHints: (leavingLeg ?? trip.destination, arrivingLeg ?? trip.destination))
+                    .padding(.horizontal, 16)
+                    .padding(.top, -96)
+                TextField("Notes", text: $item.notes, axis: .vertical)
+                    .lineLimit(1...6)
+                    .padding(14)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.1)))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                if !isNew {
+                    Button("Delete", role: .destructive, action: delete)
+                        .padding(.top, 18)
                 }
             }
-            field("Seats", text: $transport.seats, prompt: "14A, 14D", code: true)
-            field("Booking code", text: $transport.confirmation, prompt: "ABC123", code: true)
+            .padding(.bottom, 30)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .ignoresSafeArea(edges: .top)
+        .background(TransportTicket.night.ignoresSafeArea())
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 
-    @ViewBuilder
-    private var trainSections: some View {
-        Section("Route") {
-            stationLink("From", place: $transport.fromStation, near: leavingLeg ?? trip.destination)
-            stationLink("To", place: $transport.toStation, near: item.day.flatMap { trip.leg(for: $0)?.name } ?? trip.destination)
-        }
-        Section("Departure") {
-            dayAndTime
-        }
-        arrivalSection { EmptyView() }
-        Section("Booking") {
-            field("Seats", text: $transport.seats, prompt: "Car 7, 12A–B")
-            field("Booking code", text: $transport.confirmation, prompt: "ABC123", code: true)
-        }
+    /// Departure time on the ticket, backed by the same state as the plain form.
+    private var departure: Binding<Date?> {
+        Binding(get: { hasTime ? time : nil },
+                set: { date in
+                    if let date { time = date }
+                    hasTime = date != nil
+                })
     }
-
-    private static let cabins = ["Economy", "Premium economy", "Business", "First"]
 
     /// The leg you're leaving on this day, to search for the departure station there.
     private var leavingLeg: String? {
@@ -858,59 +834,19 @@ struct TripItemEditor: View {
         return trip.legs.first { $0.endDay == day && $0.startDay != day }?.name
     }
 
-    private func arrivalSection<Extra: View>(@ViewBuilder extra: () -> Extra) -> some View {
-        Section("Arrival") {
-            Toggle("Set arrival time", isOn: $hasArrival.animation())
-            if hasArrival {
-                Picker("Day", selection: $transport.arriveDayOffset) {
-                    ForEach(0...2, id: \.self) { Text(arrivalDayLabel($0)).tag($0) }
-                }
-                DatePicker("Time", selection: $arrival, displayedComponents: .hourAndMinute)
-            }
-            extra()
-        }
+    private var arrivingLeg: String? { item.day.flatMap { trip.leg(for: $0)?.name } }
+
+    /// Middle of the trip's places, for the globe to face before airports are picked.
+    private var tripFocus: CLLocationCoordinate2D? {
+        let places = TripStore.shared.items(in: trip.id).compactMap(\.place)
+        guard !places.isEmpty else { return nil }
+        return CLLocationCoordinate2D(latitude: places.map(\.latitude).reduce(0, +) / Double(places.count),
+                                      longitude: places.map(\.longitude).reduce(0, +) / Double(places.count))
     }
 
-    private func arrivalDayLabel(_ offset: Int) -> String {
-        let name = ["Same day", "Next day", "2 days later"][offset]
-        guard let day = item.day, offset > 0,
-              let date = Calendar.current.date(byAdding: .day, value: offset, to: DayKey.date(day)) else { return name }
-        return "\(name) · \(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
-    }
-
-    private func field(_ label: String, text: Binding<String>, prompt: String, code: Bool = false) -> some View {
-        LabeledContent(label) {
-            TextField(label, text: text, prompt: Text(prompt))
-                .multilineTextAlignment(.trailing)
-                .textInputAutocapitalization(code ? .characters : .words)
-                .autocorrectionDisabled(code)
-        }
-    }
-
-    private func airportLink(_ label: String, code: Binding<String>) -> some View {
-        NavigationLink {
-            AirportSearchView(title: label == "From" ? "Departing from" : "Arriving at") { code.wrappedValue = $0.code }
-        } label: {
-            LabeledContent(label) {
-                if let airport = Airports.airport(code.wrappedValue) {
-                    Text("\(airport.code) · \(airport.place)").foregroundStyle(Theme.text)
-                } else {
-                    Text("Choose airport").foregroundStyle(Theme.textTertiary)
-                }
-            }
-        }
-    }
-
-    private func stationLink(_ label: String, place: Binding<TripPlace?>, near: String) -> some View {
-        NavigationLink {
-            PlaceSearchView(near: near) { place.wrappedValue = $0 }
-        } label: {
-            LabeledContent(label) {
-                Text(place.wrappedValue?.name ?? "Choose station")
-                    .foregroundStyle(place.wrappedValue == nil ? Theme.textTertiary : Theme.text)
-                    .lineLimit(1)
-            }
-        }
+    private func delete() {
+        TripStore.shared.delete(item)
+        dismiss()
     }
 
     private func save() {
@@ -919,13 +855,14 @@ struct TripItemEditor: View {
             var details = draft
             details.flightNumber = details.flightNumber.uppercased().trimmingCharacters(in: .whitespaces)
             item.transport = details
-            if item.title.isEmpty { item.title = details.suggestedTitle }
+            // The ticket has no title field: name it after the route once both ends are picked.
+            if item.title.isEmpty || details.hasRoute { item.title = details.suggestedTitle }
         } else {
             item.transport = nil
         }
         if item.title.isEmpty, let place = item.place { item.title = place.name }
         if hasTime && item.day != nil {
-            item.time = Self.minutes(time)
+            item.time = TripTransport.minutes(time)
         } else {
             item.time = nil
         }

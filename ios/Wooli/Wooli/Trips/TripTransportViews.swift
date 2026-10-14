@@ -1,150 +1,370 @@
 import SwiftUI
 import MapKit
 
-// MARK: - Route header
+// MARK: - Ticket editor
 
-/// Top of the flight / train editor: the route on a map (a great-circle arc
-/// for flights) and a boarding-pass strip with both ends, times and how long
-/// the trip takes.
-struct TransportHero: View {
-    let transport: TripTransport
-    let departDay: String?
-    let departTime: Int?
+/// The flight / train editor's ticket, styled like the travel cards between
+/// legs: tap the codes or stations to pick them, tap a time to set it, and
+/// type straight into the flight number and the stub's seat / booking /
+/// terminal. Airline, title, flight time and arrival day fill themselves in.
+struct TransportTicket: View {
+    @Binding var transport: TripTransport
+    @Binding var day: String?
+    /// Clock times; nil = not set yet.
+    @Binding var departure: Date?
+    @Binding var arrival: Date?
+    let days: [String]
+    /// Where to search for each station: the leg you leave and the one you reach.
+    let stationHints: (from: String, to: String)
 
-    private struct End {
-        let title: String
-        let subtitle: String
-        let coordinate: CLLocationCoordinate2D?
+    @State private var editingTime: End?
+
+    enum End: Hashable { case from, to }
+
+    static let night = Color(hex: "#050812")
+
+    static func colors(for mode: TripTransport.Mode) -> [Color] {
+        mode == .flight ? [Color(hex: "#334155"), Color(hex: "#2563eb")] : [Color(hex: "#2563eb"), Color(hex: "#0d9488")]
+    }
+
+    /// The transport as it would be saved, with the arrival day worked out.
+    private var resolved: TripTransport {
+        var t = transport
+        t.arriveTime = arrival.map(TripTransport.minutes)
+        return t.inferringArrivalDay(departDay: day, departTime: departure.map(TripTransport.minutes))
     }
 
     var body: some View {
-        let ends = self.ends
-        VStack(spacing: 0) {
-            map(ends.from.coordinate, ends.to.coordinate)
-                .frame(height: 190)
-            pass(ends)
-                .padding(16)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var ends: (from: End, to: End) {
-        switch transport.mode {
-        case .flight:
-            let a = transport.from, b = transport.to
-            return (End(title: a?.code ?? "From", subtitle: a?.place ?? "Choose airport", coordinate: a?.coordinate),
-                    End(title: b?.code ?? "To", subtitle: b?.place ?? "Choose airport", coordinate: b?.coordinate))
-        case .train:
-            let a = transport.fromStation, b = transport.toStation
-            return (End(title: a?.name ?? "From", subtitle: a?.address ?? "Choose station", coordinate: a?.coordinate),
-                    End(title: b?.name ?? "To", subtitle: b?.address ?? "Choose station", coordinate: b?.coordinate))
-        }
-    }
-
-    @ViewBuilder
-    private func map(_ a: CLLocationCoordinate2D?, _ b: CLLocationCoordinate2D?) -> some View {
-        if a != nil || b != nil {
-            Map(initialPosition: .automatic, interactionModes: []) {
-                if let a, let b {
-                    MapPolyline(coordinates: [a, b], contourStyle: transport.mode == .flight ? .geodesic : .straight)
-                        .stroke(Theme.brand, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [2, 7]))
-                }
-                if let a { Annotation("", coordinate: a) { pin(ends.from.title, filled: false) } }
-                if let b { Annotation("", coordinate: b) { pin(ends.to.title, filled: true) } }
+        let t = resolved
+        let duration = t.durationMinutes(departDay: day, departTime: departure.map(TripTransport.minutes))
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            HStack(spacing: 6) {
+                endpoint(.from).frame(maxWidth: .infinity, alignment: .leading)
+                routeGlyph
+                endpoint(.to).frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-            // Re-frame when an end changes; `initialPosition` only applies once.
-            .id("\(a?.latitude ?? 0),\(a?.longitude ?? 0)-\(b?.latitude ?? 0),\(b?.longitude ?? 0)")
-            .allowsHitTesting(false)
-        } else {
-            ZStack {
-                LinearGradient(colors: [Theme.brandSoft, Theme.track], startPoint: .topLeading, endPoint: .bottomTrailing)
-                VStack(spacing: 8) {
-                    Image(systemName: transport.mode == .flight ? "airplane.departure" : "tram.fill")
-                        .font(.largeTitle).foregroundStyle(Theme.brand)
-                    Text(transport.mode == .flight ? "Choose airports to see the route" : "Choose stations to see the route")
-                        .font(.footnote).foregroundStyle(Theme.textSecondary)
-                }
-            }
-        }
-    }
-
-    private func pin(_ text: String, filled: Bool) -> some View {
-        Text(transport.mode == .flight ? text : "")
-            .font(.caption.weight(.heavy)).monospaced()
-            .foregroundStyle(filled ? .white : Theme.brand)
-            .padding(.horizontal, transport.mode == .flight ? 8 : 6).padding(.vertical, transport.mode == .flight ? 4 : 6)
-            .background(filled ? Theme.brand : Theme.card, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.brand, lineWidth: 2))
-            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-    }
-
-    private func pass(_ ends: (from: End, to: End)) -> some View {
-        let duration = transport.durationMinutes(departDay: departDay, departTime: departTime)
-        return VStack(spacing: 12) {
-            if transport.mode == .flight, let airline = transport.airlineName {
-                Text([airline, transport.flightNumber.uppercased()].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            HStack(alignment: .top, spacing: 8) {
-                endColumn(ends.from, time: departTime, dayOffset: 0, terminal: transport.departTerminal, alignment: .leading)
-                VStack(spacing: 4) {
-                    HStack(spacing: 4) {
-                        dashes
-                        Image(systemName: transport.mode.symbol).font(.subheadline.weight(.bold)).foregroundStyle(Theme.brand)
-                        dashes
-                    }
-                    Text(duration.map(TripTransport.durationText) ?? " ")
-                        .font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.text)
-                    if let km = transport.distanceKm, km >= 1 {
-                        Text("\(Int(km.rounded()).formatted()) km").font(.caption2).foregroundStyle(Theme.textTertiary)
+            .padding(.top, 16)
+            HStack(alignment: .bottom, spacing: 6) {
+                timeButton(.from, offset: 0).frame(maxWidth: .infinity, alignment: .leading)
+                VStack(spacing: 2) {
+                    Text(duration.map(TripTransport.durationText) ?? " ").font(.footnote.weight(.bold)).monospacedDigit()
+                    if let km = t.distanceKm, km >= 1 {
+                        Text("\(Int(km.rounded()).formatted()) km").font(.caption2).foregroundStyle(.white.opacity(0.65))
                     }
                 }
-                .frame(width: 92)
-                .padding(.top, transport.mode == .flight ? 10 : 4)
-                endColumn(ends.to, time: transport.arriveTime, dayOffset: transport.arriveDayOffset,
-                          terminal: transport.arriveTerminal, alignment: .trailing)
+                .frame(width: 96)
+                .padding(.bottom, 4)
+                timeButton(.to, offset: t.arriveDayOffset).frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .padding(.top, 16)
+            perforation.padding(.top, 20)
+            stub.padding(.vertical, 14)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .foregroundStyle(.white)
+        .background(LinearGradient(colors: Self.colors(for: transport.mode), startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.18)))
+        .shadow(color: Self.colors(for: transport.mode)[1].opacity(0.45), radius: 24, y: 12)
+    }
+
+    // MARK: Parts
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(transport.mode == .flight ? (resolved.airlineName ?? "Flight").uppercased() : "TRAIN")
+                    .font(.caption2.weight(.bold)).tracking(1.2).foregroundStyle(.white.opacity(0.7))
+                if transport.mode == .flight {
+                    TextField("Flight number", text: $transport.flightNumber,
+                              prompt: Text("CX831").foregroundStyle(.white.opacity(0.4)))
+                        .font(.system(size: 26, weight: .heavy, design: .rounded))
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .frame(maxWidth: 170)
+                }
+            }
+            Spacer(minLength: 8)
+            Menu {
+                Picker("Day", selection: $day) {
+                    Text("Ideas · no day yet").tag(String?.none)
+                    ForEach(Array(days.enumerated()), id: \.element) { i, d in
+                        Text("Day \(i + 1) · \(DayKey.date(d).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))")
+                            .tag(String?.some(d))
+                    }
+                }
+            } label: {
+                Text(dayLabel).font(.caption.weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.white.opacity(0.16), in: Capsule())
             }
         }
     }
 
-    private func endColumn(_ end: End, time: Int?, dayOffset: Int, terminal: String, alignment: HorizontalAlignment) -> some View {
-        let isFlight = transport.mode == .flight
-        return VStack(alignment: alignment, spacing: 2) {
-            Text(end.title)
-                .font(isFlight ? Font.system(size: 34, weight: .heavy, design: .rounded) : Font.headline.weight(.bold))
-                .foregroundStyle(Theme.text)
-                .lineLimit(2).minimumScaleFactor(0.7)
-                .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
-            Text(end.subtitle).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
-            if let time {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(TripTransport.timeText(time)).font(.title3.weight(.semibold)).monospacedDigit()
-                    if dayOffset > 0 {
-                        Text("+\(dayOffset)").font(.caption2.weight(.bold)).foregroundStyle(Theme.pending)
-                    }
+    private var dayLabel: String {
+        guard let day, let index = days.firstIndex(of: day) else { return "No day yet" }
+        return "Day \(index + 1) · \(DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))"
+    }
+
+    private func endpoint(_ end: End) -> some View {
+        NavigationLink {
+            if transport.mode == .flight {
+                AirportSearchView(title: end == .from ? "Departing from" : "Arriving at") { picked in
+                    if end == .from { transport.fromAirport = picked.code } else { transport.toAirport = picked.code }
                 }
-                .foregroundStyle(Theme.text)
-                .padding(.top, 4)
+            } else {
+                PlaceSearchView(near: end == .from ? stationHints.from : stationHints.to) { place in
+                    if end == .from { transport.fromStation = place } else { transport.toStation = place }
+                }
             }
-            if isFlight, !terminal.isEmpty {
-                Text("Terminal \(terminal)").font(.caption2.weight(.medium)).foregroundStyle(Theme.textSecondary)
+        } label: {
+            if transport.mode == .flight {
+                airportLabel(end == .from ? transport.from : transport.to, end: end)
+            } else {
+                stationLabel(end == .from ? transport.fromStation : transport.toStation, end: end)
             }
         }
-        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+        .buttonStyle(.plain)
+    }
+
+    private func airportLabel(_ airport: Airport?, end: End) -> some View {
+        VStack(alignment: end == .from ? .leading : .trailing, spacing: 3) {
+            Text(airport?.code ?? "···")
+                .font(.system(size: 44, weight: .black, design: .rounded))
+                .foregroundStyle(.white.opacity(airport == nil ? 0.35 : 1))
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(airport?.place ?? (end == .from ? "From · tap" : "To · tap"))
+                .font(.footnote).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+        }
+    }
+
+    private func stationLabel(_ station: TripPlace?, end: End) -> some View {
+        Text(station?.name ?? (end == .from ? "From · tap" : "To · tap"))
+            .font(.system(size: 22, weight: .heavy, design: .rounded))
+            .foregroundStyle(.white.opacity(station == nil ? 0.4 : 1))
+            .lineLimit(2).minimumScaleFactor(0.7)
+            .multilineTextAlignment(end == .from ? .leading : .trailing)
+    }
+
+    private var routeGlyph: some View {
+        HStack(spacing: 6) {
+            dashes
+            Image(systemName: transport.mode.symbol)
+                .font(.subheadline.weight(.bold)).foregroundStyle(Self.colors(for: transport.mode)[1])
+                .frame(width: 36, height: 36)
+                .background(.white, in: Circle())
+            dashes
+        }
+        .frame(width: 96)
     }
 
     private var dashes: some View {
-        Rectangle().fill(Theme.textTertiary.opacity(0.6)).frame(height: 1.5)
+        DashLine().stroke(.white.opacity(0.6), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 4]))
+            .frame(height: 2)
+    }
+
+    private func timeButton(_ end: End, offset: Int) -> some View {
+        let date = end == .from ? departure : arrival
+        return Button { editingTime = end } label: {
+            VStack(alignment: end == .from ? .leading : .trailing, spacing: 2) {
+                Text(end == .from ? "DEPARTS" : "ARRIVES")
+                    .font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(.white.opacity(0.65))
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(date.map { TripTransport.timeText(TripTransport.minutes($0)) } ?? "--:--")
+                        .font(.system(size: 24, weight: .bold)).monospacedDigit()
+                        .foregroundStyle(.white.opacity(date == nil ? 0.35 : 1))
+                    if offset > 0 && date != nil {
+                        Text("+\(offset)").font(.caption.weight(.bold)).foregroundStyle(Color(hex: "#fde68a"))
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: Binding(get: { editingTime == end }, set: { if !$0 { editingTime = nil } })) {
+            TimePickerPopover(title: end == .from ? "Departs" : "Arrives",
+                              date: end == .from ? $departure : $arrival,
+                              suggestion: end == .from ? nil : departure?.addingTimeInterval(2 * 3600))
+        }
+    }
+
+    /// The tear line, with notches cut into both edges.
+    private var perforation: some View {
+        HStack(spacing: 0) {
+            Circle().fill(Self.night).frame(width: 22, height: 22).offset(x: -11)
+            DashLine().stroke(.white.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                .frame(height: 2)
+            Circle().fill(Self.night).frame(width: 22, height: 22).offset(x: 11)
+        }
+        .padding(.horizontal, -18)
+    }
+
+    private var stub: some View {
+        HStack(spacing: 8) {
+            stubField("SEAT", text: $transport.seats, prompt: transport.mode == .flight ? "14A" : "Car 7, 12A")
+            stubField("BOOKING", text: $transport.confirmation, prompt: "ABC123")
+            if transport.mode == .flight {
+                stubBox(label: "TERMINAL", empty: transport.departTerminal.isEmpty && transport.arriveTerminal.isEmpty) {
+                    HStack(spacing: 4) {
+                        stubText($transport.departTerminal, prompt: "–")
+                        Image(systemName: "arrow.right").font(.caption2.weight(.bold)).foregroundStyle(.white.opacity(0.7))
+                        stubText($transport.arriveTerminal, prompt: "–")
+                    }
+                }
+            }
+        }
+    }
+
+    private func stubField(_ label: String, text: Binding<String>, prompt: String) -> some View {
+        stubBox(label: label, empty: text.wrappedValue.isEmpty) { stubText(text, prompt: prompt) }
+    }
+
+    private func stubText(_ text: Binding<String>, prompt: String) -> some View {
+        TextField(prompt, text: text, prompt: Text(prompt).foregroundStyle(.white.opacity(0.4)))
+            .font(.subheadline.weight(.bold))
+            .textInputAutocapitalization(transport.mode == .flight ? .characters : .never)
+            .autocorrectionDisabled()
+    }
+
+    private func stubBox<Content: View>(label: String, empty: Bool, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(.white.opacity(0.65))
+            content()
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(empty ? 0 : 0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            if empty {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(.white.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+            }
+        }
+    }
+}
+
+private struct DashLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { $0.move(to: CGPoint(x: 0, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
+    }
+}
+
+/// Wheel time picker in a popover; changes apply as you scroll.
+private struct TimePickerPopover: View {
+    let title: String
+    @Binding var date: Date?
+    @State private var value: Date
+    @Environment(\.dismiss) private var dismiss
+
+    init(title: String, date: Binding<Date?>, suggestion: Date?) {
+        self.title = title
+        _date = date
+        _value = State(initialValue: date.wrappedValue ?? suggestion ?? TripTransport.clock(12 * 60))
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title).font(.headline)
+            DatePicker(title, selection: $value, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+            HStack {
+                if date != nil {
+                    Button("Clear", role: .destructive) {
+                        date = nil
+                        dismiss()
+                    }
+                }
+                Spacer()
+                Button("Done") {
+                    date = value
+                    dismiss()
+                }
+                .fontWeight(.semibold)
+            }
+        }
+        .padding()
+        .frame(width: 300)
+        .onChange(of: value) { _, new in date = new }
+        .presentationCompactAdaptation(.popover)
+    }
+}
+
+// MARK: - Route backdrop
+
+/// Behind the ticket: the globe for long flights, a dark Apple Map for
+/// trains and short hops (the globe makes a short route look like a dot).
+struct RouteBackdrop: View {
+    let transport: TripTransport
+    /// Where to face before both ends are picked (the trip's places).
+    let focus: CLLocationCoordinate2D?
+
+    var body: some View {
+        let ends = transport.endPoints
+        let accent = Color(hex: transport.mode == .flight ? "#60a5fa" : "#5eead4")
+        if let a = ends.from, let b = ends.to, transport.mode == .train || (transport.distanceKm ?? 0) < 2000 {
+            RouteMap(from: a, to: b, labels: ends.labels, accent: accent)
+        } else {
+            RouteGlobe(from: ends.from, to: ends.to,
+                       focus: focus ?? CLLocationCoordinate2D(latitude: 20, longitude: 0),
+                       fromLabel: ends.labels.from, toLabel: ends.labels.to, accent: accent)
+        }
+    }
+}
+
+private struct RouteMap: View {
+    let from: CLLocationCoordinate2D
+    let to: CLLocationCoordinate2D
+    let labels: (from: String, to: String)
+    let accent: Color
+
+    var body: some View {
+        Map(initialPosition: .automatic, interactionModes: []) {
+            MapPolyline(coordinates: [from, to]).stroke(accent.opacity(0.35), lineWidth: 9)
+            MapPolyline(coordinates: [from, to]).stroke(accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            Annotation(labels.from, coordinate: from) {
+                Circle().fill(TransportTicket.night).frame(width: 12, height: 12)
+                    .overlay(Circle().stroke(Color(white: 0.9), lineWidth: 3))
+            }
+            Annotation(labels.to, coordinate: to) {
+                Circle().fill(accent).frame(width: 13, height: 13)
+                    .overlay(Circle().stroke(.white, lineWidth: 2))
+                    .background(Circle().fill(accent.opacity(0.35)).frame(width: 26, height: 26))
+            }
+        }
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
+        .environment(\.colorScheme, .dark)
+        // Keep the route clear of the toolbar above and the ticket below.
+        .safeAreaPadding(EdgeInsets(top: 110, leading: 40, bottom: 110, trailing: 40))
+        // Re-frame when an end changes; `initialPosition` only applies once.
+        .id("\(from.latitude),\(from.longitude)-\(to.latitude),\(to.longitude)")
+        .allowsHitTesting(false)
     }
 }
 
 extension TripTransport {
     /// "14:55" / "2:55 PM", following the phone's 12/24-hour setting.
     static func timeText(_ minutes: Int) -> String {
-        let date = Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
-        return date.formatted(date: .omitted, time: .shortened)
+        clock(minutes).formatted(date: .omitted, time: .shortened)
+    }
+
+    /// Today at that many minutes after midnight, for time pickers.
+    static func clock(_ minutes: Int) -> Date {
+        Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
+    }
+
+    static func minutes(_ date: Date) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    }
+
+    /// Both ends on the map, with short labels ("JFK", "Tokyo Station").
+    var endPoints: (from: CLLocationCoordinate2D?, to: CLLocationCoordinate2D?, labels: (from: String, to: String)) {
+        switch mode {
+        case .flight: (from?.coordinate, to?.coordinate, (fromAirport, toAirport))
+        case .train: (fromStation?.coordinate, toStation?.coordinate, (fromStation?.name ?? "", toStation?.name ?? ""))
+        }
     }
 }
 

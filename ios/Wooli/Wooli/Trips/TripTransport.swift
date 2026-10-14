@@ -147,6 +147,28 @@ extension TripTransport {
         return (1..<(48 * 60)).contains(minutes) ? minutes : nil
     }
 
+    /// Both ends are filled in, so the suggested title names the route.
+    var hasRoute: Bool {
+        switch mode {
+        case .flight: from != nil && to != nil
+        case .train: fromStation != nil && toStation != nil
+        }
+    }
+
+    /// Picks the arrival day: the first of same day / next day / two days
+    /// later that gives a real flight time across the time zones. Without
+    /// both airports, an arrival earlier on the clock means the next day.
+    func inferringArrivalDay(departDay: String?, departTime: Int?) -> TripTransport {
+        guard let departTime, let arriveTime else { return self }
+        var t = self
+        for offset in 0...2 {
+            t.arriveDayOffset = offset
+            if t.durationMinutes(departDay: departDay, departTime: departTime) != nil { return t }
+        }
+        t.arriveDayOffset = arriveTime < departTime ? 1 : 0
+        return t
+    }
+
     static func durationText(_ minutes: Int) -> String {
         minutes < 60 ? "\(minutes)m" : minutes % 60 == 0 ? "\(minutes / 60)h" : "\(minutes / 60)h \(minutes % 60)m"
     }
