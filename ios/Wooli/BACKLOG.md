@@ -229,6 +229,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-15 · Claude** — Settings → About → Acknowledgements (`Views/AcknowledgementsView.swift`): credits OurAirports, Natural Earth and mwgg/Airports, with mwgg's MIT notice. Not built.
+
 - **2026-10-14 · Claude** — T6 redesign after user feedback ("too many fields, not futuristic"): Flight and Train now open a dark boarding-pass ticket instead of a form. Tap the codes/stations to pick them, tap a time to set it, type the flight number on the ticket; seat, booking code and terminal are dashed "+" chips on the stub. Removed: cabin picker (field kept in the model, unused), Departure/Arrival/Booking sections, title field (named after the route once both ends are set), arrival-day picker (worked out from time zones, `TripTransport.inferringArrivalDay`). Behind the ticket: a globe drawn from real coastlines (`TripGlobe.swift`, `coastlines.bin` = Natural Earth 1:110m, 20 KB, offline) for flights ≥ 2,000 km; a dark Apple Map for trains and short flights. Globe projection checked by porting it to Python and rendering the real `coastlines.bin`. **Not built — no Xcode in the session.** Check: the popover time pickers, the dark sheet switching back to light on "Other", and whether `safeAreaPadding` keeps the train map's route clear of the ticket.
 
 - **2026-10-13 · Claude** — T6 flight & train editor (`Trips/TripTransport.swift`, `TripTransportViews.swift`, `airports.tsv`). A travel booking now has a Flight / Train / Other switch. Flight: flight number (airline guessed from the code), airport search (code, city, name or keyword like "Tokyo" or "NYC"), departure/arrival day, time and terminal, cabin, seats, booking code. The header shows the great-circle arc on a map and a boarding-pass strip with both codes, times, "+1" for next-day arrival, and flight time across time zones. Train: stations via Apple Maps search, times, seats, booking code. Existing bookings open as Flight/Train when their wording reads that way, otherwise as Other; notes are untouched. Travel cards take their icon from the saved mode. Synced as a JSON string field `transport` on `TripItem`. **Not built — no Xcode in the session**: build, then check in the Simulator (new flight, old CX831 booking, train, switching to Other, dark mode). **Deploy the CloudKit schema** (new `TripItem.transport` field) before the next TestFlight.
@@ -262,7 +264,6 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Inbox (found while working — not yet prioritized)
 
-- Add an Acknowledgements screen before release: `Trips/airports.tsv` uses mwgg/Airports time zones (MIT — needs its copyright notice); OurAirports and Natural Earth (`coastlines.bin`) are public domain, credit is polite.
 - Trip travel cards still estimate distance from the legs' places; they could use the booking's airports/stations (`TripTransport.distanceKm`) when set, and show flight time.
 - Old flight bookings keep their details in Notes; the user plans to move them into the new fields later.
 - Manual transactions: no edit for amount/date/account after saving (category, note, tags edit as usual) — delete and re-add for now.

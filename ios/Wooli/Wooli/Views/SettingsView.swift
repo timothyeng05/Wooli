@@ -147,6 +147,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("About") {
+                    NavigationLink {
+                        AcknowledgementsView()
+                    } label: {
+                        Label("Acknowledgements", systemImage: "heart.text.square")
+                    }
+                }
+
                 Section {
                     Button(role: .destructive) {
                         confirmErase = true
