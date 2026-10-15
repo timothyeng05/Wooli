@@ -229,6 +229,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-15 · Claude** — Trip colors: every travel card and the flight/train ticket use one dark→light blue gradient (`TripTravelCard.gradient`) instead of leg colors; item types get their own colors — travel blue, stays violet, food orange, activities pink, notes slate — and item icons are solid colored circles with white symbols. Leg headers and day bars keep leg colors. Not built.
+
 - **2026-10-15 · Claude** — Settings → About → Acknowledgements (`Views/AcknowledgementsView.swift`): credits OurAirports, Natural Earth and mwgg/Airports, with mwgg's MIT notice. Not built.
 
 - **2026-10-14 · Claude** — T6 redesign after user feedback ("too many fields, not futuristic"): Flight and Train now open a dark boarding-pass ticket instead of a form. Tap the codes/stations to pick them, tap a time to set it, type the flight number on the ticket; seat, booking code and terminal are dashed "+" chips on the stub. Removed: cabin picker (field kept in the model, unused), Departure/Arrival/Booking sections, title field (named after the route once both ends are set), arrival-day picker (worked out from time zones, `TripTransport.inferringArrivalDay`). Behind the ticket: a globe drawn from real coastlines (`TripGlobe.swift`, `coastlines.bin` = Natural Earth 1:110m, 20 KB, offline) for flights ≥ 2,000 km; a dark Apple Map for trains and short flights. Globe projection checked by porting it to Python and rendering the real `coastlines.bin`. **Not built — no Xcode in the session.** Check: the popover time pickers, the dark sheet switching back to light on "Other", and whether `safeAreaPadding` keeps the train map's route clear of the ticket.

@@ -23,10 +23,6 @@ struct TransportTicket: View {
 
     static let night = Color(hex: "#050812")
 
-    static func colors(for mode: TripTransport.Mode) -> [Color] {
-        mode == .flight ? [Color(hex: "#334155"), Color(hex: "#2563eb")] : [Color(hex: "#2563eb"), Color(hex: "#0d9488")]
-    }
-
     /// The transport as it would be saved, with the arrival day worked out.
     private var resolved: TripTransport {
         var t = transport
@@ -64,10 +60,10 @@ struct TransportTicket: View {
         .padding(.horizontal, 18)
         .padding(.top, 18)
         .foregroundStyle(.white)
-        .background(LinearGradient(colors: Self.colors(for: transport.mode), startPoint: .topLeading, endPoint: .bottomTrailing),
+        .background(LinearGradient(colors: TripTravelCard.gradient, startPoint: .topLeading, endPoint: .bottomTrailing),
                     in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.18)))
-        .shadow(color: Self.colors(for: transport.mode)[1].opacity(0.45), radius: 24, y: 12)
+        .shadow(color: TripTravelCard.gradient[1].opacity(0.45), radius: 24, y: 12)
     }
 
     // MARK: Parts
@@ -152,7 +148,7 @@ struct TransportTicket: View {
         HStack(spacing: 6) {
             dashes
             Image(systemName: transport.mode.symbol)
-                .font(.subheadline.weight(.bold)).foregroundStyle(Self.colors(for: transport.mode)[1])
+                .font(.subheadline.weight(.bold)).foregroundStyle(TripTravelCard.gradient[1])
                 .frame(width: 36, height: 36)
                 .background(.white, in: Circle())
             dashes
@@ -302,7 +298,7 @@ struct RouteBackdrop: View {
 
     var body: some View {
         let ends = transport.endPoints
-        let accent = Color(hex: transport.mode == .flight ? "#60a5fa" : "#5eead4")
+        let accent = Color(hex: "#60a5fa")
         if let a = ends.from, let b = ends.to, transport.mode == .train || (transport.distanceKm ?? 0) < 2000 {
             RouteMap(from: a, to: b, labels: ends.labels, accent: accent)
         } else {

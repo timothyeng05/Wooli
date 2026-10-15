@@ -209,8 +209,6 @@ struct TripLegHeader: View {
 struct TripTravelCard: View {
     let fromName: String?
     let toName: String?
-    let fromHex: String
-    let toHex: String
     let day: String
     /// Day you arrive, when the trip there runs overnight.
     var endDay: String? = nil
@@ -268,7 +266,7 @@ struct TripTravelCard: View {
         }
         .padding(16)
         .background(
-            LinearGradient(colors: [Color(hex: fromHex), Color(hex: toHex)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            LinearGradient(colors: Self.gradient, startPoint: .topLeading, endPoint: .bottomTrailing),
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
         // Ticket notches.
@@ -278,7 +276,7 @@ struct TripTravelCard: View {
                 .overlay(alignment: .trailing) { Circle().frame(width: 18).offset(x: 9).blendMode(.destinationOut) }
                 .compositingGroup()
         }
-        .shadow(color: Color(hex: toHex).opacity(0.3), radius: 10, y: 5)
+        .shadow(color: Self.gradient[1].opacity(0.3), radius: 10, y: 5)
         .padding(.vertical, 4)
     }
 
@@ -302,7 +300,7 @@ struct TripTravelCard: View {
         HStack(spacing: 6) {
             dashes
             Image(systemName: symbol)
-                .font(.subheadline.weight(.bold)).foregroundStyle(Color(hex: toHex))
+                .font(.subheadline.weight(.bold)).foregroundStyle(Self.gradient[1])
                 .frame(width: 34, height: 34)
                 .background(.white, in: Circle())
             dashes
@@ -320,6 +318,10 @@ struct TripTravelCard: View {
             Path { $0.move(to: CGPoint(x: 0, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
         }
     }
+
+    /// Every travel card (and the flight / train ticket) uses the same dark
+    /// to light blue, so stays, food and activities can have their own colors.
+    static let gradient = [Color(hex: "#1e3a8a"), Color(hex: "#3b82f6")]
 
     /// Best guess at how you're travelling, from the bookings' wording.
     static func mode(for items: [TripItem]) -> (symbol: String, label: String?) {

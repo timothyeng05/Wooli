@@ -172,12 +172,14 @@ struct TripItem: Identifiable, Codable, Hashable {
             }
         }
 
+        /// Travel owns blue (matching the travel cards); the others each
+        /// get their own color so a day reads at a glance.
         var colorHex: String {
             switch self {
-            case .activity: "#2563eb"
+            case .activity: "#ec4899"
             case .meal: "#f97316"
-            case .transit: "#8b5cf6"
-            case .stay: "#16a34a"
+            case .transit: "#2563eb"
+            case .stay: "#8b5cf6"
             case .note: "#64748b"
             }
         }

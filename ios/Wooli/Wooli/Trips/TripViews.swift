@@ -552,7 +552,6 @@ struct TripDetailView: View {
     private func travelCard(_ trip: Trip, from: TripLeg?, to: TripLeg?, start: String, end: String,
                             items: [TripItem], all: [TripItem]) -> some View {
         TripTravelCard(fromName: from?.name, toName: to?.name,
-                       fromHex: from.map(trip.colorHex) ?? "#334155", toHex: to.map(trip.colorHex) ?? "#334155",
                        day: start, endDay: end, items: items,
                        distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: all),
                        onSelect: { editingItem = $0 },
@@ -608,9 +607,10 @@ struct TripItemRow: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: item.kind.symbol)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color(hex: item.kind.colorHex))
+                .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .background(Color(hex: item.kind.colorHex).opacity(0.12), in: Circle())
+                .background(Color(hex: item.kind.colorHex).gradient, in: Circle())
+                .shadow(color: Color(hex: item.kind.colorHex).opacity(0.35), radius: 4, y: 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title.isEmpty ? (item.place?.name ?? item.kind.label) : item.title)
                     .font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
