@@ -229,6 +229,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-17 · Claude** — Trip page: a bar pinned above the itinerary ("N stops" + Collapse all / Expand all) folds every leg in one tap so the trip reads as its stops and travel cards; stays on screen while scrolling. Replaces the Expand/Collapse items in the ••• menu. Not built.
+
 - **2026-10-15 · Claude** — Trip colors: every travel card and the flight/train ticket use one dark→light blue gradient (`TripTravelCard.gradient`) instead of leg colors; item types get their own colors — travel blue, stays violet, food orange, activities pink, notes slate — and item icons are solid colored circles with white symbols. Leg headers and day bars keep leg colors. Not built.
 
 - **2026-10-15 · Claude** — Settings → About → Acknowledgements (`Views/AcknowledgementsView.swift`): credits OurAirports, Natural Earth and mwgg/Airports, with mwgg's MIT notice. Not built.

@@ -347,7 +347,7 @@ struct TripDetailView: View {
 
         return ScrollView {
             // Lazy: long trips have dozens of day cards.
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
                 header(trip, dayCount: days.count)
 
                 if !placed.isEmpty {
@@ -358,24 +358,28 @@ struct TripDetailView: View {
 
                 ideasCard(trip, ideas: ideas)
 
-                ForEach(TripRow.rows(blocks: blocks, items: allItems, collapsed: collapsed)) { row in
-                    switch row {
-                    case .day(let block, let half, let leg):
-                        dayCard(trip, block, half: half, leg: leg, travelIDs: travelIDs)
-                    case .travel(let from, let to, let start, let end, let items):
-                        travelCard(trip, from: from, to: to, start: start, end: end, items: items, all: allItems)
-                    case .legHeader(let leg):
-                        Button {
-                            withAnimation(.snappy) { toggle(leg, trip: trip) }
-                        } label: {
-                            TripLegHeader(leg: leg, number: (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1,
-                                          colorHex: trip.colorHex(of: leg),
-                                          planCount: planCounts[leg.id] ?? 0,
-                                          isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(DayKey.key(.now)))
+                Section {
+                    ForEach(TripRow.rows(blocks: blocks, items: allItems, collapsed: collapsed)) { row in
+                        switch row {
+                        case .day(let block, let half, let leg):
+                            dayCard(trip, block, half: half, leg: leg, travelIDs: travelIDs)
+                        case .travel(let from, let to, let start, let end, let items):
+                            travelCard(trip, from: from, to: to, start: start, end: end, items: items, all: allItems)
+                        case .legHeader(let leg):
+                            Button {
+                                withAnimation(.snappy) { toggle(leg, trip: trip) }
+                            } label: {
+                                TripLegHeader(leg: leg, number: (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1,
+                                              colorHex: trip.colorHex(of: leg),
+                                              planCount: planCounts[leg.id] ?? 0,
+                                              isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(DayKey.key(.now)))
+                            }
+                            .buttonStyle(.plain)
+                            .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
                         }
-                        .buttonStyle(.plain)
-                        .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
                     }
+                } header: {
+                    if !trip.legs.isEmpty { legsBar(trip, collapsed: collapsed) }
                 }
             }
             .padding(16)
@@ -394,10 +398,6 @@ struct TripDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("More", systemImage: "ellipsis") {
                     Button("Edit trip", systemImage: "pencil") { editingTrip = trip }
-                    if !trip.legs.isEmpty {
-                        Button("Expand all", systemImage: "rectangle.expand.vertical") { setCollapsed([]) }
-                        Button("Collapse all", systemImage: "rectangle.compress.vertical") { setCollapsed(Set(trip.legs.map(\.id))) }
-                    }
                     Button(trip.isMine ? "Delete trip" : "Leave trip", systemImage: trip.isMine ? "trash" : "rectangle.portrait.and.arrow.right",
                            role: .destructive) { confirmDelete = true }
                 }
@@ -467,6 +467,31 @@ struct TripDetailView: View {
     }
 
     /// Past trips start collapsed; during a trip, legs already finished do.
+    /// Pinned above the itinerary: one tap folds every leg so the trip reads
+    /// as just its stops and the travel between them.
+    private func legsBar(_ trip: Trip, collapsed: Set<String>) -> some View {
+        let allCollapsed = trip.legs.allSatisfy { collapsed.contains($0.id) }
+        return HStack {
+            Label("\(trip.legs.count) stop\(trip.legs.count == 1 ? "" : "s")", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+            Spacer()
+            Button {
+                setCollapsed(allCollapsed ? [] : Set(trip.legs.map(\.id)))
+            } label: {
+                Label(allCollapsed ? "Expand all" : "Collapse all",
+                      systemImage: allCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .sensoryFeedback(.selection, trigger: allCollapsed)
+        }
+        .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+    }
+
     private func defaultCollapsed(_ trip: Trip) -> Set<String> {
         let today = DayKey.key(.now)
         if trip.endDay < today { return Set(trip.legs.map(\.id)) }
