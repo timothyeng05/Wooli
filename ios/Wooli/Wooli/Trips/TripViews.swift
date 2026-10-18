@@ -373,9 +373,9 @@ struct TripDetailView: View {
                 Section {
                     ForEach(TripRow.rows(blocks: blocks, items: allItems, collapsed: collapsed)) { row in
                         switch row {
-                        case .day(let block, let half, let leg):
-                            dayCard(trip, block, half: half, leg: leg, travelIDs: travelIDs)
-                        case .travel(let from, let to, let start, let end, let items):
+                        case .day(let block, let leg):
+                            dayCard(trip, block, leg: leg, travelIDs: travelIDs, all: allItems)
+                        case .travel(let from, let to, let start, let end, let items, _):
                             travelCard(trip, from: from, to: to, start: start, end: end, items: items, all: allItems)
                         case .legHeader(let leg):
                             Button {
@@ -596,47 +596,66 @@ struct TripDetailView: View {
         UserDefaults.standard.set(Array(set), forKey: collapsedKey)
     }
 
-    /// A day's plans. On a travel day, "1 of 2" holds plans before the
-    /// departure (still in the city you're leaving) and "2 of 2" the rest.
-    private func dayCard(_ trip: Trip, _ block: TripDayBlock, half: TripRow.Half, leg: TripLeg?,
-                         travelIDs: Set<String>) -> some View {
-        let departure = block.departure ?? Int.max
-        let plans = store.items(in: trip.id, day: block.day).filter { item in
-            guard !travelIDs.contains(item.id) else { return false }
-            switch half {
-            case .whole: return true
-            case .first: return (item.time ?? Int.max) < departure
-            case .second: return (item.time ?? Int.max) >= departure
+    /// What a day card lists, in order: plans and the day's tickets.
+    private enum DayEntry: Identifiable {
+        case plan(TripItem)
+        case ticket(home: Bool)
+        var id: String {
+            switch self {
+            case .plan(let item): item.id
+            case .ticket(let home): home ? "ticket-home" : "ticket"
             }
         }
+    }
+
+    /// A day's plans, with the day's travel inside the card where it falls:
+    /// plans before the departure above the ticket, the rest below. A ticket
+    /// with no time yet goes first.
+    private func dayCard(_ trip: Trip, _ block: TripDayBlock, leg: TripLeg?,
+                         travelIDs: Set<String>, all: [TripItem]) -> some View {
+        let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) }
+        var entries = plans.map(DayEntry.plan)
+        func insert(_ entry: DayEntry, at time: Int) {
+            let i = entries.firstIndex { if case .plan(let item) = $0 { (item.time ?? Int.max) >= time } else { false } }
+            entries.insert(entry, at: i ?? entries.endIndex)
+        }
+        if block.showsTicket { insert(.ticket(home: false), at: block.departure ?? Int.min) }
+        if !block.homeTravel.isEmpty { insert(.ticket(home: true), at: block.homeTravel.compactMap(\.time).min() ?? Int.max) }
+
         let date = DayKey.date(block.day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         let base = "Day \(block.number)"
-        let title: String = switch half {
-        case .whole: trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base
-        case .first: "\(base) · 1 of 2"
-        case .second: "\(base) · 2 of 2"
-        }
-        let subtitle = half == .whole ? date : [date, leg?.name].compactMap { $0 }.joined(separator: " · ")
+        let title = trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base
 
         return VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: title, subtitle: subtitle) {
+            CardHeader(title: title, subtitle: date) {
                 HStack(spacing: 14) {
                     if plans.contains(where: { $0.place != nil }) {
                         Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
                     }
                     Button("Add", systemImage: "plus") {
-                        // "1 of 2" needs a time before departure to stay there.
-                        let time = half == .first ? max(min(9 * 60, departure - 60), 0) : nil
-                        editingItem = TripItem(tripID: trip.id, day: block.day, time: time)
+                        editingItem = TripItem(tripID: trip.id, day: block.day)
                     }
                     .labelStyle(.iconOnly)
                 }
                 .font(.body.weight(.medium))
             }
-            if plans.isEmpty {
+            if entries.isEmpty {
                 Text("Nothing planned yet").font(.footnote).foregroundStyle(Theme.textTertiary)
             }
-            ForEach(plans) { itemRow($0, trip: trip) }
+            ForEach(entries) { entry in
+                switch entry {
+                case .plan(let item):
+                    itemRow(item, trip: trip)
+                case .ticket(let home):
+                    if home {
+                        travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day,
+                                   items: block.homeTravel, all: all)
+                    } else {
+                        travelCard(trip, from: block.travelFrom, to: block.travelTo, start: block.day,
+                                   end: block.travelEnd ?? block.day, items: block.travel, all: all)
+                    }
+                }
+            }
         }
         .card()
         // The day's leg color down the left edge.
@@ -676,6 +695,9 @@ struct TripDetailView: View {
             .contextMenu {
                 if let url = item.place?.mapsURL {
                     Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+                }
+                if let url = item.place?.googleMapsURL {
+                    Link(destination: url) { Label("Open in Google Maps", systemImage: "globe") }
                 }
                 Menu("Move to", systemImage: "calendar") {
                     Button("Ideas") { move(item, to: nil) }
@@ -744,9 +766,15 @@ struct TripItemRow: View {
                 if item.isMealPlaceholder {
                     Text("Tap to pick a place").font(.caption).foregroundStyle(Theme.textTertiary)
                 }
-                if let place = item.place, place.name != item.title || !place.address.isEmpty {
-                    Text(place.name == item.title ? place.address : place.name)
-                        .font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                if let place = item.place {
+                    if place.name != item.title && !item.title.isEmpty {
+                        Text(place.name).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    }
+                    if !place.address.isEmpty {
+                        Label(place.address, systemImage: "mappin.and.ellipse")
+                            .labelStyle(.titleAndIcon).imageScale(.small)
+                            .font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    }
                 }
                 if !item.notes.isEmpty {
                     Text(item.notes).font(.caption).foregroundStyle(Theme.textTertiary).lineLimit(2)
@@ -763,6 +791,89 @@ struct TripItemRow: View {
             }
         }
         .contentShape(Rectangle())
+    }
+}
+
+/// A place's pin on a small map, its name and address, and buttons to
+/// open it in Apple Maps or Google Maps. Tapping the map opens Apple's own
+/// place card (photos, hours, ratings, phone) without leaving the app.
+struct PlaceMapCard: View {
+    let place: TripPlace
+    var tint: Color = Color(hex: TripItem.Kind.meal.colorHex)
+    var showsName = true
+
+    /// Apple's listing for the place, once found.
+    @State private var mapItem: MKMapItem?
+    @State private var showingDetail = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button { showingDetail = true } label: {
+                Map(initialPosition: .camera(MapCamera(centerCoordinate: place.coordinate, distance: 1200)), interactionModes: []) {
+                    Marker(place.name, coordinate: place.coordinate).tint(tint)
+                }
+                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .allowsHitTesting(false)
+                .frame(height: 170)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    if mapItem != nil {
+                        Label("Photos & info", systemImage: "photo.on.rectangle")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(10)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(mapItem == nil)
+            VStack(alignment: .leading, spacing: 2) {
+                if showsName { Text(place.name).font(.subheadline.weight(.semibold)) }
+                if !place.address.isEmpty {
+                    Text(place.address).font(.caption).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
+                }
+            }
+            HStack(spacing: 10) {
+                if let mapItem {
+                    // Opens the place's real listing (photos, reviews), not a dropped pin.
+                    Button { mapItem.openInMaps() } label: { buttonLabel("Apple Maps", systemImage: "map.fill") }
+                        .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                } else if let url = place.mapsURL {
+                    mapButton("Apple Maps", systemImage: "map.fill", url: url)
+                }
+                if let url = place.googleMapsURL { mapButton("Google Maps", systemImage: "globe", url: url) }
+            }
+        }
+        .padding(.vertical, 4)
+        .mapItemDetailSheet(isPresented: $showingDetail, item: mapItem)
+        .task(id: place) { mapItem = await Self.listing(for: place) }
+    }
+
+    /// Apple's listing: by its Apple Maps ID, or for places pinned some other
+    /// way, a search for the name right where the pin is.
+    static func listing(for place: TripPlace) async -> MKMapItem? {
+        if !place.mapItemID.isEmpty, let id = MKMapItem.Identifier(rawValue: place.mapItemID),
+           let item = try? await MKMapItemRequest(mapItemIdentifier: id).mapItem {
+            return item
+        }
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = place.name
+        request.resultTypes = .pointOfInterest
+        request.region = MKCoordinateRegion(center: place.coordinate, latitudinalMeters: 600, longitudinalMeters: 600)
+        let pin = CLLocation(latitude: place.latitude, longitude: place.longitude)
+        return try? await MKLocalSearch(request: request).start().mapItems
+            .first { $0.location.distance(from: pin) < 250 }
+    }
+
+    private func buttonLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity)
+    }
+
+    private func mapButton(_ title: String, systemImage: String, url: URL) -> some View {
+        Link(destination: url) { buttonLabel(title, systemImage: systemImage) }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
     }
 }
 
@@ -796,7 +907,7 @@ struct TripItemEditor: View {
         // Existing bookings without details keep their look unless they read
         // like a flight or train; new ones start as a flight.
         let mode = item.transport?.mode ?? Self.guessMode(item) ?? (isNew ? .flight : nil)
-        _transport = State(initialValue: item.transport ?? TripTransport(mode: mode ?? .flight))
+        _transport = State(initialValue: item.transport ?? TripTransport.guess(fromTitle: item.title, mode: mode ?? .flight))
         _transportMode = State(initialValue: mode)
         _arrival = State(initialValue: item.transport?.arriveTime.map(TripTransport.clock))
     }
@@ -871,19 +982,7 @@ struct TripItemEditor: View {
 
             Section("Place") {
                 if let place = item.place {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(place.name)
-                            if !place.address.isEmpty {
-                                Text(place.address).font(.caption).foregroundStyle(Theme.textSecondary)
-                            }
-                        }
-                        Spacer()
-                        if let url = place.mapsURL {
-                            Link(destination: url) { Image(systemName: "arrow.up.right.square") }
-                                .accessibilityLabel("Open in Apple Maps")
-                        }
-                    }
+                    PlaceMapCard(place: place, tint: Color(hex: item.kind.colorHex))
                     Button("Remove place", role: .destructive) { item.place = nil }
                 }
                 NavigationLink {

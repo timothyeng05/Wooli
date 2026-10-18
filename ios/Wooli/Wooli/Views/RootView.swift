@@ -132,6 +132,16 @@ struct MainTabView: View {
                     .zIndex(1)
             }
         }
+        // Swipe in from the left edge to open the ☰ drawer — except on a
+        // pushed screen, where that swipe is iOS's "back".
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12, coordinateSpace: .global).onChanged { drag in
+                guard !app.isSidebarOpen, drag.startLocation.x < 28,
+                      drag.translation.width > 60, abs(drag.translation.height) < drag.translation.width,
+                      !NavigationDepth.isShowingPushedScreen else { return }
+                app.isSidebarOpen = true
+            }
+        )
         .animation(.easeInOut(duration: 0.25), value: app.isSidebarOpen)
         .animation(.easeInOut(duration: 0.2), value: app.space)
         .sheet(item: $app.sidebarDestination) { dest in
@@ -436,5 +446,20 @@ struct SidebarDrawer: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Whether a NavigationStack on screen has pushed past its root, so the
+/// left-edge swipe belongs to "back" rather than the drawer.
+@MainActor
+enum NavigationDepth {
+    static var isShowingPushedScreen: Bool {
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        return windows.filter(\.isKeyWindow).contains { $0.rootViewController.map(hasPushed) ?? false }
+    }
+
+    private static func hasPushed(_ vc: UIViewController) -> Bool {
+        if let nav = vc as? UINavigationController, nav.viewIfLoaded?.window != nil, nav.viewControllers.count > 1 { return true }
+        return vc.children.contains(where: hasPushed)
     }
 }

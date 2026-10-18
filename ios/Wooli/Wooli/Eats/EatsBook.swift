@@ -63,22 +63,33 @@ final class EatsBook {
 
     private static var importURL: URL { URL.documentsDirectory.appending(path: "eats-import.json") }
 
-    /// Imports `Documents/eats-import.json` (a list of places, e.g. ratings
-    /// converted from the Wooli web app) through the normal save path so it
-    /// syncs, then deletes the file. Saves are by id, so importing again
-    /// updates places in place.
+    private struct ImportFile: Codable {
+        var places: [EatsPlace]?
+        /// Ids of places to take off the list.
+        var remove: [String]?
+    }
+
+    /// Imports `Documents/eats-import.json` (a list of places, or
+    /// `{"places": […], "remove": [ids]}`, e.g. ratings converted from the
+    /// Wooli web app or Beli) through the normal save path so it syncs, then
+    /// deletes the file. Saves are by id, so importing again updates places
+    /// in place.
     private func importPendingFile() {
         guard let data = try? Data(contentsOf: Self.importURL) else { return }
         defer { try? FileManager.default.removeItem(at: Self.importURL) }
-        guard let places = try? JSONDecoder().decode([EatsPlace].self, from: data) else {
+        guard let file = (try? JSONDecoder().decode([EatsPlace].self, from: data)).map({ ImportFile(places: $0) })
+                ?? (try? JSONDecoder().decode(ImportFile.self, from: data)) else {
             log.error("Eats import file couldn't be read")
             return
         }
-        for var place in places {
+        for var place in file.places ?? [] {
             place.systemFields = nil
             save(place)
         }
-        log.info("Imported \(places.count) Eats places")
+        for id in file.remove ?? [] {
+            if let place = mine.first(where: { $0.id == id }) { delete(place) }
+        }
+        log.info("Imported \(file.places?.count ?? 0) Eats places, removed \(file.remove?.count ?? 0)")
     }
 
     private func persist() {

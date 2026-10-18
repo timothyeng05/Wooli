@@ -1,23 +1,26 @@
 import SwiftUI
 import CoreLocation
 
-/// One day card on the trip page. A day you move on also carries the
-/// travel (shown inside the card) and, when you arrive somewhere new, that
-/// leg's header as a divider: plans before the departure time sit above
-/// the travel, the rest below the header.
+/// One day card on the trip page. A day you travel carries the ticket
+/// inside the card, where it falls in the day: plans before the departure
+/// above it, the rest below.
 struct TripDayBlock: Identifiable {
     let day: String
     let number: Int
-    /// The leg the day (or its later part) belongs to; nil outside every leg.
+    /// The leg the day belongs to; nil outside every leg.
     let leg: TripLeg?
 
-    /// Arriving at `leg` today: travel from `travelFrom` (nil = from home),
-    /// which may have started on an earlier day (an overnight flight).
+    /// Today starts a new leg (its header goes above this card).
     var arriving = false
-    var travelFrom: TripLeg?
-    var travelStart: String?
+    /// The ticket shown in this card: travel that departs today, from
+    /// `travelFrom` (nil = home) to `travelTo` (nil = home), arriving on
+    /// `travelEnd` when it runs overnight.
     var travel: [TripItem] = []
-    /// Departure time; plans before it are shown above the travel.
+    var showsTicket = false
+    var travelFrom: TripLeg?
+    var travelTo: TripLeg?
+    var travelEnd: String?
+    /// Departure time; plans before it sit above the ticket.
     var departure: Int?
 
     /// Heading home at the end of the trip.
@@ -38,51 +41,62 @@ enum TripLayout {
             items.filter { $0.day == day && $0.kind == .transit }
                 .sorted { ($0.time ?? Int.max, $0.createdAt) < ($1.time ?? Int.max, $1.createdAt) }
         }
-        func hasOtherPlans(_ day: String) -> Bool { items.contains { $0.day == day && $0.kind != .transit } }
 
         var blocks: [TripDayBlock] = []
         var used = Set<String>()
         var previousLeg: TripLeg?
-        // Travel on days outside every leg (an overnight flight), carried to the next arrival.
-        var carried: [TripItem] = []
-        var carriedFrom: String?
+        // A ticket on a day outside every leg (an overnight flight), still
+        // waiting to learn where it lands.
+        var inFlight: Int?
 
         for (index, day) in days.enumerated() {
             guard let leg = trip.leg(for: day) else {
+                var block = TripDayBlock(day: day, number: index + 1, leg: nil)
                 let hop = transit(on: day)
                 if !hop.isEmpty {
-                    carried += hop
-                    carriedFrom = carriedFrom ?? day
+                    block.travel = hop
+                    block.showsTicket = true
+                    block.travelFrom = previousLeg
+                    block.departure = hop.compactMap(\.time).min()
                     used.formUnion(hop.map(\.id))
+                    inFlight = blocks.count
                 }
-                // A day that's only travel folds into the next card.
-                if hop.isEmpty || hasOtherPlans(day) {
-                    blocks.append(TripDayBlock(day: day, number: index + 1, leg: nil))
-                }
+                blocks.append(block)
                 continue
             }
             var block = TripDayBlock(day: day, number: index + 1, leg: leg)
             if leg.id != previousLeg?.id {
-                let hop = transit(on: day)
                 block.arriving = true
-                block.travelFrom = previousLeg
-                block.travelStart = carriedFrom ?? day
-                block.travel = carried + hop
-                // Split the day at departure if it starts in the leg you're leaving.
-                if previousLeg != nil, carried.isEmpty, let departure = hop.compactMap(\.time).min() {
-                    block.departure = departure
+                let hop = transit(on: day)
+                if let i = inFlight {
+                    // Landing from yesterday's flight; anything booked today is a connection.
+                    blocks[i].travelTo = leg
+                    blocks[i].travelEnd = day
+                    inFlight = nil
+                    if !hop.isEmpty {
+                        block.travel = hop
+                        block.showsTicket = true
+                        block.travelFrom = blocks[i].travelFrom
+                        block.travelTo = leg
+                        block.departure = hop.compactMap(\.time).min()
+                    }
+                } else {
+                    block.travel = hop
+                    // Moving on from another city: show the ticket even before it's booked.
+                    block.showsTicket = !hop.isEmpty || previousLeg != nil
+                    block.travelFrom = previousLeg
+                    block.travelTo = leg
+                    block.departure = hop.compactMap(\.time).min()
                 }
                 used.formUnion(hop.map(\.id))
-                carried = []
-                carriedFrom = nil
                 previousLeg = leg
             }
             blocks.append(block)
         }
 
-        // Heading home from the last leg's last day (plus any travel after it).
+        // Heading home from the last leg's last day.
         if let lastLeg = previousLeg, let i = blocks.lastIndex(where: { $0.leg?.id == lastLeg.id }) {
-            let home = transit(on: blocks[i].day).filter { !used.contains($0.id) } + carried
+            let home = transit(on: blocks[i].day).filter { !used.contains($0.id) }
             if !home.isEmpty {
                 blocks[i].homeTravel = home
                 used.formUnion(home.map(\.id))
@@ -92,20 +106,18 @@ enum TripLayout {
     }
 }
 
-/// What the trip page lists, in order: day cards (a travel day split into
-/// "1 of 2" in the city you leave and "2 of 2" where you arrive), travel
-/// cards, and each leg's header.
+/// What the trip page lists, in order: each leg's header, then its day
+/// cards (travel rides inside them). A collapsed leg still shows its
+/// tickets, so the trip reads as its stops and how you got between them.
 enum TripRow: Identifiable {
-    enum Half: Hashable { case whole, first, second }
-
-    case day(TripDayBlock, half: Half, leg: TripLeg?)
-    case travel(from: TripLeg?, to: TripLeg?, start: String, end: String, items: [TripItem])
+    case day(TripDayBlock, leg: TripLeg?)
+    case travel(from: TripLeg?, to: TripLeg?, start: String, end: String, items: [TripItem], arrival: String)
     case legHeader(TripLeg)
 
     var id: String {
         switch self {
-        case .day(let block, let half, _): "day-\(block.day)-\(half)"
-        case .travel(let from, let to, let start, _, _): "travel-\(from?.id ?? "home")-\(to?.id ?? "home")-\(start)"
+        case .day(let block, _): "day-\(block.day)"
+        case .travel(_, _, _, _, _, let arrival): "travel-\(arrival)"
         case .legHeader(let leg): "leg-\(leg.id)"
         }
     }
@@ -114,26 +126,18 @@ enum TripRow: Identifiable {
         func hidden(_ leg: TripLeg?) -> Bool { leg.map { collapsed.contains($0.id) } ?? false }
         var rows: [TripRow] = []
         for block in blocks {
-            if block.arriving, let leg = block.leg {
-                // "1 of 2" when you're still in the last city that morning.
-                let split = block.departure.map { departure in
-                    (block.travelFrom.map { $0.endDay >= block.day } ?? false)
-                        || items.contains { $0.day == block.day && $0.kind != .transit && ($0.time ?? Int.max) < departure }
-                } ?? false
-                if split && !hidden(block.travelFrom) {
-                    rows.append(.day(block, half: .first, leg: block.travelFrom))
+            if block.arriving, let leg = block.leg { rows.append(.legHeader(leg)) }
+            if !hidden(block.leg) {
+                rows.append(.day(block, leg: block.leg))
+            } else {
+                if block.showsTicket {
+                    rows.append(.travel(from: block.travelFrom, to: block.travelTo, start: block.day,
+                                        end: block.travelEnd ?? block.day, items: block.travel, arrival: block.day))
                 }
-                if !block.travel.isEmpty || block.travelFrom != nil {
-                    rows.append(.travel(from: block.travelFrom, to: leg, start: block.travelStart ?? block.day,
-                                        end: block.day, items: block.travel))
+                if !block.homeTravel.isEmpty {
+                    rows.append(.travel(from: block.leg, to: nil, start: block.day, end: block.day,
+                                        items: block.homeTravel, arrival: block.day + "-home"))
                 }
-                rows.append(.legHeader(leg))
-                if !hidden(leg) { rows.append(.day(block, half: split ? .second : .whole, leg: leg)) }
-            } else if !hidden(block.leg) {
-                rows.append(.day(block, half: .whole, leg: block.leg))
-            }
-            if !block.homeTravel.isEmpty {
-                rows.append(.travel(from: block.leg, to: nil, start: block.day, end: block.day, items: block.homeTravel))
             }
         }
         return rows

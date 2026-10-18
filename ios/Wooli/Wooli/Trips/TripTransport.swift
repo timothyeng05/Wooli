@@ -186,6 +186,26 @@ extension TripTransport {
     }
 }
 
+extension TripTransport {
+    /// A starting ticket read from a plain title, for bookings saved before
+    /// they had details: "CX831 New York (JFK) → Hong Kong" gives the flight
+    /// number and JFK; "Flight Lijiang (LJG) → Hangzhou (HGH)" both airports.
+    static func guess(fromTitle title: String, mode: Mode) -> TripTransport {
+        var t = TripTransport(mode: mode)
+        guard mode == .flight else { return t }
+        if let match = title.firstMatch(of: /^([A-Z0-9]{2}\d{1,4})\b/) { t.flightNumber = String(match.1) }
+        func code(_ text: Substring) -> String? {
+            text.firstMatch(of: /\(([A-Z]{3})\)/).map { String($0.1) }.flatMap { Airports.airport($0) == nil ? nil : $0 }
+        }
+        let ends = title.split(separator: "→", maxSplits: 1)
+        if ends.count == 2 {
+            t.fromAirport = code(ends[0]) ?? ""
+            t.toAirport = code(ends[1]) ?? ""
+        }
+        return t
+    }
+}
+
 extension TripPlace {
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 }

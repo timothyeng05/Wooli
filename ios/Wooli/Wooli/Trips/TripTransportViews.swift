@@ -7,6 +7,8 @@ import MapKit
 /// legs: tap the codes or stations to pick them, tap a time to set it, and
 /// type straight into the flight number and the stub's seat / booking /
 /// terminal. Airline, title, flight time and arrival day fill themselves in.
+/// Empty spots say what to add ("+ From airport", "Set time", "Add") rather
+/// than showing example values, which read as already filled in.
 struct TransportTicket: View {
     @Binding var transport: TripTransport
     @Binding var day: String?
@@ -75,11 +77,12 @@ struct TransportTicket: View {
                     .font(.caption2.weight(.bold)).tracking(1.2).foregroundStyle(.white.opacity(0.7))
                 if transport.mode == .flight {
                     TextField("Flight number", text: $transport.flightNumber,
-                              prompt: Text("CX831").foregroundStyle(.white.opacity(0.4)))
+                              prompt: Text("Add flight no.").font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.55)))
                         .font(.system(size: 26, weight: .heavy, design: .rounded))
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                        .frame(maxWidth: 170)
+                        .frame(maxWidth: 190)
                 }
             }
             Spacer(minLength: 8)
@@ -127,21 +130,37 @@ struct TransportTicket: View {
 
     private func airportLabel(_ airport: Airport?, end: End) -> some View {
         VStack(alignment: end == .from ? .leading : .trailing, spacing: 3) {
-            Text(airport?.code ?? "···")
-                .font(.system(size: 44, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(airport == nil ? 0.35 : 1))
-                .lineLimit(1).minimumScaleFactor(0.6)
-            Text(airport?.place ?? (end == .from ? "From · tap" : "To · tap"))
-                .font(.footnote).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+            if let airport {
+                Text(airport.code)
+                    .font(.system(size: 44, weight: .black, design: .rounded))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(airport.place).font(.footnote).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+            } else {
+                emptyChip(end == .from ? "From airport" : "To airport")
+            }
         }
     }
 
+    @ViewBuilder
     private func stationLabel(_ station: TripPlace?, end: End) -> some View {
-        Text(station?.name ?? (end == .from ? "From · tap" : "To · tap"))
-            .font(.system(size: 22, weight: .heavy, design: .rounded))
-            .foregroundStyle(.white.opacity(station == nil ? 0.4 : 1))
-            .lineLimit(2).minimumScaleFactor(0.7)
-            .multilineTextAlignment(end == .from ? .leading : .trailing)
+        if let station {
+            Text(station.name)
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .lineLimit(2).minimumScaleFactor(0.7)
+                .multilineTextAlignment(end == .from ? .leading : .trailing)
+        } else {
+            emptyChip(end == .from ? "From station" : "To station")
+        }
+    }
+
+    /// An unfilled spot on the ticket: a dashed "+ Add …" chip, so it can't
+    /// be mistaken for something already filled in.
+    private func emptyChip(_ label: String) -> some View {
+        Label(label, systemImage: "plus")
+            .font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+            .padding(.vertical, 8)
     }
 
     private var routeGlyph: some View {
@@ -168,9 +187,13 @@ struct TransportTicket: View {
                 Text(end == .from ? "DEPARTS" : "ARRIVES")
                     .font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(.white.opacity(0.65))
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(date.map { TripTransport.timeText(TripTransport.minutes($0)) } ?? "--:--")
-                        .font(.system(size: 24, weight: .bold)).monospacedDigit()
-                        .foregroundStyle(.white.opacity(date == nil ? 0.35 : 1))
+                    if let date {
+                        Text(TripTransport.timeText(TripTransport.minutes(date)))
+                            .font(.system(size: 24, weight: .bold)).monospacedDigit()
+                    } else {
+                        Text("Set time").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                            .underline(pattern: .dash, color: .white.opacity(0.5))
+                    }
                     if offset > 0 && date != nil {
                         Text("+\(offset)").font(.caption.weight(.bold)).foregroundStyle(Color(hex: "#fde68a"))
                     }
@@ -198,8 +221,8 @@ struct TransportTicket: View {
 
     private var stub: some View {
         HStack(spacing: 8) {
-            stubField("SEAT", text: $transport.seats, prompt: transport.mode == .flight ? "14A" : "Car 7, 12A")
-            stubField("BOOKING", text: $transport.confirmation, prompt: "ABC123")
+            stubField("SEAT", text: $transport.seats, prompt: "Add")
+            stubField("BOOKING", text: $transport.confirmation, prompt: "Add")
             if transport.mode == .flight {
                 stubBox(label: "TERMINAL", empty: transport.departTerminal.isEmpty && transport.arriveTerminal.isEmpty) {
                     HStack(spacing: 4) {
@@ -217,7 +240,7 @@ struct TransportTicket: View {
     }
 
     private func stubText(_ text: Binding<String>, prompt: String) -> some View {
-        TextField(prompt, text: text, prompt: Text(prompt).foregroundStyle(.white.opacity(0.4)))
+        TextField(prompt, text: text, prompt: Text(prompt).font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.5)))
             .font(.subheadline.weight(.bold))
             .textInputAutocapitalization(transport.mode == .flight ? .characters : .never)
             .autocorrectionDisabled()

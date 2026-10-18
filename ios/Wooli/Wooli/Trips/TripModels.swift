@@ -145,6 +145,16 @@ struct TripPlace: Codable, Hashable {
         if !mapItemID.isEmpty { parts?.queryItems?.append(URLQueryItem(name: "place-id", value: mapItemID)) }
         return parts?.url
     }
+
+    /// The same place in Google Maps (opens the app if installed). Searches
+    /// by name and address so Google lands on its own listing; coordinates
+    /// alone when there's no address.
+    var googleMapsURL: URL? {
+        var parts = URLComponents(string: "https://www.google.com/maps/search/")
+        let query = address.isEmpty ? "\(latitude),\(longitude)" : "\(name), \(address)"
+        parts?.queryItems = [URLQueryItem(name: "api", value: "1"), URLQueryItem(name: "query", value: query)]
+        return parts?.url
+    }
 }
 
 struct TripItem: Identifiable, Codable, Hashable {

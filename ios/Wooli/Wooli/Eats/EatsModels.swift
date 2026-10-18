@@ -169,12 +169,12 @@ enum MealSentiment: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// The scores this feeling can land on. 10 is kept for the one meal
-    /// you'd have if you could only have one: your top must-try.
+    /// The scores this feeling can land on. Must-try and liked share the
+    /// green band as one stack rank (must-trys on top), like Beli, so 10 is
+    /// your single best meal and scores step down evenly from there.
     var band: ClosedRange<Double> {
         switch self {
-        case .mustTry: 9.0...10.0
-        case .liked: 7.0...8.9
+        case .mustTry, .liked: 7.0...10.0
         case .fine: 4.0...6.9
         case .disliked: 0.0...3.9
         }
@@ -201,23 +201,25 @@ enum EatsRanking {
         items.filter { $0.sentiment == sentiment && $0.rank != nil }.sorted { ($0.rank ?? 0) > ($1.rank ?? 0) }
     }
 
-    /// Each place's score, spread evenly across its feeling's band, so a
-    /// score moves as you rank more places (like Beli).
+    /// Each place's score, spread evenly across its band, so a score moves
+    /// as you rank more places (like Beli). Must-try and liked are one band.
     static func scores(_ items: [RankCandidate]) -> [String: Double] {
         var scores: [String: Double] = [:]
-        for sentiment in MealSentiment.allCases {
-            let places = group(of: sentiment, in: items)
-            let band = sentiment.band
+        let bands: [[MealSentiment]] = [[.mustTry, .liked], [.fine], [.disliked]]
+        for feelings in bands {
+            let places = feelings.flatMap { group(of: $0, in: items) }
+            let band = feelings[0].band
             for (i, place) in places.enumerated() {
                 let t = places.count == 1 ? 0 : Double(i) / Double(places.count - 1)
-                scores[place.id] = ((band.upperBound - (band.upperBound - band.lowerBound) * t) * 10).rounded() / 10
+                // Rounded down, so only your #1 shows 10.0.
+                scores[place.id] = ((band.upperBound - (band.upperBound - band.lowerBound) * t) * 10 + 1e-9).rounded(.down) / 10
             }
         }
         return scores
     }
 
     static func color(_ score: Double) -> Color {
-        score >= 9 ? MealSentiment.mustTry.color : score >= 7 ? MealSentiment.liked.color : score >= 4 ? MealSentiment.fine.color : MealSentiment.disliked.color
+        score >= 7 ? MealSentiment.liked.color : score >= 4 ? MealSentiment.fine.color : MealSentiment.disliked.color
     }
 
     /// Trip meals waiting to be ranked: food on days that have started,

@@ -2,20 +2,25 @@ import SwiftUI
 import MapKit
 import CloudKit
 
-/// The score in a colored ring: violet 9+ (must try), green 7+, amber 4–6.9, red below.
+/// The score in a thin ring, Beli-style: the number carries the color
+/// (green 7+, amber 4–6.9, red below), the ring stays quiet.
 struct MealScoreBadge: View {
     let score: Double
     var size: CGFloat = 30
 
     var body: some View {
-        let color = EatsRanking.color(score)
         Text(score.formatted(.number.precision(.fractionLength(1))))
-            .font(.system(size: size * 0.38, weight: .bold, design: .rounded)).monospacedDigit()
-            .foregroundStyle(color)
+            .font(.system(size: size * 0.36, weight: .semibold, design: .rounded)).monospacedDigit()
+            .foregroundStyle(Self.ink(score))
             .frame(width: size, height: size)
-            .background(color.opacity(0.12), in: Circle())
-            .overlay(Circle().strokeBorder(color, lineWidth: max(1.5, size * 0.07)))
+            .background(Circle().fill(Theme.card))
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: max(1, size * 0.035)))
             .accessibilityLabel("Score \(score.formatted(.number.precision(.fractionLength(1)))) out of 10")
+    }
+
+    /// Slightly deeper than the feeling colors so the number reads on white.
+    static func ink(_ score: Double) -> Color {
+        score >= 7 ? Color(hex: "#1f9d55") : score >= 4 ? Color(hex: "#e5a50a") : Color(hex: "#dc2626")
     }
 }
 
@@ -454,13 +459,26 @@ struct EatsPlaceRow: View {
     let subtitle: String
     var friends: [EatsFriend] = []
 
+    /// The first line of your notes — the cuisine, for places from Beli.
+    private var tagline: String? {
+        place.notes.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Text("\(index)").font(.subheadline.weight(.bold)).monospacedDigit()
-                .foregroundStyle(Theme.textTertiary).frame(width: 26)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(place.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(index). \(place.name)").font(.headline).foregroundStyle(Theme.text).lineLimit(2)
+                if let tagline {
+                    Text(tagline).font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                }
+                if !place.address.isEmpty {
+                    Label(place.address, systemImage: "fork.knife")
+                        .labelStyle(.titleAndIcon).imageScale(.small)
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                }
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(.caption).foregroundStyle(Theme.textTertiary).lineLimit(1).padding(.top, 2)
+                }
             }
             Spacer(minLength: 8)
             // Friends who've ranked it too.
@@ -469,8 +487,9 @@ struct EatsPlaceRow: View {
                     FriendAvatar(friend: friend, size: 22).overlay(Circle().stroke(Theme.card, lineWidth: 2))
                 }
             }
-            if let score { MealScoreBadge(score: score, size: 38) }
+            if let score { MealScoreBadge(score: score, size: 46) }
         }
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
     }
 }
@@ -585,12 +604,20 @@ struct FriendListView: View {
 
 // MARK: - A place
 
+/// A place on your list, laid out like Beli: a map up top with the name,
+/// your score and rank, quick actions from Apple's listing, scores, then
+/// your own notes.
 struct EatsPlaceDetail: View {
     @State private var place: EatsPlace
     @State private var book = EatsBook.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var reranking = false
     @State private var confirmDelete = false
+    @State private var renaming = false
+    @State private var mapItem: MKMapItem?
+    @State private var showingListing = false
+    @FocusState private var editingNotes: Bool
 
     init(place: EatsPlace) {
         _place = State(initialValue: place)
@@ -600,62 +627,29 @@ struct EatsPlaceDetail: View {
         let others = book.mine.filter { $0.id != place.id }.map(\.candidate)
         let all = others + [place.candidate]
         let ordered = EatsRanking.ordered(all)
+        let score = EatsRanking.scores(all)[place.id] ?? 0
+        let position = (ordered.firstIndex { $0.id == place.id } ?? 0) + 1
         NavigationStack {
-            Form {
-                Section {
-                    HStack(spacing: 14) {
-                        MealScoreBadge(score: EatsRanking.scores(all)[place.id] ?? 0, size: 56)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(place.sentiment.label).font(.headline)
-                            Text("#\((ordered.firstIndex { $0.id == place.id } ?? 0) + 1) of \(ordered.count) on your list")
-                                .font(.subheadline).foregroundStyle(Theme.textSecondary)
-                        }
-                        Spacer()
-                        Button("Re-rank") { reranking = true }.buttonStyle(.bordered).buttonBorderShape(.capsule)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    hero
+                    VStack(alignment: .leading, spacing: 22) {
+                        titleBlock(score: score)
+                        actions
+                        scores(score: score, position: position, count: ordered.count)
+                        notesList
+                        Button("Remove from Eats", role: .destructive) { confirmDelete = true }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 4)
                     }
-                }
-
-                let friendScores = book.friendScores(for: place)
-                if !friendScores.isEmpty {
-                    Section("Friends who've been") {
-                        ForEach(friendScores) { entry in
-                            HStack(spacing: 12) {
-                                FriendAvatar(friend: entry.friend, size: 30)
-                                Text(entry.friend.name)
-                                Spacer()
-                                MealScoreBadge(score: entry.score, size: 32)
-                            }
-                        }
-                    }
-                }
-
-                Section {
-                    TextField("Name", text: $place.name)
-                    DatePicker("Went", selection: Binding(get: { DayKey.date(place.visitedDay) },
-                                                          set: { place.visitedDay = DayKey.key($0) }),
-                               displayedComponents: .date)
-                    if let trip = TripStore.shared.trip(place.tripID) {
-                        LabeledContent("Trip", value: trip.name)
-                    }
-                    if let url = place.tripPlace?.mapsURL {
-                        Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
-                    }
-                }
-
-                Section {
-                    TextField("What to order, who you went with…", text: $place.notes, axis: .vertical).lineLimit(2...8)
-                } header: {
-                    Text("Notes")
-                } footer: {
-                    Text("Friends you share your list with can see your notes.")
-                }
-
-                Section {
-                    Button("Remove from Eats", role: .destructive) { confirmDelete = true }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
                 }
             }
-            .navigationTitle(place.name)
-            .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
+            .background(Theme.card)
+            .ignoresSafeArea(edges: .top)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -666,11 +660,20 @@ struct EatsPlaceDetail: View {
                     .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .task(id: place.tripPlace) {
+                guard let spot = place.tripPlace else { return }
+                mapItem = await PlaceMapCard.listing(for: spot)
+            }
+            .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
             .sheet(isPresented: $reranking) {
                 RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
                     place.sentiment = sentiment
                     place.rank = rank
                 }
+            }
+            .alert("Rename", isPresented: $renaming) {
+                TextField("Name", text: $place.name)
+                Button("Done") {}
             }
             .confirmationDialog("Remove \(place.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {
@@ -679,5 +682,167 @@ struct EatsPlaceDetail: View {
                 }
             }
         }
+    }
+
+    // MARK: Parts
+
+    /// The map, fading into the page so the name sits over it.
+    @ViewBuilder
+    private var hero: some View {
+        if let coordinate = place.coordinate {
+            Map(initialPosition: .camera(MapCamera(centerCoordinate: coordinate, distance: 1600)), interactionModes: []) {
+                Marker(place.name, coordinate: coordinate).tint(MealScoreBadge.ink(EatsRanking.scores(book.mine.map(\.candidate))[place.id] ?? 7))
+            }
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .allowsHitTesting(false)
+            .frame(height: 280)
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [Theme.card.opacity(0), Theme.card], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 110)
+            }
+            .onTapGesture { if mapItem != nil { showingListing = true } }
+        } else {
+            Color.clear.frame(height: 110)
+        }
+    }
+
+    private func titleBlock(score: Double) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(place.name)
+                .font(.system(size: 34, weight: .heavy, design: .serif))
+                .foregroundStyle(Theme.text)
+                .lineLimit(3).minimumScaleFactor(0.7)
+                .onLongPressGesture { renaming = true }
+                .padding(.top, place.coordinate == nil ? 0 : -44)
+            HStack(spacing: 10) {
+                Text(score.formatted(.number.precision(.fractionLength(1))))
+                    .font(.headline.weight(.bold)).monospacedDigit().foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(MealScoreBadge.ink(score), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(place.sentiment.label).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                Spacer()
+                Button("Rank again") { reranking = true }
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.secondary)
+            }
+            if let tagline {
+                Text(tagline).font(.headline).foregroundStyle(Color(hex: "#0f5c66"))
+            }
+            if !place.address.isEmpty {
+                Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
+            }
+        }
+    }
+
+    /// Website, call, directions and photos — from Apple's listing when there is one.
+    private var actions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                if let url = mapItem?.url { pill("Website", systemImage: "globe") { openURL(url) } }
+                if let phone = mapItem?.phoneNumber, let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
+                    pill("Call", systemImage: "phone.fill") { openURL(url) }
+                }
+                if let mapItem {
+                    pill("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill") {
+                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault])
+                    }
+                    pill("Photos & info", systemImage: "photo.on.rectangle") { showingListing = true }
+                } else if let url = place.tripPlace?.mapsURL {
+                    pill("Apple Maps", systemImage: "map.fill") { openURL(url) }
+                }
+                if let url = place.tripPlace?.googleMapsURL { pill("Google Maps", systemImage: "g.circle.fill") { openURL(url) } }
+            }
+        }
+        .scrollClipDisabled()
+    }
+
+    private func pill(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: "#0f5c66"))
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .overlay(Capsule().strokeBorder(Color(hex: "#0f5c66"), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func scores(score: Double, position: Int, count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Scores").font(.title3.weight(.bold)).foregroundStyle(Theme.text)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    scoreTile(score: score, badge: "You", title: "Your rating", detail: "#\(position) of \(count) on your list")
+                    let friends = book.friendScores(for: place)
+                    if !friends.isEmpty {
+                        let average = friends.map(\.score).reduce(0, +) / Double(friends.count)
+                        scoreTile(score: (average * 10).rounded() / 10, badge: "\(friends.count)", title: "Friend score",
+                                  detail: friends.prefix(2).map(\.friend.name).joined(separator: ", "))
+                    }
+                }
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func scoreTile(score: Double, badge: String, title: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            MealScoreBadge(score: score, size: 58)
+                .overlay(alignment: .bottomTrailing) {
+                    Text(badge).font(.caption2.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Color(hex: "#0f5c66"), in: Capsule())
+                        .offset(x: 6, y: 4)
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline).foregroundStyle(Theme.text)
+                Text(detail).font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(2)
+            }
+        }
+    }
+
+    /// Your own details, as a list of rows like Beli's "Your notes and photos".
+    private var notesList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Your notes").font(.title3.weight(.bold)).foregroundStyle(Theme.text).padding(.bottom, 6)
+            noteRow("calendar") {
+                DatePicker("Visit date", selection: Binding(get: { DayKey.date(place.visitedDay) },
+                                                             set: { place.visitedDay = DayKey.key($0) }),
+                           displayedComponents: .date)
+            }
+            if let trip = TripStore.shared.trip(place.tripID) {
+                noteRow("suitcase") { LabeledContent("Trip", value: trip.name) }
+            }
+            noteRow("square.and.pencil") {
+                TextField("Add notes — what to order, who you went with", text: $place.notes, axis: .vertical)
+                    .lineLimit(1...8).focused($editingNotes)
+            }
+            noteRow("pencil.line") {
+                Button { renaming = true } label: {
+                    HStack {
+                        Text("Rename").foregroundStyle(Theme.text)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            Text("Friends you share your list with can see your notes.")
+                .font(.caption).foregroundStyle(Theme.textTertiary).padding(.top, 8)
+        }
+    }
+
+    private func noteRow<Content: View>(_ systemImage: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Image(systemName: systemImage).font(.title3).foregroundStyle(Theme.textSecondary).frame(width: 28)
+                content().font(.body)
+            }
+            .padding(.vertical, 14)
+            Divider()
+        }
+    }
+
+    private var tagline: String? {
+        place.notes.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
     }
 }
