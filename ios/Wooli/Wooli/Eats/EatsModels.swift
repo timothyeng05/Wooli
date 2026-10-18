@@ -138,11 +138,13 @@ struct EatsFriend: Codable, Identifiable, Hashable {
 }
 
 enum MealSentiment: String, Codable, CaseIterable, Identifiable {
-    case liked, fine, disliked
+    // Raw values are stored; `mustTry` decodes as `liked` on older builds.
+    case mustTry, liked, fine, disliked
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .mustTry: "Must try"
         case .liked: "I liked it!"
         case .fine: "It was fine"
         case .disliked: "I didn't like it"
@@ -151,6 +153,7 @@ enum MealSentiment: String, Codable, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .mustTry: "star.fill"
         case .liked: "hand.thumbsup.fill"
         case .fine: "minus"
         case .disliked: "hand.thumbsdown.fill"
@@ -159,16 +162,19 @@ enum MealSentiment: String, Codable, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
+        case .mustTry: Color(hex: "#7c3aed")
         case .liked: Color(hex: "#22c55e")
         case .fine: Color(hex: "#f59e0b")
         case .disliked: Color(hex: "#ef4444")
         }
     }
 
-    /// The scores this feeling can land on.
+    /// The scores this feeling can land on. 10 is kept for the one meal
+    /// you'd have if you could only have one: your top must-try.
     var band: ClosedRange<Double> {
         switch self {
-        case .liked: 7.0...10.0
+        case .mustTry: 9.0...10.0
+        case .liked: 7.0...8.9
         case .fine: 4.0...6.9
         case .disliked: 0.0...3.9
         }
@@ -211,7 +217,7 @@ enum EatsRanking {
     }
 
     static func color(_ score: Double) -> Color {
-        score >= 7 ? MealSentiment.liked.color : score >= 4 ? MealSentiment.fine.color : MealSentiment.disliked.color
+        score >= 9 ? MealSentiment.mustTry.color : score >= 7 ? MealSentiment.liked.color : score >= 4 ? MealSentiment.fine.color : MealSentiment.disliked.color
     }
 
     /// Trip meals waiting to be ranked: food on days that have started,

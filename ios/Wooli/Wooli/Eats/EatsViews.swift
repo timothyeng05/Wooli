@@ -2,7 +2,7 @@ import SwiftUI
 import MapKit
 import CloudKit
 
-/// The score in a colored ring: green 7+, amber 4–6.9, red below.
+/// The score in a colored ring: violet 9+ (must try), green 7+, amber 4–6.9, red below.
 struct MealScoreBadge: View {
     let score: Double
     var size: CGFloat = 30

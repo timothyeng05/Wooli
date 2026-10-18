@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — Eats gets a fourth feeling, **Must try** (violet, ★): 9–10, so 10 means "if you could only have one meal". Plain likes drop to 7–8.9 (fine 4–6.9, didn't like 0–3.9); `mustTry` decodes as liked on older builds. `EatsBook` imports `Documents/eats-import.json` like trips do. Japan + Seoul 2026 on the user's iPhone re-imported in the new layout: 17 cities instead of 6 legs, 11 flights/trains as tickets (trip now starts May 30 for the JFK red-eye), 49 meals pinned to Apple Maps places, and 47 restaurants from the web 1–10 ratings in Eats (web 10 → must try, 7–9 liked, 4–6 fine, ≤3 didn't like; ties in trip order). Built and installed on device; not tap-tested.
+
 - **2026-10-19 · Claude** — New trips with cities get Breakfast (8:00), Lunch (12:30) and Dinner (19:00) on every city day (`TripItem.mealPlaceholders`). An unfilled slot (meal, no place, no notes, slot title) shows as a dashed outline with "Tap to pick a place"; delete any that don't apply. Placeholders don't count as plans in the city header, don't show the What we ate card, and never reach Eats (no place). Only on creation — adding a city to an existing trip doesn't add them. Not built.
 
 - **2026-10-19 · Claude** — Eats "To rank" cleanup after a device test showed the whole Japan trip flooding in with notes like "Lunch: figure out": only trip meals pinned to an Apple Maps place count, each restaurant once (and not if it's already on your list), shown by the place's name instead of the itinerary note; the section shows 3 with "Show all N" and a "Skip all". Not built.

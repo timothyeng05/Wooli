@@ -58,6 +58,27 @@ final class EatsBook {
         // Places added while offline or before signing in to iCloud.
         let unsent = mine.filter { $0.systemFields == nil }.map(recordID)
         if !unsent.isEmpty { TripStore.shared.queueEats(saving: unsent) }
+        importPendingFile()
+    }
+
+    private static var importURL: URL { URL.documentsDirectory.appending(path: "eats-import.json") }
+
+    /// Imports `Documents/eats-import.json` (a list of places, e.g. ratings
+    /// converted from the Wooli web app) through the normal save path so it
+    /// syncs, then deletes the file. Saves are by id, so importing again
+    /// updates places in place.
+    private func importPendingFile() {
+        guard let data = try? Data(contentsOf: Self.importURL) else { return }
+        defer { try? FileManager.default.removeItem(at: Self.importURL) }
+        guard let places = try? JSONDecoder().decode([EatsPlace].self, from: data) else {
+            log.error("Eats import file couldn't be read")
+            return
+        }
+        for var place in places {
+            place.systemFields = nil
+            save(place)
+        }
+        log.info("Imported \(places.count) Eats places")
     }
 
     private func persist() {
