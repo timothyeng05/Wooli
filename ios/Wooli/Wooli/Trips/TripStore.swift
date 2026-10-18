@@ -409,7 +409,20 @@ final class TripStore: CKSyncEngineDelegate {
             }
 
         case .fetchedRecordZoneChanges(let changes):
-            for modification in changes.modifications { apply(modification.record) }
+            // A record with an edit still waiting to go up keeps the edit:
+            // only the server's change tag is taken, so the upload wins.
+            // (Without this, re-downloading a whole environment replaced
+            // fresh edits with the server's old copies.)
+            let unsent = Set(syncEngine.state.pendingRecordZoneChanges.compactMap { change -> CKRecord.ID? in
+                if case .saveRecord(let id) = change { id } else { nil }
+            })
+            for modification in changes.modifications {
+                if unsent.contains(modification.record.recordID), hasLocalCopy(of: modification.record.recordID) {
+                    storeSystemFields(of: modification.record)
+                } else {
+                    apply(modification.record)
+                }
+            }
             for deletion in changes.deletions {
                 if EatsBook.isEatsZone(deletion.recordID.zoneID) {
                     EatsBook.shared.removeRecord(deletion.recordID, isShare: deletion.recordType == CKRecord.SystemType.share)
@@ -487,6 +500,11 @@ final class TripStore: CKSyncEngineDelegate {
         default:
             break
         }
+    }
+
+    private func hasLocalCopy(of recordID: CKRecord.ID) -> Bool {
+        if EatsBook.isEatsZone(recordID.zoneID) { return EatsBook.shared.record(for: recordID) != nil }
+        return trip(recordID.recordName) != nil || items.contains { $0.id == recordID.recordName }
     }
 
     private func storeSystemFields(of record: CKRecord) {
