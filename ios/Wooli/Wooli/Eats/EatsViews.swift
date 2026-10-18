@@ -210,6 +210,8 @@ struct EatsListView: View {
     @State private var ranking: RankRequest?
     @State private var detail: EatsPlace?
     @State private var preparingShare = false
+    @State private var showAllWaiting = false
+    @State private var confirmSkipAll = false
 
     enum RankRequest: Identifiable {
         case tripItem(TripItem)
@@ -297,7 +299,7 @@ struct EatsListView: View {
 
             if !waiting.isEmpty {
                 Section {
-                    ForEach(waiting) { item in
+                    ForEach(showAllWaiting ? waiting : Array(waiting.prefix(3))) { item in
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.rankCandidate.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
@@ -309,15 +311,34 @@ struct EatsListView: View {
                         }
                         .swipeActions {
                             Button("Skip") {
-                                EatsRanking.skip(item.id)
+                                EatsRanking.skip([item.id])
                                 skipped.insert(item.id)
                             }
                         }
                     }
+                    if waiting.count > 3 {
+                        Button(showAllWaiting ? "Show fewer" : "Show all \(waiting.count)") {
+                            withAnimation(.snappy) { showAllWaiting.toggle() }
+                        }
+                        .font(.subheadline.weight(.medium))
+                    }
                 } header: {
-                    Text("To rank")
+                    HStack {
+                        Text("To rank · \(waiting.count)")
+                        Spacer()
+                        Button("Skip all") { confirmSkipAll = true }
+                            .font(.footnote.weight(.semibold)).textCase(nil)
+                    }
                 } footer: {
-                    Text("Food from your trips. Swipe to skip one.")
+                    Text("Restaurants from your trips. Swipe to skip one.")
+                }
+                .confirmationDialog("Skip all \(waiting.count)?", isPresented: $confirmSkipAll, titleVisibility: .visible) {
+                    Button("Skip all", role: .destructive) {
+                        EatsRanking.skip(waiting.map(\.id))
+                        skipped.formUnion(waiting.map(\.id))
+                    }
+                } message: {
+                    Text("They won't show up to rank again. You can still add any place with +.")
                 }
             }
 

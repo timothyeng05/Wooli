@@ -215,21 +215,32 @@ enum EatsRanking {
     }
 
     /// Trip meals waiting to be ranked: food on days that have started,
-    /// not yet in Eats and not skipped.
+    /// pinned to a real Apple Maps place (so "Lunch: figure out" or "ramen
+    /// at A or B" notes stay out), not on your list yet, not skipped, and
+    /// each restaurant once. Newest first.
     @MainActor
     static func toRank(entries: [EatsPlace]) -> [TripItem] {
         let today = DayKey.key(.now)
         let linked = Set(entries.map(\.tripItemID))
         let skipped = skippedIDs
-        return TripStore.shared.items
-            .filter { $0.kind == .meal && !linked.contains($0.id) && !skipped.contains($0.id) && ($0.day.map { $0 <= today } ?? false) }
+        let candidates = TripStore.shared.items
+            .filter { $0.kind == .meal && $0.place != nil && !linked.contains($0.id) && !skipped.contains($0.id)
+                && ($0.day.map { $0 <= today } ?? false) }
             .sorted { ($0.day ?? "", $0.time ?? 0) > ($1.day ?? "", $1.time ?? 0) }
+        var picked: [(item: TripItem, place: EatsPlace)] = []
+        for item in candidates {
+            guard let place = item.place.map({ EatsPlace(name: $0.name, place: $0) }),
+                  !entries.contains(where: { $0.isSamePlace(as: place) }),
+                  !picked.contains(where: { $0.place.isSamePlace(as: place) }) else { continue }
+            picked.append((item, place))
+        }
+        return picked.map(\.item)
     }
 
     private static let skippedKey = "eats.skippedTripItems"
     static var skippedIDs: Set<String> { Set(UserDefaults.standard.stringArray(forKey: skippedKey) ?? []) }
-    static func skip(_ itemID: String) {
-        UserDefaults.standard.set(Array(skippedIDs.union([itemID])), forKey: skippedKey)
+    static func skip(_ itemIDs: [String]) {
+        UserDefaults.standard.set(Array(skippedIDs.union(itemIDs)), forKey: skippedKey)
     }
 }
 
@@ -237,7 +248,8 @@ extension TripItem {
     /// How this trip meal looks in the ranking flow.
     @MainActor
     var rankCandidate: RankCandidate {
-        RankCandidate(id: id, title: title.isEmpty ? (place?.name ?? "Meal") : title,
+        // The restaurant's name, not the itinerary note ("7:00pm Monolith (French…)").
+        RankCandidate(id: id, title: place?.name ?? (title.isEmpty ? "Meal" : title),
                       subtitle: [TripStore.shared.trip(tripID)?.name, day.map { DayKey.date($0).formatted(.dateTime.month(.abbreviated).day()) }]
                         .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
     }

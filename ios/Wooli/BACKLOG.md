@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-19 · Claude** — Eats "To rank" cleanup after a device test showed the whole Japan trip flooding in with notes like "Lunch: figure out": only trip meals pinned to an Apple Maps place count, each restaurant once (and not if it's already on your list), shown by the place's name instead of the itinerary note; the section shows 3 with "Show all N" and a "Skip all". Not built.
+
 - **2026-10-18 · Claude** — Re-center button (`RecenterButton`) on the trip map, day map and Eats maps: appears once you pan or zoom, taps back to fit every pin. Not built.
 
 - **2026-10-18 · Claude** — Trips say **Cities** instead of legs/stops everywhere on screen ("4 cities", "Add a city", "City 2", the new-trip step); code keeps `TripLeg`. The trip map gets chips — All + each city in its color — that zoom the map to that city's places ("No places in Kyoto yet" when empty). Not built.
