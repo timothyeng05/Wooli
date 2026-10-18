@@ -609,9 +609,12 @@ struct FriendListView: View {
 /// your own notes.
 struct EatsPlaceDetail: View {
     @State private var place: EatsPlace
+    /// The trip meal this was opened from, for its "Edit trip plan" row.
+    let tripItem: TripItem?
     @State private var book = EatsBook.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @State private var editingPlan: TripItem?
     @State private var reranking = false
     @State private var confirmDelete = false
     @State private var renaming = false
@@ -619,8 +622,9 @@ struct EatsPlaceDetail: View {
     @State private var showingListing = false
     @FocusState private var editingNotes: Bool
 
-    init(place: EatsPlace) {
+    init(place: EatsPlace, tripItem: TripItem? = nil) {
         _place = State(initialValue: place)
+        self.tripItem = tripItem
     }
 
     var body: some View {
@@ -665,6 +669,9 @@ struct EatsPlaceDetail: View {
                 mapItem = await PlaceMapCard.listing(for: spot)
             }
             .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
+            .sheet(item: $editingPlan) { item in
+                if let trip = TripStore.shared.trip(item.tripID) { TripItemEditor(item: item, trip: trip) }
+            }
             .sheet(isPresented: $reranking) {
                 RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
                     place.sentiment = sentiment
@@ -809,7 +816,23 @@ struct EatsPlaceDetail: View {
                                                              set: { place.visitedDay = DayKey.key($0) }),
                            displayedComponents: .date)
             }
-            if let trip = TripStore.shared.trip(place.tripID) {
+            if let item = tripItem, let trip = TripStore.shared.trip(item.tripID) {
+                noteRow("suitcase") {
+                    Button { editingPlan = TripStore.shared.items.first { $0.id == item.id } ?? item } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Edit trip plan").foregroundStyle(Theme.text)
+                                Text([trip.name, item.day.map { DayKey.date($0).formatted(.dateTime.month(.abbreviated).day()) }, item.timeText]
+                                    .compactMap { $0 }.joined(separator: " · "))
+                                    .font(.caption).foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else if let trip = TripStore.shared.trip(place.tripID) {
                 noteRow("suitcase") { LabeledContent("Trip", value: trip.name) }
             }
             noteRow("square.and.pencil") {

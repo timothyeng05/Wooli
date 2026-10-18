@@ -328,6 +328,8 @@ struct TripDetailView: View {
     /// Your Eats rankings, for the "What we ate" card and meal scores.
     @State private var eatsBook = EatsBook.shared
     @State private var editingItem: TripItem?
+    /// A ranked meal opened on its Eats page.
+    @State private var eatsMeal: TripItem?
     @State private var editingTrip: Trip?
     @State private var dayMap: String?
     @State private var preparingShare = false
@@ -424,6 +426,9 @@ struct TripDetailView: View {
             }
         }
         .sheet(item: $editingItem) { TripItemEditor(item: $0, trip: trip) }
+        .sheet(item: $eatsMeal) { meal in
+            if let place = eatsEntry(meal) { EatsPlaceDetail(place: place, tripItem: meal) }
+        }
         .sheet(item: $editingTrip) { TripEditor(trip: $0) }
         .sheet(item: Binding(get: { dayMap.map(TripRoute.init) }, set: { dayMap = $0?.id })) { route in
             DayMapView(trip: trip, day: route.id)
@@ -699,7 +704,10 @@ struct TripDetailView: View {
     }
 
     private func itemRow(_ item: TripItem, trip: Trip) -> some View {
-        Button { editingItem = item } label: { TripItemRow(item: item, score: eatsScore(item)) }
+        // A meal that's on your Eats list opens its Eats page; anything else, the editor.
+        Button { if eatsEntry(item) != nil { eatsMeal = item } else { editingItem = item } } label: {
+            TripItemRow(item: item, score: eatsScore(item))
+        }
             .buttonStyle(.plain)
             .contextMenu {
                 if let url = item.place?.mapsURL {
@@ -720,8 +728,18 @@ struct TripDetailView: View {
 
     /// Your Eats score for a trip meal, once you've ranked it.
     private func eatsScore(_ item: TripItem) -> Double? {
-        guard item.kind == .meal, let place = eatsBook.place(forTripItem: item.id) else { return nil }
+        guard let place = eatsEntry(item) else { return nil }
         return EatsRanking.scores(eatsBook.mine.map(\.candidate))[place.id]
+    }
+
+    /// Your Eats place for a trip meal: ranked from this meal, or the same
+    /// restaurant ranked some other way (e.g. imported from Beli).
+    private func eatsEntry(_ item: TripItem) -> EatsPlace? {
+        guard item.kind == .meal else { return nil }
+        if let linked = eatsBook.place(forTripItem: item.id) { return linked }
+        guard let spot = item.place else { return nil }
+        let probe = EatsPlace(name: spot.name, place: spot)
+        return eatsBook.mine.first { $0.isSamePlace(as: probe) }
     }
 
     private func move(_ item: TripItem, to day: String?) {

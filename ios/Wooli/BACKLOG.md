@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — Trip meals on your Eats list (ranked from the trip, or the same restaurant from Beli by Apple Maps ID / name within 150 m) open their Eats page from the itinerary, with an "Edit trip plan" row for day/time/notes; other meals still open the plan editor. Folded cities say "Folded · tap to show its days" (a fully collapsed trip read as lost data).
+
 - **2026-10-18 · Claude** — Home city: a trip city can be marked "Where you're leaving from" (`TripLeg.isHome`, decodes as false on older data; toggle in the city editor, defaults its emoji to 🏠). It isn't numbered or counted among the cities, and its flight shows as the way out to the first city. Added 🏠 New York as the starting city of Japan + Seoul, China and Spain 2026 (their Day 1).
 
 - **2026-10-18 · Claude** — New trips get Breakfast/Lunch/Dinner on every day, travel days included (was city days only), so a Day 1 spent flying out isn't empty. Added the missing slots to Day 1 of Spain 2026, China and Japan + Seoul.
