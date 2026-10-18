@@ -19,6 +19,8 @@ final class EatsBook {
     static let myZoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
 
     private(set) var mine: [EatsPlace] = []
+    /// Places you want to try (not ranked yet).
+    private(set) var wishlist: [EatsPlace] = []
     private(set) var friends: [EatsFriend] = []
     /// You've shared your list with someone.
     private(set) var isSharing = false
@@ -33,6 +35,8 @@ final class EatsBook {
         var mine: [EatsPlace]
         var friends: [EatsFriend]
         var isSharing: Bool
+        /// Optional so files from before the wishlist still load.
+        var wishlist: [EatsPlace]?
     }
 
     private static var fileURL: URL {
@@ -48,6 +52,7 @@ final class EatsBook {
             mine = saved.mine
             friends = saved.friends
             isSharing = saved.isSharing
+            wishlist = saved.wishlist ?? []
         }
     }
 
@@ -56,7 +61,7 @@ final class EatsBook {
         guard !started else { return }
         started = true
         // Places added while offline or before signing in to iCloud.
-        let unsent = mine.filter { $0.systemFields == nil }.map(recordID)
+        let unsent = (mine + wishlist).filter { $0.systemFields == nil }.map(recordID)
         if !unsent.isEmpty { TripStore.shared.queueEats(saving: unsent) }
         importPendingFile()
     }
@@ -94,7 +99,8 @@ final class EatsBook {
 
     private func persist() {
         do {
-            try JSONEncoder().encode(Saved(mine: mine, friends: friends, isSharing: isSharing)).write(to: Self.fileURL, options: .atomic)
+            try JSONEncoder().encode(Saved(mine: mine, friends: friends, isSharing: isSharing, wishlist: wishlist))
+                .write(to: Self.fileURL, options: .atomic)
         } catch {
             log.error("Couldn't save Eats: \(error)")
         }
@@ -136,6 +142,8 @@ final class EatsBook {
         }
         persist()
         TripStore.shared.queueEats(saving: [recordID(place)])
+        // Ranked now, so it's no longer one to try.
+        for wish in wishlist where wish.isSamePlace(as: place) { removeFromWishlist(wish) }
     }
 
     func delete(_ place: EatsPlace) {
@@ -152,6 +160,21 @@ final class EatsBook {
         place.sentiment = sentiment
         place.rank = rank
         save(place)
+    }
+
+    /// Saves a place to try later; skipped if it's already ranked or saved.
+    func addToWishlist(_ place: EatsPlace) {
+        guard !mine.contains(where: { $0.isSamePlace(as: place) }),
+              !wishlist.contains(where: { $0.isSamePlace(as: place) }) else { return }
+        wishlist.append(place)
+        persist()
+        TripStore.shared.queueEats(saving: [recordID(place)])
+    }
+
+    func removeFromWishlist(_ place: EatsPlace) {
+        wishlist.removeAll { $0.id == place.id }
+        persist()
+        TripStore.shared.queueEats(deleting: [recordID(place)])
     }
 
     // MARK: - Friends
@@ -195,10 +218,11 @@ final class EatsBook {
 
     private static func isMine(_ zoneID: CKRecordZone.ID) -> Bool { zoneID.ownerName == CKCurrentUserDefaultName }
 
-    var allMyRecordIDs: [CKRecord.ID] { mine.map(recordID) }
+    var allMyRecordIDs: [CKRecord.ID] { (mine + wishlist).map(recordID) }
 
     func record(for recordID: CKRecord.ID) -> CKRecord? {
-        mine.first { $0.id == recordID.recordName }?.record(in: Self.myZoneID)
+        if let place = mine.first(where: { $0.id == recordID.recordName }) { return place.record(in: Self.myZoneID) }
+        return wishlist.first { $0.id == recordID.recordName }?.record(in: Self.myZoneID, type: EatsPlace.wishRecordType)
     }
 
     func apply(_ record: CKRecord) {
@@ -219,6 +243,10 @@ final class EatsBook {
                     if let i = friend.places.firstIndex(where: { $0.id == place.id }) { friend.places[i] = place } else { friend.places.append(place) }
                 }
             }
+        } else if record.recordType == EatsPlace.wishRecordType, Self.isMine(zoneID) {
+            // Friends' wishlists aren't shown, so only yours is kept.
+            let place = EatsPlace(record: record, keepSystemFields: true)
+            if let i = wishlist.firstIndex(where: { $0.id == place.id }) { wishlist[i] = place } else { wishlist.append(place) }
         }
         persist()
     }
@@ -236,7 +264,12 @@ final class EatsBook {
     func removeRecord(_ recordID: CKRecord.ID, isShare: Bool) {
         let zoneID = recordID.zoneID
         if Self.isMine(zoneID) {
-            if isShare { isSharing = false } else { mine.removeAll { $0.id == recordID.recordName } }
+            if isShare {
+                isSharing = false
+            } else {
+                mine.removeAll { $0.id == recordID.recordName }
+                wishlist.removeAll { $0.id == recordID.recordName }
+            }
         } else if isShare {
             friends.removeAll { $0.id == zoneID.ownerName }
         } else {
@@ -258,14 +291,21 @@ final class EatsBook {
     }
 
     func storeSystemFields(of record: CKRecord) {
-        guard let i = mine.firstIndex(where: { $0.id == record.recordID.recordName }) else { return }
-        mine[i].systemFields = record.encodedSystemFields
-        persist()
+        setSystemFields(record.encodedSystemFields, of: record.recordID.recordName)
     }
 
     func clearSystemFields(_ recordName: String) {
-        guard let i = mine.firstIndex(where: { $0.id == recordName }) else { return }
-        mine[i].systemFields = nil
+        setSystemFields(nil, of: recordName)
+    }
+
+    private func setSystemFields(_ fields: Data?, of recordName: String) {
+        if let i = mine.firstIndex(where: { $0.id == recordName }) {
+            mine[i].systemFields = fields
+        } else if let i = wishlist.firstIndex(where: { $0.id == recordName }) {
+            wishlist[i].systemFields = fields
+        } else {
+            return
+        }
         persist()
     }
 
@@ -274,15 +314,19 @@ final class EatsBook {
     /// unless `keepMine` is false (someone else's iCloud now) — then
     /// they're copied aside first, like trips.
     func resetSync(keepMine: Bool = true) {
-        if !keepMine, !mine.isEmpty, let data = try? Data(contentsOf: Self.fileURL) {
+        if !keepMine, !(mine.isEmpty && wishlist.isEmpty), let data = try? Data(contentsOf: Self.fileURL) {
             let stamp = Date.now.formatted(.iso8601).replacingOccurrences(of: ":", with: "-")
             try? data.write(to: Self.fileURL.deletingLastPathComponent().appending(path: "eats-\(stamp)-account-switch.json"))
         }
-        mine = keepMine ? mine.map { place in
-            var place = place
-            place.systemFields = nil
-            return place
-        } : []
+        let unsynced: ([EatsPlace]) -> [EatsPlace] = { places in
+            places.map { place in
+                var place = place
+                place.systemFields = nil
+                return place
+            }
+        }
+        mine = keepMine ? unsynced(mine) : []
+        wishlist = keepMine ? unsynced(wishlist) : []
         friends = []
         isSharing = false
         persist()

@@ -109,9 +109,13 @@ struct ShareView: View {
             Spacer(minLength: 0)
             VStack(spacing: 10) {
                 Button { model.send(place, to: .eats) } label: {
-                    Label("Add to Eats", systemImage: "fork.knife").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    Label("I've been — rank it", systemImage: "fork.knife").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent).tint(orange)
+                Button { model.send(place, to: .eatsWishlist) } label: {
+                    Label("Want to try", systemImage: "bookmark").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                }
+                .buttonStyle(.bordered).tint(orange)
                 Button { model.send(place, to: .tripIdeas) } label: {
                     Label("Add to a trip's Ideas", systemImage: "airplane").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }

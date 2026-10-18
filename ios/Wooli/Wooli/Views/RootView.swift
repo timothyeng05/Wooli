@@ -193,6 +193,7 @@ struct MainTabView: View {
         // A place shared from Apple Maps (the share extension opens wooli://).
         .onAppear { inbox.check() }
         .onOpenURL { _ in inbox.check() }
+        .onChange(of: inbox.wishesAdded) { app.space = .eats }
         .sheet(item: $inbox.current, onDismiss: inbox.dismissed) { place in
             SharedPlaceSheet(place: place)
         }

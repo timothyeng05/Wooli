@@ -220,6 +220,7 @@ struct EatsListView: View {
     @State private var detail: EatsPlace?
     @State private var preparingShare = false
     @State private var showAllWaiting = false
+    @State private var showAllWishes = false
     @State private var confirmSkipAll = false
 
     enum RankRequest: Identifiable {
@@ -351,7 +352,45 @@ struct EatsListView: View {
                 }
             }
 
-            if ordered.isEmpty && waiting.isEmpty {
+            if tripID == nil && !book.wishlist.isEmpty {
+                Section {
+                    ForEach(showAllWishes ? book.wishlist : Array(book.wishlist.prefix(3))) { wish in
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(wish.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                                if !wish.address.isEmpty {
+                                    Text(wish.address).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if let spot = wish.tripPlace {
+                                Button("Been") { ranking = .place(spot) }
+                                    .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+                            }
+                        }
+                        .contextMenu {
+                            if let url = wish.tripPlace?.mapsURL {
+                                Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+                            }
+                        }
+                        .swipeActions {
+                            Button("Remove", role: .destructive) { book.removeFromWishlist(wish) }
+                        }
+                    }
+                    if book.wishlist.count > 3 {
+                        Button(showAllWishes ? "Show fewer" : "Show all \(book.wishlist.count)") {
+                            withAnimation(.snappy) { showAllWishes.toggle() }
+                        }
+                        .font(.subheadline.weight(.medium))
+                    }
+                } header: {
+                    Text("Want to try · \(book.wishlist.count)")
+                } footer: {
+                    Text("Saved from Apple Maps. Tap Been once you've gone to rank it.")
+                }
+            }
+
+            if ordered.isEmpty && waiting.isEmpty && (tripID != nil || book.wishlist.isEmpty) {
                 ContentUnavailableView {
                     Label(tripID == nil ? "Start your list" : "Nothing ranked yet", systemImage: "fork.knife")
                 } description: {

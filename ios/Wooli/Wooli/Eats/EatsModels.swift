@@ -28,6 +28,9 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     var systemFields: Data?
 
     static let recordType = "EatsPlace"
+    /// A place you want to try. Its own record type, so it never counts as
+    /// ranked (and older builds, which don't know it, skip it).
+    static let wishRecordType = "EatsWish"
 
     init(name: String, place: TripPlace? = nil, visitedDay: String = DayKey.key(.now)) {
         self.name = name
@@ -87,8 +90,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
     }
 
-    func record(in zoneID: CKRecordZone.ID) -> CKRecord {
-        let r = CKRecord.restoring(systemFields, type: Self.recordType, id: CKRecord.ID(recordName: id, zoneID: zoneID))
+    func record(in zoneID: CKRecordZone.ID, type: String = Self.recordType) -> CKRecord {
+        let r = CKRecord.restoring(systemFields, type: type, id: CKRecord.ID(recordName: id, zoneID: zoneID))
         r["name"] = name
         r["address"] = address
         r["latitude"] = latitude

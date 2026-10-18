@@ -7,7 +7,7 @@ import Foundation
 /// A place shared to Wooli, waiting for the app to pick it up.
 struct SharedPlace: Codable, Identifiable, Hashable {
     enum Destination: String, Codable {
-        case eats, tripIdeas
+        case eats, eatsWishlist, tripIdeas
     }
 
     var id: String = UUID().uuidString

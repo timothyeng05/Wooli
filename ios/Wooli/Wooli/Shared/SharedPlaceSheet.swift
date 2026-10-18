@@ -8,11 +8,21 @@ final class SharedPlaceInbox {
     static let shared = SharedPlaceInbox()
 
     var current: SharedPlace?
+    /// Bumped when shared places go straight to Eats' Want to try, so the
+    /// app can switch to Eats to show them.
+    private(set) var wishesAdded = 0
     /// A trip to open once the sheet is gone (two sheets can't overlap).
     @ObservationIgnored var tripToOpenAfter: String?
     @ObservationIgnored private var shownID: String?
 
     func check() {
+        // Want to try needs no questions: save those right away.
+        let wishes = SharedPlaceHandoff.pending().filter { $0.destination == .eatsWishlist }
+        for wish in wishes {
+            EatsBook.shared.addToWishlist(EatsPlace(name: wish.name, place: wish.tripPlace))
+            SharedPlaceHandoff.remove(wish.id)
+        }
+        if !wishes.isEmpty { wishesAdded += 1 }
         guard current == nil, let next = SharedPlaceHandoff.pending().first else { return }
         shownID = next.id
         current = next
@@ -47,6 +57,8 @@ struct SharedPlaceSheet: View {
         switch place.destination {
         case .eats: rank
         case .tripIdeas: SharedPlaceTripPicker(place: place)
+        // Saved by `SharedPlaceInbox.check` before any sheet shows.
+        case .eatsWishlist: EmptyView()
         }
     }
 
