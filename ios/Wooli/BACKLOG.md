@@ -231,6 +231,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — Travel between cities as a route strip (`Trips/TravelLegs.swift`): each leg is a row with its own icon (flight, train, ferry, drive, bus, taxi, walk, key for car pick-up), its route (ticket route when the title is empty) and "21:00–22:30 · 1h 30m". The header shows the ways you travelled in order (🚢 › 🚗) and the main mode (longest leg). Out-and-back legs on the same day (Kagoshima ⇄ Sakurajima ferries) are side trips and stay in the day as plans; someone else's booking ("[Mom / Jojo] HKG → FUK") shows as "Meeting … lands 16:10" under the route (a plain plan on days without a ticket). Mode reads the title's first word, then the title, then notes. Checked against the Japan data; not tap-tested.
+
 - **2026-10-18 · Claude** — Activity and stay place page (`Trips/TripPlaceDetail.swift`): an activity or stay with a place opens a Beli-style page from the itinerary — map header (tap for Apple's place card), serif name, type chip + "Day 3 · Tue, Jun 2 · 2:00 PM", place and address, Website/Call/Directions/Photos/Google Maps, a "What we did" notes box (the item's notes, shared with the trip), Edit plan and Remove from trip. Map header, action pills and rows moved to `Views/PlaceDetailParts.swift`, shared with the Eats place page. Not tap-tested.
 
 - **2026-10-18 · Claude** — Trip plan types: Activity's icon is a walking figure (was a star); Note is no longer offered when adding or editing (existing notes still open and keep their type).

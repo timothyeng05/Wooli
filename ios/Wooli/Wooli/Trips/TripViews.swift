@@ -669,7 +669,7 @@ struct TripDetailView: View {
                                    items: block.homeTravel, all: all)
                     } else {
                         travelCard(trip, from: block.travelFrom, to: block.travelTo, start: block.day,
-                                   end: block.travelEnd ?? block.day, items: block.travel, all: all)
+                                   end: block.travelEnd ?? block.day, items: block.travel, meeting: block.meeting, all: all)
                     }
                 }
             }
@@ -697,9 +697,9 @@ struct TripDetailView: View {
     }
 
     private func travelCard(_ trip: Trip, from: TripLeg?, to: TripLeg?, start: String, end: String,
-                            items: [TripItem], all: [TripItem]) -> some View {
+                            items: [TripItem], meeting: [TripItem] = [], all: [TripItem]) -> some View {
         TripTravelCard(fromName: from?.name, toName: to?.name,
-                       day: start, endDay: end, items: items,
+                       day: start, endDay: end, items: items, meeting: meeting,
                        distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: all),
                        onSelect: { editingItem = $0 },
                        onAdd: { editingItem = TripItem(tripID: trip.id, day: end, kind: .transit,

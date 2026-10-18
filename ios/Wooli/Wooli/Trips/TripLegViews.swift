@@ -16,6 +16,8 @@ struct TripDayBlock: Identifiable {
     /// `travelFrom` (nil = home) to `travelTo` (nil = home), arriving on
     /// `travelEnd` when it runs overnight.
     var travel: [TripItem] = []
+    /// Other people's travel you're meeting today ("[Mom] HKG → FUK").
+    var meeting: [TripItem] = []
     var showsTicket = false
     var travelFrom: TripLeg?
     var travelTo: TripLeg?
@@ -37,9 +39,16 @@ enum TripLayout {
         guard !trip.legs.isEmpty else {
             return (days.enumerated().map { TripDayBlock(day: $1, number: $0 + 1, leg: nil) }, [])
         }
+        // A day's travel that moves you on: not out-and-back side trips
+        // (those stay in the day as plans) and not other people's bookings.
         func transit(on day: String) -> [TripItem] {
-            items.filter { $0.day == day && $0.kind == .transit }
+            let all = items.filter { $0.day == day && $0.kind == .transit }
                 .sorted { ($0.time ?? Int.max, $0.createdAt) < ($1.time ?? Int.max, $1.createdAt) }
+            let side = TravelLegs.sideTripIDs(in: all)
+            return all.filter { !side.contains($0.id) && !TravelLegs.isSomeoneElse($0) }
+        }
+        func meeting(on day: String) -> [TripItem] {
+            items.filter { $0.day == day && $0.kind == .transit && TravelLegs.isSomeoneElse($0) }
         }
 
         var blocks: [TripDayBlock] = []
@@ -52,6 +61,8 @@ enum TripLayout {
         for (index, day) in days.enumerated() {
             guard let leg = trip.leg(for: day) else {
                 var block = TripDayBlock(day: day, number: index + 1, leg: nil)
+                block.meeting = meeting(on: day)
+                used.formUnion(block.meeting.map(\.id))
                 let hop = transit(on: day)
                 if !hop.isEmpty {
                     block.travel = hop
@@ -65,6 +76,8 @@ enum TripLayout {
                 continue
             }
             var block = TripDayBlock(day: day, number: index + 1, leg: leg)
+            block.meeting = meeting(on: day)
+            used.formUnion(block.meeting.map(\.id))
             if leg.isHome {
                 // Where the trip starts: its travel is the way out, landing at the next city.
                 block.arriving = leg.id != previousLeg?.id
@@ -108,6 +121,12 @@ enum TripLayout {
                 previousLeg = leg
             }
             blocks.append(block)
+        }
+
+        // Others' travel rides in a ticket; on a day without one it stays a plan.
+        for i in blocks.indices where !blocks[i].showsTicket && blocks[i].homeTravel.isEmpty && !blocks[i].meeting.isEmpty {
+            used.subtract(blocks[i].meeting.map(\.id))
+            blocks[i].meeting = []
         }
 
         // Heading home from the last leg's last day.
@@ -238,21 +257,25 @@ struct TripTravelCard: View {
     /// Day you arrive, when the trip there runs overnight.
     var endDay: String? = nil
     let items: [TripItem]
+    /// Other people's travel you're meeting, shown under the route.
+    var meeting: [TripItem] = []
     let distanceKm: Double?
     let onSelect: (TripItem) -> Void
     /// Add a booking for this hop (shown when there are none yet).
     let onAdd: () -> Void
 
     var body: some View {
-        let mode = Self.mode(for: items)
+        let modes = TravelLegs.modes(of: items)
+        let main = TravelLegs.mainMode(of: items)
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 endpoint(fromName ?? "Home", caption: fromName == nil ? "Getting there" : "From", alignment: .leading)
-                route(symbol: mode.symbol)
+                route(symbols: modes.isEmpty ? [Self.mode(for: items).symbol] : modes.map(\.symbol))
                 endpoint(toName ?? "Home", caption: toName == nil ? "Heading home" : "To", alignment: .trailing)
             }
             Text([dateText,
-                  mode.label, distanceKm.map { "~\(Int($0.rounded()).formatted()) km" }]
+                  modes.count > 1 ? modes.map(\.label).joined(separator: " + ") : main?.label,
+                  distanceKm.map { "~\(Int($0.rounded()).formatted()) km" }]
                 .compactMap { $0 }.joined(separator: " · "))
                 .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.85))
 
@@ -268,11 +291,16 @@ struct TripTravelCard: View {
                 VStack(spacing: 0) {
                     ForEach(items) { item in
                         Button { onSelect(item) } label: {
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text(item.timeText ?? "—").font(.caption.weight(.semibold)).monospacedDigit()
-                                    .frame(width: 64, alignment: .leading)
-                                Text(item.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            HStack(alignment: .center, spacing: 10) {
+                                Image(systemName: TravelLegs.mode(of: item).symbol)
+                                    .font(.caption.weight(.bold)).foregroundStyle(Self.gradient[0])
+                                    .frame(width: 26, height: 26)
+                                    .background(.white, in: Circle())
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(TravelLegs.title(of: item)).font(.subheadline.weight(.semibold)).lineLimit(2)
+                                    Text(legDetail(item)).font(.caption.weight(.medium)).monospacedDigit().opacity(0.8)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).opacity(0.6)
                             }
                             .foregroundStyle(.white)
@@ -287,6 +315,18 @@ struct TripTravelCard: View {
                 }
                 .padding(.horizontal, 12)
                 .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            ForEach(meeting) { item in
+                Button { onSelect(item) } label: {
+                    Label {
+                        Text("Meeting " + meetingText(item)).lineLimit(2)
+                    } icon: {
+                        Image(systemName: TravelLegs.mode(of: item) == .other ? "person.2.fill" : TravelLegs.mode(of: item).symbol)
+                    }
+                    .font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(16)
@@ -305,6 +345,24 @@ struct TripTravelCard: View {
         .padding(.vertical, 4)
     }
 
+    /// "21:00–22:30 · 1h 30m", from what's known.
+    private func legDetail(_ item: TripItem) -> String {
+        let minutes = TravelLegs.minutes(of: item)
+        let time: String? = item.time.map { depart in
+            let start = TripTransport.timeText(depart)
+            guard let minutes else { return start }
+            return "\(start)–\(TripTransport.timeText((depart + minutes) % 1440))"
+        }
+        return [time ?? "No time yet", minutes.map(TripTransport.durationText)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "Mom / Jojo · HKG → FUK, lands 16:10".
+    private func meetingText(_ item: TripItem) -> String {
+        let title = item.title.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: " ·")
+        guard let depart = item.time, let minutes = TravelLegs.minutes(of: item) else { return title }
+        return "\(title), lands \(TripTransport.timeText((depart + minutes) % 1440))"
+    }
+
     private var dateText: String {
         let start = DayKey.date(day)
         guard let endDay, endDay != day else { return start.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) }
@@ -321,16 +379,20 @@ struct TripTravelCard: View {
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
     }
 
-    private func route(symbol: String) -> some View {
-        HStack(spacing: 6) {
+    /// The dashed route with each way of travelling on it, in order.
+    private func route(symbols: [String]) -> some View {
+        HStack(spacing: 4) {
             dashes
-            Image(systemName: symbol)
-                .font(.subheadline.weight(.bold)).foregroundStyle(Self.gradient[1])
-                .frame(width: 34, height: 34)
-                .background(.white, in: Circle())
+            ForEach(Array(symbols.prefix(3).enumerated()), id: \.offset) { i, symbol in
+                if i > 0 { Image(systemName: "chevron.right").font(.caption2.weight(.heavy)).foregroundStyle(.white.opacity(0.8)) }
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.bold)).foregroundStyle(Self.gradient[1])
+                    .frame(width: 34, height: 34)
+                    .background(.white, in: Circle())
+            }
             dashes
         }
-        .frame(width: 84)
+        .frame(width: symbols.count > 1 ? 120 : 84)
     }
 
     private var dashes: some View {
