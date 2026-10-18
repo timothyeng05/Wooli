@@ -998,7 +998,7 @@ struct TripItemEditor: View {
         Form {
             Section {
                 Picker("Type", selection: $item.kind) {
-                    ForEach(TripItem.Kind.allCases) { kind in
+                    ForEach(TripItem.Kind.picker(for: item.kind)) { kind in
                         Image(systemName: kind.symbol).tag(kind).accessibilityLabel(kind.label)
                     }
                 }

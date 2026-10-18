@@ -185,6 +185,12 @@ struct TripItem: Identifiable, Codable, Hashable {
         case activity, meal, transit, stay, note
         var id: String { rawValue }
 
+        /// What the add/edit picker offers. Notes are no longer offered, but
+        /// old ones still open (and keep their kind) — `picker(for:)`.
+        static func picker(for current: Kind) -> [Kind] {
+            current == .note ? allCases : allCases.filter { $0 != .note }
+        }
+
         var label: String {
             switch self {
             case .activity: "Activity"
@@ -197,7 +203,7 @@ struct TripItem: Identifiable, Codable, Hashable {
 
         var symbol: String {
             switch self {
-            case .activity: "star.fill"
+            case .activity: "figure.walk"
             case .meal: "fork.knife"
             case .transit: "airplane"
             case .stay: "bed.double.fill"
