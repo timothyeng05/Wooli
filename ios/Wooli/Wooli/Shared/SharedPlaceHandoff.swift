@@ -1,8 +1,8 @@
 import Foundation
 
 // Compiled into both the app and the share extension (WooliShare): a place
-// shared from Apple Maps waits in the App Group container until the app
-// opens and adds it to Eats or a trip.
+// shared from Apple Maps (or an Instagram reel) waits in the App Group
+// container until the app opens and adds it to Eats or a trip.
 
 /// A place shared to Wooli, waiting for the app to pick it up.
 struct SharedPlace: Codable, Identifiable, Hashable {
@@ -20,6 +20,13 @@ struct SharedPlace: Codable, Identifiable, Hashable {
     /// A restaurant, café, bar…: saved to a trip as a meal, not an activity.
     var isFood: Bool = false
     var destination: Destination
+    var sharedAt: Date = .now
+}
+
+/// An Instagram reel or post shared to Wooli; the app looks for places in its caption.
+struct SharedReel: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var url: URL
     var sharedAt: Date = .now
 }
 
@@ -58,5 +65,44 @@ enum SharedPlaceHandoff {
         } else {
             try? JSONEncoder().encode(rest).write(to: fileURL, options: .atomic)
         }
+    }
+
+    // MARK: Reels (their own file, so older app builds never see them)
+
+    private static var reelsURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
+            .appending(path: "shared-reels.json")
+    }
+
+    static func pendingReels() -> [SharedReel] {
+        guard let reelsURL, let data = try? Data(contentsOf: reelsURL) else { return [] }
+        return (try? JSONDecoder().decode([SharedReel].self, from: data)) ?? []
+    }
+
+    @discardableResult
+    static func add(_ reel: SharedReel) -> Bool {
+        guard let reelsURL else { return false }
+        do {
+            try JSONEncoder().encode(pendingReels() + [reel]).write(to: reelsURL, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    static func removeReel(_ id: String) {
+        guard let reelsURL else { return }
+        let rest = pendingReels().filter { $0.id != id }
+        if rest.isEmpty {
+            try? FileManager.default.removeItem(at: reelsURL)
+        } else {
+            try? JSONEncoder().encode(rest).write(to: reelsURL, options: .atomic)
+        }
+    }
+
+    /// instagram.com/reel/…, /reels/…, /p/… or /tv/… links.
+    static func isInstagramPost(_ url: URL) -> Bool {
+        guard url.host?.hasSuffix("instagram.com") == true else { return false }
+        return ["reel", "reels", "p", "tv"].contains(url.pathComponents.dropFirst().first ?? "")
     }
 }

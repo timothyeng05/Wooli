@@ -372,6 +372,9 @@ struct EatsListView: View {
                             if let url = wish.tripPlace?.mapsURL {
                                 Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
                             }
+                            if let reel = URL(string: wish.notes), SharedPlaceHandoff.isInstagramPost(reel) {
+                                Link(destination: reel) { Label("Watch the reel", systemImage: "play.rectangle") }
+                            }
                         }
                         .swipeActions {
                             Button("Remove", role: .destructive) { book.removeFromWishlist(wish) }
@@ -386,7 +389,7 @@ struct EatsListView: View {
                 } header: {
                     Text("Want to try · \(book.wishlist.count)")
                 } footer: {
-                    Text("Saved from Apple Maps. Tap Been once you've gone to rank it.")
+                    Text("Saved from Apple Maps and Instagram. Tap Been once you've gone to rank it.")
                 }
             }
 

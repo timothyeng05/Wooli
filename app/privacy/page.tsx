@@ -37,6 +37,15 @@ export default function PrivacyPage() {
         handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
       </p>
 
+      <h2>Instagram reels</h2>
+      <p>
+        If you share an Instagram reel or post to Wooli, your iPhone downloads that post&apos;s public page
+        from Instagram to read its caption, so Instagram sees that request like any visit to the post. The
+        caption is read on your iPhone (with Apple Intelligence when it&apos;s on) to find place names, which
+        are then looked up in Apple Maps. Nothing is sent to the developer, and Wooli only keeps the
+        places you choose to save, with the reel&apos;s link.
+      </p>
+
       <h2>What Wooli doesn&apos;t do</h2>
       <ul>
         <li>No accounts, sign-ups or analytics.</li>

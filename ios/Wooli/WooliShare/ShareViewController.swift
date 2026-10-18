@@ -48,7 +48,7 @@ final class ShareViewController: UIViewController {
 @Observable
 final class ShareModel {
     enum State {
-        case loading, ready(SharedPlace), notAPlace, saveFailed
+        case loading, ready(SharedPlace), reel(URL), notAPlace, saveFailed
     }
 
     var state: State = .loading
@@ -56,13 +56,23 @@ final class ShareModel {
     var onSaved: () -> Void = {}
 
     func load(_ items: [NSExtensionItem]) async {
-        state = await PlaceResolver.resolve(items).map(State.ready) ?? .notAPlace
+        if let place = await PlaceResolver.resolve(items) {
+            state = .ready(place)
+        } else if let link = await PlaceResolver.instagramLink(in: items) {
+            state = .reel(link)
+        } else {
+            state = .notAPlace
+        }
     }
 
     func send(_ place: SharedPlace, to destination: SharedPlace.Destination) {
         var place = place
         place.destination = destination
         if SharedPlaceHandoff.add(place) { onSaved() } else { state = .saveFailed }
+    }
+
+    func send(reel url: URL) {
+        if SharedPlaceHandoff.add(SharedReel(url: url)) { onSaved() } else { state = .saveFailed }
     }
 }
 
@@ -78,8 +88,10 @@ struct ShareView: View {
                     ProgressView("Finding the place…").frame(maxHeight: .infinity)
                 case .ready(let place):
                     ready(place)
+                case .reel(let url):
+                    reel(url)
                 case .notAPlace:
-                    message("No place here", detail: "Share a place from Apple Maps to add it to Eats or a trip.")
+                    message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats or a trip.")
                 case .saveFailed:
                     message("Couldn't hand this to Wooli", detail: "Open Wooli once, then try sharing again.")
                 }
@@ -121,6 +133,27 @@ struct ShareView: View {
                 }
                 .buttonStyle(.bordered)
             }
+        }
+    }
+
+    private func reel(_ url: URL) -> some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 6) {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.title2.weight(.bold)).foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .background(orange.gradient, in: Circle())
+                Text("Instagram reel").font(.title3.weight(.bold))
+                Text("Wooli reads the caption for restaurants and saves the ones you pick to Want to try in Eats.")
+                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            .padding(.top, 8)
+            Spacer(minLength: 0)
+            Button { model.send(reel: url) } label: {
+                Label("Find places in this reel", systemImage: "sparkle.magnifyingglass")
+                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent).tint(orange)
         }
     }
 

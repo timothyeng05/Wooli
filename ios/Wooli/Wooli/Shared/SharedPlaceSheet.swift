@@ -8,6 +8,8 @@ final class SharedPlaceInbox {
     static let shared = SharedPlaceInbox()
 
     var current: SharedPlace?
+    /// An Instagram reel to look for places in; shown after any places.
+    var currentReel: SharedReel?
     /// Bumped when shared places go straight to Eats' Want to try, so the
     /// app can switch to Eats to show them.
     private(set) var wishesAdded = 0
@@ -23,9 +25,20 @@ final class SharedPlaceInbox {
             SharedPlaceHandoff.remove(wish.id)
         }
         if !wishes.isEmpty { wishesAdded += 1 }
-        guard current == nil, let next = SharedPlaceHandoff.pending().first else { return }
-        shownID = next.id
-        current = next
+        guard current == nil, currentReel == nil else { return }
+        if let next = SharedPlaceHandoff.pending().first {
+            shownID = next.id
+            current = next
+        } else {
+            currentReel = SharedPlaceHandoff.pendingReels().first
+        }
+    }
+
+    /// Added or cancelled, like places: it leaves the inbox either way.
+    func reelDismissed() {
+        if let reel = currentReel { SharedPlaceHandoff.removeReel(reel.id) }
+        currentReel = nil
+        check()
     }
 
     /// Added or cancelled: either way it's done, so it leaves the inbox.

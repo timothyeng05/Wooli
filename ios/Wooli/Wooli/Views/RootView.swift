@@ -197,6 +197,9 @@ struct MainTabView: View {
         .sheet(item: $inbox.current, onDismiss: inbox.dismissed) { place in
             SharedPlaceSheet(place: place)
         }
+        .sheet(item: $inbox.currentReel, onDismiss: inbox.reelDismissed) { reel in
+            ReelImportSheet(reel: reel)
+        }
         // A trip someone just invited you to.
         .sheet(item: Binding(get: { trips.tripToOpen.map(TripRoute.init) }, set: { trips.tripToOpen = $0?.id })) { route in
             NavigationStack {

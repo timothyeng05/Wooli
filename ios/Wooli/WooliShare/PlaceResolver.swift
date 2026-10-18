@@ -9,21 +9,15 @@ enum PlaceResolver {
     static func resolve(_ items: [NSExtensionItem]) async -> SharedPlace? {
         let providers = items.flatMap { $0.attachments ?? [] }
         var mapItem: MKMapItem?
-        var links: [URL] = []
-        for provider in providers {
-            if mapItem == nil, provider.canLoadObject(ofClass: MKMapItem.self) {
-                mapItem = await loadMapItem(provider)
-            }
-            if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier), let url = await loadURL(provider) {
-                links.append(url)
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                links += await loadLinks(inTextOf: provider)
-            }
+        for provider in providers where provider.canLoadObject(ofClass: MKMapItem.self) {
+            mapItem = await loadMapItem(provider)
+            if mapItem != nil { break }
         }
+        let sharedLinks = await links(in: items)
 
         // A shared map item may come without its place ID; the link has it.
         if mapItem?.identifier == nil {
-            for link in links {
+            for link in sharedLinks {
                 if let found = await lookUp(link) { mapItem = found; break }
             }
         }
@@ -42,6 +36,23 @@ enum PlaceResolver {
     ]
 
     // MARK: - Links
+
+    /// An Instagram reel or post among the shared links (Instagram shares just the link).
+    static func instagramLink(in items: [NSExtensionItem]) async -> URL? {
+        await links(in: items).first(where: SharedPlaceHandoff.isInstagramPost)
+    }
+
+    private static func links(in items: [NSExtensionItem]) async -> [URL] {
+        var links: [URL] = []
+        for provider in items.flatMap({ $0.attachments ?? [] }) {
+            if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier), let url = await loadURL(provider) {
+                links.append(url)
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                links += await loadLinks(inTextOf: provider)
+            }
+        }
+        return links
+    }
 
     /// maps.apple.com links: `place-id` looks the place up directly; older
     /// links carry a name (`q`/`name`) and coordinate (`ll`/`coordinate`).
