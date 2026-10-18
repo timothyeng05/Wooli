@@ -20,6 +20,8 @@ enum Deduplicator {
         dedupe(FetchDescriptor<RecurringItem>(), key: { "\($0.merchant)|\($0.title)" }, context: context) { a, b in a.createdAt >= b.createdAt }
         // Modules: one period per start day; keep the newest edit.
         dedupe(FetchDescriptor<PeriodEntry>(), key: { "\($0.startDay.timeIntervalSince1970)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
+        // Trip journal: one entry per trip day; keep the newest edit.
+        dedupe(FetchDescriptor<JournalEntry>(), key: { "\($0.tripID)|\($0.day)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
         try? context.save()
     }
 

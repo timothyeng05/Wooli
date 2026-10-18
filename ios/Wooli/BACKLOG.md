@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-19 · Claude** — Trip journal (`Trips/TripJournal.swift`): past day cards get a Journal strip — your starred photos first, then that day's photos/videos found by date, with a count and the start of your entry. The day's journal screen: write about the day, all photos/videos from that date with ☆ to favorite, "Add other photos" (PhotosPicker), full-screen viewer with video playback. Media is never copied: `JournalEntry` (SwiftData: text + favorite links) stores iCloud Photos cloud identifiers (resolve on your other devices) or local identifiers. Private even on shared trips (links point into your own library). Asks for photo access (`NSPhotoLibraryUsageDescription` added). Not erased by Reset All Data. New SwiftData record type → CloudKit schema deploy. Not built.
+
 - **2026-10-19 · Claude** — New trips with cities get Breakfast (8:00), Lunch (12:30) and Dinner (19:00) on every city day (`TripItem.mealPlaceholders`). An unfilled slot (meal, no place, no notes, slot title) shows as a dashed outline with "Tap to pick a place"; delete any that don't apply. Placeholders don't count as plans in the city header, don't show the What we ate card, and never reach Eats (no place). Only on creation — adding a city to an existing trip doesn't add them. Not built.
 
 - **2026-10-19 · Claude** — Eats "To rank" cleanup after a device test showed the whole Japan trip flooding in with notes like "Lunch: figure out": only trip meals pinned to an Apple Maps place count, each restaurant once (and not if it's already on your list), shown by the place's name instead of the itinerary note; the section shows 3 with "Show all N" and a "Skip all". Not built.

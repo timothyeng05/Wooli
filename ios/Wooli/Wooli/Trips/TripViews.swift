@@ -637,6 +637,10 @@ struct TripDetailView: View {
                 Text("Nothing planned yet").font(.footnote).foregroundStyle(Theme.textTertiary)
             }
             ForEach(plans) { itemRow($0, trip: trip) }
+            // Looking back: the day's photos and journal (once, on a split travel day).
+            if block.day <= DayKey.key(.now) && half != .first {
+                JournalStrip(trip: trip, day: block.day)
+            }
         }
         .card()
         // The day's leg color down the left edge.
