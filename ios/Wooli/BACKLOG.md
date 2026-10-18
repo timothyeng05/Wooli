@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-19 · Claude** — New trips with cities get Breakfast (8:00), Lunch (12:30) and Dinner (19:00) on every city day (`TripItem.mealPlaceholders`). An unfilled slot (meal, no place, no notes, slot title) shows as a dashed outline with "Tap to pick a place"; delete any that don't apply. Placeholders don't count as plans in the city header, don't show the What we ate card, and never reach Eats (no place). Only on creation — adding a city to an existing trip doesn't add them. Not built.
+
 - **2026-10-19 · Claude** — Eats "To rank" cleanup after a device test showed the whole Japan trip flooding in with notes like "Lunch: figure out": only trip meals pinned to an Apple Maps place count, each restaurant once (and not if it's already on your list), shown by the place's name instead of the itinerary note; the section shows 3 with "Show all N" and a "Skip all". Not built.
 
 - **2026-10-18 · Claude** — Re-center button (`RecenterButton`) on the trip map, day map and Eats maps: appears once you pan or zoom, taps back to fit every pin. Not built.
