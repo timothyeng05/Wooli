@@ -1,25 +1,63 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Privacy policy — Wooli" };
+
 export default function PrivacyPage() {
   return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-      <p className="text-sm text-gray-400 mb-8">Last updated: May 2026</p>
+    <main className="doc">
+      <h1>Privacy policy</h1>
+      <p className="updated">Last updated October 18, 2026</p>
 
-      <div className="space-y-6 text-gray-700 text-sm leading-relaxed">
-        <section>
-          <h2 className="font-semibold text-gray-900 mb-1">Overview</h2>
-          <p>Wooli is a personal productivity app for tracking trips, mood, budgets, and lists. This policy explains what data is accessed and how it is used.</p>
-        </section>
+      <p>
+        Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten, keeping a budget and
+        tracking your period. <strong>Wooli does not collect any data.</strong> The developer has no
+        servers that receive your information and cannot see it.
+      </p>
 
-        <section>
-          <h2 className="font-semibold text-gray-900 mb-1">Data Storage</h2>
-          <p>App data (trips, mood entries, transactions, lists) is stored in a private Supabase database accessible only to the authenticated user. No data is shared with or sold to third parties.</p>
-        </section>
+      <h2>Where your information lives</h2>
+      <ul>
+        <li><strong>On your iPhone.</strong> Budget categories, transactions you enter or import, period entries and your settings are stored on your device.</li>
+        <li><strong>In your own iCloud.</strong> Trips and your Eats list sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data.</li>
+        <li><strong>When you share.</strong> If you invite someone to a trip or share your Eats list, they can see what you shared. You can stop sharing at any time.</li>
+      </ul>
 
-        <section>
-          <h2 className="font-semibold text-gray-900 mb-1">Contact</h2>
-          <p>Questions? Email <a href="mailto:woolitravel@gmail.com" className="text-blue-600 hover:underline">woolitravel@gmail.com</a></p>
-        </section>
-      </div>
-    </div>
-  )
+      <h2>Bank connections (optional)</h2>
+      <p>
+        If you choose to connect a bank, Wooli uses <a href="https://beta-bridge.simplefin.org">SimpleFIN Bridge</a>,
+        a separate service you sign up for and pay directly. Your iPhone downloads balances and
+        transactions straight from SimpleFIN; nothing passes through the developer. Your SimpleFIN
+        access key is kept in your iPhone&apos;s Keychain. SimpleFIN&apos;s own privacy policy applies to
+        what you share with them. You can also use Wooli without a bank connection by entering amounts yourself.
+      </p>
+
+      <h2>Apple services</h2>
+      <p>
+        Place search, maps and place details come from Apple Maps, and Face ID (if you turn it on) is
+        handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
+      </p>
+
+      <h2>What Wooli doesn&apos;t do</h2>
+      <ul>
+        <li>No accounts, sign-ups or analytics.</li>
+        <li>No advertising, and no tracking across apps or websites.</li>
+        <li>No selling or sharing of your information with anyone.</li>
+      </ul>
+
+      <h2>Deleting your data</h2>
+      <p>
+        Delete items in the app, or delete the app to remove what&apos;s stored on your iPhone. To remove
+        synced trips and Eats places, delete them in the app, or remove Wooli&apos;s data in Settings →
+        your name → iCloud → Manage Account Storage.
+      </p>
+
+      <h2>Children</h2>
+      <p>Wooli is not directed at children under 13.</p>
+
+      <h2>Changes</h2>
+      <p>If this policy changes, the new version will be posted on this page with a new date.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about privacy? Email <a href="mailto:woolitravel@gmail.com">woolitravel@gmail.com</a>.</p>
+    </main>
+  );
 }
