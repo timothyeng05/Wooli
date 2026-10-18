@@ -358,6 +358,10 @@ struct TripDetailView: View {
 
                 ideasCard(trip, ideas: ideas)
 
+                if allItems.contains(where: { $0.kind == .meal }) {
+                    whatWeAteCard(trip, meals: MealRating.meals(in: allItems))
+                }
+
                 Section {
                     ForEach(TripRow.rows(blocks: blocks, items: allItems, collapsed: collapsed)) { row in
                         switch row {
@@ -466,7 +470,35 @@ struct TripDetailView: View {
         .card()
     }
 
-    /// Past trips start collapsed; during a trip, legs already finished do.
+    private func whatWeAteCard(_ trip: Trip, meals: [TripItem]) -> some View {
+        NavigationLink {
+            WhatWeAteView(tripID: trip.id)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "fork.knife")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Color(hex: TripItem.Kind.meal.colorHex).gradient, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("What we ate").font(.headline).foregroundStyle(Theme.text)
+                    Text(whatWeAteSummary(meals)).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                if let best = meals.first?.rating { RatingChip(score: best) }
+                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Theme.textTertiary)
+            }
+            .card()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func whatWeAteSummary(_ meals: [TripItem]) -> String {
+        guard let best = meals.first else { return "Rate meals to rank your favorites" }
+        let count = "\(meals.count) meal\(meals.count == 1 ? "" : "s")"
+        guard best.rating != nil else { return count }
+        return "\(count) · Top: \(best.title.isEmpty ? (best.place?.name ?? "Meal") : best.title)"
+    }
+
     /// Pinned above the itinerary: one tap folds every leg so the trip reads
     /// as just its stops and the travel between them.
     private func legsBar(_ trip: Trip, collapsed: Set<String>) -> some View {
@@ -492,6 +524,7 @@ struct TripDetailView: View {
         .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
     }
 
+    /// Past trips start collapsed; during a trip, legs already finished do.
     private func defaultCollapsed(_ trip: Trip) -> Set<String> {
         let today = DayKey.key(.now)
         if trip.endDay < today { return Set(trip.legs.map(\.id)) }
@@ -648,8 +681,13 @@ struct TripItemRow: View {
                 }
             }
             Spacer(minLength: 8)
-            if let time = item.timeText {
-                Text(time).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.textSecondary)
+            VStack(alignment: .trailing, spacing: 4) {
+                if let time = item.timeText {
+                    Text(time).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.textSecondary)
+                }
+                if item.kind == .meal, let rating = item.rating {
+                    RatingChip(score: rating)
+                }
             }
         }
         .contentShape(Rectangle())
@@ -794,6 +832,19 @@ struct TripItemEditor: View {
                     if hasTime {
                         DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
                     }
+                }
+            }
+
+            if item.kind == .meal {
+                Section {
+                    Picker("How was it?", selection: $item.rating) {
+                        Text("Not rated").tag(Int?.none)
+                        ForEach(MealRating.scale, id: \.score) { entry in
+                            Text("\(entry.score) · \(entry.label)").tag(Int?.some(entry.score))
+                        }
+                    }
+                } footer: {
+                    Text("Rated meals are ranked in What we ate.")
                 }
             }
 

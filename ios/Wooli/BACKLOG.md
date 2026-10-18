@@ -229,6 +229,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — What we ate (port of the web panel): meals get a 1–10 rating with the web's verdicts ("Must try" … "Do you even love yourself") from a picker in the item editor; rated meals show a green/amber/red chip on the itinerary; a "What we ate" card on the trip page opens `WhatWeAteView` — rated meals and meals on past days, best first, with the scale. New synced field `TripItem.rating` → deploy the CloudKit schema. Ratings from the web trip weren't part of the earlier import, so existing meals start unrated. Not built.
+
 - **2026-10-17 · Claude** — Trip page: a bar pinned above the itinerary ("N stops" + Collapse all / Expand all) folds every leg in one tap so the trip reads as its stops and travel cards; stays on screen while scrolling. Replaces the Expand/Collapse items in the ••• menu. Not built.
 
 - **2026-10-15 · Claude** — Trip colors: every travel card and the flight/train ticket use one dark→light blue gradient (`TripTravelCard.gradient`) instead of leg colors; item types get their own colors — travel blue, stays violet, food orange, activities pink, notes slate — and item icons are solid colored circles with white symbols. Leg headers and day bars keep leg colors. Not built.

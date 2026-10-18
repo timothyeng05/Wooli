@@ -197,6 +197,8 @@ struct TripItem: Identifiable, Codable, Hashable {
     var notes: String = ""
     /// Flight or train details, for travel items; nil uses the plain form.
     var transport: TripTransport?
+    /// 1–10, for meals ("What we ate"); same scale as the web app.
+    var rating: Int?
     var createdAt: Date = .now
     var systemFields: Data?
 
@@ -331,6 +333,7 @@ extension TripItem {
         r["latitude"] = place?.latitude
         r["longitude"] = place?.longitude
         r["mapItemID"] = place?.mapItemID
+        r["rating"] = rating.map { Int64($0) }
         r["transport"] = transport.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
         return r
     }
@@ -347,6 +350,7 @@ extension TripItem {
             place = TripPlace(name: name, address: r["placeAddress"] as? String ?? "", latitude: lat, longitude: lon,
                               mapItemID: r["mapItemID"] as? String ?? "")
         }
+        rating = (r["rating"] as? Int64).map { Int($0) }
         if let json = r["transport"] as? String {
             transport = try? JSONDecoder().decode(TripTransport.self, from: Data(json.utf8))
         }
