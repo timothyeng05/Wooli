@@ -195,6 +195,8 @@ struct NewTripFlow: View {
             trip.endDay = DayKey.key(max(end, start))
             trip.legs.sort { $0.startDay < $1.startDay }
             TripStore.shared.save(trip)
+            // Breakfast, lunch and dinner on every city day, ready to fill in or delete.
+            for meal in TripItem.mealPlaceholders(for: trip) { TripStore.shared.save(meal) }
             dismiss()
             return
         }
@@ -360,7 +362,7 @@ struct TripDetailView: View {
 
                 ideasCard(trip, ideas: ideas)
 
-                if allItems.contains(where: { $0.kind == .meal }) {
+                if allItems.contains(where: { $0.kind == .meal && !$0.isMealPlaceholder }) {
                     whatWeAteCard(trip)
                 }
 
@@ -650,7 +652,7 @@ struct TripDetailView: View {
     private static func planCounts(blocks: [TripDayBlock], items: [TripItem]) -> [String: Int] {
         var counts: [String: Int] = [:]
         for block in blocks {
-            for item in items where item.day == block.day && item.kind != .transit {
+            for item in items where item.day == block.day && item.kind != .transit && !item.isMealPlaceholder {
                 let early = block.departure.map { (item.time ?? Int.max) < $0 } ?? false
                 if let leg = early ? block.travelFrom : block.leg { counts[leg.id, default: 0] += 1 }
             }
@@ -722,15 +724,26 @@ struct TripItemRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            let tint = Color(hex: item.kind.colorHex)
             Image(systemName: item.kind.symbol)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(item.isMealPlaceholder ? tint : .white)
                 .frame(width: 32, height: 32)
-                .background(Color(hex: item.kind.colorHex).gradient, in: Circle())
-                .shadow(color: Color(hex: item.kind.colorHex).opacity(0.35), radius: 4, y: 2)
+                // An empty meal slot is an outline; a real plan is solid.
+                .background(item.isMealPlaceholder ? AnyShapeStyle(tint.opacity(0.1)) : AnyShapeStyle(tint.gradient), in: Circle())
+                .overlay {
+                    if item.isMealPlaceholder {
+                        Circle().strokeBorder(tint.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                    }
+                }
+                .shadow(color: tint.opacity(item.isMealPlaceholder ? 0 : 0.35), radius: 4, y: 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title.isEmpty ? (item.place?.name ?? item.kind.label) : item.title)
-                    .font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(item.isMealPlaceholder ? Theme.textSecondary : Theme.text)
+                if item.isMealPlaceholder {
+                    Text("Tap to pick a place").font(.caption).foregroundStyle(Theme.textTertiary)
+                }
                 if let place = item.place, place.name != item.title || !place.address.isEmpty {
                     Text(place.name == item.title ? place.address : place.name)
                         .font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)

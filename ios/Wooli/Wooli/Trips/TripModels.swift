@@ -202,6 +202,21 @@ struct TripItem: Identifiable, Codable, Hashable {
 
     static let recordType = "TripItem"
 
+    /// Empty meal slots added to each city day of a new trip, with times so
+    /// they sort through the day.
+    static let mealSlots: [(title: String, time: Int)] = [("Breakfast", 8 * 60), ("Lunch", 12 * 60 + 30), ("Dinner", 19 * 60)]
+
+    static func mealPlaceholders(for trip: Trip) -> [TripItem] {
+        trip.days.filter { trip.leg(for: $0) != nil }.flatMap { day in
+            mealSlots.map { TripItem(tripID: trip.id, day: day, kind: .meal, title: $0.title, time: $0.time) }
+        }
+    }
+
+    /// A meal slot nobody has filled in yet.
+    var isMealPlaceholder: Bool {
+        kind == .meal && place == nil && notes.isEmpty && Self.mealSlots.contains { $0.title == title }
+    }
+
     var timeText: String? {
         guard let time else { return nil }
         let date = Calendar.current.date(bySettingHour: time / 60, minute: time % 60, second: 0, of: .now) ?? .now
