@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import MapKit
 import CloudKit
 
@@ -315,6 +316,8 @@ struct TripLegEditor: View {
 struct TripDetailView: View {
     let tripID: String
     @State private var store = TripStore.shared
+    /// Your Eats rankings, for the "What we ate" card and meal scores.
+    @Query private var eats: [EatsEntry]
     @State private var editingItem: TripItem?
     @State private var editingTrip: Trip?
     @State private var dayMap: String?
@@ -359,7 +362,7 @@ struct TripDetailView: View {
                 ideasCard(trip, ideas: ideas)
 
                 if allItems.contains(where: { $0.kind == .meal }) {
-                    whatWeAteCard(trip, meals: MealRating.meals(in: allItems))
+                    whatWeAteCard(trip)
                 }
 
                 Section {
@@ -470,33 +473,28 @@ struct TripDetailView: View {
         .card()
     }
 
-    private func whatWeAteCard(_ trip: Trip, meals: [TripItem]) -> some View {
-        NavigationLink {
-            WhatWeAteView(tripID: trip.id)
+    private func whatWeAteCard(_ trip: Trip) -> some View {
+        let tripEats = eats.filter { $0.tripID == trip.id }
+        let best = EatsRanking.ordered(tripEats.map(\.candidate)).first
+        let waiting = EatsRanking.toRank(entries: eats).filter { $0.tripID == trip.id }.count
+        let summary = best.map { "\(tripEats.count) ranked · Top: \($0.title)" }
+            ?? (waiting > 0 ? "\(waiting) meal\(waiting == 1 ? "" : "s") to rank in Eats" : "Rank this trip's meals in Eats")
+        return NavigationLink {
+            EatsListView(tripID: trip.id)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "fork.knife")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Color(hex: TripItem.Kind.meal.colorHex).gradient, in: Circle())
+                AppIconTile(.eats, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("What we ate").font(.headline).foregroundStyle(Theme.text)
-                    Text(whatWeAteSummary(meals)).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    Text(summary).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if let best = meals.first?.rating { RatingChip(score: best) }
+                if let best, let score = EatsRanking.scores(eats.map(\.candidate))[best.id] { MealScoreBadge(score: score, size: 34) }
                 Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Theme.textTertiary)
             }
             .card()
         }
         .buttonStyle(.plain)
-    }
-
-    private func whatWeAteSummary(_ meals: [TripItem]) -> String {
-        guard let best = meals.first else { return "Rate meals to rank your favorites" }
-        let count = "\(meals.count) meal\(meals.count == 1 ? "" : "s")"
-        guard best.rating != nil else { return count }
-        return "\(count) · Top: \(best.title.isEmpty ? (best.place?.name ?? "Meal") : best.title)"
     }
 
     /// Pinned above the itinerary: one tap folds every leg so the trip reads
@@ -618,7 +616,7 @@ struct TripDetailView: View {
     }
 
     private func itemRow(_ item: TripItem, trip: Trip) -> some View {
-        Button { editingItem = item } label: { TripItemRow(item: item) }
+        Button { editingItem = item } label: { TripItemRow(item: item, score: eatsScore(item)) }
             .buttonStyle(.plain)
             .contextMenu {
                 if let url = item.place?.mapsURL {
@@ -632,6 +630,12 @@ struct TripDetailView: View {
                 }
                 Button("Delete", systemImage: "trash", role: .destructive) { store.delete(item) }
             }
+    }
+
+    /// Your Eats score for a trip meal, once you've ranked it.
+    private func eatsScore(_ item: TripItem) -> Double? {
+        guard item.kind == .meal, let entry = eats.first(where: { $0.tripItemID == item.id }) else { return nil }
+        return EatsRanking.scores(eats.map(\.candidate))[entry.id]
     }
 
     private func move(_ item: TripItem, to day: String?) {
@@ -660,6 +664,8 @@ struct TripDetailView: View {
 
 struct TripItemRow: View {
     let item: TripItem
+    /// A ranked meal's score.
+    var score: Double? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -685,8 +691,8 @@ struct TripItemRow: View {
                 if let time = item.timeText {
                     Text(time).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.textSecondary)
                 }
-                if item.kind == .meal, let rating = item.rating {
-                    RatingChip(score: rating)
+                if let score {
+                    MealScoreBadge(score: score, size: 28)
                 }
             }
         }
@@ -708,6 +714,11 @@ struct TripItemEditor: View {
     @State private var transportMode: TripTransport.Mode?
     /// Arrival clock time on the ticket; nil = not set.
     @State private var arrival: Date?
+    @Query private var eats: [EatsEntry]
+    @Environment(\.modelContext) private var context
+    @State private var rankingMeal = false
+    /// A ranking made in this editor; written to Eats on Save.
+    @State private var pendingRank: (sentiment: MealSentiment, rank: Double)?
     @Environment(\.dismiss) private var dismiss
 
     init(item: TripItem, trip: Trip) {
@@ -837,14 +848,24 @@ struct TripItemEditor: View {
 
             if item.kind == .meal {
                 Section {
-                    Picker("How was it?", selection: $item.rating) {
-                        Text("Not rated").tag(Int?.none)
-                        ForEach(MealRating.scale, id: \.score) { entry in
-                            Text("\(entry.score) · \(entry.label)").tag(Int?.some(entry.score))
+                    if let status = eatsStatus {
+                        HStack(spacing: 12) {
+                            MealScoreBadge(score: status.score, size: 40)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(status.sentiment.label).font(.subheadline.weight(.semibold))
+                                Text("#\(status.position) of \(status.count) on your list")
+                                    .font(.caption).foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Button("Re-rank") { rankingMeal = true }.buttonStyle(.borderless)
                         }
+                    } else {
+                        Button("Rank in Eats", systemImage: "fork.knife") { rankingMeal = true }
                     }
+                } header: {
+                    Text("How was it?")
                 } footer: {
-                    Text("Rated meals are ranked in What we ate.")
+                    Text("Your own ranking in Eats — not shared with the trip.")
                 }
             }
 
@@ -856,6 +877,12 @@ struct TripItemEditor: View {
                 Section {
                     Button("Delete", role: .destructive, action: delete)
                 }
+            }
+        }
+        .sheet(isPresented: $rankingMeal) {
+            RankFlow(candidate: RankCandidate(id: item.id, title: item.title.isEmpty ? (item.place?.name ?? "Meal") : item.title),
+                     others: eats.filter { $0.tripItemID != item.id }.map(\.candidate)) { sentiment, rank in
+                pendingRank = (sentiment, rank)
             }
         }
     }
@@ -893,6 +920,24 @@ struct TripItemEditor: View {
         .ignoresSafeArea(edges: .top)
         .background(TransportTicket.night.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    /// This meal's place on your Eats list: the ranking just made here, or the saved one.
+    private var eatsStatus: (sentiment: MealSentiment, score: Double, position: Int, count: Int)? {
+        let entry = eats.first { $0.tripItemID == item.id }
+        let me: RankCandidate
+        if let pendingRank {
+            me = RankCandidate(id: item.id, title: item.title, sentiment: pendingRank.sentiment, rank: pendingRank.rank)
+        } else if let entry {
+            me = entry.candidate
+        } else {
+            return nil
+        }
+        let all = eats.filter { $0.id != entry?.id }.map(\.candidate) + [me]
+        let ordered = EatsRanking.ordered(all)
+        guard let sentiment = me.sentiment, let score = EatsRanking.scores(all)[me.id],
+              let index = ordered.firstIndex(where: { $0.id == me.id }) else { return nil }
+        return (sentiment, score, index + 1, ordered.count)
     }
 
     /// Departure time on the ticket, backed by the same state as the plain form.
@@ -943,6 +988,15 @@ struct TripItemEditor: View {
             item.time = nil
         }
         TripStore.shared.save(item)
+        if let pendingRank, item.kind == .meal {
+            if let entry = eats.first(where: { $0.tripItemID == item.id }) {
+                entry.sentiment = pendingRank.sentiment
+                entry.rank = pendingRank.rank
+                try? context.save()
+            } else {
+                EatsStore.add(item, sentiment: pendingRank.sentiment, rank: pendingRank.rank, context: context)
+            }
+        }
         dismiss()
     }
 }

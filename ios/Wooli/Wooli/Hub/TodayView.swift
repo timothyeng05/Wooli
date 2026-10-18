@@ -30,6 +30,7 @@ struct TodayView: View {
                             switch space {
                             case .budget: BudgetTodayCard()
                             case .trips: TripsTodayCard()
+                            case .eats: EatsTodayCard()
                             case .period: PeriodTodayCard()
                             case .today: EmptyView()
                             }
@@ -246,6 +247,25 @@ private struct TripsTodayCard: View {
                       detail: next.dateRangeText)
         } else {
             TodayCard(space: .trips, headline: "Plan a trip", detail: "Ideas, day plans on Apple Maps, and someone to plan with.")
+        }
+    }
+}
+
+// MARK: - Eats
+
+private struct EatsTodayCard: View {
+    @Query private var entries: [EatsEntry]
+
+    var body: some View {
+        let waiting = EatsRanking.toRank(entries: entries).count
+        let best = EatsRanking.ordered(entries.map(\.candidate)).first
+        if waiting > 0 {
+            TodayCard(space: .eats, headline: "\(waiting) meal\(waiting == 1 ? "" : "s") to rank",
+                      detail: "From your trips — a few taps each.")
+        } else if let best {
+            TodayCard(space: .eats, headline: "\(entries.count) place\(entries.count == 1 ? "" : "s") ranked", detail: "Top: \(best.title)")
+        } else {
+            TodayCard(space: .eats, headline: "Start your list", detail: "Rank places you've eaten against each other.")
         }
     }
 }

@@ -197,6 +197,7 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 | S4 | **Dates** app — spec with user: what to track (date nights? ideas list? anniversaries?), link spend to a Budget tag | idea |
 | S5 | **Outfits** app — spec with user: photo wardrobe, log what you wore, "last worn", WeatherKit suggestion | idea |
 | S6 | Cross-app links: trip spend from Budget tags (T5), date-night spend | idea |
+| S9 | Eats app (Beli-style rankings, trip meals flow in) | ✅ done (not built) |
 | S7 | iPad: switch the drawer to a `sidebarAdaptable` TabView with a `TabSection` per app | idea |
 
 ---
@@ -229,7 +230,7 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
-- **2026-10-18 · Claude** — What we ate (port of the web panel): meals get a 1–10 rating with the web's verdicts ("Must try" … "Do you even love yourself") from a picker in the item editor; rated meals show a green/amber/red chip on the itinerary; a "What we ate" card on the trip page opens `WhatWeAteView` — rated meals and meals on past days, best first, with the scale. New synced field `TripItem.rating` → deploy the CloudKit schema. Ratings from the web trip weren't part of the earlier import, so existing meals start unrated. Not built.
+- **2026-10-18 · Claude** — **Eats** app (Phase S), Beli-style, replacing the trip-level 1–10 rating from earlier today (never shipped): pick a feeling (liked / fine / didn't like), then answer "which was better?" against places with the same feeling (binary search, ~log₂ n taps); the score (7–10 / 4–6.9 / 0–3.9) comes from where it lands and shifts as the list grows. Personal: `EatsEntry` in SwiftData (schema + Deduplicator), not on the shared trip, so trip mates rank separately. Trip meals on started days appear under "To rank" (swipe to skip); ranking links the entry to the trip and trip item. Trips: "What we ate" card → Eats filtered to the trip; ranked meals show the score on the itinerary; meal editor has "Rank in Eats" (written on Save). List/map views, add any place via Apple Maps search, place detail (notes, date, re-rank, remove). Ranking search checked with a Python port on 500 random lists. No new trip CloudKit fields. Not built.
 
 - **2026-10-17 · Claude** — Trip page: a bar pinned above the itinerary ("N stops" + Collapse all / Expand all) folds every leg in one tap so the trip reads as its stops and travel cards; stays on screen while scrolling. Replaces the Expand/Collapse items in the ••• menu. Not built.
 
@@ -270,6 +271,7 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Inbox (found while working — not yet prioritized)
 
+- Eats: the same restaurant visited twice becomes two entries — consider merging by Apple Maps place ID. "Reset All Data" doesn't erase Eats (deliberately — it's not budget data); confirm with the user.
 - Trip travel cards still estimate distance from the legs' places; they could use the booking's airports/stations (`TripTransport.distanceKm`) when set, and show flight time.
 - Old flight bookings keep their details in Notes; the user plans to move them into the new fields later.
 - Manual transactions: no edit for amount/date/account after saving (category, note, tags edit as usual) — delete and re-add for now.

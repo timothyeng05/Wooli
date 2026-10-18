@@ -211,6 +211,11 @@ private struct SpaceRoot: View {
                 TripsListView()
                     .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
             }
+        case .eats:
+            NavigationStack {
+                EatsListView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+            }
         case .period:
             NavigationStack {
                 moduleScreen(.period)
