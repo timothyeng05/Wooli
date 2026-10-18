@@ -24,6 +24,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     var tripID: String = ""
     var tripItemID: String = ""
     var createdAt: Date = .now
+    /// On the Want to try list: saved, not ranked (its sentiment/rank mean nothing yet).
+    var isWishlist: Bool = false
     /// CloudKit change tag etc. (your own places only).
     var systemFields: Data?
 
@@ -51,9 +53,10 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     }
 
     var candidate: RankCandidate {
+        // A Want to try place has no feeling yet, so it never counts in rankings or scores.
         RankCandidate(id: id, title: name,
                       subtitle: visitedDay.isEmpty ? "" : DayKey.date(visitedDay).formatted(.dateTime.month(.abbreviated).day().year()),
-                      sentiment: sentiment, rank: rank)
+                      sentiment: isWishlist ? nil : sentiment, rank: isWishlist ? nil : rank)
     }
 
     /// Same restaurant on two lists: Apple Maps place ID, or same name within 150 m.
@@ -66,7 +69,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
 
     // Field by field, so records from newer or older versions still decode.
     enum CodingKeys: String, CodingKey {
-        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, notes, tripID, tripItemID, createdAt, systemFields
+        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, notes, tripID, tripItemID, createdAt, isWishlist, systemFields
     }
 
     init(from decoder: Decoder) throws {
@@ -84,6 +87,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         tripID = try c.decodeIfPresent(String.self, forKey: .tripID) ?? ""
         tripItemID = try c.decodeIfPresent(String.self, forKey: .tripItemID) ?? ""
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
+        isWishlist = try c.decodeIfPresent(Bool.self, forKey: .isWishlist) ?? false
         systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
     }
 
@@ -101,6 +105,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         r["tripID"] = tripID
         r["tripItemID"] = tripItemID
         r["createdAt"] = createdAt
+        r["wishlist"] = isWishlist ? 1 : 0
         return r
     }
 
@@ -118,6 +123,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         tripID = r["tripID"] as? String ?? ""
         tripItemID = r["tripItemID"] as? String ?? ""
         createdAt = r["createdAt"] as? Date ?? r.creationDate ?? .now
+        isWishlist = (r["wishlist"] as? Int64 ?? 0) == 1
         systemFields = keepSystemFields ? r.encodedSystemFields : nil
     }
 }
@@ -222,6 +228,7 @@ enum EatsRanking {
     static func toRank(entries: [EatsPlace]) -> [TripItem] {
         let today = DayKey.key(.now)
         let linked = Set(entries.map(\.tripItemID))
+        let ranked = entries.filter { !$0.isWishlist } // a Want to try place you've now been to still needs ranking
         let skipped = skippedIDs
         let candidates = TripStore.shared.items
             .filter { $0.kind == .meal && $0.place != nil && !linked.contains($0.id) && !skipped.contains($0.id)
@@ -230,7 +237,7 @@ enum EatsRanking {
         var picked: [(item: TripItem, place: EatsPlace)] = []
         for item in candidates {
             guard let place = item.place.map({ EatsPlace(name: $0.name, place: $0) }),
-                  !entries.contains(where: { $0.isSamePlace(as: place) }),
+                  !ranked.contains(where: { $0.isSamePlace(as: place) }),
                   !picked.contains(where: { $0.place.isSamePlace(as: place) }) else { continue }
             picked.append((item, place))
         }

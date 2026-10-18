@@ -529,7 +529,7 @@ struct TripDetailView: View {
 
     private func whatWeAteCard(_ trip: Trip) -> some View {
         let eats = eatsBook.mine
-        let tripEats = eats.filter { $0.tripID == trip.id }
+        let tripEats = eatsBook.ranked.filter { $0.tripID == trip.id }
         let best = EatsRanking.ordered(tripEats.map(\.candidate)).first
         let waiting = EatsRanking.toRank(entries: eats).filter { $0.tripID == trip.id }.count
         let summary = best.map { "\(tripEats.count) ranked · Top: \($0.title)" }

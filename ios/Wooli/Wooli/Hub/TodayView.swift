@@ -257,8 +257,8 @@ private struct EatsTodayCard: View {
     @State private var book = EatsBook.shared
 
     var body: some View {
-        let entries = book.mine
-        let waiting = EatsRanking.toRank(entries: entries).count
+        let entries = book.ranked
+        let waiting = EatsRanking.toRank(entries: book.mine).count
         let best = EatsRanking.ordered(entries.map(\.candidate)).first
         if waiting > 0 {
             TodayCard(space: .eats, headline: "\(waiting) meal\(waiting == 1 ? "" : "s") to rank",

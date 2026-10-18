@@ -212,28 +212,37 @@ struct EatsListView: View {
     @State private var preparingShare = false
     @State private var showAllWaiting = false
     @State private var confirmSkipAll = false
+    @State private var tab: Tab = .been
+
+    enum Tab: Hashable { case been, wantToTry }
 
     enum RankRequest: Identifiable {
         case tripItem(TripItem)
         case place(TripPlace)
+        /// Been to a Want to try place.
+        case wish(EatsPlace)
 
         var id: String {
             switch self {
             case .tripItem(let item): item.id
             case .place(let place): "\(place.latitude),\(place.longitude)"
+            case .wish(let place): place.id
             }
         }
     }
 
     var body: some View {
-        let mine = book.mine.filter { tripID == nil || $0.tripID == tripID }
+        let mine = book.ranked.filter { tripID == nil || $0.tripID == tripID }
         let scores = EatsRanking.scores(book.mine.map(\.candidate))
         let ordered = EatsRanking.ordered(mine.map(\.candidate)).compactMap { c in mine.first { $0.id == c.id } }
         let waiting = EatsRanking.toRank(entries: book.mine).filter { !skipped.contains($0.id) && (tripID == nil || $0.tripID == tripID) }
+        let wantToTry = tripID == nil && tab == .wantToTry
 
         Group {
             if showMap {
-                EatsMap(places: ordered, scores: scores) { detail = $0 }
+                EatsMap(places: wantToTry ? book.wishlist : ordered, scores: scores) { detail = $0 }
+            } else if wantToTry {
+                wishlistView
             } else {
                 list(ordered, waiting: waiting, scores: scores)
             }
@@ -242,21 +251,26 @@ struct EatsListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("View", selection: $showMap) {
-                    Text("List").tag(false)
-                    Text("Map").tag(true)
+                if tripID == nil {
+                    Picker("List", selection: $tab) {
+                        Text("Been").tag(Tab.been)
+                        Text("Want to try").tag(Tab.wantToTry)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 210)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Add a place", systemImage: "plus") { adding = true }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button(showMap ? "List" : "Map", systemImage: showMap ? "list.bullet" : "map") {
+                    withAnimation(.snappy) { showMap.toggle() }
+                }
+                Button(wantToTry ? "Save a place to try" : "Add a place", systemImage: "plus") { adding = true }
             }
         }
         .sheet(isPresented: $adding, onDismiss: {
             if let place = pickedPlace {
                 pickedPlace = nil
-                ranking = .place(place)
+                if wantToTry { book.addToWishlist(place) } else { ranking = .place(place) }
             }
         }) {
             NavigationStack {
@@ -265,7 +279,7 @@ struct EatsListView: View {
             }
         }
         .sheet(item: $ranking) { request in
-            RankFlow(candidate: candidate(for: request), others: book.mine.map(\.candidate)) { sentiment, rank in
+            RankFlow(candidate: candidate(for: request), others: book.ranked.map(\.candidate)) { sentiment, rank in
                 record(request, sentiment: sentiment, rank: rank)
             }
         }
@@ -282,9 +296,63 @@ struct EatsListView: View {
         }
     }
 
+    private var wishlistView: some View {
+        let wishes = book.wishlist
+        return List {
+            Section { WeekendCard().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
+
+            if wishes.isEmpty {
+                ContentUnavailableView {
+                    Label("Your Want to try list", systemImage: "bookmark")
+                } description: {
+                    Text("Save restaurants you want to go to. They're pinned on Apple Maps, picked for your weekends, and one tap moves them to your list when you go.")
+                } actions: {
+                    Button("Save a place") { adding = true }.buttonStyle(.borderedProminent)
+                }
+            } else {
+                Section("Want to try · \(wishes.count)") {
+                    ForEach(wishes) { place in
+                        Button { detail = place } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "bookmark.fill").font(.footnote).foregroundStyle(Color(hex: "#f97316"))
+                                    .frame(width: 26)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(place.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                                    if !place.address.isEmpty {
+                                        Text(place.address).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                ForEach(book.friendScores(for: place).prefix(2)) { entry in
+                                    HStack(spacing: 4) {
+                                        FriendAvatar(friend: entry.friend, size: 22)
+                                        Text(entry.score.formatted(.number.precision(.fractionLength(1))))
+                                            .font(.caption.weight(.bold)).foregroundStyle(EatsRanking.color(entry.score))
+                                    }
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .leading) {
+                            Button("Been here", systemImage: "checkmark") { ranking = .wish(place) }.tint(.green)
+                        }
+                        .swipeActions {
+                            Button("Remove", systemImage: "trash", role: .destructive) { book.delete(place) }
+                        }
+                    }
+                } footer: {
+                    Text("Swipe right when you've been — it moves to your list once you rank it.")
+                }
+            }
+        }
+    }
+
     private func list(_ ordered: [EatsPlace], waiting: [TripItem], scores: [String: Double]) -> some View {
         List {
             if tripID == nil {
+                Section { WeekendCard().listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
+
                 Section {
                     friendsStrip
                         .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
@@ -429,6 +497,7 @@ struct EatsListView: View {
         switch request {
         case .tripItem(let item): item.rankCandidate
         case .place(let place): RankCandidate(id: request.id, title: place.name, subtitle: place.address)
+        case .wish(let place): RankCandidate(id: place.id, title: place.name, subtitle: place.address)
         }
     }
 
@@ -442,6 +511,8 @@ struct EatsListView: View {
             place.sentiment = sentiment
             place.rank = rank
             book.save(place)
+        case .wish(let place):
+            book.markBeen(place, sentiment: sentiment, rank: rank)
         }
     }
 }
@@ -487,9 +558,18 @@ struct EatsMap: View {
             ForEach(places.filter { $0.coordinate != nil }) { place in
                 Annotation(place.name, coordinate: place.coordinate!) {
                     Button { onSelect?(place) } label: {
-                        MealScoreBadge(score: scores[place.id] ?? 0, size: 34)
-                            .background(Circle().fill(Theme.card))
-                            .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                        if place.isWishlist {
+                            // Not ranked yet: a bookmark instead of a score.
+                            Image(systemName: "bookmark.fill").font(.footnote.weight(.bold)).foregroundStyle(.white)
+                                .frame(width: 30, height: 30)
+                                .background(Color(hex: "#f97316").gradient, in: Circle())
+                                .overlay(Circle().stroke(.white, lineWidth: 2))
+                                .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                        } else {
+                            MealScoreBadge(score: scores[place.id] ?? 0, size: 34)
+                                .background(Circle().fill(Theme.card))
+                                .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                        }
                     }
                     .disabled(onSelect == nil)
                 }
@@ -576,7 +656,7 @@ struct FriendListView: View {
     /// Their date, plus your score if you've been too.
     private func subtitle(_ place: EatsPlace) -> String {
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).year())
-        let yours = book.mine.first { $0.isSamePlace(as: place) }
+        let yours = book.ranked.first { $0.isSamePlace(as: place) }
             .flatMap { EatsRanking.scores(book.mine.map(\.candidate))[$0.id] }
             .map { "You: \($0.formatted(.number.precision(.fractionLength(1))))" }
         return [yours, date].compactMap { $0 }.joined(separator: " · ")
@@ -597,21 +677,28 @@ struct EatsPlaceDetail: View {
     }
 
     var body: some View {
-        let others = book.mine.filter { $0.id != place.id }.map(\.candidate)
+        let others = book.ranked.filter { $0.id != place.id }.map(\.candidate)
         let all = others + [place.candidate]
         let ordered = EatsRanking.ordered(all)
         NavigationStack {
             Form {
-                Section {
-                    HStack(spacing: 14) {
-                        MealScoreBadge(score: EatsRanking.scores(all)[place.id] ?? 0, size: 56)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(place.sentiment.label).font(.headline)
-                            Text("#\((ordered.firstIndex { $0.id == place.id } ?? 0) + 1) of \(ordered.count) on your list")
-                                .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                if place.isWishlist {
+                    Section {
+                        Label("On your Want to try list", systemImage: "bookmark.fill").foregroundStyle(Color(hex: "#f97316"))
+                        Button("Been here? Rank it", systemImage: "checkmark.circle") { reranking = true }
+                    }
+                } else {
+                    Section {
+                        HStack(spacing: 14) {
+                            MealScoreBadge(score: EatsRanking.scores(all)[place.id] ?? 0, size: 56)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(place.sentiment.label).font(.headline)
+                                Text("#\((ordered.firstIndex { $0.id == place.id } ?? 0) + 1) of \(ordered.count) on your list")
+                                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Button("Re-rank") { reranking = true }.buttonStyle(.bordered).buttonBorderShape(.capsule)
                         }
-                        Spacer()
-                        Button("Re-rank") { reranking = true }.buttonStyle(.bordered).buttonBorderShape(.capsule)
                     }
                 }
 
@@ -631,9 +718,11 @@ struct EatsPlaceDetail: View {
 
                 Section {
                     TextField("Name", text: $place.name)
-                    DatePicker("Went", selection: Binding(get: { DayKey.date(place.visitedDay) },
-                                                          set: { place.visitedDay = DayKey.key($0) }),
-                               displayedComponents: .date)
+                    if !place.isWishlist {
+                        DatePicker("Went", selection: Binding(get: { DayKey.date(place.visitedDay) },
+                                                              set: { place.visitedDay = DayKey.key($0) }),
+                                   displayedComponents: .date)
+                    }
                     if let trip = TripStore.shared.trip(place.tripID) {
                         LabeledContent("Trip", value: trip.name)
                     }
@@ -668,6 +757,10 @@ struct EatsPlaceDetail: View {
             }
             .sheet(isPresented: $reranking) {
                 RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
+                    if place.isWishlist {
+                        place.isWishlist = false
+                        place.visitedDay = DayKey.key(.now)
+                    }
                     place.sentiment = sentiment
                     place.rank = rank
                 }

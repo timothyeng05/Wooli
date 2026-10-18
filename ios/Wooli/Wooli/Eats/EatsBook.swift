@@ -72,6 +72,11 @@ final class EatsBook {
 
     // MARK: - Reading
 
+    /// Places you've ranked.
+    var ranked: [EatsPlace] { mine.filter { !$0.isWishlist } }
+    /// Your Want to try list, newest first.
+    var wishlist: [EatsPlace] { mine.filter(\.isWishlist).sorted { $0.createdAt > $1.createdAt } }
+
     /// Your place for a trip meal, once ranked.
     func place(forTripItem itemID: String) -> EatsPlace? { mine.first { $0.tripItemID == itemID } }
 
@@ -86,7 +91,7 @@ final class EatsBook {
     /// Friends who've ranked the same restaurant, with their score.
     func friendScores(for place: EatsPlace) -> [FriendScore] {
         friends.compactMap { friend in
-            guard let theirs = friend.places.first(where: { $0.isSamePlace(as: place) }),
+            guard let theirs = friend.places.first(where: { !$0.isWishlist && $0.isSamePlace(as: place) }),
                   let score = friend.scores[theirs.id] else { return nil }
             return FriendScore(friend: friend, score: score)
         }
@@ -112,9 +117,34 @@ final class EatsBook {
         TripStore.shared.queueEats(deleting: [recordID(place)])
     }
 
-    /// Adds a ranked trip meal, linked back to its trip.
+    /// Save a place to try (from Apple Maps search).
+    func addToWishlist(_ tripPlace: TripPlace) {
+        var place = EatsPlace(name: tripPlace.name, place: tripPlace)
+        guard !mine.contains(where: { $0.isSamePlace(as: place) }) else { return }
+        place.isWishlist = true
+        save(place)
+    }
+
+    /// You went to a Want to try place: it joins your ranked list.
+    func markBeen(_ place: EatsPlace, sentiment: MealSentiment, rank: Double) {
+        var place = place
+        place.isWishlist = false
+        place.sentiment = sentiment
+        place.rank = rank
+        place.visitedDay = DayKey.key(.now)
+        save(place)
+    }
+
+    /// Adds a ranked trip meal, linked back to its trip. If it was on your
+    /// Want to try list, that entry moves over instead of a copy.
     func add(_ item: TripItem, sentiment: MealSentiment, rank: Double) {
-        var place = EatsPlace(name: item.rankCandidate.title, place: item.place, visitedDay: item.day ?? DayKey.key(.now))
+        let fresh = EatsPlace(name: item.rankCandidate.title, place: item.place, visitedDay: item.day ?? DayKey.key(.now))
+        var place = wishlist.first { $0.isSamePlace(as: fresh) }.map { wish in
+            var wish = wish
+            wish.isWishlist = false
+            wish.visitedDay = fresh.visitedDay
+            return wish
+        } ?? fresh
         place.tripID = item.tripID
         place.tripItemID = item.id
         place.sentiment = sentiment

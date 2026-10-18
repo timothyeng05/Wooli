@@ -197,6 +197,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Wooli shows your photos and videos from each trip day in your journal. They stay in your library — only links are saved.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Wooli finds free lunch and dinner times on your weekend for places you want to try, and adds the plans you pick to your calendar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wooli suggests places to eat near you for the weekend.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -237,6 +239,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Wooli shows your photos and videos from each trip day in your journal. They stay in your library — only links are saved.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Wooli finds free lunch and dinner times on your weekend for places you want to try, and adds the plans you pick to your calendar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wooli suggests places to eat near you for the weekend.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
