@@ -30,6 +30,9 @@ struct TripLeg: Identifiable, Codable, Hashable {
     var emoji: String = ""
     var startDay: String
     var endDay: String
+    /// Where the trip starts from (home): its travel is the trip's way out,
+    /// and it isn't numbered among the cities.
+    var isHome: Bool = false
 
     func contains(_ day: String) -> Bool { day >= startDay && day <= endDay }
 
@@ -39,6 +42,21 @@ struct TripLeg: Identifiable, Codable, Hashable {
 
     /// Leg colors, matching the web app's leg palette.
     static let colorHexes = ["#2563eb", "#0d9488", "#e11d48", "#7c3aed", "#4f46e5", "#d97706"]
+}
+
+extension TripLeg {
+    enum CodingKeys: String, CodingKey { case id, name, emoji, startDay, endDay, isHome }
+
+    // Field by field, so legs saved before `isHome` existed still open.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        emoji = try c.decodeIfPresent(String.self, forKey: .emoji) ?? ""
+        startDay = try c.decode(String.self, forKey: .startDay)
+        endDay = try c.decode(String.self, forKey: .endDay)
+        isHome = try c.decodeIfPresent(Bool.self, forKey: .isHome) ?? false
+    }
 }
 
 struct Trip: Identifiable, Codable, Hashable {
@@ -119,6 +137,11 @@ struct Trip: Identifiable, Codable, Hashable {
     /// the leg you arrive at.
     func leg(for day: String) -> TripLeg? {
         legs.first { $0.startDay == day } ?? legs.first { $0.contains(day) }
+    }
+
+    /// A city's number on its badge, not counting the home city.
+    func number(of leg: TripLeg) -> Int {
+        (legs.filter { !$0.isHome }.firstIndex { $0.id == leg.id } ?? 0) + 1
     }
 
     func colorHex(of leg: TripLeg) -> String {

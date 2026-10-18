@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — Home city: a trip city can be marked "Where you're leaving from" (`TripLeg.isHome`, decodes as false on older data; toggle in the city editor, defaults its emoji to 🏠). It isn't numbered or counted among the cities, and its flight shows as the way out to the first city. Added 🏠 New York as the starting city of Japan + Seoul, China and Spain 2026 (their Day 1).
+
 - **2026-10-18 · Claude** — New trips get Breakfast/Lunch/Dinner on every day, travel days included (was city days only), so a Day 1 spent flying out isn't empty. Added the missing slots to Day 1 of Spain 2026, China and Japan + Seoul.
 
 - **2026-10-18 · Claude** — Moved the last web-only data to the phone: `Services/WebDataImporter.swift` applies `Documents/web-import.json` once on launch — web-reviewed transactions get their category (mapped to the phone's categories) and are marked reviewed where the phone still had them waiting (125 of 274; phone-reviewed ones untouched), and the 4 web period entries were added. Japan + Seoul got Breakfast/Lunch/Dinner slots where a city day had no meal in that slot (39); Spain 2026 created with Madrid / Seville / Barcelona and meal slots. Web lists not carried over (user's call).

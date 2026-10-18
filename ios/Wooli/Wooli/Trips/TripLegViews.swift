@@ -65,6 +65,22 @@ enum TripLayout {
                 continue
             }
             var block = TripDayBlock(day: day, number: index + 1, leg: leg)
+            if leg.isHome {
+                // Where the trip starts: its travel is the way out, landing at the next city.
+                block.arriving = leg.id != previousLeg?.id
+                let hop = transit(on: day)
+                if !hop.isEmpty {
+                    block.travel = hop
+                    block.showsTicket = true
+                    block.travelFrom = leg
+                    block.departure = hop.compactMap(\.time).min()
+                    used.formUnion(hop.map(\.id))
+                    inFlight = blocks.count
+                }
+                previousLeg = leg
+                blocks.append(block)
+                continue
+            }
             if leg.id != previousLeg?.id {
                 block.arriving = true
                 let hop = transit(on: day)

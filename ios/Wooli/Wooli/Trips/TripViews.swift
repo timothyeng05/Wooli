@@ -297,6 +297,14 @@ struct TripLegEditor: View {
                 TextField("Emoji (optional)", text: Binding(get: { leg.emoji }, set: { leg.emoji = String($0.prefix(1)) }))
             }
             Section {
+                Toggle("Where you're leaving from", isOn: Binding(get: { leg.isHome }, set: {
+                    leg.isHome = $0
+                    if $0 && leg.emoji.isEmpty { leg.emoji = "🏠" }
+                }))
+            } footer: {
+                Text("Home, or wherever the trip starts. Its flight or train shows as the way out, and it isn't numbered among the cities.")
+            }
+            Section {
                 DatePicker("Arrive", selection: Binding(get: { DayKey.date(leg.startDay) }, set: {
                     leg.startDay = DayKey.key($0)
                     if leg.endDay < leg.startDay { leg.endDay = leg.startDay }
@@ -381,7 +389,7 @@ struct TripDetailView: View {
                             Button {
                                 withAnimation(.snappy) { toggle(leg, trip: trip) }
                             } label: {
-                                TripLegHeader(leg: leg, number: (trip.legs.firstIndex { $0.id == leg.id } ?? 0) + 1,
+                                TripLegHeader(leg: leg, number: trip.number(of: leg),
                                               colorHex: trip.colorHex(of: leg),
                                               planCount: planCounts[leg.id] ?? 0,
                                               isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(DayKey.key(.now)))
@@ -460,8 +468,8 @@ struct TripDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         mapChip("All", color: Theme.brand, selected: city == nil) { mapCity = nil }
-                        ForEach(Array(trip.legs.enumerated()), id: \.element.id) { index, leg in
-                            mapChip(leg.name.isEmpty ? "City \(index + 1)" : leg.name, color: Color(hex: trip.colorHex(of: leg)),
+                        ForEach(trip.legs.filter { !$0.isHome }) { leg in
+                            mapChip(leg.name.isEmpty ? "City \(trip.number(of: leg))" : leg.name, color: Color(hex: trip.colorHex(of: leg)),
                                     selected: city?.id == leg.id) { mapCity = leg.id }
                         }
                     }
@@ -557,7 +565,8 @@ struct TripDetailView: View {
     private func legsBar(_ trip: Trip, collapsed: Set<String>) -> some View {
         let allCollapsed = trip.legs.allSatisfy { collapsed.contains($0.id) }
         return HStack {
-            Label("\(trip.legs.count) cit\(trip.legs.count == 1 ? "y" : "ies")", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+            let cities = trip.legs.filter { !$0.isHome }.count
+            Label("\(cities) cit\(cities == 1 ? "y" : "ies")", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
             Spacer()
             Button {
