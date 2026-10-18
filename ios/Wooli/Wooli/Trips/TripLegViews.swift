@@ -166,7 +166,7 @@ struct TripLegHeader: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(leg.name.isEmpty ? "Leg \(number)" : leg.name)
+                    Text(leg.name.isEmpty ? "City \(number)" : leg.name)
                         .font(.title3.weight(.bold)).foregroundStyle(Theme.text)
                     if isNow {
                         Text("NOW").font(.caption2.weight(.heavy)).foregroundStyle(.white)
@@ -190,7 +190,7 @@ struct TripLegHeader: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(color.opacity(0.22)))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint(isCollapsed ? "Shows this leg's days" : "Hides this leg's days")
+        .accessibilityHint(isCollapsed ? "Shows this city's days" : "Hides this city's days")
     }
 
     private var summary: String {

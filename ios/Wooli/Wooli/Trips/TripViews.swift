@@ -125,7 +125,7 @@ struct NewTripFlow: View {
                                 HStack {
                                     Text(leg.emoji.isEmpty ? "📍" : leg.emoji)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(leg.name.isEmpty ? "Untitled stop" : leg.name)
+                                        Text(leg.name.isEmpty ? "Untitled city" : leg.name)
                                         Text("\(DayKey.date(leg.startDay).formatted(.dateTime.month(.abbreviated).day())) – \(DayKey.date(leg.endDay).formatted(.dateTime.month(.abbreviated).day()))")
                                             .font(.caption).foregroundStyle(Theme.textSecondary)
                                     }
@@ -133,16 +133,16 @@ struct NewTripFlow: View {
                             }
                         }
                         .onDelete { trip.legs.remove(atOffsets: $0) }
-                        Button("Add a stop", systemImage: "plus") {
+                        Button("Add a city", systemImage: "plus") {
                             let startDay = trip.legs.last.map { DayKey.key(Calendar.current.date(byAdding: .day, value: 1, to: DayKey.date($0.endDay))!) }
                                 ?? DayKey.key(start)
                             let clamped = min(startDay, DayKey.key(max(end, start)))
                             trip.legs.append(TripLeg(startDay: clamped, endDay: DayKey.key(max(end, start))))
                         }
                     } header: {
-                        Text("Stops")
+                        Text("Cities")
                     } footer: {
-                        Text("Split a multi-city trip into stops (\"Tokyo\", \"Kyoto\"). Each stop gets its own section, and travel between them shows as a card. Optional — skip if it's a single place.")
+                        Text("Split a multi-city trip into cities (\"Tokyo\", \"Kyoto\"). Each city gets its own section, and travel between them shows as a card. Optional — skip if it's a single place.")
                     }
                 case .notes:
                     Section("Notes") {
@@ -168,7 +168,7 @@ struct NewTripFlow: View {
         switch step {
         case .basics: "New trip"
         case .dates: "When?"
-        case .stops: "Stops"
+        case .stops: "Cities"
         case .notes: "Notes"
         }
     }
@@ -239,7 +239,7 @@ struct TripEditor: View {
                             HStack {
                                 Text(leg.emoji.isEmpty ? "📍" : leg.emoji)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(leg.name.isEmpty ? "Untitled stop" : leg.name)
+                                    Text(leg.name.isEmpty ? "Untitled city" : leg.name)
                                     Text("\(DayKey.date(leg.startDay).formatted(.dateTime.month(.abbreviated).day())) – \(DayKey.date(leg.endDay).formatted(.dateTime.month(.abbreviated).day()))")
                                         .font(.caption).foregroundStyle(Theme.textSecondary)
                                 }
@@ -247,16 +247,16 @@ struct TripEditor: View {
                         }
                     }
                     .onDelete { trip.legs.remove(atOffsets: $0) }
-                    Button("Add a stop", systemImage: "plus") {
+                    Button("Add a city", systemImage: "plus") {
                         let startDay = trip.legs.last.map { DayKey.key(Calendar.current.date(byAdding: .day, value: 1, to: DayKey.date($0.endDay))!) }
                             ?? DayKey.key(start)
                         let clamped = min(startDay, DayKey.key(max(end, start)))
                         trip.legs.append(TripLeg(startDay: clamped, endDay: DayKey.key(max(end, start))))
                     }
                 } header: {
-                    Text("Stops")
+                    Text("Cities")
                 } footer: {
-                    Text("Split a multi-city trip into stops (\"Tokyo\", \"Kyoto\"). Each stop gets its own section, and travel between them shows as a card.")
+                    Text("Split a multi-city trip into cities (\"Tokyo\", \"Kyoto\"). Each city gets its own section, and travel between them shows as a card.")
                 }
 
                 Section("Notes") {
@@ -302,10 +302,10 @@ struct TripLegEditor: View {
                 DatePicker("Leave", selection: Binding(get: { DayKey.date(leg.endDay) }, set: { leg.endDay = DayKey.key($0) }),
                            in: DayKey.date(leg.startDay)...max(tripEnd, DayKey.date(leg.startDay)), displayedComponents: .date)
             } footer: {
-                Text("The day you arrive is shown as a travel day from the previous stop.")
+                Text("The day you arrive is shown as a travel day from the previous city.")
             }
         }
-        .navigationTitle(leg.name.isEmpty ? "Stop" : leg.name)
+        .navigationTitle(leg.name.isEmpty ? "City" : leg.name)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -322,6 +322,8 @@ struct TripDetailView: View {
     @State private var dayMap: String?
     @State private var preparingShare = false
     @State private var confirmDelete = false
+    /// The city the map is showing; nil = the whole trip.
+    @State private var mapCity: String?
     /// Collapsed legs; nil until the user changes something (then remembered).
     @State private var collapsedLegs: Set<String>?
     @Environment(\.dismiss) private var dismiss
@@ -353,9 +355,7 @@ struct TripDetailView: View {
                 header(trip, dayCount: days.count)
 
                 if !placed.isEmpty {
-                    TripMap(stops: placed.map { TripMap.Stop(item: $0, label: nil) })
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    tripMap(trip, placed: placed)
                 }
 
                 ideasCard(trip, ideas: ideas)
@@ -436,6 +436,55 @@ struct TripDetailView: View {
         }
     }
 
+    /// The trip's places on a map, with chips to zoom to one city.
+    private func tripMap(_ trip: Trip, placed: [TripItem]) -> some View {
+        let city = trip.legs.first { $0.id == mapCity }
+        let shown = city.map { city in placed.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == city.id } } ?? placed
+        return VStack(spacing: 10) {
+            TripMap(stops: shown.map { TripMap.Stop(item: $0, label: nil) })
+                // Re-frame on the chosen city; `initialPosition` only applies once.
+                .id(city?.id ?? "all")
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    if let city, shown.isEmpty {
+                        Text("No places in \(city.name.isEmpty ? "this city" : city.name) yet")
+                            .font(.footnote.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(.regularMaterial, in: Capsule())
+                    }
+                }
+            if !trip.legs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        mapChip("All", color: Theme.brand, selected: city == nil) { mapCity = nil }
+                        ForEach(Array(trip.legs.enumerated()), id: \.element.id) { index, leg in
+                            mapChip(leg.name.isEmpty ? "City \(index + 1)" : leg.name, color: Color(hex: trip.colorHex(of: leg)),
+                                    selected: city?.id == leg.id) { mapCity = leg.id }
+                        }
+                    }
+                }
+                .sensoryFeedback(.selection, trigger: mapCity)
+            }
+        }
+    }
+
+    private func mapChip(_ title: String, color: Color, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.snappy) { action() }
+        } label: {
+            HStack(spacing: 6) {
+                Circle().fill(selected ? .white : color).frame(width: 8, height: 8)
+                Text(title).font(.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(selected ? .white : Theme.text)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(selected ? AnyShapeStyle(color.gradient) : AnyShapeStyle(Theme.card), in: Capsule())
+            .overlay(Capsule().strokeBorder(selected ? .clear : Theme.border))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func header(_ trip: Trip, dayCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if !trip.destination.isEmpty {
@@ -506,7 +555,7 @@ struct TripDetailView: View {
     private func legsBar(_ trip: Trip, collapsed: Set<String>) -> some View {
         let allCollapsed = trip.legs.allSatisfy { collapsed.contains($0.id) }
         return HStack {
-            Label("\(trip.legs.count) stop\(trip.legs.count == 1 ? "" : "s")", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+            Label("\(trip.legs.count) cit\(trip.legs.count == 1 ? "y" : "ies")", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
             Spacer()
             Button {
