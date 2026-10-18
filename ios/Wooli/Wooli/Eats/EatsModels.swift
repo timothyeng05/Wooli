@@ -59,6 +59,32 @@ struct EatsPlace: Codable, Identifiable, Hashable {
                       sentiment: sentiment, rank: rank)
     }
 
+    /// The first line of your notes — the cuisine, for places from Beli.
+    /// Not a link (places saved from a reel keep its URL there).
+    var cuisine: String? {
+        guard let line = notes.split(separator: "\n").first?.trimmingCharacters(in: .whitespaces),
+              !line.isEmpty, !line.hasPrefix("http") else { return nil }
+        return line
+    }
+
+    /// The city from the address, for the City filter: the last part that
+    /// isn't a country, a state code or a postcode ("Old Montreal, Montreal,
+    /// QC, Canada" → Montreal; "Asakusa, Tokyo, Japan" → Tokyo).
+    var city: String? {
+        var parts = address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        while parts.count > 1, let last = parts.last, Self.isRegion(last) { parts.removeLast() }
+        guard let city = parts.last, !city.contains(where: \.isNumber) else { return nil }
+        return city
+    }
+
+    private static let countries: Set<String> = Set(Locale.Region.isoRegions.compactMap {
+        Locale(identifier: "en_US").localizedString(forRegionCode: $0.identifier)
+    }).union(["USA", "UK", "UAE"])
+
+    private static func isRegion(_ part: String) -> Bool {
+        part.contains(where: \.isNumber) || (part.count <= 3 && part == part.uppercased()) || countries.contains(part)
+    }
+
     /// Same restaurant on two lists: Apple Maps place ID, or same name within 150 m.
     func isSamePlace(as other: EatsPlace) -> Bool {
         if !mapItemID.isEmpty && mapItemID == other.mapItemID { return true }

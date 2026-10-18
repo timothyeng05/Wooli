@@ -220,8 +220,23 @@ struct EatsListView: View {
     @State private var detail: EatsPlace?
     @State private var preparingShare = false
     @State private var showAllWaiting = false
-    @State private var showAllWishes = false
     @State private var confirmSkipAll = false
+    @State private var tab = Tab.been
+    @State private var sort = Sort.score
+    @State private var city: String?
+    @State private var cuisine: String?
+    @State private var searching = false
+    @State private var query = ""
+
+    enum Tab: String, CaseIterable, Identifiable {
+        case been = "Been", wantToTry = "Want to Try"
+        var id: String { rawValue }
+    }
+
+    enum Sort: String, CaseIterable, Identifiable {
+        case score = "Score", recent = "Recent", name = "A–Z"
+        var id: String { rawValue }
+    }
 
     enum RankRequest: Identifiable {
         case tripItem(TripItem)
@@ -240,25 +255,32 @@ struct EatsListView: View {
         let scores = EatsRanking.scores(book.mine.map(\.candidate))
         let ordered = EatsRanking.ordered(mine.map(\.candidate)).compactMap { c in mine.first { $0.id == c.id } }
         let waiting = EatsRanking.toRank(entries: book.mine).filter { !skipped.contains($0.id) && (tripID == nil || $0.tripID == tripID) }
+        let pool = tab == .been ? ordered : book.wishlist
+        let shown = sorted(filtered(pool))
 
         Group {
             if showMap {
-                EatsMap(places: ordered, scores: scores) { detail = $0 }
+                EatsMap(places: sorted(filtered(ordered)), scores: scores) { detail = $0 }
             } else {
-                list(ordered, waiting: waiting, scores: scores)
+                VStack(spacing: 0) {
+                    header(pool)
+                    list(shown, total: pool.count, waiting: waiting, scores: scores)
+                }
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button { withAnimation(.snappy) { showMap.toggle() } } label: {
+                Label(showMap ? "View List" : "View Map", systemImage: showMap ? "list.bullet" : "map")
+                    .font(.headline).foregroundStyle(.white)
+                    .padding(.horizontal, 20).padding(.vertical, 14)
+                    .background(PlaceActionBar.ink, in: Capsule())
+                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+            }
+            .padding(20)
         }
         .navigationTitle(tripID == nil ? "Eats" : "What we ate")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $showMap) {
-                    Text("List").tag(false)
-                    Text("Map").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Add a place", systemImage: "plus") { adding = true }
             }
@@ -292,129 +314,261 @@ struct EatsListView: View {
         }
     }
 
-    private func list(_ ordered: [EatsPlace], waiting: [TripItem], scores: [String: Double]) -> some View {
-        List {
+    // MARK: Header
+
+    /// Beli's top: Been / Want to Try tabs, filter chips, then sort and search.
+    private func header(_ pool: [EatsPlace]) -> some View {
+        let cities = Set(pool.compactMap(\.city)).sorted()
+        let cuisines = Set(pool.compactMap(\.cuisine)).sorted()
+        return VStack(alignment: .leading, spacing: 14) {
             if tripID == nil {
-                Section {
-                    friendsStrip
-                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                } header: {
-                    Text("Friends")
-                } footer: {
-                    if book.friends.isEmpty {
-                        Text("Share your list with friends and ask them to share theirs back — you'll see each other's rankings.")
-                    }
-                }
-            }
-
-            if !waiting.isEmpty {
-                Section {
-                    ForEach(showAllWaiting ? waiting : Array(waiting.prefix(3))) { item in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.rankCandidate.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
-                                Text(item.rankCandidate.subtitle).font(.caption).foregroundStyle(Theme.textSecondary)
+                HStack(spacing: 28) {
+                    ForEach(Tab.allCases) { t in
+                        Button {
+                            tab = t
+                            city = nil
+                            cuisine = nil
+                        } label: {
+                            VStack(spacing: 8) {
+                                Text(t == .wantToTry && !book.wishlist.isEmpty ? "\(t.rawValue) · \(book.wishlist.count)" : t.rawValue)
+                                    .font(.headline).foregroundStyle(tab == t ? Theme.text : Theme.textTertiary)
+                                Rectangle().fill(tab == t ? Theme.text : .clear).frame(height: 3)
                             }
-                            Spacer(minLength: 8)
-                            Button("Rank") { ranking = .tripItem(item) }
-                                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.small)
-                        }
-                        .swipeActions {
-                            Button("Skip") {
-                                EatsRanking.skip([item.id])
-                                skipped.insert(item.id)
-                            }
-                        }
-                    }
-                    if waiting.count > 3 {
-                        Button(showAllWaiting ? "Show fewer" : "Show all \(waiting.count)") {
-                            withAnimation(.snappy) { showAllWaiting.toggle() }
-                        }
-                        .font(.subheadline.weight(.medium))
-                    }
-                } header: {
-                    HStack {
-                        Text("To rank · \(waiting.count)")
-                        Spacer()
-                        Button("Skip all") { confirmSkipAll = true }
-                            .font(.footnote.weight(.semibold)).textCase(nil)
-                    }
-                } footer: {
-                    Text("Restaurants from your trips. Swipe to skip one.")
-                }
-                .confirmationDialog("Skip all \(waiting.count)?", isPresented: $confirmSkipAll, titleVisibility: .visible) {
-                    Button("Skip all", role: .destructive) {
-                        EatsRanking.skip(waiting.map(\.id))
-                        skipped.formUnion(waiting.map(\.id))
-                    }
-                } message: {
-                    Text("They won't show up to rank again. You can still add any place with +.")
-                }
-            }
-
-            if tripID == nil && !book.wishlist.isEmpty {
-                Section {
-                    ForEach(showAllWishes ? book.wishlist : Array(book.wishlist.prefix(3))) { wish in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(wish.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
-                                if !wish.address.isEmpty {
-                                    Text(wish.address).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 8)
-                            if let spot = wish.tripPlace {
-                                Button("Been") { ranking = .place(spot) }
-                                    .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
-                            }
-                        }
-                        .contextMenu {
-                            if let url = wish.tripPlace?.mapsURL {
-                                Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
-                            }
-                            if let reel = URL(string: wish.notes), SharedPlaceHandoff.isInstagramPost(reel) {
-                                Link(destination: reel) { Label("Watch the reel", systemImage: "play.rectangle") }
-                            }
-                        }
-                        .swipeActions {
-                            Button("Remove", role: .destructive) { book.removeFromWishlist(wish) }
-                        }
-                    }
-                    if book.wishlist.count > 3 {
-                        Button(showAllWishes ? "Show fewer" : "Show all \(book.wishlist.count)") {
-                            withAnimation(.snappy) { showAllWishes.toggle() }
-                        }
-                        .font(.subheadline.weight(.medium))
-                    }
-                } header: {
-                    Text("Want to try · \(book.wishlist.count)")
-                } footer: {
-                    Text("Saved from Apple Maps and Instagram. Tap Been once you've gone to rank it.")
-                }
-            }
-
-            if ordered.isEmpty && waiting.isEmpty && (tripID != nil || book.wishlist.isEmpty) {
-                ContentUnavailableView {
-                    Label(tripID == nil ? "Start your list" : "Nothing ranked yet", systemImage: "fork.knife")
-                } description: {
-                    Text(tripID == nil ? "Add places you've eaten and rank them against each other. Meals from your trips show up here too."
-                                       : "Meals from this trip show up here once their day starts.")
-                } actions: {
-                    Button("Add a place") { adding = true }.buttonStyle(.borderedProminent)
-                }
-            }
-
-            if !ordered.isEmpty {
-                Section(tripID == nil ? "Your list" : "Ranked") {
-                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, place in
-                        Button { detail = place } label: {
-                            EatsPlaceRow(place: place, index: index + 1, score: scores[place.id],
-                                         subtitle: subtitle(place), friends: book.friendScores(for: place).map(\.friend))
+                            .fixedSize()
                         }
                         .buttonStyle(.plain)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .bottom) { Divider() }
             }
+            if cities.count > 1 || cuisines.count > 1 || city != nil || cuisine != nil {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        if city != nil || cuisine != nil {
+                            Button("Clear", systemImage: "xmark") {
+                                city = nil
+                                cuisine = nil
+                            }
+                            .labelStyle(.iconOnly)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                            .frame(width: 36, height: 36)
+                            .overlay(Circle().strokeBorder(Theme.textTertiary, lineWidth: 1.2))
+                        }
+                        if cities.count > 1 || city != nil { chip("City", value: $city, options: cities) }
+                        if cuisines.count > 1 || cuisine != nil { chip("Cuisine", value: $cuisine, options: cuisines) }
+                    }
+                    .padding(.vertical, 1)
+                }
+                .scrollClipDisabled()
+            }
+            HStack {
+                Menu {
+                    Picker("Sort", selection: $sort) {
+                        ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                } label: {
+                    Label(sort.rawValue, systemImage: "arrow.up.arrow.down")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(PlaceActionBar.ink)
+                }
+                Spacer()
+                Button(searching ? "Done" : "Search", systemImage: "magnifyingglass") {
+                    withAnimation(.snappy) {
+                        searching.toggle()
+                        if !searching { query = "" }
+                    }
+                }
+                .labelStyle(.iconOnly).font(.title3).foregroundStyle(PlaceActionBar.ink)
+            }
+            if searching {
+                TextField("Search your list", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background(Theme.card)
+    }
+
+    /// An outlined pill that turns solid once a value is picked.
+    private func chip(_ title: String, value: Binding<String?>, options: [String]) -> some View {
+        Menu {
+            Button("Any \(title.lowercased())") { value.wrappedValue = nil }
+            ForEach(options, id: \.self) { option in
+                Button(option) { value.wrappedValue = option }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(value.wrappedValue ?? title).lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption.weight(.bold))
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(value.wrappedValue == nil ? Theme.text : .white)
+            .padding(.horizontal, 14).frame(height: 36)
+            .background(Capsule().fill(value.wrappedValue == nil ? Color.clear : PlaceActionBar.ink))
+            .overlay(Capsule().strokeBorder(value.wrappedValue == nil ? Theme.textTertiary : PlaceActionBar.ink, lineWidth: 1.2))
+        }
+    }
+
+    private func filtered(_ places: [EatsPlace]) -> [EatsPlace] {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        return places.filter { place in
+            (city == nil || place.city == city) && (cuisine == nil || place.cuisine == cuisine)
+                && (text.isEmpty || place.name.localizedCaseInsensitiveContains(text) || place.address.localizedCaseInsensitiveContains(text)
+                    || (place.cuisine?.localizedCaseInsensitiveContains(text) ?? false))
+        }
+    }
+
+    /// Score keeps the list's own order (best first; wishes in the order saved).
+    private func sorted(_ places: [EatsPlace]) -> [EatsPlace] {
+        switch sort {
+        case .score: places
+        case .recent: places.sorted { ($0.visitedDay, $0.createdAt) > ($1.visitedDay, $1.createdAt) }
+        case .name: places.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+    }
+
+    // MARK: List
+
+    private func list(_ shown: [EatsPlace], total: Int, waiting: [TripItem], scores: [String: Double]) -> some View {
+        List {
+            if tab == .been {
+                if tripID == nil {
+                    Section {
+                        friendsStrip
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                    } header: {
+                        Text("Friends")
+                    } footer: {
+                        if book.friends.isEmpty {
+                            Text("Share your list with friends and ask them to share theirs back — you'll see each other's rankings.")
+                        }
+                    }
+                }
+                if !waiting.isEmpty { toRank(waiting) }
+            }
+
+            if total == 0 && (tab == .wantToTry || waiting.isEmpty) {
+                emptyState
+            } else if shown.isEmpty && total > 0 {
+                ContentUnavailableView {
+                    Label("No matches", systemImage: "line.3.horizontal.decrease.circle")
+                } actions: {
+                    Button("Clear filters") {
+                        city = nil
+                        cuisine = nil
+                        query = ""
+                    }
+                }
+            }
+
+            Section {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, place in
+                    if tab == .been {
+                        Button { detail = place } label: {
+                            EatsPlaceRow(place: place, index: sort == .score ? index + 1 : nil, score: scores[place.id],
+                                         subtitle: subtitle(place), friends: book.friendScores(for: place).map(\.friend))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        wishRow(place)
+                    }
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listSectionSeparator(.hidden, edges: .top)
+
+            // Room to scroll the last row out from under View Map.
+            Color.clear.frame(height: 72).listRowSeparator(.hidden)
+        }
+        .listStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if tab == .wantToTry {
+            ContentUnavailableView("Nothing saved yet", systemImage: "bookmark",
+                                   description: Text("Share a place from Apple Maps or an Instagram reel to Wooli and pick Want to try."))
+        } else {
+            ContentUnavailableView {
+                Label(tripID == nil ? "Start your list" : "Nothing ranked yet", systemImage: "fork.knife")
+            } description: {
+                Text(tripID == nil ? "Add places you've eaten and rank them against each other. Meals from your trips show up here too."
+                                   : "Meals from this trip show up here once their day starts.")
+            } actions: {
+                Button("Add a place") { adding = true }.buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func toRank(_ waiting: [TripItem]) -> some View {
+        Section {
+            ForEach(showAllWaiting ? waiting : Array(waiting.prefix(3))) { item in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.rankCandidate.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                        Text(item.rankCandidate.subtitle).font(.caption).foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Rank") { ranking = .tripItem(item) }
+                        .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.small)
+                }
+                .swipeActions {
+                    Button("Skip") {
+                        EatsRanking.skip([item.id])
+                        skipped.insert(item.id)
+                    }
+                }
+            }
+            if waiting.count > 3 {
+                Button(showAllWaiting ? "Show fewer" : "Show all \(waiting.count)") {
+                    withAnimation(.snappy) { showAllWaiting.toggle() }
+                }
+                .font(.subheadline.weight(.medium))
+            }
+        } header: {
+            HStack {
+                Text("To rank · \(waiting.count)")
+                Spacer()
+                Button("Skip all") { confirmSkipAll = true }
+                    .font(.footnote.weight(.semibold)).textCase(nil)
+            }
+        } footer: {
+            Text("Restaurants from your trips. Swipe to skip one.")
+        }
+        .confirmationDialog("Skip all \(waiting.count)?", isPresented: $confirmSkipAll, titleVisibility: .visible) {
+            Button("Skip all", role: .destructive) {
+                EatsRanking.skip(waiting.map(\.id))
+                skipped.formUnion(waiting.map(\.id))
+            }
+        } message: {
+            Text("They won't show up to rank again. You can still add any place with +.")
+        }
+    }
+
+    /// A saved place: same row as the list, with Been to rank it.
+    private func wishRow(_ wish: EatsPlace) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            EatsPlaceRow(place: wish, index: nil, score: nil,
+                         subtitle: "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))")
+            if let spot = wish.tripPlace {
+                Button("Been") { ranking = .place(spot) }
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(PlaceActionBar.ink)
+            }
+        }
+        .contextMenu {
+            if let url = wish.tripPlace?.mapsURL {
+                Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+            }
+            if let reel = URL(string: wish.notes), SharedPlaceHandoff.isInstagramPost(reel) {
+                Link(destination: reel) { Label("Watch the reel", systemImage: "play.rectangle") }
+            }
+        }
+        .swipeActions {
+            Button("Remove", role: .destructive) { book.removeFromWishlist(wish) }
         }
     }
 
@@ -497,33 +651,32 @@ struct EatsListView: View {
     }
 }
 
-/// One ranked place: position, name, who else has been, score.
+/// One place, laid out like Beli's lists: "1. Name", cuisine, where it
+/// is, then a quiet line (date, trip); who else has been and the score on
+/// the right.
 struct EatsPlaceRow: View {
     let place: EatsPlace
-    let index: Int
+    /// Position on the list; nil when the order isn't by score.
+    let index: Int?
     let score: Double?
     let subtitle: String
     var friends: [EatsFriend] = []
 
-    /// The first line of your notes — the cuisine, for places from Beli.
-    private var tagline: String? {
-        place.notes.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(index). \(place.name)").font(.headline).foregroundStyle(Theme.text).lineLimit(2)
-                if let tagline {
-                    Text(tagline).font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(index.map { "\($0). \(place.name)" } ?? place.name)
+                    .font(.title3.weight(.bold)).foregroundStyle(Theme.text).lineLimit(2)
+                if let cuisine = place.cuisine {
+                    Text(cuisine).font(.subheadline).foregroundStyle(Theme.text).lineLimit(1)
                 }
                 if !place.address.isEmpty {
                     Label(place.address, systemImage: "fork.knife")
                         .labelStyle(.titleAndIcon).imageScale(.small)
-                        .font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        .font(.subheadline).foregroundStyle(Theme.text).lineLimit(1)
                 }
                 if !subtitle.isEmpty {
-                    Text(subtitle).font(.caption).foregroundStyle(Theme.textTertiary).lineLimit(1).padding(.top, 2)
+                    Text(subtitle).font(.subheadline).foregroundStyle(Theme.textTertiary).lineLimit(1).padding(.top, 14)
                 }
             }
             Spacer(minLength: 8)
@@ -533,9 +686,10 @@ struct EatsPlaceRow: View {
                     FriendAvatar(friend: friend, size: 22).overlay(Circle().stroke(Theme.card, lineWidth: 2))
                 }
             }
-            if let score { MealScoreBadge(score: score, size: 46) }
+            .padding(.top, 14)
+            if let score { MealScoreBadge(score: score, size: 50) }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 16)
         .contentShape(Rectangle())
     }
 }
