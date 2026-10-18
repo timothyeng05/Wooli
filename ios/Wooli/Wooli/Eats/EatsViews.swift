@@ -459,9 +459,10 @@ struct EatsMap: View {
     let places: [EatsPlace]
     let scores: [String: Double]
     var onSelect: ((EatsPlace) -> Void)? = nil
+    @State private var position: MapCameraPosition = .automatic
 
     var body: some View {
-        Map(initialPosition: .automatic) {
+        Map(position: $position) {
             ForEach(places.filter { $0.coordinate != nil }) { place in
                 Annotation(place.name, coordinate: place.coordinate!) {
                     Button { onSelect?(place) } label: {
@@ -474,6 +475,7 @@ struct EatsMap: View {
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .overlay(alignment: .topTrailing) { RecenterButton(position: $position) }
         .overlay {
             if !places.contains(where: { $0.coordinate != nil }) {
                 ContentUnavailableView("No places on the map yet", systemImage: "map",

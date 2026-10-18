@@ -1171,9 +1171,10 @@ struct TripMap: View {
 
     let stops: [Stop]
     var routes: [MKRoute] = []
+    @State private var position: MapCameraPosition = .automatic
 
     var body: some View {
-        Map(initialPosition: .automatic) {
+        Map(position: $position) {
             ForEach(routes, id: \.self) { route in
                 MapPolyline(route.polyline).stroke(Theme.brand.opacity(0.7), lineWidth: 4)
             }
@@ -1191,6 +1192,29 @@ struct TripMap: View {
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .overlay(alignment: .topTrailing) { RecenterButton(position: $position) }
+    }
+}
+
+/// Shows once you've panned or zoomed the map; flies back to fit every pin.
+struct RecenterButton: View {
+    @Binding var position: MapCameraPosition
+
+    var body: some View {
+        if position.positionedByUser {
+            Button {
+                withAnimation(.easeInOut(duration: 0.4)) { position = .automatic }
+            } label: {
+                Image(systemName: "scope")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.brand)
+                    .frame(width: 36, height: 36)
+                    .background(.regularMaterial, in: Circle())
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            }
+            .accessibilityLabel("Re-center map")
+            .padding(10)
+            .transition(.scale.combined(with: .opacity))
+        }
     }
 }
 

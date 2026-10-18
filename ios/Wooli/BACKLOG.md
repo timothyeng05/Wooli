@@ -230,6 +230,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — Re-center button (`RecenterButton`) on the trip map, day map and Eats maps: appears once you pan or zoom, taps back to fit every pin. Not built.
+
 - **2026-10-18 · Claude** — Trips say **Cities** instead of legs/stops everywhere on screen ("4 cities", "Add a city", "City 2", the new-trip step); code keeps `TripLeg`. The trip map gets chips — All + each city in its color — that zoom the map to that city's places ("No places in Kyoto yet" when empty). Not built.
 
 - **2026-10-18 · Claude** — Eats friends: Eats moved off SwiftData (can't share across Apple Accounts) to CloudKit directly — your places live in an "eats" zone in your private database (`EatsBook`, JSON cache like trips), riding on `TripStore`'s two sync engines (one engine per database). **Share my list** (Friends row → Invite) makes a read-only, invite-only zone share via the system share sheet (`TripSharingPresenter` generalized); a friend's accepted list appears under Friends, opens as a ranked list/map with "You: 8.4" where you've both been, and can be unfollowed. Your rows show avatars of friends who ranked the same place (Apple Maps ID, or same name within 150 m); place detail lists their scores. Trips: "Friends ate here" card — friends' places within 40 km of the trip's destination, stops (Apple Maps lookup) or planned places, best first, with "+ Ideas". **Not built; sharing between two Apple Accounts can only be tested on two real devices** (TestFlight + CloudKit schema in Production: new `EatsPlace` record type).
