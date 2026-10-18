@@ -109,7 +109,9 @@
       "Bash(awk -F, '$1==\"\" {c++} END{print c+0 \" empty\"}')",
       "Bash(cd *)",
       "Bash(vercel projects *)",
-      "Bash(vercel --prod --yes)"
+      "Bash(vercel --prod --yes)",
+      "Bash(python3 -I -)",
+      "Bash(xcodebuild -project Wooli.xcodeproj -scheme Wooli -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO)"
     ],
     "deny": [
       "Read(//Users/timothyeng/Desktop/Wooli/.env.local)",
