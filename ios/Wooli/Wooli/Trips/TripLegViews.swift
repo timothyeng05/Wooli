@@ -195,6 +195,11 @@ struct TripLegHeader: View {
                     }
                 }
                 Text(summary).font(.caption).foregroundStyle(Theme.textSecondary)
+                if isCollapsed {
+                    // Folded cities keep their plans; say so, so it doesn't read as empty.
+                    Label("Folded · tap to show its days", systemImage: "eye.slash")
+                        .font(.caption.weight(.semibold)).foregroundStyle(color)
+                }
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.down")
