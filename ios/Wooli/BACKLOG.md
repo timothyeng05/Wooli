@@ -231,6 +231,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-18 · Claude** — Activity and stay place page (`Trips/TripPlaceDetail.swift`): an activity or stay with a place opens a Beli-style page from the itinerary — map header (tap for Apple's place card), serif name, type chip + "Day 3 · Tue, Jun 2 · 2:00 PM", place and address, Website/Call/Directions/Photos/Google Maps, a "What we did" notes box (the item's notes, shared with the trip), Edit plan and Remove from trip. Map header, action pills and rows moved to `Views/PlaceDetailParts.swift`, shared with the Eats place page. Not tap-tested.
+
 - **2026-10-18 · Claude** — Trip plan types: Activity's icon is a walking figure (was a star); Note is no longer offered when adding or editing (existing notes still open and keep their type).
 
 - **2026-10-18 · Claude** — **Sync fix:** records fetched from iCloud no longer overwrite a local copy that has an edit still waiting to upload (only the server's change tag is taken, so the upload wins). Switching CloudKit environments (Xcode build after TestFlight) re-downloaded the development copy of Japan + Seoul from Oct 11 and silently undid its 11 flight/train tickets; restored them. Japan + Seoul now has a time on every plan (81 filled in, in the original web order: counted back from the next timed plan by duration, clock times read from titles, meal/lunch/dinner/sunset wording, check-in 3 PM or on arrival).

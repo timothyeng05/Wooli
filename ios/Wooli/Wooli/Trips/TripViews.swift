@@ -330,6 +330,8 @@ struct TripDetailView: View {
     @State private var editingItem: TripItem?
     /// A ranked meal opened on its Eats page.
     @State private var eatsMeal: TripItem?
+    /// An activity or stay with a place, opened on its place page.
+    @State private var placeItem: TripItem?
     @State private var editingTrip: Trip?
     @State private var dayMap: String?
     @State private var preparingShare = false
@@ -426,6 +428,7 @@ struct TripDetailView: View {
             }
         }
         .sheet(item: $editingItem) { TripItemEditor(item: $0, trip: trip) }
+        .sheet(item: $placeItem) { TripPlaceDetail(item: $0, trip: trip) }
         .sheet(item: $eatsMeal) { meal in
             if let place = eatsEntry(meal) { EatsPlaceDetail(place: place, tripItem: meal) }
         }
@@ -704,8 +707,17 @@ struct TripDetailView: View {
     }
 
     private func itemRow(_ item: TripItem, trip: Trip) -> some View {
-        // A meal that's on your Eats list opens its Eats page; anything else, the editor.
-        Button { if eatsEntry(item) != nil { eatsMeal = item } else { editingItem = item } } label: {
+        // A meal on your Eats list opens its Eats page; an activity or stay
+        // with a place, its place page; anything else, the editor.
+        Button {
+            if eatsEntry(item) != nil {
+                eatsMeal = item
+            } else if item.place != nil && (item.kind == .activity || item.kind == .stay) {
+                placeItem = item
+            } else {
+                editingItem = item
+            }
+        } label: {
             TripItemRow(item: item, score: eatsScore(item))
         }
             .buttonStyle(.plain)

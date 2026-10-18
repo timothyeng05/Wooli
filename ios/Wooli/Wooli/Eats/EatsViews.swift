@@ -693,23 +693,10 @@ struct EatsPlaceDetail: View {
 
     // MARK: Parts
 
-    /// The map, fading into the page so the name sits over it.
-    @ViewBuilder
     private var hero: some View {
-        if let coordinate = place.coordinate {
-            Map(initialPosition: .camera(MapCamera(centerCoordinate: coordinate, distance: 1600)), interactionModes: []) {
-                Marker(place.name, coordinate: coordinate).tint(MealScoreBadge.ink(EatsRanking.scores(book.mine.map(\.candidate))[place.id] ?? 7))
-            }
-            .mapStyle(.standard(pointsOfInterest: .excludingAll))
-            .allowsHitTesting(false)
-            .frame(height: 280)
-            .overlay(alignment: .bottom) {
-                LinearGradient(colors: [Theme.card.opacity(0), Theme.card], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 110)
-            }
-            .onTapGesture { if mapItem != nil { showingListing = true } }
-        } else {
-            Color.clear.frame(height: 110)
+        PlaceHeroMap(coordinate: place.coordinate, name: place.name,
+                     tint: MealScoreBadge.ink(EatsRanking.scores(book.mine.map(\.candidate))[place.id] ?? 7)) {
+            if mapItem != nil { showingListing = true }
         }
     }
 
@@ -720,7 +707,7 @@ struct EatsPlaceDetail: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(3).minimumScaleFactor(0.7)
                 .onLongPressGesture { renaming = true }
-                .padding(.top, place.coordinate == nil ? 0 : -44)
+                .padding(.top, place.coordinate == nil ? 0 : -PlaceHeroMap.titleOverlap)
             HStack(spacing: 10) {
                 Text(score.formatted(.number.precision(.fractionLength(1))))
                     .font(.headline.weight(.bold)).monospacedDigit().foregroundStyle(.white)
@@ -733,7 +720,7 @@ struct EatsPlaceDetail: View {
                     .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.secondary)
             }
             if let tagline {
-                Text(tagline).font(.headline).foregroundStyle(Color(hex: "#0f5c66"))
+                Text(tagline).font(.headline).foregroundStyle(PlaceActionBar.ink)
             }
             if !place.address.isEmpty {
                 Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
@@ -741,36 +728,8 @@ struct EatsPlaceDetail: View {
         }
     }
 
-    /// Website, call, directions and photos — from Apple's listing when there is one.
     private var actions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                if let url = mapItem?.url { pill("Website", systemImage: "globe") { openURL(url) } }
-                if let phone = mapItem?.phoneNumber, let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
-                    pill("Call", systemImage: "phone.fill") { openURL(url) }
-                }
-                if let mapItem {
-                    pill("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill") {
-                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault])
-                    }
-                    pill("Photos & info", systemImage: "photo.on.rectangle") { showingListing = true }
-                } else if let url = place.tripPlace?.mapsURL {
-                    pill("Apple Maps", systemImage: "map.fill") { openURL(url) }
-                }
-                if let url = place.tripPlace?.googleMapsURL { pill("Google Maps", systemImage: "g.circle.fill") { openURL(url) } }
-            }
-        }
-        .scrollClipDisabled()
-    }
-
-    private func pill(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: "#0f5c66"))
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .overlay(Capsule().strokeBorder(Color(hex: "#0f5c66"), lineWidth: 1.5))
-        }
-        .buttonStyle(.plain)
+        PlaceActionBar(place: place.tripPlace, mapItem: mapItem) { showingListing = true }
     }
 
     private func scores(score: Double, position: Int, count: Int) -> some View {
@@ -797,7 +756,7 @@ struct EatsPlaceDetail: View {
                 .overlay(alignment: .bottomTrailing) {
                     Text(badge).font(.caption2.weight(.bold)).foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(Color(hex: "#0f5c66"), in: Capsule())
+                        .background(PlaceActionBar.ink, in: Capsule())
                         .offset(x: 6, y: 4)
                 }
             VStack(alignment: .leading, spacing: 2) {
@@ -811,13 +770,13 @@ struct EatsPlaceDetail: View {
     private var notesList: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Your notes").font(.title3.weight(.bold)).foregroundStyle(Theme.text).padding(.bottom, 6)
-            noteRow("calendar") {
+            PlaceDetailRow(systemImage: "calendar") {
                 DatePicker("Visit date", selection: Binding(get: { DayKey.date(place.visitedDay) },
                                                              set: { place.visitedDay = DayKey.key($0) }),
                            displayedComponents: .date)
             }
             if let item = tripItem, let trip = TripStore.shared.trip(item.tripID) {
-                noteRow("suitcase") {
+                PlaceDetailRow(systemImage: "suitcase") {
                     Button { editingPlan = TripStore.shared.items.first { $0.id == item.id } ?? item } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -833,13 +792,13 @@ struct EatsPlaceDetail: View {
                     .buttonStyle(.plain)
                 }
             } else if let trip = TripStore.shared.trip(place.tripID) {
-                noteRow("suitcase") { LabeledContent("Trip", value: trip.name) }
+                PlaceDetailRow(systemImage: "suitcase") { LabeledContent("Trip", value: trip.name) }
             }
-            noteRow("square.and.pencil") {
+            PlaceDetailRow(systemImage: "square.and.pencil") {
                 TextField("Add notes — what to order, who you went with", text: $place.notes, axis: .vertical)
                     .lineLimit(1...8).focused($editingNotes)
             }
-            noteRow("pencil.line") {
+            PlaceDetailRow(systemImage: "pencil.line") {
                 Button { renaming = true } label: {
                     HStack {
                         Text("Rename").foregroundStyle(Theme.text)
@@ -851,17 +810,6 @@ struct EatsPlaceDetail: View {
             }
             Text("Friends you share your list with can see your notes.")
                 .font(.caption).foregroundStyle(Theme.textTertiary).padding(.top, 8)
-        }
-    }
-
-    private func noteRow<Content: View>(_ systemImage: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
-                Image(systemName: systemImage).font(.title3).foregroundStyle(Theme.textSecondary).frame(width: 28)
-                content().font(.body)
-            }
-            .padding(.vertical, 14)
-            Divider()
         }
     }
 
