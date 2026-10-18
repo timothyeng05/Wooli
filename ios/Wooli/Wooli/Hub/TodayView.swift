@@ -254,9 +254,10 @@ private struct TripsTodayCard: View {
 // MARK: - Eats
 
 private struct EatsTodayCard: View {
-    @Query private var entries: [EatsEntry]
+    @State private var book = EatsBook.shared
 
     var body: some View {
+        let entries = book.mine
         let waiting = EatsRanking.toRank(entries: entries).count
         let best = EatsRanking.ordered(entries.map(\.candidate)).first
         if waiting > 0 {

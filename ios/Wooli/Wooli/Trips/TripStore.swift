@@ -7,6 +7,8 @@ import os
 /// offline) and synced with CloudKit by two `CKSyncEngine`s: one for trips
 /// you made (private database) and one for trips shared with you (shared
 /// database). Edits are saved locally first and sent when iCloud is reachable.
+/// The same engines carry Eats lists (`EatsBook`): anything in an "eats" zone
+/// is handed to it, since Apple recommends one sync engine per database.
 @MainActor
 @Observable
 final class TripStore: CKSyncEngineDelegate {
@@ -70,6 +72,7 @@ final class TripStore: CKSyncEngineDelegate {
         guard privateEngine == nil else { return }
         load()
         startEngines()
+        EatsBook.shared.start()
         if needsFullUpload { uploadEverythingMine() }
         importPendingFile()
         Task { await refreshAccountStatus() }
@@ -129,6 +132,7 @@ final class TripStore: CKSyncEngineDelegate {
         }
         needsFullUpload = true
         persist()
+        EatsBook.shared.resetSync()
     }
 
     /// Copies the local trips file aside (Application Support/Trips/backups)
@@ -152,6 +156,7 @@ final class TripStore: CKSyncEngineDelegate {
             privateEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)]
                 + items(in: trip.id).map { .saveRecord(CKRecord.ID(recordName: $0.id, zoneID: trip.zoneID)) })
         }
+        queueEats(saving: EatsBook.shared.allMyRecordIDs)
     }
 
     private func persist() {
@@ -346,9 +351,42 @@ final class TripStore: CKSyncEngineDelegate {
             _ = try await container.accept(metadata)
             try await sharedEngine?.fetchChanges()
             if let tripID = Trip.tripID(from: metadata.share.recordID.zoneID) { tripToOpen = tripID }
+            if EatsBook.isEatsZone(metadata.share.recordID.zoneID) { EatsBook.shared.didAccept(metadata) }
         } catch {
-            lastError = "Couldn't join the trip: \(error.localizedDescription)"
+            lastError = "Couldn't accept the invite: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Eats
+
+    /// Queue changes to your Eats list (its zone is created on first save).
+    func queueEats(saving: [CKRecord.ID] = [], deleting: [CKRecord.ID] = []) {
+        guard let engine = privateEngine, !(saving.isEmpty && deleting.isEmpty) else { return }
+        if !saving.isEmpty { engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: EatsBook.myZoneID))]) }
+        engine.state.add(pendingRecordZoneChanges: saving.map { .saveRecord($0) } + deleting.map { .deleteRecord($0) })
+    }
+
+    /// Leave a zone someone shared with you (an Eats list you follow).
+    func leaveSharedZone(_ zoneID: CKRecordZone.ID) {
+        sharedEngine?.state.add(pendingDatabaseChanges: [.deleteZone(zoneID)])
+    }
+
+    /// The read-only share for your Eats list, created the first time.
+    func eatsShare() async throws -> CKShare {
+        let zoneID = EatsBook.myZoneID
+        let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+        do {
+            if let existing = try await container.privateCloudDatabase.record(for: shareID) as? CKShare { return existing }
+        } catch is CKError {
+            // No zone or share yet: create them below.
+        }
+        privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+        try await privateEngine?.sendChanges()
+        let share = CKShare(recordZoneID: zoneID)
+        share[CKShare.SystemFieldKey.title] = "My Eats list"
+        share.publicPermission = .none
+        _ = try await container.privateCloudDatabase.modifyRecords(saving: [share], deleting: [])
+        return share
     }
 
     // MARK: - CKSyncEngineDelegate
@@ -367,11 +405,16 @@ final class TripStore: CKSyncEngineDelegate {
             // A trip zone disappeared: the owner deleted it, or stopped sharing.
             for deletion in changes.deletions {
                 if let tripID = Trip.tripID(from: deletion.zoneID) { removeLocally(tripID: tripID) }
+                if EatsBook.isEatsZone(deletion.zoneID) { EatsBook.shared.removeZone(deletion.zoneID) }
             }
 
         case .fetchedRecordZoneChanges(let changes):
             for modification in changes.modifications { apply(modification.record) }
             for deletion in changes.deletions {
+                if EatsBook.isEatsZone(deletion.recordID.zoneID) {
+                    EatsBook.shared.removeRecord(deletion.recordID, isShare: deletion.recordType == CKRecord.SystemType.share)
+                    continue
+                }
                 guard let tripID = Trip.tripID(from: deletion.recordID.zoneID) else { continue }
                 if deletion.recordType == CKRecord.SystemType.share {
                     setShared(false, tripID: tripID)
@@ -411,6 +454,11 @@ final class TripStore: CKSyncEngineDelegate {
     // MARK: - Sync helpers
 
     private func record(for recordID: CKRecord.ID, engine: CKSyncEngine) -> CKRecord? {
+        if EatsBook.isEatsZone(recordID.zoneID) {
+            if let record = EatsBook.shared.record(for: recordID) { return record }
+            engine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID)])
+            return nil
+        }
         if let trip = trip(recordID.recordName) { return trip.record() }
         if let item = items.first(where: { $0.id == recordID.recordName }) { return item.record(in: recordID.zoneID) }
         // Deleted here since it was queued: nothing to send.
@@ -420,6 +468,10 @@ final class TripStore: CKSyncEngineDelegate {
 
     private func apply(_ record: CKRecord) {
         let zoneID = record.recordID.zoneID
+        if EatsBook.isEatsZone(zoneID) {
+            EatsBook.shared.apply(record)
+            return
+        }
         guard let tripID = Trip.tripID(from: zoneID) else { return }
         switch record.recordType {
         case Trip.recordType:
@@ -438,6 +490,10 @@ final class TripStore: CKSyncEngineDelegate {
     }
 
     private func storeSystemFields(of record: CKRecord) {
+        if EatsBook.isEatsZone(record.recordID.zoneID) {
+            EatsBook.shared.storeSystemFields(of: record)
+            return
+        }
         let fields = record.encodedSystemFields
         if let i = trips.firstIndex(where: { $0.id == record.recordID.recordName }) {
             trips[i].systemFields = fields
@@ -455,6 +511,11 @@ final class TripStore: CKSyncEngineDelegate {
             if let server = failure.error.serverRecord { storeSystemFields(of: server) }
             engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
         case .zoneNotFound:
+            if EatsBook.isEatsZone(recordID.zoneID) {
+                engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: recordID.zoneID))])
+                engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+                return
+            }
             guard let tripID = Trip.tripID(from: recordID.zoneID), let trip = trip(tripID) else { return }
             if trip.isMine {
                 engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
@@ -466,6 +527,7 @@ final class TripStore: CKSyncEngineDelegate {
             // Deleted on the server; saving again recreates it from scratch.
             if let i = trips.firstIndex(where: { $0.id == recordID.recordName }) { trips[i].systemFields = nil }
             if let i = items.firstIndex(where: { $0.id == recordID.recordName }) { items[i].systemFields = nil }
+            EatsBook.shared.clearSystemFields(recordID.recordName)
             engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
         case .permissionFailure:
             lastError = "You can view this trip but not edit it."
@@ -494,6 +556,7 @@ final class TripStore: CKSyncEngineDelegate {
             // delete — a mistaken "switch" (seen when a TestFlight build met
             // data from an Xcode build) wiped trips. Keep a copy first.
             backUpLocalTrips(reason: "account-switch")
+            EatsBook.shared.resetSync(keepMine: false)
             trips = []
             items = []
             privateState = nil

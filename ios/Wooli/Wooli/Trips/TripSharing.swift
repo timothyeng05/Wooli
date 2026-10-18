@@ -1,18 +1,29 @@
 import UIKit
 import CloudKit
 
-/// Apple's share sheet for a trip: invite people through Messages, Mail or
-/// a link, choose who can edit, and see or remove participants. Presented
-/// from UIKit — `UICloudSharingController` misbehaves inside a SwiftUI sheet.
+/// Apple's share sheet for a trip or an Eats list: invite people through
+/// Messages, Mail or a link, choose permissions, and see or remove
+/// participants. Presented from UIKit — `UICloudSharingController`
+/// misbehaves inside a SwiftUI sheet.
 @MainActor
 enum TripSharingPresenter {
     /// The controller only holds its delegate weakly.
     private static var delegate: Delegate?
 
     static func present(share: CKShare, container: CKContainer, trip: Trip) {
+        let tripID = trip.id
+        present(share: share, container: container, title: trip.name,
+                permissions: [.allowReadWrite, .allowReadOnly, .allowPrivate, .allowPublic]) {
+            TripStore.shared.setShared(false, tripID: tripID)
+        }
+    }
+
+    static func present(share: CKShare, container: CKContainer, title: String,
+                        permissions: UICloudSharingController.PermissionOptions,
+                        onStopSharing: @escaping @MainActor () -> Void) {
         let controller = UICloudSharingController(share: share, container: container)
-        controller.availablePermissions = [.allowReadWrite, .allowReadOnly, .allowPrivate, .allowPublic]
-        let delegate = Delegate(tripID: trip.id, tripName: trip.name)
+        controller.availablePermissions = permissions
+        let delegate = Delegate(title: title, onStopSharing: onStopSharing)
         self.delegate = delegate
         controller.delegate = delegate
 
@@ -24,23 +35,23 @@ enum TripSharingPresenter {
     }
 
     final class Delegate: NSObject, UICloudSharingControllerDelegate {
-        let tripID: String
-        let tripName: String
+        let title: String
+        let onStopSharing: @MainActor () -> Void
 
-        init(tripID: String, tripName: String) {
-            self.tripID = tripID
-            self.tripName = tripName
+        init(title: String, onStopSharing: @escaping @MainActor () -> Void) {
+            self.title = title
+            self.onStopSharing = onStopSharing
         }
 
-        func itemTitle(for csc: UICloudSharingController) -> String? { tripName }
+        func itemTitle(for csc: UICloudSharingController) -> String? { title }
 
         func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) {
             Task { @MainActor in TripStore.shared.lastError = "Couldn't update sharing: \(error.localizedDescription)" }
         }
 
         func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
-            let tripID = tripID
-            Task { @MainActor in TripStore.shared.setShared(false, tripID: tripID) }
+            let onStopSharing = onStopSharing
+            Task { @MainActor in onStopSharing() }
         }
     }
 }

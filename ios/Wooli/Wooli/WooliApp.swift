@@ -11,7 +11,7 @@ struct WooliApp: App {
     init() {
         let schema = Schema([LocalAccount.self, LocalTransaction.self, BudgetCategory.self, MerchantRule.self, BalanceSnapshot.self,
                              CategoryRule.self, TransactionRule.self, RecurringItem.self,
-                             PeriodEntry.self, Person.self, EatsEntry.self])
+                             PeriodEntry.self, Person.self])
         let configuration = ModelConfiguration(
             schema: schema,
             cloudKitDatabase: .private("iCloud.com.timothyeng.wooli")

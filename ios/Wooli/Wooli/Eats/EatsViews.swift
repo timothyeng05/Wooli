@@ -1,22 +1,6 @@
 import SwiftUI
-import SwiftData
 import MapKit
-
-// MARK: - Saving
-
-enum EatsStore {
-    /// Adds a ranked trip meal to Eats, linked back to its trip.
-    @MainActor
-    static func add(_ item: TripItem, sentiment: MealSentiment, rank: Double, context: ModelContext) {
-        let entry = EatsEntry(name: item.rankCandidate.title, place: item.place, visitedDay: item.day ?? DayKey.key(.now))
-        entry.tripID = item.tripID
-        entry.tripItemID = item.id
-        entry.sentiment = sentiment
-        entry.rank = rank
-        context.insert(entry)
-        try? context.save()
-    }
-}
+import CloudKit
 
 /// The score in a colored ring: green 7+, amber 4–6.9, red below.
 struct MealScoreBadge: View {
@@ -32,6 +16,24 @@ struct MealScoreBadge: View {
             .background(color.opacity(0.12), in: Circle())
             .overlay(Circle().strokeBorder(color, lineWidth: max(1.5, size * 0.07)))
             .accessibilityLabel("Score \(score.formatted(.number.precision(.fractionLength(1)))) out of 10")
+    }
+}
+
+/// A friend's initials in a colored circle.
+struct FriendAvatar: View {
+    let friend: EatsFriend
+    var size: CGFloat = 36
+
+    private static let colors = ["#6366f1", "#0ea5e9", "#14b8a6", "#f59e0b", "#ec4899", "#8b5cf6"]
+
+    var body: some View {
+        // A stable pick (String.hashValue changes every launch).
+        let hex = Self.colors[friend.id.unicodeScalars.reduce(0) { $0 + Int($1.value) } % Self.colors.count]
+        Text(friend.initials.isEmpty ? "?" : friend.initials)
+            .font(.system(size: size * 0.4, weight: .bold, design: .rounded)).foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Color(hex: hex).gradient, in: Circle())
+            .accessibilityLabel(friend.name)
     }
 }
 
@@ -195,19 +197,19 @@ struct RankFlow: View {
 // MARK: - Your list
 
 /// Eats' main screen, and a trip's "What we ate" when `tripID` is set:
-/// trip meals waiting to be ranked, then your ranked places (list or map).
+/// friends, trip meals waiting to be ranked, then your ranked places.
 struct EatsListView: View {
     /// Show only this trip's places.
     var tripID: String? = nil
 
-    @Environment(\.modelContext) private var context
-    @Query(sort: \EatsEntry.createdAt) private var entries: [EatsEntry]
+    @State private var book = EatsBook.shared
     @State private var skipped = EatsRanking.skippedIDs
     @State private var showMap = false
     @State private var adding = false
     @State private var pickedPlace: TripPlace?
     @State private var ranking: RankRequest?
-    @State private var detail: EatsEntry?
+    @State private var detail: EatsPlace?
+    @State private var preparingShare = false
 
     enum RankRequest: Identifiable {
         case tripItem(TripItem)
@@ -222,14 +224,14 @@ struct EatsListView: View {
     }
 
     var body: some View {
-        let mine = entries.filter { tripID == nil || $0.tripID == tripID }
-        let scores = EatsRanking.scores(entries.map(\.candidate))
+        let mine = book.mine.filter { tripID == nil || $0.tripID == tripID }
+        let scores = EatsRanking.scores(book.mine.map(\.candidate))
         let ordered = EatsRanking.ordered(mine.map(\.candidate)).compactMap { c in mine.first { $0.id == c.id } }
-        let waiting = EatsRanking.toRank(entries: entries).filter { !skipped.contains($0.id) && (tripID == nil || $0.tripID == tripID) }
+        let waiting = EatsRanking.toRank(entries: book.mine).filter { !skipped.contains($0.id) && (tripID == nil || $0.tripID == tripID) }
 
         Group {
             if showMap {
-                map(ordered, scores: scores)
+                EatsMap(places: ordered, scores: scores) { detail = $0 }
             } else {
                 list(ordered, waiting: waiting, scores: scores)
             }
@@ -261,17 +263,38 @@ struct EatsListView: View {
             }
         }
         .sheet(item: $ranking) { request in
-            RankFlow(candidate: candidate(for: request), others: entries.map(\.candidate)) { sentiment, rank in
+            RankFlow(candidate: candidate(for: request), others: book.mine.map(\.candidate)) { sentiment, rank in
                 record(request, sentiment: sentiment, rank: rank)
             }
         }
-        .sheet(item: $detail) { entry in
-            EatsEntryDetail(entry: entry)
+        .sheet(item: $detail) { place in
+            EatsPlaceDetail(place: place)
+        }
+        .overlay {
+            if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) }
+        }
+        .alert("Eats", isPresented: Binding(get: { book.lastError != nil }, set: { if !$0 { book.lastError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(book.lastError ?? "")
         }
     }
 
-    private func list(_ ordered: [EatsEntry], waiting: [TripItem], scores: [String: Double]) -> some View {
+    private func list(_ ordered: [EatsPlace], waiting: [TripItem], scores: [String: Double]) -> some View {
         List {
+            if tripID == nil {
+                Section {
+                    friendsStrip
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                } header: {
+                    Text("Friends")
+                } footer: {
+                    if book.friends.isEmpty {
+                        Text("Share your list with friends and ask them to share theirs back — you'll see each other's rankings.")
+                    }
+                }
+            }
+
             if !waiting.isEmpty {
                 Section {
                     ForEach(waiting) { item in
@@ -311,19 +334,10 @@ struct EatsListView: View {
 
             if !ordered.isEmpty {
                 Section(tripID == nil ? "Your list" : "Ranked") {
-                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, entry in
-                        Button { detail = entry } label: {
-                            HStack(spacing: 12) {
-                                Text("\(index + 1)").font(.subheadline.weight(.bold)).monospacedDigit()
-                                    .foregroundStyle(Theme.textTertiary).frame(width: 26)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(entry.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                                    Text(subtitle(entry)).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
-                                }
-                                Spacer(minLength: 8)
-                                if let score = scores[entry.id] { MealScoreBadge(score: score, size: 38) }
-                            }
-                            .contentShape(Rectangle())
+                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, place in
+                        Button { detail = place } label: {
+                            EatsPlaceRow(place: place, index: index + 1, score: scores[place.id],
+                                         subtitle: subtitle(place), friends: book.friendScores(for: place).map(\.friend))
                         }
                         .buttonStyle(.plain)
                     }
@@ -332,31 +346,62 @@ struct EatsListView: View {
         }
     }
 
-    private func subtitle(_ entry: EatsEntry) -> String {
-        let trip = tripID == nil && !entry.tripID.isEmpty ? TripStore.shared.trip(entry.tripID)?.name : nil
-        let date = entry.visitedDay.isEmpty ? nil : DayKey.date(entry.visitedDay).formatted(.dateTime.month(.abbreviated).day().year())
-        return [trip, date].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    private func map(_ ordered: [EatsEntry], scores: [String: Double]) -> some View {
-        Map(initialPosition: .automatic) {
-            ForEach(ordered.filter { $0.coordinate != nil }) { entry in
-                Annotation(entry.name, coordinate: entry.coordinate!) {
-                    Button { detail = entry } label: {
-                        MealScoreBadge(score: scores[entry.id] ?? 0, size: 34)
-                            .background(Circle().fill(Theme.card))
-                            .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+    private var friendsStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                Button(action: shareMyList) {
+                    VStack(spacing: 6) {
+                        Image(systemName: book.isSharing ? "person.2.fill" : "person.crop.circle.badge.plus")
+                            .font(.title3).foregroundStyle(Theme.brand)
+                            .frame(width: 52, height: 52)
+                            .background(Theme.brandSoft, in: Circle())
+                        Text(book.isSharing ? "Sharing" : "Invite").font(.caption).foregroundStyle(Theme.text)
                     }
+                }
+                .buttonStyle(.plain)
+                .disabled(preparingShare)
+
+                ForEach(book.friends) { friend in
+                    NavigationLink {
+                        FriendListView(friendID: friend.id)
+                    } label: {
+                        VStack(spacing: 6) {
+                            FriendAvatar(friend: friend, size: 52)
+                            Text(friend.name.split(separator: " ").first.map(String.init) ?? friend.name)
+                                .font(.caption).foregroundStyle(Theme.text).lineLimit(1)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .overlay {
-            if !ordered.contains(where: { $0.coordinate != nil }) {
-                ContentUnavailableView("No places on the map yet", systemImage: "map",
-                                       description: Text("Places picked from Apple Maps show up here with their score."))
+    }
+
+    private func shareMyList() {
+        guard TripStore.shared.iCloudAvailable else {
+            book.lastError = "Sign in to iCloud in Settings to share your list with friends."
+            return
+        }
+        preparingShare = true
+        Task {
+            defer { preparingShare = false }
+            do {
+                let share = try await book.share()
+                TripSharingPresenter.present(share: share, container: TripStore.shared.container, title: "My Eats list",
+                                             permissions: [.allowReadOnly, .allowPrivate]) {
+                    EatsBook.shared.setSharing(false)
+                }
+            } catch {
+                book.lastError = "Couldn't set up sharing: \(error.localizedDescription)"
             }
         }
+    }
+
+    private func subtitle(_ place: EatsPlace) -> String {
+        let trip = tripID == nil && !place.tripID.isEmpty ? TripStore.shared.trip(place.tripID)?.name : nil
+        let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).day().year())
+        return [trip, date].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func candidate(for request: RankRequest) -> RankCandidate {
@@ -369,39 +414,177 @@ struct EatsListView: View {
     private func record(_ request: RankRequest, sentiment: MealSentiment, rank: Double) {
         switch request {
         case .tripItem(let item):
-            EatsStore.add(item, sentiment: sentiment, rank: rank, context: context)
-        case .place(let place):
-            let entry = EatsEntry(name: place.name, place: place)
-            entry.tripID = tripID ?? ""
-            entry.sentiment = sentiment
-            entry.rank = rank
-            context.insert(entry)
-            try? context.save()
+            book.add(item, sentiment: sentiment, rank: rank)
+        case .place(let tripPlace):
+            var place = EatsPlace(name: tripPlace.name, place: tripPlace)
+            place.tripID = tripID ?? ""
+            place.sentiment = sentiment
+            place.rank = rank
+            book.save(place)
         }
+    }
+}
+
+/// One ranked place: position, name, who else has been, score.
+struct EatsPlaceRow: View {
+    let place: EatsPlace
+    let index: Int
+    let score: Double?
+    let subtitle: String
+    var friends: [EatsFriend] = []
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(index)").font(.subheadline.weight(.bold)).monospacedDigit()
+                .foregroundStyle(Theme.textTertiary).frame(width: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(place.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            // Friends who've ranked it too.
+            HStack(spacing: -8) {
+                ForEach(friends.prefix(3)) { friend in
+                    FriendAvatar(friend: friend, size: 22).overlay(Circle().stroke(Theme.card, lineWidth: 2))
+                }
+            }
+            if let score { MealScoreBadge(score: score, size: 38) }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// Places with a score pin each.
+struct EatsMap: View {
+    let places: [EatsPlace]
+    let scores: [String: Double]
+    var onSelect: ((EatsPlace) -> Void)? = nil
+
+    var body: some View {
+        Map(initialPosition: .automatic) {
+            ForEach(places.filter { $0.coordinate != nil }) { place in
+                Annotation(place.name, coordinate: place.coordinate!) {
+                    Button { onSelect?(place) } label: {
+                        MealScoreBadge(score: scores[place.id] ?? 0, size: 34)
+                            .background(Circle().fill(Theme.card))
+                            .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                    }
+                    .disabled(onSelect == nil)
+                }
+            }
+        }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .overlay {
+            if !places.contains(where: { $0.coordinate != nil }) {
+                ContentUnavailableView("No places on the map yet", systemImage: "map",
+                                       description: Text("Places picked from Apple Maps show up here with their score."))
+            }
+        }
+    }
+}
+
+// MARK: - A friend's list
+
+/// Someone else's ranked list, read-only, with your score where you've both been.
+struct FriendListView: View {
+    let friendID: String
+    @State private var book = EatsBook.shared
+    @State private var showMap = false
+    @State private var confirmUnfollow = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        if let friend = book.friend(friendID) {
+            let scores = friend.scores
+            let ordered = EatsRanking.ordered(friend.places.map(\.candidate)).compactMap { c in friend.places.first { $0.id == c.id } }
+            Group {
+                if showMap {
+                    EatsMap(places: ordered, scores: scores)
+                } else {
+                    List {
+                        if ordered.isEmpty {
+                            ContentUnavailableView("Nothing ranked yet", systemImage: "fork.knife",
+                                                   description: Text("\(friend.name)'s places show up here as they rank them."))
+                        }
+                        ForEach(Array(ordered.enumerated()), id: \.element.id) { index, place in
+                            HStack(spacing: 12) {
+                                EatsPlaceRow(place: place, index: index + 1, score: scores[place.id], subtitle: subtitle(place))
+                            }
+                            .contextMenu {
+                                if let url = place.tripPlace?.mapsURL {
+                                    Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(friend.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("View", selection: $showMap) {
+                        Text("List").tag(false)
+                        Text("Map").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 160)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("More", systemImage: "ellipsis") {
+                        Button("Stop following", systemImage: "person.badge.minus", role: .destructive) { confirmUnfollow = true }
+                    }
+                }
+            }
+            .confirmationDialog("Stop following \(friend.name)?", isPresented: $confirmUnfollow, titleVisibility: .visible) {
+                Button("Stop following", role: .destructive) {
+                    dismiss()
+                    book.unfollow(friend)
+                }
+            } message: {
+                Text("You'll need a new invite from them to see their list again.")
+            }
+        } else {
+            ContentUnavailableView("List not available", systemImage: "person.crop.circle.badge.questionmark",
+                                   description: Text("They may have stopped sharing it."))
+        }
+    }
+
+    /// Their date, plus your score if you've been too.
+    private func subtitle(_ place: EatsPlace) -> String {
+        let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).year())
+        let yours = book.mine.first { $0.isSamePlace(as: place) }
+            .flatMap { EatsRanking.scores(book.mine.map(\.candidate))[$0.id] }
+            .map { "You: \($0.formatted(.number.precision(.fractionLength(1))))" }
+        return [yours, date].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
 // MARK: - A place
 
-struct EatsEntryDetail: View {
-    @Bindable var entry: EatsEntry
-    @Environment(\.modelContext) private var context
+struct EatsPlaceDetail: View {
+    @State private var place: EatsPlace
+    @State private var book = EatsBook.shared
     @Environment(\.dismiss) private var dismiss
-    @Query private var entries: [EatsEntry]
     @State private var reranking = false
     @State private var confirmDelete = false
 
+    init(place: EatsPlace) {
+        _place = State(initialValue: place)
+    }
+
     var body: some View {
-        let all = entries.map(\.candidate)
+        let others = book.mine.filter { $0.id != place.id }.map(\.candidate)
+        let all = others + [place.candidate]
         let ordered = EatsRanking.ordered(all)
         NavigationStack {
             Form {
                 Section {
                     HStack(spacing: 14) {
-                        MealScoreBadge(score: EatsRanking.scores(all)[entry.id] ?? 0, size: 56)
+                        MealScoreBadge(score: EatsRanking.scores(all)[place.id] ?? 0, size: 56)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.sentiment.label).font(.headline)
-                            Text("#\((ordered.firstIndex { $0.id == entry.id } ?? 0) + 1) of \(ordered.count) on your list")
+                            Text(place.sentiment.label).font(.headline)
+                            Text("#\((ordered.firstIndex { $0.id == place.id } ?? 0) + 1) of \(ordered.count) on your list")
                                 .font(.subheadline).foregroundStyle(Theme.textSecondary)
                         }
                         Spacer()
@@ -409,44 +592,67 @@ struct EatsEntryDetail: View {
                     }
                 }
 
+                let friendScores = book.friendScores(for: place)
+                if !friendScores.isEmpty {
+                    Section("Friends who've been") {
+                        ForEach(friendScores) { entry in
+                            HStack(spacing: 12) {
+                                FriendAvatar(friend: entry.friend, size: 30)
+                                Text(entry.friend.name)
+                                Spacer()
+                                MealScoreBadge(score: entry.score, size: 32)
+                            }
+                        }
+                    }
+                }
+
                 Section {
-                    TextField("Name", text: $entry.name)
-                    DatePicker("Went", selection: Binding(get: { DayKey.date(entry.visitedDay) },
-                                                          set: { entry.visitedDay = DayKey.key($0) }),
+                    TextField("Name", text: $place.name)
+                    DatePicker("Went", selection: Binding(get: { DayKey.date(place.visitedDay) },
+                                                          set: { place.visitedDay = DayKey.key($0) }),
                                displayedComponents: .date)
-                    if let trip = TripStore.shared.trip(entry.tripID) {
+                    if let trip = TripStore.shared.trip(place.tripID) {
                         LabeledContent("Trip", value: trip.name)
                     }
-                    if let coordinate = entry.coordinate,
-                       let url = TripPlace(name: entry.name, address: entry.address, latitude: coordinate.latitude,
-                                           longitude: coordinate.longitude, mapItemID: entry.mapItemID).mapsURL {
+                    if let url = place.tripPlace?.mapsURL {
                         Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
                     }
                 }
 
-                Section("Notes") {
-                    TextField("What to order, who you went with…", text: $entry.notes, axis: .vertical).lineLimit(2...8)
+                Section {
+                    TextField("What to order, who you went with…", text: $place.notes, axis: .vertical).lineLimit(2...8)
+                } header: {
+                    Text("Notes")
+                } footer: {
+                    Text("Friends you share your list with can see your notes.")
                 }
 
                 Section {
                     Button("Remove from Eats", role: .destructive) { confirmDelete = true }
                 }
             }
-            .navigationTitle(entry.name)
+            .navigationTitle(place.name)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { try? context.save(); dismiss() } } }
-            .sheet(isPresented: $reranking) {
-                RankFlow(candidate: entry.candidate, others: all.filter { $0.id != entry.id }) { sentiment, rank in
-                    entry.sentiment = sentiment
-                    entry.rank = rank
-                    try? context.save()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        book.save(place)
+                        dismiss()
+                    }
+                    .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .confirmationDialog("Remove \(entry.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .sheet(isPresented: $reranking) {
+                RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
+                    place.sentiment = sentiment
+                    place.rank = rank
+                }
+            }
+            .confirmationDialog("Remove \(place.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {
+                    book.delete(place)
                     dismiss()
-                    context.delete(entry)
-                    try? context.save()
                 }
             }
         }

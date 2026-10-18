@@ -1,31 +1,33 @@
 import SwiftUI
-import SwiftData
+import CloudKit
 import CoreLocation
 
-// Eats: your own ranked list of places you've eaten, Beli-style. Personal,
-// so it lives in SwiftData (this phone + your iCloud), not in the shared
-// trip zones. Trip meals flow in to be ranked and keep a link to the trip.
+// Eats: your own ranked list of places you've eaten, Beli-style. It syncs
+// through CloudKit directly (not SwiftData, which can't share with another
+// Apple Account) so friends can follow your list read-only; see `EatsBook`.
 
-/// A place you've ranked. Rules for CloudKit (see `Models/Models.swift`):
-/// every property has a default, no unique constraints, links are string ids.
-@Model
-final class EatsEntry {
+/// A place on someone's list.
+struct EatsPlace: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var name: String = ""
     var address: String = ""
     var latitude: Double?
     var longitude: Double?
     var mapItemID: String = ""
-    var sentimentRaw: String = MealSentiment.liked.rawValue
+    var sentiment: MealSentiment = .liked
     /// Order within the sentiment (higher = better); only the order matters.
     var rank: Double = 0
     /// "yyyy-MM-dd" you went.
-    var visitedDay: String = ""
+    var visitedDay: String = DayKey.key(.now)
     var notes: String = ""
     /// The trip and trip item this came from; "" for places added in Eats.
     var tripID: String = ""
     var tripItemID: String = ""
-    var createdAt: Date = Date.now
+    var createdAt: Date = .now
+    /// CloudKit change tag etc. (your own places only).
+    var systemFields: Data?
+
+    static let recordType = "EatsPlace"
 
     init(name: String, place: TripPlace? = nil, visitedDay: String = DayKey.key(.now)) {
         self.name = name
@@ -38,20 +40,101 @@ final class EatsEntry {
         }
     }
 
-    var sentiment: MealSentiment {
-        get { MealSentiment(rawValue: sentimentRaw) ?? .liked }
-        set { sentimentRaw = newValue.rawValue }
-    }
-
     var coordinate: CLLocationCoordinate2D? {
         guard let latitude, let longitude else { return nil }
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
+    var tripPlace: TripPlace? {
+        guard let latitude, let longitude else { return nil }
+        return TripPlace(name: name, address: address, latitude: latitude, longitude: longitude, mapItemID: mapItemID)
+    }
+
     var candidate: RankCandidate {
-        RankCandidate(id: id, title: name, subtitle: visitedDay.isEmpty ? "" : DayKey.date(visitedDay).formatted(.dateTime.month(.abbreviated).day().year()),
+        RankCandidate(id: id, title: name,
+                      subtitle: visitedDay.isEmpty ? "" : DayKey.date(visitedDay).formatted(.dateTime.month(.abbreviated).day().year()),
                       sentiment: sentiment, rank: rank)
     }
+
+    /// Same restaurant on two lists: Apple Maps place ID, or same name within 150 m.
+    func isSamePlace(as other: EatsPlace) -> Bool {
+        if !mapItemID.isEmpty && mapItemID == other.mapItemID { return true }
+        guard name.caseInsensitiveCompare(other.name) == .orderedSame, let a = coordinate, let b = other.coordinate else { return false }
+        return CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude)) < 150
+    }
+
+    // Field by field, so records from newer or older versions still decode.
+    enum CodingKeys: String, CodingKey {
+        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, notes, tripID, tripItemID, createdAt, systemFields
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        address = try c.decodeIfPresent(String.self, forKey: .address) ?? ""
+        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        mapItemID = try c.decodeIfPresent(String.self, forKey: .mapItemID) ?? ""
+        sentiment = (try? c.decodeIfPresent(MealSentiment.self, forKey: .sentiment)) ?? .liked
+        rank = try c.decodeIfPresent(Double.self, forKey: .rank) ?? 0
+        visitedDay = try c.decodeIfPresent(String.self, forKey: .visitedDay) ?? ""
+        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        tripID = try c.decodeIfPresent(String.self, forKey: .tripID) ?? ""
+        tripItemID = try c.decodeIfPresent(String.self, forKey: .tripItemID) ?? ""
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
+        systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
+    }
+
+    func record(in zoneID: CKRecordZone.ID) -> CKRecord {
+        let r = CKRecord.restoring(systemFields, type: Self.recordType, id: CKRecord.ID(recordName: id, zoneID: zoneID))
+        r["name"] = name
+        r["address"] = address
+        r["latitude"] = latitude
+        r["longitude"] = longitude
+        r["mapItemID"] = mapItemID
+        r["sentiment"] = sentiment.rawValue
+        r["rank"] = rank
+        r["visitedDay"] = visitedDay
+        r["notes"] = notes
+        r["tripID"] = tripID
+        r["tripItemID"] = tripItemID
+        r["createdAt"] = createdAt
+        return r
+    }
+
+    init(record r: CKRecord, keepSystemFields: Bool) {
+        id = r.recordID.recordName
+        name = r["name"] as? String ?? ""
+        address = r["address"] as? String ?? ""
+        latitude = r["latitude"] as? Double
+        longitude = r["longitude"] as? Double
+        mapItemID = r["mapItemID"] as? String ?? ""
+        sentiment = (r["sentiment"] as? String).flatMap(MealSentiment.init) ?? .liked
+        rank = r["rank"] as? Double ?? 0
+        visitedDay = r["visitedDay"] as? String ?? ""
+        notes = r["notes"] as? String ?? ""
+        tripID = r["tripID"] as? String ?? ""
+        tripItemID = r["tripItemID"] as? String ?? ""
+        createdAt = r["createdAt"] as? Date ?? r.creationDate ?? .now
+        systemFields = keepSystemFields ? r.encodedSystemFields : nil
+    }
+}
+
+/// Someone whose list you follow (they shared it with you).
+struct EatsFriend: Codable, Identifiable, Hashable {
+    /// Their iCloud user record name (the owner of the shared zone).
+    var id: String
+    var name: String = "Friend"
+    var places: [EatsPlace] = []
+
+    var initials: String {
+        let parts = name.split(separator: " ").prefix(2)
+        return parts.map { String($0.prefix(1)) }.joined().uppercased()
+    }
+
+    var scores: [String: Double] { EatsRanking.scores(places.map(\.candidate)) }
 }
 
 enum MealSentiment: String, Codable, CaseIterable, Identifiable {
@@ -134,7 +217,7 @@ enum EatsRanking {
     /// Trip meals waiting to be ranked: food on days that have started,
     /// not yet in Eats and not skipped.
     @MainActor
-    static func toRank(entries: [EatsEntry]) -> [TripItem] {
+    static func toRank(entries: [EatsPlace]) -> [TripItem] {
         let today = DayKey.key(.now)
         let linked = Set(entries.map(\.tripItemID))
         let skipped = skippedIDs

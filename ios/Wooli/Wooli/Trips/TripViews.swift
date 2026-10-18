@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import MapKit
 import CloudKit
 
@@ -317,7 +316,7 @@ struct TripDetailView: View {
     let tripID: String
     @State private var store = TripStore.shared
     /// Your Eats rankings, for the "What we ate" card and meal scores.
-    @Query private var eats: [EatsEntry]
+    @State private var eatsBook = EatsBook.shared
     @State private var editingItem: TripItem?
     @State private var editingTrip: Trip?
     @State private var dayMap: String?
@@ -363,6 +362,10 @@ struct TripDetailView: View {
 
                 if allItems.contains(where: { $0.kind == .meal }) {
                     whatWeAteCard(trip)
+                }
+
+                if !eatsBook.friends.isEmpty {
+                    FriendsNearTripCard(trip: trip)
                 }
 
                 Section {
@@ -474,6 +477,7 @@ struct TripDetailView: View {
     }
 
     private func whatWeAteCard(_ trip: Trip) -> some View {
+        let eats = eatsBook.mine
         let tripEats = eats.filter { $0.tripID == trip.id }
         let best = EatsRanking.ordered(tripEats.map(\.candidate)).first
         let waiting = EatsRanking.toRank(entries: eats).filter { $0.tripID == trip.id }.count
@@ -634,8 +638,8 @@ struct TripDetailView: View {
 
     /// Your Eats score for a trip meal, once you've ranked it.
     private func eatsScore(_ item: TripItem) -> Double? {
-        guard item.kind == .meal, let entry = eats.first(where: { $0.tripItemID == item.id }) else { return nil }
-        return EatsRanking.scores(eats.map(\.candidate))[entry.id]
+        guard item.kind == .meal, let place = eatsBook.place(forTripItem: item.id) else { return nil }
+        return EatsRanking.scores(eatsBook.mine.map(\.candidate))[place.id]
     }
 
     private func move(_ item: TripItem, to day: String?) {
@@ -714,8 +718,7 @@ struct TripItemEditor: View {
     @State private var transportMode: TripTransport.Mode?
     /// Arrival clock time on the ticket; nil = not set.
     @State private var arrival: Date?
-    @Query private var eats: [EatsEntry]
-    @Environment(\.modelContext) private var context
+    @State private var eatsBook = EatsBook.shared
     @State private var rankingMeal = false
     /// A ranking made in this editor; written to Eats on Save.
     @State private var pendingRank: (sentiment: MealSentiment, rank: Double)?
@@ -881,7 +884,7 @@ struct TripItemEditor: View {
         }
         .sheet(isPresented: $rankingMeal) {
             RankFlow(candidate: RankCandidate(id: item.id, title: item.title.isEmpty ? (item.place?.name ?? "Meal") : item.title),
-                     others: eats.filter { $0.tripItemID != item.id }.map(\.candidate)) { sentiment, rank in
+                     others: eatsBook.mine.filter { $0.tripItemID != item.id }.map(\.candidate)) { sentiment, rank in
                 pendingRank = (sentiment, rank)
             }
         }
@@ -924,7 +927,8 @@ struct TripItemEditor: View {
 
     /// This meal's place on your Eats list: the ranking just made here, or the saved one.
     private var eatsStatus: (sentiment: MealSentiment, score: Double, position: Int, count: Int)? {
-        let entry = eats.first { $0.tripItemID == item.id }
+        let eats = eatsBook.mine
+        let entry = eatsBook.place(forTripItem: item.id)
         let me: RankCandidate
         if let pendingRank {
             me = RankCandidate(id: item.id, title: item.title, sentiment: pendingRank.sentiment, rank: pendingRank.rank)
@@ -989,12 +993,12 @@ struct TripItemEditor: View {
         }
         TripStore.shared.save(item)
         if let pendingRank, item.kind == .meal {
-            if let entry = eats.first(where: { $0.tripItemID == item.id }) {
-                entry.sentiment = pendingRank.sentiment
-                entry.rank = pendingRank.rank
-                try? context.save()
+            if var place = eatsBook.place(forTripItem: item.id) {
+                place.sentiment = pendingRank.sentiment
+                place.rank = pendingRank.rank
+                eatsBook.save(place)
             } else {
-                EatsStore.add(item, sentiment: pendingRank.sentiment, rank: pendingRank.rank, context: context)
+                eatsBook.add(item, sentiment: pendingRank.sentiment, rank: pendingRank.rank)
             }
         }
         dismiss()

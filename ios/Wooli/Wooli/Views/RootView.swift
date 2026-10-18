@@ -96,6 +96,7 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
     @State private var trips = TripStore.shared
+    @State private var eats = EatsBook.shared
     @State private var lineup = AppLineup.shared
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
@@ -182,6 +183,15 @@ struct MainTabView: View {
                 TripDetailView(tripID: route.id)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("Close") { trips.tripToOpen = nil } }
+                    }
+            }
+        }
+        // A friend who just shared their Eats list with you.
+        .sheet(item: Binding(get: { eats.friendToShow.map(TripRoute.init) }, set: { eats.friendToShow = $0?.id })) { route in
+            NavigationStack {
+                FriendListView(friendID: route.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Close") { eats.friendToShow = nil } }
                     }
             }
         }
