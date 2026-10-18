@@ -28,32 +28,9 @@ The native iPhone app is where active product work happens. **Before any iOS wor
 
 ---
 
-## Module focus (context efficiency)
+## Website (`app/`)
 
-Each major module has a **CLAUDE.md** in its route directory and a doc in `docs/modules/`. When working on one module, load only that module's context.
-
-**Module boundaries:**
-
-| Module | Routes | Components | Lib | Doc |
-|--------|--------|------------|-----|-----|
-| Budget | `app/budget/**` | `app/components/budget/**` | `lib/budget/**` | `docs/modules/BUDGET.md` |
-| Trips | `app/trips/**` | `app/components/trips/**` | `lib/trips/**` | `docs/modules/TRIPS.md` |
-| Lists | `app/lists/**`, `app/wishlist/**` | `app/components/lists/**` | — | — |
-| Period | `app/period/**` | `app/components/period/**` | `lib/period-utils.ts` | — |
-
-The Mood and Cards modules were removed in 2026-07/08. Docs that mention them are stale.
-
-**Default reading order for any module work:**
-1. `app/{module}/CLAUDE.md` — boundary rules and key conventions
-2. `docs/modules/{module}.md` — schema, routes, components in one place
-3. The single file you're modifying
-4. Only fan out if doc + target file aren't enough
-
-**Don't load:**
-- Other modules' source files unless explicitly integrating
-- Files the user hasn't asked you to change
-
-**Shared infrastructure** (`lib/supabase-client.ts`, `lib/supabase-server.ts`, `lib/groq.ts`, `middleware.ts`, `app/layout.tsx`, `app/components/Nav.tsx`) is read-only for module work — don't modify it unless the task specifically requires it.
+As of 2026-10-18 the Next.js app is only a static introduction to the iPhone app, plus the pages App Store Connect links to: `/` (intro), `/privacy` (privacy policy URL), `/support` (support URL) and `/terms`. The old web features (budget, trips, lists, period, auth, API routes, crons, Supabase client) were removed; they're in git history before that date, and the Supabase data was left untouched. Keep the policy pages in step with what the app actually does with data.
 
 ## Build & verify toolkit
 
