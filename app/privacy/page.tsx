@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <h2>Where your information lives</h2>
       <ul>
         <li><strong>On your iPhone.</strong> Budget categories, transactions you enter or import, period entries and your settings are stored on your device.</li>
-        <li><strong>In your own iCloud.</strong> Trips and your Eats list sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data.</li>
+        <li><strong>In your own iCloud.</strong> Trips, your Eats list and your Movies list sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data.</li>
         <li><strong>When you share.</strong> If you invite someone to a trip or share your Eats list, they can see what you shared. You can stop sharing at any time.</li>
       </ul>
 
@@ -32,7 +32,8 @@ export default function PrivacyPage() {
 
       <h2>Apple services</h2>
       <p>
-        Place search, maps and place details come from Apple Maps, and Face ID (if you turn it on) is
+        Place search, maps and place details come from Apple Maps, movie search and posters come from
+        Apple&apos;s iTunes Search, and Face ID (if you turn it on) is
         handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
       </p>
 
@@ -46,7 +47,7 @@ export default function PrivacyPage() {
       <h2>Deleting your data</h2>
       <p>
         Delete items in the app, or delete the app to remove what&apos;s stored on your iPhone. To remove
-        synced trips and Eats places, delete them in the app, or remove Wooli&apos;s data in Settings →
+        synced trips, Eats places and movies, delete them in the app, or remove Wooli&apos;s data in Settings →
         your name → iCloud → Manage Account Storage.
       </p>
 

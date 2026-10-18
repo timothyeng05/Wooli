@@ -31,6 +31,7 @@ struct TodayView: View {
                             case .budget: BudgetTodayCard()
                             case .trips: TripsTodayCard()
                             case .eats: EatsTodayCard()
+                            case .movies: MoviesTodayCard()
                             case .period: PeriodTodayCard()
                             case .today: EmptyView()
                             }
@@ -267,6 +268,20 @@ private struct EatsTodayCard: View {
             TodayCard(space: .eats, headline: "\(entries.count) place\(entries.count == 1 ? "" : "s") ranked", detail: "Top: \(best.title)")
         } else {
             TodayCard(space: .eats, headline: "Start your list", detail: "Rank places you've eaten against each other.")
+        }
+    }
+}
+
+// MARK: - Movies
+
+private struct MoviesTodayCard: View {
+    @Query private var movies: [MovieEntry]
+
+    var body: some View {
+        if let best = EatsRanking.ordered(movies.map(\.candidate)).first {
+            TodayCard(space: .movies, headline: "\(movies.count) movie\(movies.count == 1 ? "" : "s") ranked", detail: "Top: \(best.title)")
+        } else {
+            TodayCard(space: .movies, headline: "Start your list", detail: "Rank movies you've seen against each other.")
         }
     }
 }

@@ -199,6 +199,7 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 | S6 | Cross-app links: trip spend from Budget tags (T5), date-night spend | idea |
 | S9 | Eats app (Beli-style rankings, trip meals flow in) | ✅ done (not built) |
 | S10 | Share from Apple Maps → Eats or a trip's Ideas (Share Extension + App Group) | ✅ done — installed on device; awaiting user's Maps test |
+| S11 | Movies app (Beli for films, reuses Eats' ranking) | ✅ done (not built) — next: want-to-watch list, friends' lists like Eats |
 | S7 | iPad: switch the drawer to a `sidebarAdaptable` TabView with a `TabSection` per app | idea |
 
 ---
@@ -230,6 +231,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 ---
 
 ## Done
+
+- **2026-10-18 · Claude** — **Movies** app (S11, `Movies/`): Beli for films. Search the iTunes Store (Apple's free iTunes Search API, no key) → pick a feeling (all-time favorite / liked / fine / didn't like) → "which was better?" against films with that feeling, reusing Eats' `RankFlow` and `EatsRanking` (same 7–10 / 4–6.9 / 0–3.9 bands). `RankFlow` gained `symbol`, `symbolColor` and `label` so Movies can show a film icon and "All-time favorite" instead of "Must try"; Eats is unchanged. List with posters and scores, detail page (poster, score, rank, synopsis, watched date, notes, Rank again, Remove), Today card, app switcher entry (on by default, like Eats). `MovieEntry` is SwiftData (schema + `Deduplicator` by iTunes id), so it syncs via iCloud; no friend sharing yet. Privacy page mentions iTunes Search. **Not built — no Xcode in the session, and the iTunes API couldn't be reached from it.** **Deploy the CloudKit schema** (new `CD_MovieEntry` record type) before the next TestFlight.
 
 - **2026-10-18 · Claude** — App Store prep: privacy manifests for the app (`Wooli/PrivacyInfo.xcprivacy`: no tracking, no collected data, UserDefaults reason CA92.1) and the share extension (nothing declared); `ITSAppUsesNonExemptEncryption = NO` in both Info.plists; build 3 (version 1.0). App Privacy answer is "Data Not Collected" — trips/Eats sync to the user's own private iCloud, bank data comes from SimpleFIN straight to the device, the rest stays on device. Still to do by hand: deploy the CloudKit schema to Production, privacy policy URL (currently the web app's /privacy), screenshots, listing, review notes.
 

@@ -8,7 +8,7 @@ import SwiftData
 /// Adding an app: a case here, a Today card in `TodayView`, and its root
 /// screen in `SpaceRoot`. Optional apps reuse `WooliModule` for on/off and Face ID.
 enum AppSpace: String, CaseIterable, Identifiable {
-    case today, budget, trips, eats, period
+    case today, budget, trips, eats, movies, period
     var id: String { rawValue }
 
     var title: String {
@@ -17,6 +17,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: "Budget"
         case .trips: "Trips"
         case .eats: "Eats"
+        case .movies: "Movies"
         case .period: "Period"
         }
     }
@@ -27,6 +28,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: "dollarsign"
         case .trips: "airplane"
         case .eats: "fork.knife"
+        case .movies: "film"
         case .period: WooliModule.period.systemImage
         }
     }
@@ -37,6 +39,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: Theme.brand
         case .trips: Color(hex: "#0ea5e9")
         case .eats: Color(hex: "#f97316")
+        case .movies: Color(hex: "#e11d48")
         case .period: WooliModule.period.tint
         }
     }
@@ -48,6 +51,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: "Connect your bank, plan each month, and see where your money goes."
         case .trips: "Plan trips day by day on Apple Maps — together, if you like."
         case .eats: "Rank every place you've eaten, Beli-style. Trip meals show up to rank."
+        case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .period: "Track your cycle with private predictions."
         }
     }

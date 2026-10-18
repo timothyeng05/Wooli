@@ -51,6 +51,10 @@ struct RankFlow: View {
     /// Everything else on your list.
     let others: [RankCandidate]
     let onFinish: (MealSentiment, Double) -> Void
+    /// Movies reuse this flow with their own icon and wording.
+    var symbol = "fork.knife"
+    var symbolColor: Color?
+    var label: (MealSentiment) -> String = { $0.label }
 
     @Environment(\.dismiss) private var dismiss
     @State private var sentiment: MealSentiment?
@@ -102,7 +106,7 @@ struct RankFlow: View {
                                 .frame(width: 64, height: 64)
                                 .background(feeling.color.gradient, in: Circle())
                                 .shadow(color: feeling.color.opacity(0.4), radius: 8, y: 4)
-                            Text(feeling.label).font(.caption.weight(.semibold)).foregroundStyle(Theme.text)
+                            Text(label(feeling)).font(.caption.weight(.semibold)).foregroundStyle(Theme.text)
                                 .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)
@@ -131,7 +135,7 @@ struct RankFlow: View {
     private func choice(_ place: RankCandidate, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: "fork.knife").font(.title3).foregroundStyle(Color(hex: TripItem.Kind.meal.colorHex))
+                Image(systemName: symbol).font(.title3).foregroundStyle(symbolColor ?? Color(hex: TripItem.Kind.meal.colorHex))
                 Text(place.title).font(.subheadline.weight(.bold)).foregroundStyle(Theme.text)
                     .multilineTextAlignment(.center).lineLimit(3)
                 if !place.subtitle.isEmpty {
