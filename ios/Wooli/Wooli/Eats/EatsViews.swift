@@ -594,6 +594,7 @@ struct FriendListView: View {
     @State private var book = EatsBook.shared
     @State private var showMap = false
     @State private var confirmUnfollow = false
+    @State private var opened: EatsPlace?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -602,7 +603,7 @@ struct FriendListView: View {
             let ordered = EatsRanking.ordered(friend.places.map(\.candidate)).compactMap { c in friend.places.first { $0.id == c.id } }
             Group {
                 if showMap {
-                    EatsMap(places: ordered, scores: scores)
+                    EatsMap(places: ordered, scores: scores) { opened = $0 }
                 } else {
                     List {
                         if ordered.isEmpty {
@@ -610,14 +611,10 @@ struct FriendListView: View {
                                                    description: Text("\(friend.name)'s places show up here as they rank them."))
                         }
                         ForEach(Array(ordered.enumerated()), id: \.element.id) { index, place in
-                            HStack(spacing: 12) {
+                            Button { opened = place } label: {
                                 EatsPlaceRow(place: place, index: index + 1, score: scores[place.id], subtitle: subtitle(place))
                             }
-                            .contextMenu {
-                                if let url = place.tripPlace?.mapsURL {
-                                    Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
-                                }
-                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -639,6 +636,7 @@ struct FriendListView: View {
                     }
                 }
             }
+            .sheet(item: $opened) { FriendPlaceSheet(friend: friend, place: $0) }
             .confirmationDialog("Stop following \(friend.name)?", isPresented: $confirmUnfollow, titleVisibility: .visible) {
                 Button("Stop following", role: .destructive) {
                     dismiss()
@@ -726,8 +724,8 @@ struct EatsPlaceDetail: View {
                     if let trip = TripStore.shared.trip(place.tripID) {
                         LabeledContent("Trip", value: trip.name)
                     }
-                    if let url = place.tripPlace?.mapsURL {
-                        Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+                    if let tripPlace = place.tripPlace {
+                        AppleMapsListingButton(place: tripPlace)
                     }
                 }
 
@@ -772,5 +770,67 @@ struct EatsPlaceDetail: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - A friend's place
+
+/// One place on a friend's list: their score and notes, yours if you've
+/// been, the Apple Maps listing, and a way to save it to try.
+struct FriendPlaceSheet: View {
+    let friend: EatsFriend
+    let place: EatsPlace
+    @State private var book = EatsBook.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let mine = book.mine.first { $0.isSamePlace(as: place) }
+        let myScore = mine.flatMap { EatsRanking.scores(book.ranked.map(\.candidate))[$0.id] }
+        NavigationStack {
+            Form {
+                Section {
+                    HStack(spacing: 14) {
+                        if let score = friend.scores[place.id] { MealScoreBadge(score: score, size: 56) }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(friend.name) · \(place.sentiment.label)").font(.headline)
+                            if !place.visitedDay.isEmpty {
+                                Text("Went \(DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).year()))")
+                                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                            }
+                        }
+                    }
+                    if !place.notes.isEmpty {
+                        Text(place.notes).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+
+                Section {
+                    if let mine, mine.isWishlist {
+                        Label("On your Want to try list", systemImage: "bookmark.fill").foregroundStyle(Color(hex: "#f97316"))
+                    } else if let myScore {
+                        HStack {
+                            Text("Your score")
+                            Spacer()
+                            MealScoreBadge(score: myScore, size: 32)
+                        }
+                    } else if let tripPlace = place.tripPlace {
+                        Button("Save to Want to try", systemImage: "bookmark") {
+                            book.addToWishlist(tripPlace)
+                            dismiss()
+                        }
+                    }
+                    if let tripPlace = place.tripPlace {
+                        AppleMapsListingButton(place: tripPlace)
+                    }
+                    if !place.address.isEmpty {
+                        LabeledContent("Address", value: place.address)
+                    }
+                }
+            }
+            .navigationTitle(place.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

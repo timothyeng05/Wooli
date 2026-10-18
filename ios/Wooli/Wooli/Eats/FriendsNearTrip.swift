@@ -10,6 +10,7 @@ struct FriendsNearTripCard: View {
     /// Where the trip goes: its destination and stops, found on Apple Maps.
     @State private var areas: [CLLocation] = []
     @State private var showAll = false
+    @State private var opened: Pick?
 
     /// Close enough to count as "near" the trip.
     private static let radius: CLLocationDistance = 40_000
@@ -38,17 +39,24 @@ struct FriendsNearTripCard: View {
             }
         }
         .task(id: areaQueries) { areas = await Self.locate(areaQueries) }
+        .sheet(item: $opened) { FriendPlaceSheet(friend: $0.friend, place: $0.place) }
     }
 
     private func row(_ pick: Pick) -> some View {
         let added = store.items(in: trip.id).contains { $0.title.caseInsensitiveCompare(pick.place.name) == .orderedSame }
         return HStack(spacing: 12) {
-            FriendAvatar(friend: pick.friend, size: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pick.place.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                Text(pick.friend.name).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            Button { opened = pick } label: {
+                HStack(spacing: 12) {
+                    FriendAvatar(friend: pick.friend, size: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(pick.place.name).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                        Text(pick.friend.name).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
             MealScoreBadge(score: pick.score, size: 32)
             Button(added ? "Added" : "Ideas", systemImage: added ? "checkmark" : "plus") { addToIdeas(pick) }
                 .font(.caption.weight(.semibold))

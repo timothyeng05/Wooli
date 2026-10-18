@@ -443,7 +443,7 @@ struct TripDetailView: View {
         let city = trip.legs.first { $0.id == mapCity }
         let shown = city.map { city in placed.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == city.id } } ?? placed
         return VStack(spacing: 10) {
-            TripMap(stops: shown.map { TripMap.Stop(item: $0, label: nil) })
+            TripMap(stops: shown.map { TripMap.Stop(item: $0, label: nil) }, onSelect: { editingItem = $0 })
                 // Re-frame on the chosen city; `initialPosition` only applies once.
                 .id(city?.id ?? "all")
                 .frame(height: 200)
@@ -888,6 +888,7 @@ struct TripItemEditor: View {
                                 .accessibilityLabel("Open in Apple Maps")
                         }
                     }
+                    AppleMapsListingButton(place: place)
                     Button("Remove place", role: .destructive) { item.place = nil }
                 }
                 NavigationLink {
@@ -1188,10 +1189,13 @@ struct TripMap: View {
 
     let stops: [Stop]
     var routes: [MKRoute] = []
+    /// Tapping a pin opens that plan.
+    var onSelect: ((TripItem) -> Void)? = nil
     @State private var position: MapCameraPosition = .automatic
+    @State private var selection: String?
 
     var body: some View {
-        Map(position: $position) {
+        Map(position: $position, selection: $selection) {
             ForEach(routes, id: \.self) { route in
                 MapPolyline(route.polyline).stroke(Theme.brand.opacity(0.7), lineWidth: 4)
             }
@@ -1201,15 +1205,22 @@ struct TripMap: View {
                     if let label = stop.label {
                         Marker(stop.item.title, monogram: Text("\(label)"), coordinate: coordinate)
                             .tint(Color(hex: stop.item.kind.colorHex))
+                            .tag(stop.item.id)
                     } else {
                         Marker(stop.item.title, systemImage: stop.item.kind.symbol, coordinate: coordinate)
                             .tint(Color(hex: stop.item.kind.colorHex))
+                            .tag(stop.item.id)
                     }
                 }
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .overlay(alignment: .topTrailing) { RecenterButton(position: $position) }
+        .onChange(of: selection) { _, id in
+            guard let id, let stop = stops.first(where: { $0.id == id }) else { return }
+            onSelect?(stop.item)
+            selection = nil // so the same pin can be tapped again
+        }
     }
 }
 
@@ -1241,6 +1252,7 @@ struct DayMapView: View {
     let trip: Trip
     let day: String
     @State private var legs: [Leg] = []
+    @State private var editingItem: TripItem?
     @Environment(\.dismiss) private var dismiss
 
     struct Leg: Identifiable {
@@ -1254,7 +1266,8 @@ struct DayMapView: View {
         let stops = TripStore.shared.items(in: trip.id, day: day).filter { $0.place != nil }
         NavigationStack {
             VStack(spacing: 0) {
-                TripMap(stops: stops.enumerated().map { TripMap.Stop(item: $1, label: $0 + 1) }, routes: legs.map(\.route))
+                TripMap(stops: stops.enumerated().map { TripMap.Stop(item: $1, label: $0 + 1) }, routes: legs.map(\.route),
+                        onSelect: { editingItem = $0 })
                     .frame(maxHeight: .infinity)
                 List {
                     ForEach(Array(stops.enumerated()), id: \.element.id) { index, stop in
@@ -1281,6 +1294,7 @@ struct DayMapView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { legs = await Self.routes(between: stops) }
+            .sheet(item: $editingItem) { TripItemEditor(item: $0, trip: trip) }
         }
     }
 
