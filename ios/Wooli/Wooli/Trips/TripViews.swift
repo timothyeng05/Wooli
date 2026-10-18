@@ -195,7 +195,7 @@ struct NewTripFlow: View {
             trip.endDay = DayKey.key(max(end, start))
             trip.legs.sort { $0.startDay < $1.startDay }
             TripStore.shared.save(trip)
-            // Breakfast, lunch and dinner on every city day, ready to fill in or delete.
+            // Breakfast, lunch and dinner on every day, ready to fill in or delete.
             for meal in TripItem.mealPlaceholders(for: trip) { TripStore.shared.save(meal) }
             dismiss()
             return
