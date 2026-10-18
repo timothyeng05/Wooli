@@ -97,6 +97,7 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var trips = TripStore.shared
     @State private var eats = EatsBook.shared
+    @State private var inbox = SharedPlaceInbox.shared
     @State private var lineup = AppLineup.shared
     @Query(filter: #Predicate<LocalTransaction> { $0.needsReview && !$0.isHidden })
     private var toReview: [LocalTransaction]
@@ -174,8 +175,15 @@ struct MainTabView: View {
             ReviewView(isCalibration: true)
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { inbox.check() }
             guard phase == .background else { return }
             ReviewReminder.scheduleOrCancel(reviewCount: reviewCount)
+        }
+        // A place shared from Apple Maps (the share extension opens wooli://).
+        .onAppear { inbox.check() }
+        .onOpenURL { _ in inbox.check() }
+        .sheet(item: $inbox.current, onDismiss: inbox.dismissed) { place in
+            SharedPlaceSheet(place: place)
         }
         // A trip someone just invited you to.
         .sheet(item: Binding(get: { trips.tripToOpen.map(TripRoute.init) }, set: { trips.tripToOpen = $0?.id })) { route in
