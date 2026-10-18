@@ -24,6 +24,7 @@ struct RootView: View {
             DefaultCategories.injectStarterRulesIfMissing(context: context)
             RolloverService.closeMonths(context: context)
             RuleImporter.importIfPresent(context: context)
+            WebDataImporter.importIfPresent(context: context)
             RuleEngine.consolidate(context: context)
             Categorizer.refreshKeywordHints(context: context)
             syncIfStale()
