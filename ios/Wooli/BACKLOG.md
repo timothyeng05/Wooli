@@ -198,6 +198,7 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 | S5 | **Outfits** app — spec with user: photo wardrobe, log what you wore, "last worn", WeatherKit suggestion | idea |
 | S6 | Cross-app links: trip spend from Budget tags (T5), date-night spend | idea |
 | S9 | Eats app (Beli-style rankings, trip meals flow in) | ✅ done (not built) |
+| S10 | Share from Apple Maps → Eats or a trip's Ideas (Share Extension + App Group) | 🔨 in progress — Claude, 2026-10-18 |
 | S7 | iPad: switch the drawer to a `sidebarAdaptable` TabView with a `TabSection` per app | idea |
 
 ---
