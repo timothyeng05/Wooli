@@ -60,6 +60,8 @@ struct RankFlow: View {
     @State private var sentiment: MealSentiment?
     @State private var low = 0
     @State private var high = 0
+    /// Places you said you don't remember; they're never asked about again.
+    @State private var forgotten: Set<String> = []
     @State private var result: Double?
 
     private var peers: [RankCandidate] { sentiment.map { EatsRanking.group(of: $0, in: others) } ?? [] }
@@ -77,8 +79,8 @@ struct RankFlow: View {
                 .padding(.top, 8)
                 if let sentiment, let result {
                     finished(sentiment, rank: result)
-                } else if sentiment != nil, low < high {
-                    compare(against: peers[(low + high) / 2])
+                } else if sentiment != nil, let pivot {
+                    compare(against: peers[pivot])
                 } else {
                     feelings
                 }
@@ -87,6 +89,7 @@ struct RankFlow: View {
             .padding(20)
             .animation(.snappy, value: low)
             .animation(.snappy, value: high)
+            .animation(.snappy, value: forgotten)
             .animation(.snappy, value: result)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -125,10 +128,15 @@ struct RankFlow: View {
                 Text("or").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textTertiary)
                 choice(other) { answer(newIsBetter: false) }
             }
-            Button("Too tough — call it even") { settle(at: (low + high) / 2) }
-                .font(.subheadline).foregroundStyle(Theme.textSecondary)
+            VStack(spacing: 10) {
+                Button("Don't remember \(other.title) — skip") { forget(other) }
+                    .font(.subheadline.weight(.medium))
+                Button("Too tough — call it even") { settle(at: pivot ?? (low + high) / 2) }
+                    .font(.subheadline).foregroundStyle(Theme.textSecondary)
+            }
+            .lineLimit(1)
         }
-        .id("\(low)-\(high)")
+        .id("\(low)-\(high)-\(forgotten.count)")
         .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
     }
 
@@ -183,10 +191,26 @@ struct RankFlow: View {
         if high == 0 { settle(at: 0) }
     }
 
-    private func answer(newIsBetter: Bool) {
+    /// Who to compare against next: the middle of what's left, or the
+    /// closest place to it that you haven't skipped. Any place in the range
+    /// works for the search; the middle just takes the fewest taps.
+    private var pivot: Int? {
+        guard low < high else { return nil }
         let mid = (low + high) / 2
-        if newIsBetter { high = mid } else { low = mid + 1 }
+        return (low..<high).filter { !forgotten.contains(peers[$0].id) }.min { abs($0 - mid) < abs($1 - mid) }
+    }
+
+    private func answer(newIsBetter: Bool) {
+        guard let pivot else { return }
+        if newIsBetter { high = pivot } else { low = pivot + 1 }
         if low >= high { settle(at: low) }
+    }
+
+    /// Skip a place you can't recall; once none are left to ask about, it
+    /// lands in the middle of the range still open.
+    private func forget(_ place: RankCandidate) {
+        forgotten.insert(place.id)
+        if pivot == nil { settle(at: (low + high) / 2) }
     }
 
     /// Slot the place in at `index` among its peers (0 = best).
