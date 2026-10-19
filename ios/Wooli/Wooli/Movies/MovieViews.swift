@@ -185,6 +185,7 @@ struct MovieDetail: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var movies: [MovieEntry]
     @State private var reranking = false
+    @State private var closeAfterRank = false
     @State private var confirmDelete = false
 
     var body: some View {
@@ -256,12 +257,14 @@ struct MovieDetail: View {
                     }
                 }
             }
-            .sheet(isPresented: $reranking) {
+            // Back to the list once it's ranked, like Eats.
+            .sheet(isPresented: $reranking, onDismiss: { if closeAfterRank { dismiss() } }) {
                 RankFlow(candidate: movie.candidate, others: movies.filter { $0.id != movie.id }.map(\.candidate),
                          onFinish: { sentiment, rank in
                              movie.sentiment = sentiment
                              movie.rank = rank
                              movie.updatedAt = .now
+                             closeAfterRank = true
                          },
                          symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel })
             }

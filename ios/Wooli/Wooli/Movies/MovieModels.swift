@@ -47,7 +47,8 @@ final class MovieEntry {
     var byline: String { [year, director].filter { !$0.isEmpty }.joined(separator: " · ") }
 
     var candidate: RankCandidate {
-        RankCandidate(id: id, title: title, subtitle: byline, sentiment: sentiment, rank: rank)
+        RankCandidate(id: id, title: title, subtitle: byline, sentiment: sentiment, rank: rank,
+                      detail: [genre, notes, synopsis].filter { !$0.isEmpty }.joined(separator: "\n\n"))
     }
 }
 

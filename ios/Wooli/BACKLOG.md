@@ -232,6 +232,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-19 · Claude** — Ranking: hold a comparison card for a preview (name, date, its score and feeling, address and notes; movies: genre, notes, synopsis) with "Pick this one". Rank again from a place's page (Eats and Movies) now saves at once and closes the page back to the list — no Save tap. Not built.
+
 - **2026-10-19 · Claude** — Ranking flow (Eats + Movies): "Don't remember <place> — skip" on each comparison. The search asks about the nearest place to the middle that you haven't skipped (any pivot keeps binary search correct; checked with a Python port, 20k random runs, 0 misplaced); if every place left is skipped it lands mid-range. "Too tough — call it even" stays. Not built.
 
 - **2026-10-18 · Claude** — Eats list redone like Beli's "My Lists" (user's screenshot): **Been / Want to Try** tabs (wishlist moved out of its section), filter chips **City** (from the address: last part that isn't a country, state code or postcode — checked with a Python port) and **Cuisine** (first line of notes, as in the Beli import), a **Score / Recent / A–Z** sort and search; rows are "1. Name", cuisine, 🍴 address, a grey date · trip line, score ring on the right, plain full-width list; floating **View Map** button replaces the List/Map switch. Grey line has no distance or hours on purpose (user chose no location permission; Apple Maps gives apps no hours). Recs / Guides / Reserve / Order / Open now not built. Not built.

@@ -158,6 +158,38 @@ struct RankFlow: View {
             .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
+        // Hold to see it again before choosing.
+        .contextMenu {
+            Button("Pick this one", systemImage: "checkmark", action: action)
+        } preview: {
+            preview(place)
+        }
+    }
+
+    private func preview(_ place: RankCandidate) -> some View {
+        let score = EatsRanking.scores(others)[place.id]
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(place.title).font(.title3.weight(.bold)).foregroundStyle(Theme.text)
+                    if !place.subtitle.isEmpty {
+                        Text(place.subtitle).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let score { MealScoreBadge(score: score, size: 46) }
+            }
+            if let sentiment = place.sentiment {
+                Label(label(sentiment), systemImage: sentiment.symbol)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(sentiment.color)
+            }
+            if !place.detail.isEmpty {
+                Text(place.detail).font(.subheadline).foregroundStyle(Theme.text).lineLimit(12)
+            }
+        }
+        .padding(20)
+        .frame(width: 320, alignment: .leading)
+        .background(Theme.card)
     }
 
     private func finished(_ sentiment: MealSentiment, rank: Double) -> some View {
@@ -840,6 +872,7 @@ struct EatsPlaceDetail: View {
     @Environment(\.openURL) private var openURL
     @State private var editingPlan: TripItem?
     @State private var reranking = false
+    @State private var closeAfterRank = false
     @State private var confirmDelete = false
     @State private var renaming = false
     @State private var mapItem: MKMapItem?
@@ -896,10 +929,13 @@ struct EatsPlaceDetail: View {
             .sheet(item: $editingPlan) { item in
                 if let trip = TripStore.shared.trip(item.tripID) { TripItemEditor(item: item, trip: trip) }
             }
-            .sheet(isPresented: $reranking) {
+            // A new rank is saved right away and takes you back to the list.
+            .sheet(isPresented: $reranking, onDismiss: { if closeAfterRank { dismiss() } }) {
                 RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
                     place.sentiment = sentiment
                     place.rank = rank
+                    book.save(place)
+                    closeAfterRank = true
                 }
             }
             .alert("Rename", isPresented: $renaming) {

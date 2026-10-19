@@ -56,7 +56,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     var candidate: RankCandidate {
         RankCandidate(id: id, title: name,
                       subtitle: visitedDay.isEmpty ? "" : DayKey.date(visitedDay).formatted(.dateTime.month(.abbreviated).day().year()),
-                      sentiment: sentiment, rank: rank)
+                      sentiment: sentiment, rank: rank,
+                      detail: [address, notes].filter { !$0.isEmpty }.joined(separator: "\n\n"))
     }
 
     /// The first line of your notes — the cuisine, for places from Beli.
@@ -217,6 +218,8 @@ struct RankCandidate: Identifiable, Hashable {
     var subtitle: String = ""
     var sentiment: MealSentiment?
     var rank: Double?
+    /// More to jog your memory when you hold the card (address, notes).
+    var detail: String = ""
 }
 
 enum EatsRanking {
