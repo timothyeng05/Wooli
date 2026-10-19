@@ -205,7 +205,10 @@ final class EatsBook {
     // MARK: - Friends
 
     /// The share for your list, created the first time.
+    /// In your partner's list, that list's share (you're its administrator,
+    /// so you can invite friends to it too).
     func share() async throws -> CKShare {
+        if inPartnersList { return try await TripStore.shared.partnersEatsShare(listZoneID) }
         let share = try await TripStore.shared.eatsShare()
         isSharing = true
         persist()
@@ -305,6 +308,11 @@ final class EatsBook {
             if Self.isMine(zoneID) {
                 isSharing = true
                 if !inPartnersList { partner = Self.partner(in: share) }
+                // Your partner runs the list with you: make them an administrator
+                // so they can invite friends to it as well.
+                if share.participants.contains(where: Self.isUnpromotedPartner) {
+                    Task { await TripStore.shared.promotePartners(in: share) }
+                }
             } else if isList(zoneID) {
                 if let name = share.owner.userIdentity.nameComponents?.formatted(), !name.isEmpty { partner?.name = name }
             } else {
@@ -331,6 +339,10 @@ final class EatsBook {
 
     private static func upsert(_ place: EatsPlace, into places: inout [EatsPlace]) {
         if let i = places.firstIndex(where: { $0.id == place.id }) { places[i] = place } else { places.append(place) }
+    }
+
+    static func isUnpromotedPartner(_ participant: CKShare.Participant) -> Bool {
+        participant.role == .privateUser && participant.permission == .readWrite && participant.acceptanceStatus == .accepted
     }
 
     /// The person you gave "can make changes" to on your share, once they've joined.

@@ -648,20 +648,20 @@ struct EatsListView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
                 partnerTile
-                // In your partner's list, sharing with friends is theirs to do.
-                if !book.inPartnersList {
-                    Button { shareMyList(asPartner: false) } label: {
-                        VStack(spacing: 6) {
-                            Image(systemName: book.isSharing ? "person.2.fill" : "person.crop.circle.badge.plus")
-                                .font(.title3).foregroundStyle(Theme.brand)
-                                .frame(width: 52, height: 52)
-                                .background(Theme.brandSoft, in: Circle())
-                            Text(book.isSharing ? "Sharing" : "Invite").font(.caption).foregroundStyle(Theme.text)
-                        }
+                // In your partner's list this invites friends to the joint list
+                // (you're its administrator).
+                Button { shareMyList(asPartner: false) } label: {
+                    VStack(spacing: 6) {
+                        let sharing = book.isSharing && !book.inPartnersList
+                        Image(systemName: sharing ? "person.2.fill" : "person.crop.circle.badge.plus")
+                            .font(.title3).foregroundStyle(Theme.brand)
+                            .frame(width: 52, height: 52)
+                            .background(Theme.brandSoft, in: Circle())
+                        Text(sharing ? "Sharing" : "Invite").font(.caption).foregroundStyle(Theme.text)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(preparingShare)
                 }
+                .buttonStyle(.plain)
+                .disabled(preparingShare)
 
                 ForEach(book.friends) { friend in
                     NavigationLink {
@@ -723,9 +723,10 @@ struct EatsListView: View {
             do {
                 let share = try await book.share()
                 TripSharingPresenter.present(share: share, container: TripStore.shared.container,
-                                             title: asPartner ? "Our Eats list" : "My Eats list",
+                                             title: asPartner || book.partner != nil ? "Our Eats list" : "My Eats list",
                                              permissions: asPartner ? [.allowReadWrite, .allowPrivate] : [.allowReadOnly, .allowPrivate]) {
-                    EatsBook.shared.setSharing(false)
+                    // Only the owner can stop sharing the list.
+                    if !EatsBook.shared.inPartnersList { EatsBook.shared.setSharing(false) }
                 }
             } catch {
                 book.lastError = "Couldn't set up sharing: \(error.localizedDescription)"

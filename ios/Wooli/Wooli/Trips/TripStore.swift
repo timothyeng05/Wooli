@@ -396,6 +396,27 @@ final class TripStore: CKSyncEngineDelegate {
         }
     }
 
+    /// Makes your Eats partner an administrator of your list's share, so they
+    /// can invite and manage friends too (iCloud only lets the owner and
+    /// administrators add people).
+    func promotePartners(in share: CKShare) async {
+        let partners = share.participants.filter(EatsBook.isUnpromotedPartner)
+        guard !partners.isEmpty else { return }
+        for partner in partners { partner.role = .administrator }
+        do {
+            _ = try await container.privateCloudDatabase.modifyRecords(saving: [share], deleting: [])
+        } catch {
+            log.error("Couldn't make the Eats partner an administrator: \(error)")
+        }
+    }
+
+    /// The share of your partner's Eats list, from the shared database.
+    func partnersEatsShare(_ zoneID: CKRecordZone.ID) async throws -> CKShare {
+        let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+        guard let share = try await container.sharedCloudDatabase.record(for: shareID) as? CKShare else { throw CKError(.unknownItem) }
+        return share
+    }
+
     /// Leave a zone someone shared with you (an Eats list you follow).
     func leaveSharedZone(_ zoneID: CKRecordZone.ID) {
         sharedEngine?.state.add(pendingDatabaseChanges: [.deleteZone(zoneID)])
