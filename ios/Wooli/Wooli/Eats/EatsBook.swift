@@ -244,9 +244,11 @@ final class EatsBook {
             stashed = mine
             stashedWishes = wishlist
         }
-        friends.removeAll { $0.id == owner }
-        mine = []
+        // Already following it as a friend: start from what's here; the full
+        // download after joining fills in the rest.
+        mine = friends.first { $0.id == owner }?.places ?? []
         wishlist = []
+        friends.removeAll { $0.id == owner }
         partner = EatsPartner(name: name, listOwner: owner)
         persist()
     }

@@ -352,6 +352,7 @@ final class TripStore: CKSyncEngineDelegate {
             // Before fetching, so a partner's list lands as your list, not a friend's.
             if EatsBook.isEatsZone(metadata.share.recordID.zoneID) { EatsBook.shared.didAccept(metadata) }
             try await sharedEngine?.fetchChanges()
+            if EatsBook.shared.inPartnersList { await downloadPartnersList() }
             if let tripID = Trip.tripID(from: metadata.share.recordID.zoneID) { tripToOpen = tripID }
         } catch {
             lastError = "Couldn't accept the invite: \(error.localizedDescription)"
@@ -370,6 +371,28 @@ final class TripStore: CKSyncEngineDelegate {
             guard let engine = ownZone ? privateEngine : sharedEngine, !(save.isEmpty && delete.isEmpty) else { continue }
             if ownZone && !save.isEmpty { engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: EatsBook.myZoneID))]) }
             engine.state.add(pendingRecordZoneChanges: save.map { .saveRecord($0) } + delete.map { .deleteRecord($0) })
+        }
+    }
+
+    /// Everything in your partner's list, read straight from iCloud. The sync
+    /// engine only sends what changed since it last looked, so a list this
+    /// phone already saw (e.g. followed as a friend before) would stay empty.
+    func downloadPartnersList() async {
+        guard EatsBook.shared.inPartnersList else { return }
+        let zoneID = EatsBook.shared.listZoneID
+        var token: CKServerChangeToken?
+        do {
+            while true {
+                let changes = try await container.sharedCloudDatabase.recordZoneChanges(inZoneWith: zoneID, since: token)
+                for (_, result) in changes.modificationResultsByID {
+                    if case .success(let modification) = result { EatsBook.shared.apply(modification.record) }
+                }
+                token = changes.changeToken
+                if !changes.moreComing { break }
+            }
+        } catch {
+            log.error("Couldn't download the shared Eats list: \(error)")
+            EatsBook.shared.lastError = "Couldn't load your shared list: \(error.localizedDescription)"
         }
     }
 
@@ -564,9 +587,17 @@ final class TripStore: CKSyncEngineDelegate {
             } else {
                 lastError = "You can view this trip but not edit it."
             }
-        default:
-            // Network and rate-limit errors are retried by the engine.
+        case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited, .zoneBusy:
+            // Retried by the engine.
             log.error("Save failed for \(recordID.recordName): \(failure.error)")
+        default:
+            log.error("Save failed for \(recordID.recordName): \(failure.error)")
+            // Say so for Eats: otherwise a list that never reaches iCloud (e.g.
+            // the production schema isn't deployed) looks fine on this phone
+            // and empty on your partner's.
+            if EatsBook.isEatsZone(recordID.zoneID) {
+                EatsBook.shared.lastError = "Your Eats list couldn't sync to iCloud: \(failure.error.localizedDescription)"
+            }
         }
     }
 

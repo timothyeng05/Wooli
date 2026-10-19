@@ -552,6 +552,10 @@ struct EatsListView: View {
             Color.clear.frame(height: 72).listRowSeparator(.hidden)
         }
         .listStyle(.plain)
+        .refreshable {
+            await TripStore.shared.fetchChanges()
+            await TripStore.shared.downloadPartnersList()
+        }
     }
 
     @ViewBuilder
