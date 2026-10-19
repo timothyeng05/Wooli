@@ -114,15 +114,28 @@ enum ReelPlaces {
     /// reading of it. At most 10.
     static func spots(in caption: String) async -> [Spot] {
         var spots = pinned(in: caption)
-        for spot in await modelSpots(in: caption) where !spots.contains(where: { matches($0.name, [spot.name, spot.localName]) }) {
-            spots.append(spot)
+        for spot in await modelSpots(in: caption) {
+            // The same place from a 📍 line: keep that, filling in what the model adds.
+            if let i = spots.firstIndex(where: { matches($0.name, [spot.name, spot.localName]) }) {
+                if spots[i].localName.isEmpty { spots[i].localName = spot.localName }
+                if spots[i].address.isEmpty { spots[i].address = spot.address }
+                if spots[i].area.isEmpty { spots[i].area = spot.area }
+            } else {
+                spots.append(spot)
+            }
         }
         return Array(spots.prefix(10))
     }
 
-    /// "📍 Joe's Pizza, Greenwich Village" → Joe's Pizza in Greenwich Village
+    /// 📍 lines name a place ("📍 Joe's Pizza, Greenwich Village") or give
+    /// the address of the one named just above:
+    ///
+    ///     Sheng Yong Xing: $$$$
+    ///     📍 Bund 5, No. 20 Guangdong Road, Huangpu District, Shanghai
     static func pinned(in caption: String) -> [Spot] {
-        caption.split(separator: "\n").compactMap { line in
+        let lines = caption.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        return lines.indices.compactMap { index in
+            let line = lines[index]
             guard let pin = line.range(of: "📍") else { return nil }
             let text = line[pin.upperBound...]
                 .replacingOccurrences(of: "@", with: "")
@@ -130,8 +143,39 @@ enum ReelPlaces {
                 .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters.subtracting(CharacterSet(charactersIn: "'&"))))
             guard !text.isEmpty else { return nil }
             let parts = text.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            return Spot(name: parts[0], area: parts.count > 1 ? parts[1] : "")
+            let rest = parts.count > 1 ? parts[1] : ""
+            // "Bund 5, No. 20 Guangdong Road, …" is an address; "Pizza 4P's, Hanoi" is a name.
+            if looksLikeAddress(parts[0], numbersCount: false) || (looksLikeAddress(parts[0]) && looksLikeAddress(rest)) {
+                guard let name = nameAbove(index, in: lines) else { return nil }
+                return Spot(name: name, address: text)
+            }
+            return looksLikeAddress(rest) ? Spot(name: parts[0], address: rest) : Spot(name: parts[0], area: rest)
         }
+    }
+
+    /// A word streets have ("No. 20 Guangdong Road", "肇嘉浜路"), or with
+    /// `numbersCount`, any number ("Bund 5").
+    static func looksLikeAddress(_ text: String, numbersCount: Bool = true) -> Bool {
+        guard !text.isEmpty else { return false }
+        if numbersCount && text.contains(where: \.isNumber) { return true }
+        if ["路", "号", "街", "区"].contains(where: { text.contains($0) }) { return true }
+        let words = Set(text.lowercased().split { !$0.isLetter && $0 != "." }.map(String.init))
+        return !words.isDisjoint(with: ["road", "rd", "rd.", "street", "st.", "avenue", "ave", "ave.", "blvd", "lane", "district", "no."])
+    }
+
+    /// The place a 📍 address belongs to: the nearest line above that isn't
+    /// blank, a hashtag or another pin, up to its ":" or " - " ("Sheng Yong Xing: $$$$").
+    private static func nameAbove(_ index: Int, in lines: [String]) -> String? {
+        for line in lines[..<index].reversed() where !line.isEmpty {
+            guard !line.contains("📍"), !line.hasPrefix("#") else { return nil }
+            var name = line
+            for separator in [":", " - ", " – ", " — ", " | "] {
+                if let range = name.range(of: separator) { name = String(name[..<range.lowerBound]) }
+            }
+            name = name.filter { $0.isLetter || $0.isNumber || " '&.".contains($0) }.trimmingCharacters(in: .whitespaces)
+            return name.isEmpty ? nil : name
+        }
+        return nil
     }
 
     private static func modelSpots(in caption: String) async -> [Spot] {
@@ -164,11 +208,23 @@ enum ReelPlaces {
     private static func lookUp(_ spot: Spot) async -> TripPlace? {
         var anchor: CLLocation?
         var region: MKCoordinateRegion?
-        if !spot.address.isEmpty,
-           let item = await search([spot.address, spot.area].filter { !$0.isEmpty }.joined(separator: ", "), types: .address)?.mapItems.first {
-            anchor = item.location
-            region = MKCoordinateRegion(center: item.location.coordinate, latitudinalMeters: 3000, longitudinalMeters: 3000)
-        } else if !spot.area.isEmpty, let response = await search(spot.area, types: [.address, .pointOfInterest]) {
+        // Addresses often start with a building ("Bund 5, No. 20 Guangdong
+        // Road, …") Maps doesn't know: drop leading parts until one is found.
+        var parts = [spot.address, spot.area].joined(separator: ", ")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if !spot.address.isEmpty {
+            while parts.count >= 2, anchor == nil {
+                if let item = await search(parts.joined(separator: ", "), types: .address)?.mapItems.first {
+                    anchor = item.location
+                    region = MKCoordinateRegion(center: item.location.coordinate, latitudinalMeters: 3000, longitudinalMeters: 3000)
+                } else {
+                    parts.removeFirst()
+                }
+            }
+        }
+        // No street found: at least stay in its city ("Shanghai, China").
+        let city = spot.area.isEmpty ? parts.suffix(2).joined(separator: ", ") : spot.area
+        if region == nil, !city.isEmpty, let response = await search(city, types: [.address, .pointOfInterest]) {
             region = response.boundingRegion
         }
 
@@ -206,8 +262,9 @@ enum ReelPlaces {
     }
 
     /// Whether a name from Apple Maps is plausibly one of the caption's:
-    /// one contains the other ("人和馆(肇嘉浜路店)" ⊃ "人和馆"), or they share
-    /// a distinctive word.
+    /// one contains the other ("人和馆(肇嘉浜路店)" ⊃ "人和馆"), or every
+    /// distinctive word of the caption's name is there (at least two — one
+    /// shared word let "Bund 5" match "The Westin Bund Center").
     static func matches(_ found: String, _ wanted: [String]) -> Bool {
         let squashed = squash(found)
         let words = Set(found.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
@@ -216,8 +273,9 @@ enum ReelPlaces {
             guard !target.isEmpty, !squashed.isEmpty else { return false }
             // Two letters is enough for Chinese names (鼎泰), not much less.
             if min(squashed.count, target.count) >= 2, squashed.contains(target) || target.contains(squashed) { return true }
-            return name.lowercased().split { !$0.isLetter && !$0.isNumber }
-                .contains { $0.count >= 4 && !genericWords.contains(String($0)) && words.contains(String($0)) }
+            let distinctive = name.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+                .filter { $0.count >= 4 && !genericWords.contains($0) }
+            return distinctive.count >= 2 && distinctive.allSatisfy(words.contains)
         }
     }
 
