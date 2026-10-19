@@ -288,6 +288,7 @@ struct EatsListView: View {
     @State private var preparingShare = false
     @State private var showAllWaiting = false
     @State private var confirmSkipAll = false
+    @State private var partnerOptions = false
     @State private var tab = Tab.been
     @State private var sort = Sort.score
     @State private var city: String?
@@ -345,7 +346,7 @@ struct EatsListView: View {
             }
             .padding(20)
         }
-        .navigationTitle(tripID == nil ? "Eats" : "What we ate")
+        .navigationTitle(tripID != nil ? "What we ate" : book.partner == nil ? "Eats" : "Our Eats")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -642,17 +643,21 @@ struct EatsListView: View {
     private var friendsStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                Button(action: shareMyList) {
-                    VStack(spacing: 6) {
-                        Image(systemName: book.isSharing ? "person.2.fill" : "person.crop.circle.badge.plus")
-                            .font(.title3).foregroundStyle(Theme.brand)
-                            .frame(width: 52, height: 52)
-                            .background(Theme.brandSoft, in: Circle())
-                        Text(book.isSharing ? "Sharing" : "Invite").font(.caption).foregroundStyle(Theme.text)
+                partnerTile
+                // In your partner's list, sharing with friends is theirs to do.
+                if !book.inPartnersList {
+                    Button { shareMyList(asPartner: false) } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: book.isSharing ? "person.2.fill" : "person.crop.circle.badge.plus")
+                                .font(.title3).foregroundStyle(Theme.brand)
+                                .frame(width: 52, height: 52)
+                                .background(Theme.brandSoft, in: Circle())
+                            Text(book.isSharing ? "Sharing" : "Invite").font(.caption).foregroundStyle(Theme.text)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(preparingShare)
                 }
-                .buttonStyle(.plain)
-                .disabled(preparingShare)
 
                 ForEach(book.friends) { friend in
                     NavigationLink {
@@ -671,9 +676,41 @@ struct EatsListView: View {
         }
     }
 
-    private func shareMyList() {
+    /// Couple mode: invite your partner, or (once you share a list) manage or leave it.
+    private var partnerTile: some View {
+        Button {
+            if book.partner == nil { shareMyList(asPartner: true) } else { partnerOptions = true }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: book.partner == nil ? "heart.circle" : "heart.fill")
+                    .font(.title3).foregroundStyle(Color(hex: "#e11d48"))
+                    .frame(width: 52, height: 52)
+                    .background(Color(hex: "#e11d48").opacity(0.12), in: Circle())
+                Text(book.partner.map { $0.name.split(separator: " ").first.map(String.init) ?? $0.name } ?? "Partner")
+                    .font(.caption).foregroundStyle(Theme.text).lineLimit(1)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+        .disabled(preparingShare)
+        .confirmationDialog("You and \(book.partner?.name ?? "your partner") share this list", isPresented: $partnerOptions,
+                            titleVisibility: .visible) {
+            if book.inPartnersList {
+                Button("Leave our list", role: .destructive) { book.leavePartnersList() }
+            } else {
+                Button("Manage sharing") { shareMyList(asPartner: true) }
+            }
+        } message: {
+            Text(book.inPartnersList
+                 ? "It stays with \(book.partner?.name ?? "them"). You'll get your own list back."
+                 : "You both add, rank and remove places, and see each other's changes.")
+        }
+    }
+
+    /// Friends get view-only access to your list; your partner can make changes.
+    private func shareMyList(asPartner: Bool) {
         guard TripStore.shared.iCloudAvailable else {
-            book.lastError = "Sign in to iCloud in Settings to share your list with friends."
+            book.lastError = "Sign in to iCloud in Settings to share your list."
             return
         }
         preparingShare = true
@@ -681,8 +718,9 @@ struct EatsListView: View {
             defer { preparingShare = false }
             do {
                 let share = try await book.share()
-                TripSharingPresenter.present(share: share, container: TripStore.shared.container, title: "My Eats list",
-                                             permissions: [.allowReadOnly, .allowPrivate]) {
+                TripSharingPresenter.present(share: share, container: TripStore.shared.container,
+                                             title: asPartner ? "Our Eats list" : "My Eats list",
+                                             permissions: asPartner ? [.allowReadWrite, .allowPrivate] : [.allowReadOnly, .allowPrivate]) {
                     EatsBook.shared.setSharing(false)
                 }
             } catch {
@@ -694,7 +732,8 @@ struct EatsListView: View {
     private func subtitle(_ place: EatsPlace) -> String {
         let trip = tripID == nil && !place.tripID.isEmpty ? TripStore.shared.trip(place.tripID)?.name : nil
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).day().year())
-        return [trip, date].compactMap { $0 }.joined(separator: " · ")
+        let visits = place.visits.count > 1 ? "\(place.visits.count) visits" : nil
+        return [trip, date, visits].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func candidate(for request: RankRequest) -> RankCandidate {
@@ -886,6 +925,7 @@ struct EatsPlaceDetail: View {
     @State private var closeAfterRank = false
     @State private var confirmDelete = false
     @State private var renaming = false
+    @State private var editingVisit: EatsVisit?
     @State private var mapItem: MKMapItem?
     @State private var showingListing = false
     @FocusState private var editingNotes: Bool
@@ -947,6 +987,13 @@ struct EatsPlaceDetail: View {
                     place.rank = rank
                     book.save(place)
                     closeAfterRank = true
+                }
+            }
+            .sheet(item: $editingVisit) { visit in
+                VisitEditor(visit: visit, isNew: !place.visits.contains { $0.id == visit.id },
+                            canDelete: place.visits.count > 1) { edited in
+                    if let edited { place.setVisit(edited) } else { place.removeVisit(visit) }
+                    book.save(place)
                 }
             }
             .alert("Rename", isPresented: $renaming) {
@@ -1040,12 +1087,18 @@ struct EatsPlaceDetail: View {
     /// Your own details, as a list of rows like Beli's "Your notes and photos".
     private var notesList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Your notes").font(.title3.weight(.bold)).foregroundStyle(Theme.text).padding(.bottom, 6)
-            PlaceDetailRow(systemImage: "calendar") {
-                DatePicker("Visit date", selection: Binding(get: { DayKey.date(place.visitedDay) },
-                                                             set: { place.visitedDay = DayKey.key($0) }),
-                           displayedComponents: .date)
+            Text(place.visits.count > 1 ? "Visits · \(place.visits.count)" : "Visits")
+                .font(.title3.weight(.bold)).foregroundStyle(Theme.text).padding(.bottom, 6)
+            ForEach(place.visits) { visit in
+                PlaceDetailRow(systemImage: "calendar") {
+                    PlaceDetailLink(title: DayKey.date(visit.day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year()),
+                                    detail: visit.note) { editingVisit = visit }
+                }
             }
+            PlaceDetailRow(systemImage: "plus.circle") {
+                PlaceDetailLink(title: "Add visit") { editingVisit = EatsVisit(day: DayKey.key(.now)) }
+            }
+            Text("Your notes").font(.title3.weight(.bold)).foregroundStyle(Theme.text).padding(.top, 22).padding(.bottom, 6)
             if let item = tripItem, let trip = TripStore.shared.trip(item.tripID) {
                 PlaceDetailRow(systemImage: "suitcase") {
                     Button { editingPlan = TripStore.shared.items.first { $0.id == item.id } ?? item } label: {
@@ -1086,5 +1139,45 @@ struct EatsPlaceDetail: View {
 
     private var tagline: String? {
         place.notes.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+    }
+}
+
+/// Add or change one visit: the day and a short note.
+struct VisitEditor: View {
+    @State var visit: EatsVisit
+    let isNew: Bool
+    /// The last visit can't be deleted; a place always has one.
+    let canDelete: Bool
+    /// The edited visit, or nil to delete it.
+    let onDone: (EatsVisit?) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Date", selection: Binding(get: { DayKey.date(visit.day) }, set: { visit.day = DayKey.key($0) }),
+                           in: ...Date.now, displayedComponents: .date)
+                TextField("Note — the occasion, what you ordered", text: $visit.note, axis: .vertical)
+                    .lineLimit(1...4)
+                if !isNew && canDelete {
+                    Button("Delete visit", role: .destructive) {
+                        onDone(nil)
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle(isNew ? "Add visit" : "Visit")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isNew ? "Add" : "Done") {
+                        onDone(visit)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

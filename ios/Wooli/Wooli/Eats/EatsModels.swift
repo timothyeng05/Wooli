@@ -17,8 +17,12 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     var sentiment: MealSentiment = .liked
     /// Order within the sentiment (higher = better); only the order matters.
     var rank: Double = 0
-    /// "yyyy-MM-dd" you went.
+    /// "yyyy-MM-dd" you last went. Kept in step with `visits` (the latest
+    /// one) so older builds, sorting and the ranking flow still have a date.
     var visitedDay: String = DayKey.key(.now)
+    /// Every time you went, newest first. Places from before visits existed
+    /// get one from `visitedDay` when they're read.
+    var visits: [EatsVisit] = []
     var notes: String = ""
     /// The trip and trip item this came from; "" for places added in Eats.
     var tripID: String = ""
@@ -35,6 +39,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     init(name: String, place: TripPlace? = nil, visitedDay: String = DayKey.key(.now)) {
         self.name = name
         self.visitedDay = visitedDay
+        visits = [EatsVisit(day: visitedDay)]
         if let place {
             address = place.address
             latitude = place.latitude
@@ -96,7 +101,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
 
     // Field by field, so records from newer or older versions still decode.
     enum CodingKeys: String, CodingKey {
-        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, notes, tripID, tripItemID, createdAt, systemFields
+        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, visits, notes, tripID, tripItemID, createdAt, systemFields
     }
 
     init(from decoder: Decoder) throws {
@@ -110,6 +115,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         sentiment = (try? c.decodeIfPresent(MealSentiment.self, forKey: .sentiment)) ?? .liked
         rank = try c.decodeIfPresent(Double.self, forKey: .rank) ?? 0
         visitedDay = try c.decodeIfPresent(String.self, forKey: .visitedDay) ?? ""
+        visits = (try? c.decodeIfPresent([EatsVisit].self, forKey: .visits)) ?? []
+        if visits.isEmpty && !visitedDay.isEmpty { visits = [EatsVisit(day: visitedDay)] }
         notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
         tripID = try c.decodeIfPresent(String.self, forKey: .tripID) ?? ""
         tripItemID = try c.decodeIfPresent(String.self, forKey: .tripItemID) ?? ""
@@ -127,6 +134,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         r["sentiment"] = sentiment.rawValue
         r["rank"] = rank
         r["visitedDay"] = visitedDay
+        r["visits"] = (try? JSONEncoder().encode(visits)).flatMap { String(data: $0, encoding: .utf8) }
         r["notes"] = notes
         r["tripID"] = tripID
         r["tripItemID"] = tripItemID
@@ -144,11 +152,40 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         sentiment = (r["sentiment"] as? String).flatMap(MealSentiment.init) ?? .liked
         rank = r["rank"] as? Double ?? 0
         visitedDay = r["visitedDay"] as? String ?? ""
+        visits = (r["visits"] as? String).flatMap { try? JSONDecoder().decode([EatsVisit].self, from: Data($0.utf8)) } ?? []
+        if visits.isEmpty && !visitedDay.isEmpty { visits = [EatsVisit(day: visitedDay)] }
         notes = r["notes"] as? String ?? ""
         tripID = r["tripID"] as? String ?? ""
         tripItemID = r["tripItemID"] as? String ?? ""
         createdAt = r["createdAt"] as? Date ?? r.creationDate ?? .now
         systemFields = keepSystemFields ? r.encodedSystemFields : nil
+    }
+}
+
+/// One time you went to a place.
+struct EatsVisit: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    /// "yyyy-MM-dd"
+    var day: String
+    var note: String = ""
+}
+
+extension EatsPlace {
+    /// Adds or updates a visit, keeping them newest first and `visitedDay`
+    /// on the latest.
+    mutating func setVisit(_ visit: EatsVisit) {
+        if let i = visits.firstIndex(where: { $0.id == visit.id }) { visits[i] = visit } else { visits.append(visit) }
+        sortVisits()
+    }
+
+    mutating func removeVisit(_ visit: EatsVisit) {
+        visits.removeAll { $0.id == visit.id }
+        sortVisits()
+    }
+
+    private mutating func sortVisits() {
+        visits.sort { $0.day > $1.day }
+        if let latest = visits.first { visitedDay = latest.day }
     }
 }
 

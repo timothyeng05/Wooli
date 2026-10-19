@@ -349,9 +349,10 @@ final class TripStore: CKSyncEngineDelegate {
     func accept(_ metadata: CKShare.Metadata) async {
         do {
             _ = try await container.accept(metadata)
+            // Before fetching, so a partner's list lands as your list, not a friend's.
+            if EatsBook.isEatsZone(metadata.share.recordID.zoneID) { EatsBook.shared.didAccept(metadata) }
             try await sharedEngine?.fetchChanges()
             if let tripID = Trip.tripID(from: metadata.share.recordID.zoneID) { tripToOpen = tripID }
-            if EatsBook.isEatsZone(metadata.share.recordID.zoneID) { EatsBook.shared.didAccept(metadata) }
         } catch {
             lastError = "Couldn't accept the invite: \(error.localizedDescription)"
         }
@@ -359,11 +360,17 @@ final class TripStore: CKSyncEngineDelegate {
 
     // MARK: - Eats
 
-    /// Queue changes to your Eats list (its zone is created on first save).
+    /// Queue changes to an Eats list: yours through the private database
+    /// (its zone is created on first save), your partner's joint list
+    /// through the shared one.
     func queueEats(saving: [CKRecord.ID] = [], deleting: [CKRecord.ID] = []) {
-        guard let engine = privateEngine, !(saving.isEmpty && deleting.isEmpty) else { return }
-        if !saving.isEmpty { engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: EatsBook.myZoneID))]) }
-        engine.state.add(pendingRecordZoneChanges: saving.map { .saveRecord($0) } + deleting.map { .deleteRecord($0) })
+        for ownZone in [true, false] {
+            let save = saving.filter { ($0.zoneID.ownerName == CKCurrentUserDefaultName) == ownZone }
+            let delete = deleting.filter { ($0.zoneID.ownerName == CKCurrentUserDefaultName) == ownZone }
+            guard let engine = ownZone ? privateEngine : sharedEngine, !(save.isEmpty && delete.isEmpty) else { continue }
+            if ownZone && !save.isEmpty { engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: EatsBook.myZoneID))]) }
+            engine.state.add(pendingRecordZoneChanges: save.map { .saveRecord($0) } + delete.map { .deleteRecord($0) })
+        }
     }
 
     /// Leave a zone someone shared with you (an Eats list you follow).
@@ -530,6 +537,10 @@ final class TripStore: CKSyncEngineDelegate {
             engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
         case .zoneNotFound:
             if EatsBook.isEatsZone(recordID.zoneID) {
+                guard recordID.zoneID.ownerName == CKCurrentUserDefaultName else {
+                    EatsBook.shared.removeZone(recordID.zoneID) // Your partner's list is gone.
+                    return
+                }
                 engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: recordID.zoneID))])
                 engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
                 return
@@ -548,7 +559,11 @@ final class TripStore: CKSyncEngineDelegate {
             EatsBook.shared.clearSystemFields(recordID.recordName)
             engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
         case .permissionFailure:
-            lastError = "You can view this trip but not edit it."
+            if EatsBook.isEatsZone(recordID.zoneID) {
+                EatsBook.shared.lastError = "You can view this list but not edit it."
+            } else {
+                lastError = "You can view this trip but not edit it."
+            }
         default:
             // Network and rate-limit errors are retried by the engine.
             log.error("Save failed for \(recordID.recordName): \(failure.error)")
