@@ -232,6 +232,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ## Done
 
+- **2026-10-19 · Claude** — Ranking compares against a random place from the middle half of the range left (was always the exact middle, so every ranking met the same places). Python port: 20k random runs, 0 misplaced; ~5.2 questions for a 40-place list (vs ~5.4); 20 different first comparisons instead of 1. Not built.
+
 - **2026-10-19 · Claude** — Ranking: hold a comparison card for a preview (name, date, its score and feeling, address and notes; movies: genre, notes, synopsis) with "Pick this one". Rank again from a place's page (Eats and Movies) now saves at once and closes the page back to the list — no Save tap. Not built.
 
 - **2026-10-19 · Claude** — Ranking flow (Eats + Movies): "Don't remember <place> — skip" on each comparison. The search asks about the nearest place to the middle that you haven't skipped (any pivot keeps binary search correct; checked with a Python port, 20k random runs, 0 misplaced); if every place left is skipped it lands mid-range. "Too tough — call it even" stays. Not built.

@@ -62,6 +62,8 @@ struct RankFlow: View {
     @State private var high = 0
     /// Places you said you don't remember; they're never asked about again.
     @State private var forgotten: Set<String> = []
+    /// The peer being compared against now (index into `peers`).
+    @State private var pivot: Int?
     @State private var result: Double?
 
     private var peers: [RankCandidate] { sentiment.map { EatsRanking.group(of: $0, in: others) } ?? [] }
@@ -136,7 +138,7 @@ struct RankFlow: View {
             }
             .lineLimit(1)
         }
-        .id("\(low)-\(high)-\(forgotten.count)")
+        .id("\(low)-\(high)-\(pivot ?? -1)")
         .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
     }
 
@@ -220,28 +222,37 @@ struct RankFlow: View {
         sentiment = feeling
         low = 0
         high = EatsRanking.group(of: feeling, in: others).count
-        if high == 0 { settle(at: 0) }
+        if high == 0 { settle(at: 0) } else { choosePivot() }
     }
 
-    /// Who to compare against next: the middle of what's left, or the
-    /// closest place to it that you haven't skipped. Any place in the range
-    /// works for the search; the middle just takes the fewest taps.
-    private var pivot: Int? {
-        guard low < high else { return nil }
+    /// Who to compare against next: a random place from the middle half of
+    /// what's left, so each ranking meets different places instead of the
+    /// same exact-middle ones every time. Any place in the range keeps the
+    /// search correct; staying near the middle keeps it to a few taps.
+    /// Places you skipped are never picked.
+    private func choosePivot() {
+        guard low < high else {
+            pivot = nil
+            return
+        }
+        let open = (low..<high).filter { !forgotten.contains(peers[$0].id) }
+        let quarter = (high - low) / 4
         let mid = (low + high) / 2
-        return (low..<high).filter { !forgotten.contains(peers[$0].id) }.min { abs($0 - mid) < abs($1 - mid) }
+        pivot = open.filter { $0 >= low + quarter && $0 < high - quarter }.randomElement()
+            ?? open.min { abs($0 - mid) < abs($1 - mid) }
     }
 
     private func answer(newIsBetter: Bool) {
         guard let pivot else { return }
         if newIsBetter { high = pivot } else { low = pivot + 1 }
-        if low >= high { settle(at: low) }
+        if low >= high { settle(at: low) } else { choosePivot() }
     }
 
     /// Skip a place you can't recall; once none are left to ask about, it
     /// lands in the middle of the range still open.
     private func forget(_ place: RankCandidate) {
         forgotten.insert(place.id)
+        choosePivot()
         if pivot == nil { settle(at: (low + high) / 2) }
     }
 
