@@ -10,6 +10,8 @@ final class SharedPlaceInbox {
     var current: SharedPlace?
     /// An Instagram reel to look for places in; shown after any places.
     var currentReel: SharedReel?
+    /// The sheet clears `currentReel` before its onDismiss runs, so remember what was shown.
+    @ObservationIgnored private var shownReel: URL?
     /// Bumped when shared places go straight to Eats' Want to try, so the
     /// app can switch to Eats to show them.
     private(set) var wishesAdded = 0
@@ -31,12 +33,14 @@ final class SharedPlaceInbox {
             current = next
         } else {
             currentReel = SharedPlaceHandoff.pendingReels().first
+            shownReel = currentReel?.url
         }
     }
 
     /// Added or cancelled, like places: it leaves the inbox either way.
     func reelDismissed() {
-        if let reel = currentReel { SharedPlaceHandoff.removeReel(reel.id) }
+        if let shownReel { SharedPlaceHandoff.removeReel(shownReel) }
+        shownReel = nil
         currentReel = nil
         check()
     }

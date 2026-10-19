@@ -83,16 +83,19 @@ enum SharedPlaceHandoff {
     static func add(_ reel: SharedReel) -> Bool {
         guard let reelsURL else { return false }
         do {
-            try JSONEncoder().encode(pendingReels() + [reel]).write(to: reelsURL, options: .atomic)
+            // Sharing the same reel twice queues it once.
+            let others = pendingReels().filter { $0.url != reel.url }
+            try JSONEncoder().encode(others + [reel]).write(to: reelsURL, options: .atomic)
             return true
         } catch {
             return false
         }
     }
 
-    static func removeReel(_ id: String) {
+    /// Removes every queued copy of that reel.
+    static func removeReel(_ url: URL) {
         guard let reelsURL else { return }
-        let rest = pendingReels().filter { $0.id != id }
+        let rest = pendingReels().filter { $0.url != url }
         if rest.isEmpty {
             try? FileManager.default.removeItem(at: reelsURL)
         } else {
