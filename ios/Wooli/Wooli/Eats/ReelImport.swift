@@ -276,8 +276,17 @@ struct ReelImportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(picked.isEmpty ? "Add" : "Add \(picked.count)") { add() }.disabled(picked.isEmpty)
+            }
+            // Says where the places go, not just "Add".
+            .safeAreaInset(edge: .bottom) {
+                if result != nil {
+                    Button { add() } label: {
+                        Label(picked.count > 1 ? "Save \(picked.count) to Want to Try" : "Save to Want to Try", systemImage: "bookmark.fill")
+                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                    }
+                    .buttonStyle(.borderedProminent).tint(AppSpace.eats.tint)
+                    .disabled(picked.isEmpty)
+                    .padding(.horizontal, 20).padding(.bottom, 8)
                 }
             }
             .sheet(isPresented: $searching) {
@@ -321,7 +330,7 @@ struct ReelImportSheet: View {
                 }
                 Button("Add a place by name", systemImage: "magnifyingglass") { searching = true }
             } header: {
-                if !result.found.isEmpty { Text("Save to Want to try") }
+                if !result.found.isEmpty { Text(result.found.count == 1 ? "Found in the caption" : "Found in the caption · tap to pick") }
             } footer: {
                 if result.caption == nil {
                     Text("Instagram didn't share this reel's caption. Add the place by name.")
