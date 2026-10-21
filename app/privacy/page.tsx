@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated October 18, 2026</p>
+      <p className="updated">Last updated October 21, 2026</p>
 
       <p>
         Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten, keeping a budget and
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <h2>Where your information lives</h2>
       <ul>
         <li><strong>On your iPhone.</strong> Budget categories, transactions you enter or import, period entries and your settings are stored on your device.</li>
-        <li><strong>In your own iCloud.</strong> Trips, your Eats list and your Movies list sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data.</li>
+        <li><strong>In your own iCloud.</strong> Trips, your Eats list, your Movies list and your saved recipes sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data.</li>
         <li><strong>When you share.</strong> If you invite someone to a trip or share your Eats list, they can see what you shared, and anyone you allow to make changes (for example a partner sharing one Eats list with you) can edit it. You can stop sharing at any time.</li>
       </ul>
 
@@ -42,8 +42,9 @@ export default function PrivacyPage() {
         If you share an Instagram reel or post to Wooli, your iPhone downloads that post&apos;s public page
         from Instagram to read its caption, so Instagram sees that request like any visit to the post. The
         caption is read on your iPhone (with Apple Intelligence when it&apos;s on) to find place names, which
-        are then looked up in Apple Maps. Nothing is sent to the developer, and Wooli only keeps the
-        places you choose to save, with the reel&apos;s link.
+        are then looked up in Apple Maps, or to split a recipe into ingredients and steps. Nothing is sent to
+        the developer, and Wooli only keeps the places or recipe you choose to save, with the reel&apos;s link
+        (and, for a recipe, its caption).
       </p>
 
       <h2>What Wooli doesn&apos;t do</h2>

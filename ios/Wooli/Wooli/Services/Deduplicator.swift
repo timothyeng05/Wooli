@@ -22,6 +22,8 @@ enum Deduplicator {
         dedupe(FetchDescriptor<PeriodEntry>(), key: { "\($0.startDay.timeIntervalSince1970)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
         // Movies: one entry per film (added on two devices); keep the newest edit.
         dedupe(FetchDescriptor<MovieEntry>(), key: { $0.appleID.isEmpty ? $0.id : $0.appleID }, context: context) { a, b in a.updatedAt >= b.updatedAt }
+        // Recipes: one per reel (saved on two devices); keep the newest edit.
+        dedupe(FetchDescriptor<RecipeEntry>(), key: { $0.sourceURL.isEmpty ? $0.id : $0.sourceURL }, context: context) { a, b in a.updatedAt >= b.updatedAt }
         try? context.save()
     }
 

@@ -198,7 +198,11 @@ struct MainTabView: View {
             SharedPlaceSheet(place: place)
         }
         .sheet(item: $inbox.currentReel, onDismiss: inbox.reelDismissed) { reel in
-            ReelImportSheet(reel: reel)
+            if reel.purpose == .recipe {
+                RecipeImportSheet(reel: reel)
+            } else {
+                ReelImportSheet(reel: reel)
+            }
         }
         // A trip someone just invited you to.
         .sheet(item: Binding(get: { trips.tripToOpen.map(TripRoute.init) }, set: { trips.tripToOpen = $0?.id })) { route in
@@ -252,6 +256,11 @@ private struct SpaceRoot: View {
         case .movies:
             NavigationStack {
                 MoviesListView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+            }
+        case .recipes:
+            NavigationStack {
+                RecipesListView()
                     .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
             }
         case .period:

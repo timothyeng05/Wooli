@@ -2,7 +2,8 @@ import UIKit
 import SwiftUI
 
 /// Wooli in the share sheet: shows the place shared from Apple Maps and
-/// hands it to the app (via the App Group) for Eats or a trip's Ideas.
+/// hands it to the app (via the App Group) for Eats or a trip's Ideas; an
+/// Instagram reel goes to Eats (places in it) or Recipes.
 final class ShareViewController: UIViewController {
     private let model = ShareModel()
 
@@ -71,8 +72,8 @@ final class ShareModel {
         if SharedPlaceHandoff.add(place) { onSaved() } else { state = .saveFailed }
     }
 
-    func send(reel url: URL) {
-        if SharedPlaceHandoff.add(SharedReel(url: url)) { onSaved() } else { state = .saveFailed }
+    func send(reel url: URL, as purpose: SharedReel.Purpose) {
+        if SharedPlaceHandoff.add(SharedReel(url: url, purpose: purpose)) { onSaved() } else { state = .saveFailed }
     }
 }
 
@@ -91,7 +92,7 @@ struct ShareView: View {
                 case .reel(let url):
                     reel(url)
                 case .notAPlace:
-                    message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats or a trip.")
+                    message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats, a trip or Recipes.")
                 case .saveFailed:
                     message("Couldn't hand this to Wooli", detail: "Open Wooli once, then try sharing again.")
                 }
@@ -144,16 +145,23 @@ struct ShareView: View {
                     .frame(width: 56, height: 56)
                     .background(orange.gradient, in: Circle())
                 Text("Instagram reel").font(.title3.weight(.bold))
-                Text("Wooli reads the caption for restaurants and saves the ones you pick to Want to try in Eats.")
+                Text("Wooli reads the caption: save its recipe as ingredients and steps, or the restaurants it names to Want to try in Eats.")
                     .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             .padding(.top, 8)
             Spacer(minLength: 0)
-            Button { model.send(reel: url) } label: {
-                Label("Find places in this reel", systemImage: "sparkle.magnifyingglass")
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+            VStack(spacing: 10) {
+                Button { model.send(reel: url, as: .recipe) } label: {
+                    Label("Save as a recipe", systemImage: "frying.pan")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent).tint(orange)
+                Button { model.send(reel: url, as: .places) } label: {
+                    Label("Find places in this reel", systemImage: "sparkle.magnifyingglass")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                }
+                .buttonStyle(.bordered).tint(orange)
             }
-            .buttonStyle(.borderedProminent).tint(orange)
         }
     }
 
