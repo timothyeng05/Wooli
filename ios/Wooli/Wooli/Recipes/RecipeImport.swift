@@ -4,9 +4,8 @@ import SwiftData
 import FoundationModels
 #endif
 
-// A reel shared with "Save as a recipe": download its caption (same public
-// pages Eats reads for places), split it into ingredients and steps, and
-// let the user check it before saving.
+// A shared reel whose caption reads as a recipe (`SharedReelSheet` decides):
+// split it into ingredients and steps and let the user check it before saving.
 
 enum RecipeReader {
     /// The headings parser first, since it keeps the caption's own words;
@@ -47,24 +46,26 @@ private struct CaptionRecipe {
 }
 #endif
 
-/// Shown when a reel arrives with "Save as a recipe": the recipe read from
-/// its caption, ready to fix up and save.
+/// The recipe read from a shared reel's caption, ready to fix up and save.
 struct RecipeImportSheet: View {
     let reel: SharedReel
+    /// Already downloaded; nil when Instagram didn't share it.
+    let caption: String?
+    /// "It's places to eat": hands the reel to Eats instead.
+    let onPlaces: () -> Void
 
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var recipes: [RecipeEntry]
     @State private var draft: RecipeDraft?
-    @State private var gotCaption = true
 
     var body: some View {
         NavigationStack {
             Group {
                 if let draft {
                     RecipeEditor(draft: draft,
-                                 notice: gotCaption ? nil : "Instagram didn't share this reel's caption. Copy it in Instagram and paste it below.") { saved in
+                                 notice: caption != nil ? nil : "Instagram didn't share this reel's caption. Copy it in Instagram and paste it below.") { saved in
                         save(saved)
                     }
                 } else {
@@ -75,11 +76,13 @@ struct RecipeImportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .bottomBar) {
+                    Button("It's places to eat — find them", systemImage: "fork.knife", action: onPlaces)
+                }
             }
             .task {
                 let link = RecipeDraft.cleanLink(reel.url)
-                guard let caption = await ReelPlaces.caption(for: reel.url) else {
-                    gotCaption = false
+                guard let caption else {
                     draft = RecipeDraft(sourceURL: link)
                     return
                 }

@@ -2,8 +2,9 @@ import UIKit
 import SwiftUI
 
 /// Wooli in the share sheet: shows the place shared from Apple Maps and
-/// hands it to the app (via the App Group) for Eats or a trip's Ideas; an
-/// Instagram reel goes to Eats (places in it) or Recipes.
+/// hands it to the app (via the App Group) for Eats or a trip's Ideas. An
+/// Instagram reel goes straight to the app, which works out from the caption
+/// whether it's a recipe or places to eat.
 final class ShareViewController: UIViewController {
     private let model = ShareModel()
 
@@ -49,7 +50,7 @@ final class ShareViewController: UIViewController {
 @Observable
 final class ShareModel {
     enum State {
-        case loading, ready(SharedPlace), reel(URL), notAPlace, saveFailed
+        case loading, ready(SharedPlace), notAPlace, saveFailed
     }
 
     var state: State = .loading
@@ -60,7 +61,8 @@ final class ShareModel {
         if let place = await PlaceResolver.resolve(items) {
             state = .ready(place)
         } else if let link = await PlaceResolver.instagramLink(in: items) {
-            state = .reel(link)
+            // Nothing to ask: the app reads the caption.
+            send(reel: link)
         } else {
             state = .notAPlace
         }
@@ -72,8 +74,8 @@ final class ShareModel {
         if SharedPlaceHandoff.add(place) { onSaved() } else { state = .saveFailed }
     }
 
-    func send(reel url: URL, as purpose: SharedReel.Purpose) {
-        if SharedPlaceHandoff.add(SharedReel(url: url, purpose: purpose)) { onSaved() } else { state = .saveFailed }
+    func send(reel url: URL) {
+        if SharedPlaceHandoff.add(SharedReel(url: url)) { onSaved() } else { state = .saveFailed }
     }
 }
 
@@ -89,8 +91,6 @@ struct ShareView: View {
                     ProgressView("Finding the place…").frame(maxHeight: .infinity)
                 case .ready(let place):
                     ready(place)
-                case .reel(let url):
-                    reel(url)
                 case .notAPlace:
                     message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats, a trip or Recipes.")
                 case .saveFailed:
@@ -133,34 +133,6 @@ struct ShareView: View {
                     Label("Add to a trip's Ideas", systemImage: "airplane").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.bordered)
-            }
-        }
-    }
-
-    private func reel(_ url: URL) -> some View {
-        VStack(spacing: 20) {
-            VStack(spacing: 6) {
-                Image(systemName: "play.rectangle.fill")
-                    .font(.title2.weight(.bold)).foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(orange.gradient, in: Circle())
-                Text("Instagram reel").font(.title3.weight(.bold))
-                Text("Wooli reads the caption: save its recipe as ingredients and steps, or the restaurants it names to Want to try in Eats.")
-                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
-            .padding(.top, 8)
-            Spacer(minLength: 0)
-            VStack(spacing: 10) {
-                Button { model.send(reel: url, as: .recipe) } label: {
-                    Label("Save as a recipe", systemImage: "frying.pan")
-                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent).tint(orange)
-                Button { model.send(reel: url, as: .places) } label: {
-                    Label("Find places in this reel", systemImage: "sparkle.magnifyingglass")
-                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
-                }
-                .buttonStyle(.bordered).tint(orange)
             }
         }
     }

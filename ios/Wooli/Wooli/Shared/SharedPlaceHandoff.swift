@@ -23,17 +23,11 @@ struct SharedPlace: Codable, Identifiable, Hashable {
     var sharedAt: Date = .now
 }
 
-/// An Instagram reel or post shared to Wooli; the app looks for places in
-/// its caption, or saves it as a recipe.
+/// An Instagram reel or post shared to Wooli; the app reads its caption and
+/// saves it as a recipe or looks for places in it, whichever it reads as.
 struct SharedReel: Codable, Identifiable, Hashable {
-    enum Purpose: String, Codable {
-        case places, recipe
-    }
-
     var id: String = UUID().uuidString
     var url: URL
-    /// Optional so reels queued by an older build (no purpose) still decode, as places.
-    var purpose: Purpose?
     var sharedAt: Date = .now
 }
 

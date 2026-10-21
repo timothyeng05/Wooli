@@ -100,6 +100,18 @@ enum RecipeParser {
 
     private enum Section { case intro, ingredients, steps, other }
 
+    /// Whether a shared reel is a recipe rather than places to eat: an
+    /// "Ingredients" heading, or a list of at least 3 things plus steps. A
+    /// 📍 means places unless there's that heading.
+    static func looksLikeRecipe(_ caption: String) -> Bool {
+        let hasHeading = caption.split(whereSeparator: \.isNewline)
+            .contains { heading($0.trimmingCharacters(in: .whitespaces))?.0 == .ingredients }
+        if hasHeading { return true }
+        if caption.contains("📍") { return false }
+        let recipe = parse(caption)
+        return recipe.ingredients.count >= 3 && !recipe.steps.isEmpty
+    }
+
     static func parse(_ caption: String) -> Recipe {
         var recipe = Recipe()
         var intro: [String] = []
