@@ -161,3 +161,54 @@ struct SharedPlaceTripPicker: View {
         dismiss()
     }
 }
+
+/// A shared Instagram reel: reads the caption once, then opens Recipes or
+/// Eats' places sheet, whichever it reads as. Either sheet can switch to the
+/// other; without a caption there's nothing to go on, so it asks.
+struct SharedReelSheet: View {
+    let reel: SharedReel
+
+    private enum Kind { case recipe, places }
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var caption: String?
+    @State private var kind: Kind?
+    @State private var loaded = false
+
+    var body: some View {
+        switch kind {
+        case .recipe:
+            RecipeImportSheet(reel: reel, caption: caption) { kind = .places }
+        case .places:
+            ReelImportSheet(reel: reel, caption: caption) { kind = .recipe }
+        case nil:
+            NavigationStack {
+                Group {
+                    if loaded {
+                        ContentUnavailableView {
+                            Label("Couldn't read this reel", systemImage: "play.rectangle")
+                        } description: {
+                            Text("Instagram didn't share its caption. What's in it?")
+                        } actions: {
+                            Button("A recipe", systemImage: AppSpace.recipes.systemImage) { kind = .recipe }
+                                .buttonStyle(.borderedProminent).tint(AppSpace.recipes.tint)
+                            Button("Places to eat", systemImage: AppSpace.eats.systemImage) { kind = .places }
+                                .buttonStyle(.bordered).tint(AppSpace.eats.tint)
+                        }
+                    } else {
+                        ProgressView("Reading the reel…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .navigationTitle("Instagram reel")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            }
+            .task {
+                guard !loaded else { return }
+                caption = await ReelPlaces.caption(for: reel.url)
+                loaded = true
+                if let caption { kind = RecipeParser.looksLikeRecipe(caption) ? .recipe : .places }
+            }
+        }
+    }
+}

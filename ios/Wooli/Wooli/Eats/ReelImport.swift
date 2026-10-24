@@ -36,8 +36,8 @@ enum ReelPlaces {
         var missing: [String] = []
     }
 
-    static func look(at url: URL) async -> Result {
-        guard let caption = await caption(for: url) else { return Result() }
+    static func look(at caption: String?) async -> Result {
+        guard let caption else { return Result() }
         var result = Result(caption: caption)
         for spot in await spots(in: caption) {
             if let place = await lookUp(spot) {
@@ -309,10 +309,14 @@ private struct CaptionSpot {
 }
 #endif
 
-/// Shown when a reel arrives from the share sheet: the places found in its
-/// caption, all ticked, to add to Want to try.
+/// Shown when a shared reel reads as places (`SharedReelSheet`): the places
+/// found in its caption, all ticked, to add to Want to try.
 struct ReelImportSheet: View {
     let reel: SharedReel
+    /// Already downloaded; nil when Instagram didn't share it.
+    let caption: String?
+    /// "It's a recipe": hands the reel to Recipes instead.
+    let onRecipe: () -> Void
 
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -358,7 +362,7 @@ struct ReelImportSheet: View {
                 }
             }
             .task {
-                let looked = await ReelPlaces.look(at: reel.url)
+                let looked = await ReelPlaces.look(at: caption)
                 picked = Set(looked.found.map(\.id))
                 result = looked
             }
@@ -406,6 +410,7 @@ struct ReelImportSheet: View {
                         .onTapGesture { withAnimation(.snappy) { showCaption.toggle() } }
                 }
                 Link(destination: reel.url) { Label("Watch on Instagram", systemImage: "play.rectangle") }
+                Button("It's a recipe — save it to Recipes", systemImage: AppSpace.recipes.systemImage, action: onRecipe)
             } header: {
                 if result.caption != nil { Text("Caption") }
             }
