@@ -638,6 +638,10 @@ struct TripDetailView: View {
         }
         if block.showsTicket { insert(.ticket(home: false), at: block.departure ?? Int.min) }
         if !block.homeTravel.isEmpty { insert(.ticket(home: true), at: block.homeTravel.compactMap(\.time).min() ?? Int.max) }
+        // Stays from an earlier day: check-out leads the day, another night ends it.
+        for stay in all where stay.staysOver(block.day) {
+            if stay.stayEnd == block.day { entries.insert(.plan(stay), at: 0) } else { entries.append(.plan(stay)) }
+        }
 
         let date = DayKey.date(block.day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         let base = "Day \(block.number)"
@@ -662,7 +666,7 @@ struct TripDetailView: View {
             ForEach(entries) { entry in
                 switch entry {
                 case .plan(let item):
-                    itemRow(item, trip: trip)
+                    itemRow(item, trip: trip, day: block.day)
                 case .ticket(let home):
                     if home {
                         travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day,
@@ -706,7 +710,7 @@ struct TripDetailView: View {
                                                        title: to.map { "To \($0.name)" } ?? "Home") })
     }
 
-    private func itemRow(_ item: TripItem, trip: Trip) -> some View {
+    private func itemRow(_ item: TripItem, trip: Trip, day: String) -> some View {
         // A meal on your Eats list opens its Eats page; an activity or stay
         // with a place, its place page; anything else, the editor.
         Button {
@@ -718,7 +722,7 @@ struct TripDetailView: View {
                 editingItem = item
             }
         } label: {
-            TripItemRow(item: item, score: eatsScore(item))
+            TripItemRow(item: item, score: eatsScore(item), day: day)
         }
             .buttonStyle(.plain)
             .contextMenu {
@@ -756,6 +760,11 @@ struct TripDetailView: View {
 
     private func move(_ item: TripItem, to day: String?) {
         var item = item
+        // A multi-night stay keeps its number of nights.
+        if let day, let from = item.day, item.stayEnd != nil, let end = item.checkOutDay {
+            let shift = Calendar.current.dateComponents([.day], from: DayKey.date(from), to: DayKey.date(day)).day ?? 0
+            item.checkOutDay = Calendar.current.date(byAdding: .day, value: shift, to: DayKey.date(end)).map(DayKey.key)
+        }
         item.day = day
         store.save(item)
     }
@@ -782,6 +791,8 @@ struct TripItemRow: View {
     let item: TripItem
     /// A ranked meal's score.
     var score: Double? = nil
+    /// The day card it's on, so a multi-night stay can say which night it is.
+    var day: String? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -821,8 +832,12 @@ struct TripItemRow: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
-                if let time = item.timeText {
+                // A stay's time is its check-in, so only on that day.
+                if let time = item.timeText, day == nil || day == item.day {
                     Text(time).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.textSecondary)
+                }
+                if let day, let stayLabel = item.stayLabel(on: day) {
+                    Text(stayLabel).font(.caption.weight(.medium)).foregroundStyle(Color(hex: item.kind.colorHex))
                 }
                 if let score {
                     MealScoreBadge(score: score, size: 28)
@@ -1041,13 +1056,25 @@ struct TripItemEditor: View {
                             .tag(String?.some(day))
                     }
                 }
+                if item.kind == .stay, let checkIn = item.day {
+                    Picker("Check-out", selection: $item.checkOutDay) {
+                        Text("Not set").tag(String?.none)
+                        ForEach(trip.days.filter { $0 > checkIn }, id: \.self) { day in
+                            let nights = Calendar.current.dateComponents([.day], from: DayKey.date(checkIn), to: DayKey.date(day)).day ?? 0
+                            Text("\(DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())) · \(nights) night\(nights == 1 ? "" : "s")")
+                                .tag(String?.some(day))
+                        }
+                    }
+                }
                 if item.day != nil {
-                    Toggle("Set a time", isOn: $hasTime.animation())
+                    Toggle(item.kind == .stay ? "Set a check-in time" : "Set a time", isOn: $hasTime.animation())
                     if hasTime {
                         DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
                     }
                 }
             }
+            .onChange(of: item.kind) { suggestCheckOut() }
+            .onChange(of: item.day) { suggestCheckOut() }
 
             if item.kind == .meal {
                 Section {
@@ -1169,6 +1196,14 @@ struct TripItemEditor: View {
                                       longitude: places.map(\.longitude).reduce(0, +) / Double(places.count))
     }
 
+    /// A stay without a check-out after its check-in gets the end of that
+    /// city's dates, else the next day.
+    private func suggestCheckOut() {
+        guard item.kind == .stay, let checkIn = item.day, (item.checkOutDay ?? "") <= checkIn else { return }
+        let legEnd = trip.leg(for: checkIn)?.endDay
+        item.checkOutDay = legEnd.flatMap { $0 > checkIn ? $0 : nil } ?? trip.days.first { $0 > checkIn }
+    }
+
     private func delete() {
         TripStore.shared.delete(item)
         dismiss()
@@ -1186,6 +1221,8 @@ struct TripItemEditor: View {
             item.transport = nil
         }
         if item.title.isEmpty, let place = item.place { item.title = place.name }
+        // Only a stay has nights, and only after its check-in.
+        if item.stayEnd == nil { item.checkOutDay = nil }
         if hasTime && item.day != nil {
             item.time = TripTransport.minutes(time)
         } else {

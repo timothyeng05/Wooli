@@ -236,6 +236,10 @@ struct TripItem: Identifiable, Codable, Hashable {
     var notes: String = ""
     /// Flight or train details, for travel items; nil uses the plain form.
     var transport: TripTransport?
+    /// The day you check out, for stays over several nights; the stay is
+    /// saved once on its check-in `day` and shown on every day it covers.
+    /// nil = just the one day, as before.
+    var checkOutDay: String?
     var createdAt: Date = .now
     var systemFields: Data?
 
@@ -254,6 +258,33 @@ struct TripItem: Identifiable, Codable, Hashable {
     /// A meal slot nobody has filled in yet.
     var isMealPlaceholder: Bool {
         kind == .meal && place == nil && notes.isEmpty && Self.mealSlots.contains { $0.title == title }
+    }
+
+    /// A multi-night stay's check-out, when it's after check-in.
+    var stayEnd: String? {
+        guard kind == .stay, let day, let checkOutDay, checkOutDay > day else { return nil }
+        return checkOutDay
+    }
+
+    var nights: Int {
+        guard let day, let end = stayEnd else { return 0 }
+        return max(Calendar.current.dateComponents([.day], from: DayKey.date(day), to: DayKey.date(end)).day ?? 0, 0)
+    }
+
+    /// The stay carries on into `other` (a later night, or check-out day).
+    func staysOver(_ other: String) -> Bool {
+        guard let day, let end = stayEnd else { return false }
+        return other > day && other <= end
+    }
+
+    /// "Check-in · 3 nights", "Night 2 of 3", "Check-out".
+    func stayLabel(on other: String) -> String? {
+        guard let end = stayEnd else { return nil }
+        if other == day { return "Check-in · \(nights) night\(nights == 1 ? "" : "s")" }
+        if other == end { return "Check-out" }
+        guard let day else { return nil }
+        let night = (Calendar.current.dateComponents([.day], from: DayKey.date(day), to: DayKey.date(other)).day ?? 0) + 1
+        return "Night \(night) of \(nights)"
     }
 
     var timeText: String? {
@@ -386,6 +417,7 @@ extension TripItem {
         r["longitude"] = place?.longitude
         r["mapItemID"] = place?.mapItemID
         r["transport"] = transport.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
+        r["checkOutDay"] = checkOutDay
         return r
     }
 
@@ -404,6 +436,7 @@ extension TripItem {
         if let json = r["transport"] as? String {
             transport = try? JSONDecoder().decode(TripTransport.self, from: Data(json.utf8))
         }
+        checkOutDay = r["checkOutDay"] as? String
         systemFields = r.encodedSystemFields
     }
 }

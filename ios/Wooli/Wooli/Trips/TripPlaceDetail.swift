@@ -73,7 +73,14 @@ struct TripPlaceDetail: View {
     private var when: String {
         guard let day = item.day else { return "Ideas · no day yet" }
         let number = (trip.days.firstIndex(of: day) ?? 0) + 1
-        return ["Day \(number)", DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()), item.timeText]
+        let format = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+        // A multi-night stay: "Day 3 · Tue, Jun 2 → Fri, Jun 5 · 3 nights · 3:00 PM"
+        if let end = item.stayEnd {
+            return ["Day \(number)", "\(DayKey.date(day).formatted(format)) → \(DayKey.date(end).formatted(format))",
+                    "\(item.nights) night\(item.nights == 1 ? "" : "s")", item.timeText]
+                .compactMap { $0 }.joined(separator: " · ")
+        }
+        return ["Day \(number)", DayKey.date(day).formatted(format), item.timeText]
             .compactMap { $0 }.joined(separator: " · ")
     }
 
