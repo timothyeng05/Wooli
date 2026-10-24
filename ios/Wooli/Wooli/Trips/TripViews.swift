@@ -710,7 +710,7 @@ struct TripDetailView: View {
                                                        title: to.map { "To \($0.name)" } ?? "Home") })
     }
 
-    private func itemRow(_ item: TripItem, trip: Trip, day: String) -> some View {
+    private func itemRow(_ item: TripItem, trip: Trip, day: String? = nil) -> some View {
         // A meal on your Eats list opens its Eats page; an activity or stay
         // with a place, its place page; anything else, the editor.
         Button {
