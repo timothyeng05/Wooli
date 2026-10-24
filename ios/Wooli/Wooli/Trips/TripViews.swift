@@ -794,7 +794,47 @@ struct TripItemRow: View {
     /// The day card it's on, so a multi-night stay can say which night it is.
     var day: String? = nil
 
+    /// Where this card's day falls in a stay: arriving at a hotel stands
+    /// out, the nights after and check-out stay quiet.
+    private enum StayRole { case checkIn, night, checkOut }
+
+    private var stayRole: StayRole? {
+        guard item.kind == .stay, let day, let checkIn = item.day else { return nil }
+        if day == checkIn { return .checkIn }
+        if day == item.stayEnd { return .checkOut }
+        return item.staysOver(day) ? .night : nil
+    }
+
     var body: some View {
+        switch stayRole {
+        case .night, .checkOut: continuation
+        case .checkIn: full.padding(10).background(Color(hex: item.kind.colorHex).opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        case nil: full
+        }
+    }
+
+    private var name: String { item.title.isEmpty ? (item.place?.name ?? item.kind.label) : item.title }
+
+    /// A later night or check-out: one muted line, so a new hotel stands out.
+    private var continuation: some View {
+        let tint = Color(hex: item.kind.colorHex)
+        return HStack(spacing: 12) {
+            Image(systemName: stayRole == .checkOut ? "door.left.hand.open" : item.kind.symbol)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 32, height: 24)
+                .background(Capsule().strokeBorder(tint.opacity(0.5), lineWidth: 1))
+            Text(stayRole == .checkOut ? "Check out of \(name)" : "Still at \(name)")
+                .font(.footnote).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            Spacer(minLength: 8)
+            if let day, let stayLabel = item.stayLabel(on: day), stayRole == .night {
+                Text(stayLabel).font(.caption).foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var full: some View {
         HStack(alignment: .top, spacing: 12) {
             let tint = Color(hex: item.kind.colorHex)
             Image(systemName: item.kind.symbol)
@@ -810,8 +850,8 @@ struct TripItemRow: View {
                 }
                 .shadow(color: tint.opacity(item.isMealPlaceholder ? 0 : 0.35), radius: 4, y: 2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title.isEmpty ? (item.place?.name ?? item.kind.label) : item.title)
-                    .font(.subheadline.weight(.medium))
+                Text(name)
+                    .font(stayRole == .checkIn ? .subheadline.weight(.semibold) : .subheadline.weight(.medium))
                     .foregroundStyle(item.isMealPlaceholder ? Theme.textSecondary : Theme.text)
                 if item.isMealPlaceholder {
                     Text("Tap to pick a place").font(.caption).foregroundStyle(Theme.textTertiary)
@@ -836,8 +876,11 @@ struct TripItemRow: View {
                 if let time = item.timeText, day == nil || day == item.day {
                     Text(time).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.textSecondary)
                 }
-                if let day, let stayLabel = item.stayLabel(on: day) {
-                    Text(stayLabel).font(.caption.weight(.medium)).foregroundStyle(Color(hex: item.kind.colorHex))
+                if stayRole == .checkIn {
+                    Text(item.stayEnd == nil ? "Check-in" : day.flatMap(item.stayLabel(on:)) ?? "Check-in")
+                        .font(.caption2.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color(hex: item.kind.colorHex).gradient, in: Capsule())
                 }
                 if let score {
                     MealScoreBadge(score: score, size: 28)
