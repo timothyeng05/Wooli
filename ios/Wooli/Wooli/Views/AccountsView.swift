@@ -203,6 +203,15 @@ struct AccountDetailView: View {
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @State private var range: ChartRange = .month3
 
+    init(account: LocalAccount) {
+        _account = Bindable(account)
+        // Only this account's records, not every account's history.
+        let id = account.providerAccountId
+        _snapshots = Query(filter: #Predicate<BalanceSnapshot> { $0.accountId == id })
+        _transactions = Query(filter: #Predicate<LocalTransaction> { $0.accountId == id },
+                              sort: \LocalTransaction.transactedAt, order: .reverse)
+    }
+
     var body: some View {
         let mine = snapshots.filter { $0.accountId == account.providerAccountId }
         let history = BalanceHistory(snapshots: mine)

@@ -156,6 +156,14 @@ struct RecurringEditor: View {
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @State private var confirmDelete = false
 
+    init(item: RecurringItem) {
+        _item = Bindable(item)
+        // Only this merchant's payments, not every transaction.
+        let merchant = item.merchant
+        _transactions = Query(filter: #Predicate<LocalTransaction> { $0.normalizedMerchant == merchant },
+                              sort: \LocalTransaction.transactedAt, order: .reverse)
+    }
+
     var body: some View {
         let history = transactions.filter { $0.normalizedMerchant == item.merchant && ($0.amount < 0) == (item.amount < 0) }
         let category = item.categoryId.flatMap { id in categories.first { $0.id == id } }
