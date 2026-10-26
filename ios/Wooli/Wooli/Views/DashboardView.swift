@@ -398,7 +398,7 @@ struct PaceCard: View {
             CardHeader(title: "Spending Pace", subtitle: month.start.formatted(.dateTime.month(.wide)))
             if target > 0 {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(max(target - spent, 0).currency(cents: false)) \(spent > target ? "over" : "left")")
+                    Text("\(abs(target - spent).currency(cents: false)) \(over ? "over" : "left")")
                         .font(.system(size: 28, weight: .bold)).monospacedDigit()
                         .foregroundStyle(Theme.text)
                     Spacer()
