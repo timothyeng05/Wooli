@@ -354,8 +354,8 @@ struct PlanRow: View {
 /// Cumulative spend this month against a dashed "usual pace" line — the one
 /// number that answers "am I on track?" The line follows how a month
 /// normally goes (bills on their days, the rest by weekday habits; see
-/// `SpendingPace`) and ends at all planned expenses — or, with three full
-/// months of history, is the average of those months.
+/// `SpendingPace`) and ends at all planned expenses — or, with three to six
+/// full months of history, is the average of those months.
 struct PaceCard: View {
     let transactions: [LocalTransaction]
     let ledger: Ledger
@@ -439,7 +439,7 @@ struct PaceCard: View {
     /// What shaped the dashed line, so it doesn't feel arbitrary.
     private func paceCaption(_ pace: SpendingPace) -> String {
         if let average = pace.monthlyAverage {
-            return "Dashed line: your average of the last \(SpendingPace.averageMonths) months (\(average.currency(cents: false)) a month)"
+            return "Dashed line: your average of the last \(pace.averagedMonths) months (\(average.currency(cents: false)) a month)"
         }
         let bills = pace.bills > 0 ? "\(pace.bills.currency(cents: false)) of bills on their usual days" : nil
         let rest = pace.usesHabits ? "the rest by how you spend on each weekday" : "the rest spread evenly"
