@@ -5,6 +5,10 @@ import Foundation
 /// target is spread across the month, weighted by how much you tend to spend
 /// on each day of the week. A straight "even spend" line made the 1st of the
 /// month look far over pace whenever rent went out.
+///
+/// Once there are `averageMonths` full months of history, the line is
+/// instead the average running total of those months, day by day — what
+/// you actually spend, not what you planned.
 struct SpendingPace {
     /// Expected running total at the end of each day of the month (index 0 = the 1st).
     let expected: [Double]
@@ -12,15 +16,28 @@ struct SpendingPace {
     let bills: Double
     /// Day-of-week habits shaped the line (false: not enough history yet, spread evenly).
     let usesHabits: Bool
+    /// The average month's total when the line is the last few months' average, else nil.
+    let monthlyAverage: Double?
 
     /// Days of history needed before day-of-week habits are trusted.
     static let minimumHistoryDays = 21
+    /// Full months of history averaged once they're all there.
+    static let averageMonths = 3
 
     init(target: Double, month: DateInterval, items: [RecurringItem], transactions: [LocalTransaction],
          ledger: Ledger, now: Date = .now) {
         let cal = Calendar.current
         let days = cal.range(of: .day, in: .month, for: month.start)?.count ?? 30
         let today = cal.startOfDay(for: now)
+
+        if let average = Self.averageCurve(transactions: transactions, before: month, days: days, ledger: ledger) {
+            expected = average
+            bills = 0
+            usesHabits = false
+            monthlyAverage = average.last ?? 0
+            return
+        }
+        monthlyAverage = nil
 
         // Bills: every charge this month, paid or still to come.
         var billsByDay = [Double](repeating: 0, count: days)
@@ -49,6 +66,29 @@ struct SpendingPace {
         expected = (0..<days).map { i in
             running += billsByDay[i] + (weightTotal > 0 ? flexible * dayWeights[i] / weightTotal : 0)
             return running
+        }
+    }
+
+    /// Average running total per day of the `averageMonths` months before
+    /// `month`, counted like the actual line (`cumulativeSpending`), or nil
+    /// unless history starts by the first few days of the oldest one. Days
+    /// past a shorter month's end use that month's total.
+    static func averageCurve(transactions: [LocalTransaction], before month: DateInterval, days: Int,
+                             ledger: Ledger) -> [Double]? {
+        let cal = Calendar.current
+        guard let earliest = transactions.map(\.transactedAt).min(),
+              let oldest = cal.date(byAdding: .month, value: -averageMonths, to: month.start),
+              earliest < cal.date(byAdding: .day, value: 3, to: oldest)! else { return nil }
+
+        let curves = (1...averageMonths).compactMap { back -> [Double]? in
+            guard let start = cal.date(byAdding: .month, value: -back, to: month.start),
+                  let past = cal.dateInterval(of: .month, for: start) else { return nil }
+            return cumulativeSpending(transactions, in: past, categories: ledger.categoriesById,
+                                      hiddenAccounts: ledger.hiddenAccounts).map(\.value)
+        }
+        guard curves.count == averageMonths, !curves.contains(where: \.isEmpty) else { return nil }
+        return (0..<days).map { i in
+            curves.reduce(0) { $0 + $1[min(i, $1.count - 1)] } / Double(curves.count)
         }
     }
 
