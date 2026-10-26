@@ -13,8 +13,10 @@ struct MoviesListView: View {
     @State private var detail: MovieEntry?
 
     var body: some View {
-        let scores = EatsRanking.scores(movies.map(\.candidate))
-        let ordered = EatsRanking.ordered(movies.map(\.candidate)).compactMap { c in movies.first { $0.id == c.id } }
+        let candidates = movies.map(\.candidate)
+        let scores = EatsRanking.scores(candidates)
+        let byID = Dictionary(movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let ordered = EatsRanking.ordered(candidates).compactMap { byID[$0.id] }
 
         List {
             if ordered.isEmpty {
