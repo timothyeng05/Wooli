@@ -197,6 +197,12 @@ private struct BudgetTodayCard: View {
     @Query private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
 
+    init() {
+        // This month and the review window (from last month on), not years of history.
+        let start = ReviewWindow.start
+        _transactions = Query(filter: #Predicate<LocalTransaction> { $0.transactedAt >= start })
+    }
+
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let month = DateInterval.month(containing: .now)
