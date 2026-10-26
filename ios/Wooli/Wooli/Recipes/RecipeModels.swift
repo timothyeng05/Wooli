@@ -260,9 +260,11 @@ enum RecipeParser {
         return text.isEmpty ? line : text
     }
 
+    private static let trailingTags = try! Regex("(\\s+[#@]\\S+)+$")
+
     /// The first line, without trailing hashtags, cut at a sentence if it's long.
     private static func title(_ line: String) -> String {
-        var text = line.replacing(try! Regex("(\\s+[#@]\\S+)+$"), with: "").trimmingCharacters(in: .whitespaces)
+        var text = line.replacing(trailingTags, with: "").trimmingCharacters(in: .whitespaces)
         if text.count > 80, let end = text.firstIndex(where: { ".!?".contains($0) }), text.distance(from: text.startIndex, to: end) >= 10 {
             text = String(text[..<end])
         }
