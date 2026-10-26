@@ -116,8 +116,10 @@ private struct CashFlowCard: View {
         let cal = Calendar.current
         let thisMonth = cal.dateInterval(of: .month, for: .now)!.start
         let months = (0..<6).reversed().map { cal.date(byAdding: .month, value: -$0, to: thisMonth)! }
+        // One pass to the last six months, not six passes over years of history.
+        let recent = transactions.filter { $0.transactedAt >= months[0] }
         let summaries = months.map { start in
-            (start, MonthSummary(transactions: transactions, in: .month(containing: start),
+            (start, MonthSummary(transactions: recent, in: .month(containing: start),
                                  categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts))
         }
         let bars = summaries.flatMap { month, s in

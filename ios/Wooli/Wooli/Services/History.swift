@@ -189,8 +189,10 @@ struct TransactionFilter: Equatable {
          minAmount != nil || maxAmount != nil].filter { $0 }.count
     }
 
-    func matches(_ tx: LocalTransaction) -> Bool {
-        if let interval = dateRange.interval, !interval.contains(tx.transactedAt) { return false }
+    /// `interval` is `dateRange.interval`, worked out once by the caller
+    /// rather than for every transaction.
+    func matches(_ tx: LocalTransaction, in interval: DateInterval?) -> Bool {
+        if let interval, !interval.contains(tx.transactedAt) { return false }
         if !accountIds.isEmpty && !accountIds.contains(tx.accountId) { return false }
         if !categoryIds.isEmpty && !categoryIds.contains(tx.categoryId ?? "") { return false }
         if !merchants.isEmpty && !merchants.contains(tx.normalizedMerchant) { return false }

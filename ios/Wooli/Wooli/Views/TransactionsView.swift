@@ -29,12 +29,13 @@ struct TransactionsView: View {
         let query = debouncedSearch.trimmingCharacters(in: .whitespaces).lowercased()
         let reviewCount = ledger.reviewQueue(transactions).count
 
+        let interval = filter.dateRange.interval
         let visible = filter.sorted(transactions.filter { tx in
             // A split original is represented by its parts.
             if tx.isSplit { return false }
             if let accountId { if tx.accountId != accountId { return false } }
             else if !ledger.isVisible(tx) && !filter.accountIds.contains(tx.accountId) { return false }
-            guard filter.matches(tx) else { return false }
+            guard filter.matches(tx, in: interval) else { return false }
             guard !query.isEmpty else { return true }
             let categoryName = ledger.category(for: tx)?.name.lowercased() ?? "uncategorized"
             return tx.title.lowercased().contains(query)

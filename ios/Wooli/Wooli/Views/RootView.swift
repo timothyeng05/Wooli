@@ -107,7 +107,8 @@ struct MainTabView: View {
 
     private var reviewCount: Int {
         let hidden = Set(hiddenAccounts.map(\.providerAccountId))
-        return toReview.filter { !hidden.contains($0.accountId) && ReviewWindow.contains($0.transactedAt) }.count
+        let start = ReviewWindow.start
+        return toReview.filter { !hidden.contains($0.accountId) && $0.transactedAt >= start }.count
     }
 
     var body: some View {

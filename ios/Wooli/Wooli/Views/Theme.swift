@@ -167,11 +167,20 @@ struct InstitutionLogo: View {
 
     @AppStorage("institutionLogos") private var customLogosData: Data = Data()
 
+    /// Decoded once per change of the stored map, not for every logo drawn.
+    @MainActor private static var decoded: (data: Data, logos: [String: String]) = (Data(), [:])
+
+    @MainActor private static func customLogos(from data: Data) -> [String: String] {
+        if data != decoded.data {
+            decoded = (data, (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:])
+        }
+        return decoded.logos
+    }
+
     var body: some View {
         let lower = name.lowercased()
-        let customLogos = (try? JSONDecoder().decode([String: String].self, from: customLogosData)) ?? [:]
-        let custom = customLogos[name]
-        
+        let custom = Self.customLogos(from: customLogosData)[name]
+
         Group {
             if let custom, let first = custom.first, first.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF }) {
                 ZStack {

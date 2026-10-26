@@ -18,7 +18,6 @@ struct DashboardView: View {
     @State private var showSettings = false
     @State private var showCustomize = false
     @State private var range: ChartRange = .month3
-    private var cloud = ICloudSyncMonitor.shared
 
     /// Visible cards in the user's chosen order. Any card not yet represented
     /// in `layoutRows` (a fresh install, or a card added in a later update)
@@ -64,26 +63,7 @@ struct DashboardView: View {
 
                     if StatusBanner.isVisible(app) { StatusBanner().card(padding: 14) }
 
-                    if app.mode == .live {
-                        HStack(spacing: 12) {
-                            Spacer()
-                            if let lastSyncAt = app.lastSyncAt {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "building.columns")
-                                    Text(app.isSyncing ? "Bank syncing…" : "Bank: \(lastSyncAt.formatted(.relative(presentation: .named)))")
-                                }
-                            }
-                            HStack(spacing: 4) {
-                                Image(systemName: cloud.iconName)
-                                    .symbolEffect(.pulse, isActive: cloud.isSyncing)
-                                Text(cloud.shortLabel)
-                            }
-                            .foregroundStyle(cloud.statusColor)
-                        }
-                        .font(.caption2)
-                        .foregroundStyle(Theme.textTertiary)
-                        .contentTransition(.numericText())
-                    }
+                    SyncStatusLine()
 
                     ForEach(orderedCards) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
@@ -649,6 +629,36 @@ struct LegendDot: View {
         HStack(spacing: 6) {
             Capsule().fill(color).frame(width: 14, height: 4)
             Text(label).font(.caption).foregroundStyle(Theme.textSecondary)
+        }
+    }
+}
+
+/// Bank and iCloud sync status. Its own view so status changes (iCloud
+/// reports several per sync) redraw this line, not every Dashboard card.
+private struct SyncStatusLine: View {
+    @Environment(AppModel.self) private var app
+    private var cloud = ICloudSyncMonitor.shared
+
+    var body: some View {
+        if app.mode == .live {
+            HStack(spacing: 12) {
+                Spacer()
+                if let lastSyncAt = app.lastSyncAt {
+                    HStack(spacing: 4) {
+                        Image(systemName: "building.columns")
+                        Text(app.isSyncing ? "Bank syncing…" : "Bank: \(lastSyncAt.formatted(.relative(presentation: .named)))")
+                    }
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: cloud.iconName)
+                        .symbolEffect(.pulse, isActive: cloud.isSyncing)
+                    Text(cloud.shortLabel)
+                }
+                .foregroundStyle(cloud.statusColor)
+            }
+            .font(.caption2)
+            .foregroundStyle(Theme.textTertiary)
+            .contentTransition(.numericText())
         }
     }
 }
