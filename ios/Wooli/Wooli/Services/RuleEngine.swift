@@ -192,32 +192,66 @@ enum RuleEngine {
     }
 
     static func matches(_ r: TransactionRule, _ tx: LocalTransaction) -> Bool {
-        guard hasConditions(r) else { return false }
-        let statements = statementValues(r)
-        if !r.statementMatch.isEmpty && !statements.isEmpty,
-           !statements.contains(where: { text(tx.transactionDescription, r.statementMatch, $0) }) { return false }
-        let merchants = merchantValues(r)
-        if !r.merchantMatch.isEmpty && !merchants.isEmpty,
-           !merchants.contains(where: { text(tx.baseTitle, r.merchantMatch, $0) }) { return false }
-        if r.amountDirection == "debit" && tx.amount >= 0 { return false }
-        if r.amountDirection == "credit" && tx.amount <= 0 { return false }
-        let size = abs(tx.amount)
-        switch r.amountMatch {
-        case "equals": if abs(size - r.amountValue) > 0.005 { return false }
-        case "greater": if size <= r.amountValue { return false }
-        case "less": if size >= r.amountValue { return false }
-        case "between": if size < min(r.amountValue, r.amountValue2) || size > max(r.amountValue, r.amountValue2) { return false }
-        default: break
-        }
-        if !r.categoryIds.isEmpty && !r.categoryIds.contains(tx.categoryId ?? "") { return false }
-        if !r.accountIds.isEmpty && !r.accountIds.contains(tx.accountId) { return false }
-        return true
+        Matcher(r).matches(tx)
     }
 
-    private static func text(_ value: String, _ mode: String, _ needle: String) -> Bool {
-        let v = value.lowercased().trimmingCharacters(in: .whitespaces)
-        let n = needle.lowercased().trimmingCharacters(in: .whitespaces)
-        return mode == "exact" ? v == n : v.contains(n)
+    /// A rule's conditions read once, for checking many transactions (the
+    /// editor's live preview, applying a rule to existing transactions).
+    struct Matcher {
+        private let hasConditions: Bool
+        private let statementMode: String
+        private let statements: [String]
+        private let merchantMode: String
+        private let merchants: [String]
+        private let direction: String
+        private let amountMatch: String
+        private let amountValue: Double
+        private let amountValue2: Double
+        private let categoryIds: Set<String>
+        private let accountIds: Set<String>
+
+        init(_ r: TransactionRule) {
+            hasConditions = RuleEngine.hasConditions(r)
+            statementMode = r.statementMatch
+            statements = r.statementMatch.isEmpty ? [] : RuleEngine.statementValues(r).map(Self.normalized)
+            merchantMode = r.merchantMatch
+            merchants = r.merchantMatch.isEmpty ? [] : RuleEngine.merchantValues(r).map(Self.normalized)
+            direction = r.amountDirection
+            amountMatch = r.amountMatch
+            amountValue = r.amountValue
+            amountValue2 = r.amountValue2
+            categoryIds = Set(r.categoryIds)
+            accountIds = Set(r.accountIds)
+        }
+
+        func matches(_ tx: LocalTransaction) -> Bool {
+            guard hasConditions else { return false }
+            if !statements.isEmpty, !Self.text(tx.transactionDescription, statementMode, statements) { return false }
+            if !merchants.isEmpty, !Self.text(tx.baseTitle, merchantMode, merchants) { return false }
+            if direction == "debit" && tx.amount >= 0 { return false }
+            if direction == "credit" && tx.amount <= 0 { return false }
+            let size = abs(tx.amount)
+            switch amountMatch {
+            case "equals": if abs(size - amountValue) > 0.005 { return false }
+            case "greater": if size <= amountValue { return false }
+            case "less": if size >= amountValue { return false }
+            case "between": if size < min(amountValue, amountValue2) || size > max(amountValue, amountValue2) { return false }
+            default: break
+            }
+            if !categoryIds.isEmpty && !categoryIds.contains(tx.categoryId ?? "") { return false }
+            if !accountIds.isEmpty && !accountIds.contains(tx.accountId) { return false }
+            return true
+        }
+
+        private static func normalized(_ text: String) -> String {
+            text.lowercased().trimmingCharacters(in: .whitespaces)
+        }
+
+        /// Any of the needles (already normalized) matches the value.
+        private static func text(_ value: String, _ mode: String, _ needles: [String]) -> Bool {
+            let v = normalized(value)
+            return needles.contains { mode == "exact" ? v == $0 : v.contains($0) }
+        }
     }
 
     /// Apply the rule's actions. Returns true if anything changed.
@@ -258,7 +292,8 @@ enum RuleEngine {
     static func applyToExisting(_ rule: TransactionRule, transactions: [LocalTransaction],
                                 categories: [String: BudgetCategory]) -> Int {
         var count = 0
-        for tx in transactions where matches(rule, tx) {
+        let matcher = Matcher(rule)
+        for tx in transactions where matcher.matches(tx) {
             if apply(rule, to: tx, categories: categories) { count += 1 }
         }
         if count > 0 {

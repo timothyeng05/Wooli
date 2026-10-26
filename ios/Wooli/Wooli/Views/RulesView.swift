@@ -203,7 +203,8 @@ struct RuleEditor: View {
 
     var body: some View {
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let matches = RuleEngine.hasConditions(draft) ? transactions.filter { RuleEngine.matches(draft, $0) } : []
+        let matcher = RuleEngine.Matcher(draft)
+        let matches = RuleEngine.hasConditions(draft) ? transactions.filter { matcher.matches($0) } : []
         let canSave = RuleEngine.hasConditions(draft) && RuleEngine.hasActions(draft)
 
         NavigationStack {
