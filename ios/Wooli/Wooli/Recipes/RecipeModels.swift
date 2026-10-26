@@ -230,9 +230,9 @@ enum RecipeParser {
     }
 
     // Scalar semantics, so "1️⃣" is a digit plus its keycap marks.
-    private static let numberPrefix = try! Regex("^(?:(?i:step)\\s*\\d{1,2}|\\d{1,2}\u{FE0F}?\u{20E3}|\\d{1,2}\\s*[.):\\-]\\s)")
+    private static let numberPrefix = try! Regex("^(?:(?i:step)\\s*\\d{1,2}|\\d{1,2}\\u{FE0F}?\\u{20E3}|\\d{1,2}\\s*[.):\\-]\\s)")
         .matchingSemantics(.unicodeScalar)
-    private static let numberToStrip = try! Regex("^(?:(?i:step)\\s*\\d{1,2}\\s*[.):\\-]?\\s*|\\d{1,2}\u{FE0F}?\u{20E3}\\s*|\\d{1,2}\\s*[.):\\-]\\s+)")
+    private static let numberToStrip = try! Regex("^(?:(?i:step)\\s*\\d{1,2}\\s*[.):\\-]?\\s*|\\d{1,2}\\u{FE0F}?\\u{20E3}\\s*|\\d{1,2}\\s*[.):\\-]\\s+)")
         .matchingSemantics(.unicodeScalar)
 
     static func isBulleted(_ line: String) -> Bool {
