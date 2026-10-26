@@ -7,6 +7,26 @@ import FoundationModels
 
 @ModelActor
 actor BackgroundStore {
+    /// Created off the main thread: a model actor made on the main actor
+    /// does its fetches and saves on the main thread.
+    static func make(_ container: ModelContainer) async -> BackgroundStore {
+        await Task.detached { BackgroundStore(modelContainer: container) }.value
+    }
+
+    // MARK: - Housekeeping
+
+    /// Merges iCloud duplicates (`Deduplicator`). It reads every record of
+    /// each type, so it runs here rather than on the main thread.
+    func dedupe() {
+        Deduplicator.run(context: modelContext)
+    }
+
+    /// Matches new payments to recurring items and detects new ones
+    /// (`RecurringDetector`), which reads every transaction.
+    func refreshRecurring() {
+        RecurringDetector.refresh(context: modelContext)
+    }
+
     // MARK: - SyncService logic
 
     func sync() async throws -> SyncService.Summary {

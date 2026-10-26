@@ -130,7 +130,7 @@ final class AppModel {
         } catch {
             syncError = error.localizedDescription
         }
-        RecurringDetector.refresh(context: context)
+        await BackgroundStore.make(context.container).refreshRecurring()
         Task { await autoCategorize(context: context) }
     }
 

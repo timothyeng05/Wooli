@@ -33,7 +33,7 @@ enum SyncService {
     /// the local store. User edits (category, review state, notes, hidden) are
     /// never overwritten by a sync.
     static func sync(context: ModelContext) async throws -> Summary {
-        let store = BackgroundStore(modelContainer: context.container)
+        let store = await BackgroundStore.make(context.container)
         return try await store.sync()
     }
 }

@@ -70,7 +70,7 @@ enum AICategorizer {
         guard isEnabled, status == .available else { return 0 }
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            let store = BackgroundStore(modelContainer: context.container)
+            let store = await BackgroundStore.make(context.container)
             return await store.runOnDeviceCategorizer(limit: limit)
         }
         #endif

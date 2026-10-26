@@ -29,7 +29,8 @@ struct RootView: View {
             Categorizer.refreshKeywordHints(context: context)
             syncIfStale()
             if app.mode != .onboarding {
-                RecurringDetector.refresh(context: context)
+                try? context.save() // So the background pass sees everything above.
+                await BackgroundStore.make(context.container).refreshRecurring()
                 await app.autoCategorize(context: context)
             }
         }
@@ -75,7 +76,8 @@ struct RootView: View {
             if phase == .background { ModuleLock.shared.lockAll() }
             guard phase == .active else { return }
             // iCloud may have delivered copies of records while we were away.
-            Deduplicator.run(context: context)
+            try? context.save()
+            Task { await BackgroundStore.make(context.container).dedupe() }
             syncIfStale()
         }
     }
