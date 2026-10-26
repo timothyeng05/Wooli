@@ -560,7 +560,7 @@ struct TripDetailView: View {
                     Text(summary).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if let best, let score = EatsRanking.scores(eats.map(\.candidate))[best.id] { MealScoreBadge(score: score, size: 34) }
+                if let best, let score = eatsBook.scores[best.id] { MealScoreBadge(score: score, size: 34) }
                 Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Theme.textTertiary)
             }
             .card()
@@ -745,7 +745,7 @@ struct TripDetailView: View {
     /// Your Eats score for a trip meal, once you've ranked it.
     private func eatsScore(_ item: TripItem) -> Double? {
         guard let place = eatsEntry(item) else { return nil }
-        return EatsRanking.scores(eatsBook.mine.map(\.candidate))[place.id]
+        return eatsBook.scores[place.id]
     }
 
     /// Your Eats place for a trip meal: ranked from this meal, or the same

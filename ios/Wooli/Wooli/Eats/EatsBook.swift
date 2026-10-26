@@ -23,10 +23,10 @@ final class EatsBook {
     static let zoneName = "eats"
     static let myZoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
 
-    private(set) var mine: [EatsPlace] = []
+    private(set) var mine: [EatsPlace] = [] { didSet { cachedScores = nil } }
     /// Places you want to try (not ranked yet).
     private(set) var wishlist: [EatsPlace] = []
-    private(set) var friends: [EatsFriend] = []
+    private(set) var friends: [EatsFriend] = [] { didSet { cachedFriendScores = [:] } }
     /// You've shared your list with someone.
     private(set) var isSharing = false
     /// Who you share one list with, if anyone.
@@ -39,6 +39,9 @@ final class EatsBook {
     var lastError: String?
 
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var persistQueued = false
+    @ObservationIgnored private var cachedScores: [String: Double]?
+    @ObservationIgnored private var cachedFriendScores: [String: [String: Double]] = [:]
     @ObservationIgnored private let log = Logger(subsystem: "com.timothyeng.wooli", category: "Eats")
 
     private struct Saved: Codable {
@@ -113,6 +116,17 @@ final class EatsBook {
         log.info("Imported \(file.places?.count ?? 0) Eats places, removed \(file.remove?.count ?? 0)")
     }
 
+    /// Sync hands over records one at a time (hundreds when a list first
+    /// downloads): write the file once after the batch, not once per record.
+    private func persistSoon() {
+        guard !persistQueued else { return }
+        persistQueued = true
+        Task {
+            persistQueued = false
+            persist()
+        }
+    }
+
     private func persist() {
         do {
             try JSONEncoder().encode(Saved(mine: mine, friends: friends, isSharing: isSharing, wishlist: wishlist,
@@ -140,6 +154,26 @@ final class EatsBook {
 
     func friend(_ id: String) -> EatsFriend? { friends.first { $0.id == id } }
 
+    /// Your places' scores, by place id. Cached until the list changes:
+    /// every Eats row and trip meal reads it, and working it out formats a
+    /// date for each place.
+    var scores: [String: Double] {
+        let places = mine // Read through the observable, so views still update.
+        if let cachedScores { return cachedScores }
+        let scores = EatsRanking.scores(places.map(\.candidate))
+        cachedScores = scores
+        return scores
+    }
+
+    /// A friend's scores, cached the same way.
+    func scores(of friend: EatsFriend) -> [String: Double] {
+        _ = friends
+        if let cached = cachedFriendScores[friend.id] { return cached }
+        let scores = friend.scores
+        cachedFriendScores[friend.id] = scores
+        return scores
+    }
+
     struct FriendScore: Identifiable {
         let friend: EatsFriend
         let score: Double
@@ -150,7 +184,7 @@ final class EatsBook {
     func friendScores(for place: EatsPlace) -> [FriendScore] {
         friends.compactMap { friend in
             guard let theirs = friend.places.first(where: { $0.isSamePlace(as: place) }),
-                  let score = friend.scores[theirs.id] else { return nil }
+                  let score = scores(of: friend)[theirs.id] else { return nil }
             return FriendScore(friend: friend, score: score)
         }
     }
@@ -334,7 +368,7 @@ final class EatsBook {
                 updateFriend(zoneID.ownerName) { friend in Self.upsert(place, into: &friend.places) }
             }
         }
-        persist()
+        persistSoon()
     }
 
     private static func upsert(_ place: EatsPlace, into places: inout [EatsPlace]) {
@@ -384,7 +418,7 @@ final class EatsBook {
         } else {
             updateFriend(zoneID.ownerName) { $0.places.removeAll { $0.id == name } }
         }
-        persist()
+        persistSoon()
     }
 
     /// A zone went away: a friend or your partner stopped sharing (or you
@@ -422,7 +456,7 @@ final class EatsBook {
         } else {
             return
         }
-        persist()
+        persistSoon()
     }
 
     /// New CloudKit environment or account: forget sync bookkeeping and

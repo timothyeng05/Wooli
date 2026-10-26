@@ -64,7 +64,7 @@ struct FriendsNearTripCard: View {
         guard !centers.isEmpty else { return [] }
         var picks: [Pick] = []
         for friend in book.friends {
-            let scores = friend.scores
+            let scores = book.scores(of: friend)
             for place in friend.places {
                 guard let c = place.coordinate, let score = scores[place.id] else { continue }
                 let location = CLLocation(latitude: c.latitude, longitude: c.longitude)

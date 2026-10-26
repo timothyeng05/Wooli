@@ -320,8 +320,9 @@ struct EatsListView: View {
 
     var body: some View {
         let mine = book.mine.filter { tripID == nil || $0.tripID == tripID }
-        let scores = EatsRanking.scores(book.mine.map(\.candidate))
-        let ordered = EatsRanking.ordered(mine.map(\.candidate)).compactMap { c in mine.first { $0.id == c.id } }
+        let scores = book.scores
+        let byID = Dictionary(mine.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let ordered = EatsRanking.ordered(mine.map(\.candidate)).compactMap { byID[$0.id] }
         let waiting = EatsRanking.toRank(entries: book.mine).filter { !skipped.contains($0.id) && (tripID == nil || $0.tripID == tripID) }
         let pool = tab == .been ? ordered : book.wishlist
         let shown = sorted(filtered(pool))
@@ -848,8 +849,9 @@ struct FriendListView: View {
 
     var body: some View {
         if let friend = book.friend(friendID) {
-            let scores = friend.scores
-            let ordered = EatsRanking.ordered(friend.places.map(\.candidate)).compactMap { c in friend.places.first { $0.id == c.id } }
+            let scores = book.scores(of: friend)
+            let byID = Dictionary(friend.places.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let ordered = EatsRanking.ordered(friend.places.map(\.candidate)).compactMap { byID[$0.id] }
             Group {
                 if showMap {
                     EatsMap(places: ordered, scores: scores)
@@ -907,7 +909,7 @@ struct FriendListView: View {
     private func subtitle(_ place: EatsPlace) -> String {
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).year())
         let yours = book.mine.first { $0.isSamePlace(as: place) }
-            .flatMap { EatsRanking.scores(book.mine.map(\.candidate))[$0.id] }
+            .flatMap { book.scores[$0.id] }
             .map { "You: \($0.formatted(.number.precision(.fractionLength(1))))" }
         return [yours, date].compactMap { $0 }.joined(separator: " · ")
     }
@@ -1018,7 +1020,7 @@ struct EatsPlaceDetail: View {
 
     private var hero: some View {
         PlaceHeroMap(coordinate: place.coordinate, name: place.name,
-                     tint: MealScoreBadge.ink(EatsRanking.scores(book.mine.map(\.candidate))[place.id] ?? 7)) {
+                     tint: MealScoreBadge.ink(book.scores[place.id] ?? 7)) {
             if mapItem != nil { showingListing = true }
         }
     }
