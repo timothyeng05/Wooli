@@ -6,11 +6,11 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated October 21, 2026</p>
+      <p className="updated">Last updated October 27, 2026</p>
 
       <p>
-        Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten, keeping a budget and
-        tracking your period. <strong>Wooli does not collect any data.</strong> The developer has no
+        Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
+        watched, saving recipes, keeping a budget and tracking your period. <strong>Wooli does not collect any data.</strong> The developer has no
         servers that receive your information and cannot see it.
       </p>
 
@@ -35,6 +35,8 @@ export default function PrivacyPage() {
         Place search, maps and place details come from Apple Maps, movie search and posters come from
         Apple&apos;s iTunes Search, and Face ID (if you turn it on) is
         handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
+        Suggested categories for transactions are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your
+        transactions aren&apos;t sent anywhere to do this.
       </p>
 
       <h2>Instagram reels</h2>
@@ -57,7 +59,7 @@ export default function PrivacyPage() {
       <h2>Deleting your data</h2>
       <p>
         Delete items in the app, or delete the app to remove what&apos;s stored on your iPhone. To remove
-        synced trips, Eats places and movies, delete them in the app, or remove Wooli&apos;s data in Settings →
+        synced trips, Eats places, movies and recipes, delete them in the app, or remove Wooli&apos;s data in Settings →
         your name → iCloud → Manage Account Storage.
       </p>
 
