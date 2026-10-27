@@ -7,7 +7,7 @@ App Store Connect → Wooli → **App Privacy** → Get Started.
      - Trips and Eats sync through CloudKit to the **user's own private iCloud** database, which the developer can't read.
      - Bank data is downloaded by the phone **directly from SimpleFIN**, a service the user signs up for themselves. Nothing passes through the developer.
      - Budget, period and settings stay on the device.
-     - Movies and Recipes sync the same way (private iCloud). Movie search calls Apple's iTunes Search API, and sharing an Instagram reel makes the phone fetch that public post from Instagram — both requests go from the phone to those services, never to the developer.
+     - Movies and Recipes sync the same way (private iCloud). Movie search calls the TMDB API (themoviedb.org), and sharing an Instagram reel makes the phone fetch that public post from Instagram — both requests go from the phone to those services, never to the developer.
      - Category suggestions and reel/recipe parsing run on-device with Apple Intelligence (Foundation Models); nothing is sent off the phone.
 2. The label will read **"Data Not Collected"**. Publish it.
 

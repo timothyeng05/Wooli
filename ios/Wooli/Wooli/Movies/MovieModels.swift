@@ -16,7 +16,8 @@ final class MovieEntry {
     var genre: String = ""
     var posterURL: String = ""
     var synopsis: String = ""
-    /// iTunes Store id, so the same film added on two devices merges.
+    /// Source id ("tmdb:<id>", or an iTunes id for films added before
+    /// 2026-10), so the same film added on two devices merges.
     var appleID: String = ""
     var sentimentRaw: String = "liked"
     /// Order within the sentiment (higher = better); only the order matters.
@@ -62,10 +63,12 @@ extension MealSentiment {
     }
 }
 
-/// Film lookup through Apple's iTunes Search API: free, no key, and the
-/// same company that already powers place search.
+/// Film lookup through TMDB (themoviedb.org). Apple's iTunes Search stopped
+/// returning films in 2026-10. The key comes from `TMDB_API_KEY` in the
+/// git-ignored `Config/Secrets.xcconfig`, through Info.plist.
 enum MovieSearch {
     struct Result: Identifiable, Hashable {
+        /// "tmdb:<id>"; films added before the switch keep their iTunes id.
         let id: String
         let title: String
         let year: String
@@ -77,38 +80,75 @@ enum MovieSearch {
         var byline: String { [year, director].filter { !$0.isEmpty }.joined(separator: " · ") }
     }
 
+    enum SearchError: Error {
+        case noKey
+    }
+
     private struct Response: Decodable {
         let results: [Item]
     }
 
     private struct Item: Decodable {
-        let trackId: Int?
-        let trackName: String?
-        let artistName: String?
-        let releaseDate: String?
-        let primaryGenreName: String?
-        let artworkUrl100: String?
-        let longDescription: String?
+        let id: Int
+        let title: String?
+        let release_date: String?
+        let poster_path: String?
+        let overview: String?
     }
 
+    private struct Details: Decodable {
+        struct Genre: Decodable { let name: String }
+        struct Crew: Decodable { let job: String?; let name: String }
+        struct Credits: Decodable { let crew: [Crew] }
+        let genres: [Genre]?
+        let credits: Credits?
+    }
+
+    private static let key = (Bundle.main.object(forInfoDictionaryKey: "TMDBAPIKey") as? String ?? "")
+        .trimmingCharacters(in: .whitespaces)
+
+    static var isConfigured: Bool { !key.isEmpty && !key.hasPrefix("$(") }
+
     static func search(_ term: String) async throws -> [Result] {
-        var components = URLComponents(string: "https://itunes.apple.com/search")!
-        components.queryItems = [
-            URLQueryItem(name: "term", value: term),
-            URLQueryItem(name: "media", value: "movie"),
-            URLQueryItem(name: "entity", value: "movie"),
-            URLQueryItem(name: "limit", value: "25"),
-        ]
-        let (data, _) = try await URLSession.shared.data(from: components.url!)
-        return try JSONDecoder().decode(Response.self, from: data).results.compactMap { item in
-            guard let id = item.trackId, let title = item.trackName else { return nil }
-            return Result(id: String(id), title: title,
-                          year: String((item.releaseDate ?? "").prefix(4)),
-                          director: item.artistName ?? "",
-                          genre: item.primaryGenreName ?? "",
-                          // The 100 px artwork has larger sizes at the same path.
-                          posterURL: (item.artworkUrl100 ?? "").replacingOccurrences(of: "100x100bb", with: "600x600bb"),
-                          synopsis: item.longDescription ?? "")
+        let response: Response = try await get("search/movie", [
+            URLQueryItem(name: "query", value: term),
+            URLQueryItem(name: "include_adult", value: "false"),
+        ])
+        return response.results.compactMap { item in
+            guard let title = item.title, !title.isEmpty else { return nil }
+            return Result(id: "tmdb:\(item.id)", title: title,
+                          year: String((item.release_date ?? "").prefix(4)),
+                          director: "", genre: "",
+                          posterURL: item.poster_path.map { "https://image.tmdb.org/t/p/w500\($0)" } ?? "",
+                          synopsis: item.overview ?? "")
         }
+    }
+
+    /// Fills in director and genre, which search results don't carry. On
+    /// failure the film is added without them.
+    static func details(_ result: Result) async -> Result {
+        guard let id = result.id.split(separator: ":").last,
+              let details: Details = try? await get("movie/\(id)", [URLQueryItem(name: "append_to_response", value: "credits")])
+        else { return result }
+        let directors = (details.credits?.crew ?? []).filter { $0.job == "Director" }.map(\.name)
+        return Result(id: result.id, title: result.title, year: result.year,
+                      director: directors.prefix(2).joined(separator: ", "),
+                      genre: (details.genres ?? []).prefix(2).map(\.name).joined(separator: ", "),
+                      posterURL: result.posterURL, synopsis: result.synopsis)
+    }
+
+    /// TMDB takes the v3 API key as a parameter, or the longer read access
+    /// token as a bearer header; either works here.
+    private static func get<T: Decodable>(_ path: String, _ items: [URLQueryItem]) async throws -> T {
+        guard isConfigured else { throw SearchError.noKey }
+        var components = URLComponents(string: "https://api.themoviedb.org/3/\(path)")!
+        let bearer = key.contains(".")
+        components.queryItems = items + [URLQueryItem(name: "language", value: "en-US")]
+            + (bearer ? [] : [URLQueryItem(name: "api_key", value: key)])
+        var request = URLRequest(url: components.url!)
+        if bearer { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        return try JSONDecoder().decode(T.self, from: data)
     }
 }

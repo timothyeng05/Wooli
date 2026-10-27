@@ -1,0 +1,6 @@
+// Build settings for the Wooli app target.
+//
+// Secrets.xcconfig is git-ignored. Put the TMDB key (movie search) in it:
+//   TMDB_API_KEY = <v3 API key or read access token>
+// Without it the app builds and movie search says it isn't set up.
+#include? "Secrets.xcconfig"

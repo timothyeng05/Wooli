@@ -47,8 +47,13 @@ struct MoviesListView: View {
         .sheet(isPresented: $adding, onDismiss: {
             guard let result = picked else { return }
             picked = nil
-            // Already ranked: open it instead of adding it twice.
-            if let existing = movies.first(where: { $0.appleID == result.id }) { detail = existing } else { ranking = result }
+            // Already ranked: open it instead of adding it twice. Films added
+            // before the move to TMDB have iTunes ids, so match title and year too.
+            if let existing = movies.first(where: { $0.appleID == result.id || ($0.title == result.title && $0.year == result.year) }) {
+                detail = existing
+            } else {
+                ranking = result
+            }
         }) {
             NavigationStack {
                 MovieSearchView { picked = $0 }
@@ -118,7 +123,7 @@ struct MoviePoster: View {
 
 // MARK: - Search
 
-/// Find a film by title on the iTunes Store.
+/// Find a film by title on TMDB.
 struct MovieSearchView: View {
     let onPick: (MovieSearch.Result) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -126,25 +131,44 @@ struct MovieSearchView: View {
     @State private var results: [MovieSearch.Result] = []
     @State private var searching = false
     @State private var failed = false
+    @State private var picking: String?
 
     var body: some View {
-        List(results) { result in
-            Button {
-                onPick(result)
-                dismiss()
-            } label: {
-                HStack(spacing: 12) {
-                    MoviePoster(url: result.posterURL, width: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(result.title).font(.headline).foregroundStyle(Theme.text)
-                        Text(result.byline).font(.subheadline).foregroundStyle(Theme.textSecondary)
+        List {
+            Section {
+                ForEach(results) { result in
+                    Button {
+                        picking = result.id
+                        Task {
+                            onPick(await MovieSearch.details(result))
+                            dismiss()
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            MoviePoster(url: result.posterURL, width: 40)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(result.title).font(.headline).foregroundStyle(Theme.text)
+                                Text(result.byline).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                            }
+                            Spacer()
+                            if picking == result.id { ProgressView() }
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(picking != nil)
+                }
+            } footer: {
+                // Attribution TMDB's terms ask for.
+                if !results.isEmpty {
+                    Text("Movie data from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.")
                 }
             }
-            .buttonStyle(.plain)
         }
         .overlay {
-            if searching && results.isEmpty {
+            if !MovieSearch.isConfigured {
+                ContentUnavailableView("Movie search isn't set up", systemImage: "key",
+                                       description: Text("This build has no TMDB API key."))
+            } else if searching && results.isEmpty {
                 ProgressView()
             } else if failed {
                 ContentUnavailableView("Couldn't search", systemImage: "wifi.exclamationmark",

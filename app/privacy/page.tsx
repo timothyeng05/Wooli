@@ -32,11 +32,18 @@ export default function PrivacyPage() {
 
       <h2>Apple services</h2>
       <p>
-        Place search, maps and place details come from Apple Maps, movie search and posters come from
-        Apple&apos;s iTunes Search, and Face ID (if you turn it on) is
+        Place search, maps and place details come from Apple Maps, and Face ID (if you turn it on) is
         handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
         Suggested categories for transactions are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your
         transactions aren&apos;t sent anywhere to do this.
+      </p>
+
+      <h2>Movie search</h2>
+      <p>
+        Movie search, posters and film details come from TMDB (The Movie Database). When you search, your
+        iPhone sends the title you type to TMDB, and fetches the details of the film you pick. Nothing is sent
+        to the developer. TMDB&apos;s privacy policy applies to those requests. This product uses the TMDB API
+        but is not endorsed or certified by TMDB.
       </p>
 
       <h2>Instagram reels</h2>
