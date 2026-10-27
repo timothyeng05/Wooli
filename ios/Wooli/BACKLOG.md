@@ -201,6 +201,7 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 | S10 | Share from Apple Maps → Eats or a trip's Ideas (Share Extension + App Group) | ✅ done — installed on device; awaiting user's Maps test |
 | S11 | Movies app (Beli for films, reuses Eats' ranking) | ✅ done (not built) — next: want-to-watch list, friends' lists like Eats |
 | S12 | Recipes app: share an Instagram reel → app tells recipe from places; recipe saved as ingredients + steps | ✅ done (not built) |
+| S13 | **Garmin in Health** (user wants it eventually) — likely via Apple Health: Garmin Connect already writes workouts, steps, sleep and heart rate there, so HealthKit read access needs no server or Garmin approval. Garmin's own Health API needs an approved developer account and a server for OAuth and pushes. Spec with user first: which data, shown where (Health app sections? trip days?). Supersedes "don't compete with Garmin" in `docs/PRODUCT-DIRECTION.md` (web era) | idea |
 | S7 | iPad: switch the drawer to a `sidebarAdaptable` TabView with a `TabSection` per app | idea |
 
 ---
