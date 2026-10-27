@@ -168,10 +168,12 @@ a { color: inherit; }
 .feature.trips h2 { color: var(--sage); }
 .feature.eats h2 { color: var(--brick); }
 .feature.money h2 { color: var(--steel); }
+.feature.more h2 { color: var(--navy-2); }
 @media (prefers-color-scheme: dark) {
   .feature.trips h2 { color: #a2ba98; }
   .feature.eats h2 { color: #e0b3a8; }
   .feature.money h2 { color: #8ca9c1; }
+  .feature.more h2 { color: #d5dfe8; }
 }
 
 .yours {
