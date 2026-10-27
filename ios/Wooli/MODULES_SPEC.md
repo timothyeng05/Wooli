@@ -75,7 +75,7 @@ them to `BACKLOG.md`).
 **Logic** — port `lib/period-utils.ts` from the web repo into
 `Modules/Period/CycleMath.swift` (pure functions, no SwiftData):
 
-- `averageCycleLength` — mean of gaps between the last 7 starts; default 28.
+- `averageCycleLength` — mean of gaps between the last 7 starts, skipping gaps over 45 days (a missed log or a pause; all gaps count if every one is over 45); default 28.
 - `averagePeriodLength` — mean of completed entries (inclusive days); default 5.
 - `predictedNextStart` — latest start + average cycle.
 - `cycleDay(today:)` — days since latest start + 1.

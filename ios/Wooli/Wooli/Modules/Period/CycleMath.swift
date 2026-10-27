@@ -28,11 +28,18 @@ enum CycleMath {
         entries.sorted { $0.start < $1.start }
     }
 
-    /// Mean gap between the last 7 starts, rounded; 28 with fewer than 2.
+    /// Gaps longer than this are treated as a missed log (or a pause, like a
+    /// pregnancy), not a cycle, and left out of the average.
+    static let maxCycleGap = 45
+
+    /// Mean gap between the last 7 starts, rounded, skipping gaps over
+    /// `maxCycleGap` days (all gaps count if every one is that long); 28 with fewer than 2.
     static func averageCycleLength(_ entries: [Entry], calendar: Calendar = .current) -> Int {
         let recent = Array(sortedByStart(entries).suffix(7))
         guard recent.count >= 2 else { return defaultCycleLength }
-        let gaps = zip(recent, recent.dropFirst()).map { days(from: $0.start, to: $1.start, calendar: calendar) }
+        let allGaps = zip(recent, recent.dropFirst()).map { days(from: $0.start, to: $1.start, calendar: calendar) }
+        let cycles = allGaps.filter { $0 <= maxCycleGap }
+        let gaps = cycles.isEmpty ? allGaps : cycles
         return Int((Double(gaps.reduce(0, +)) / Double(gaps.count)).rounded())
     }
 
@@ -113,6 +120,15 @@ enum CycleMath {
         check(isPredictedDay(d(2026, 10, 4), in: three, today: d(2026, 9, 20), calendar: cal), "Oct 4 predicted")
         check(!isPredictedDay(d(2026, 10, 5), in: three, today: d(2026, 9, 20), calendar: cal), "Oct 5 not predicted")
         check(cycleDay(three, today: d(2026, 9, 12), calendar: cal) == 12, "cycle day 12")
+
+        // A missed month (62-day gap) is left out: 30, 26, 25, 29 → 28, not 34
+        let missed = [d(2026, 4, 20), d(2026, 5, 20), d(2026, 6, 15), d(2026, 7, 10), d(2026, 9, 10), d(2026, 10, 9)]
+            .map { Entry(start: $0, end: nil) }
+        check(averageCycleLength(missed, calendar: cal) == 28, "gap over 45 days skipped")
+        check(predictedNextStart(missed, calendar: cal) == cal.startOfDay(for: d(2026, 11, 6)), "next start Nov 6")
+        // Every gap over 45 (long cycles): use them all rather than the default
+        let long = [Entry(start: d(2026, 1, 1), end: nil), Entry(start: d(2026, 2, 20), end: nil), Entry(start: d(2026, 4, 11), end: nil)]
+        check(averageCycleLength(long, calendar: cal) == 50, "all-long gaps still averaged")
 
         // Ongoing period covers start through today, not beyond
         let ongoing = [Entry(start: d(2026, 9, 25), end: nil)]
