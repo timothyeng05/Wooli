@@ -6,7 +6,7 @@ export default function TermsPage() {
   return (
     <main className="doc">
       <h1>Terms of use</h1>
-      <p className="updated">Last updated October 18, 2026</p>
+      <p className="updated">Last updated October 27, 2026</p>
 
       <p>
         These terms cover your use of the Wooli app for iPhone. Wooli is licensed to you under
@@ -37,14 +37,16 @@ export default function TermsPage() {
       <h2>Third-party services</h2>
       <p>
         Bank connections are provided by SimpleFIN Bridge under their own terms and fees, which you
-        agree to with them directly. Maps and place information come from Apple. Wooli isn&apos;t
-        responsible for these services.
+        agree to with them directly. Maps and place information come from Apple, and movie details
+        from Apple&apos;s iTunes Search. Instagram reels you share are read from Instagram. Wooli
+        isn&apos;t responsible for these services.
       </p>
 
       <h2>Your content</h2>
       <p>
         What you add to Wooli is yours. When you share a trip or your Eats list, the people you invite
-        can see and, for trips, edit it. Only share with people you trust.
+        can see it, and those you let make changes (trip mates, or a partner on your Eats list) can
+        edit it. Only share with people you trust.
       </p>
 
       <h2>No warranty</h2>

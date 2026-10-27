@@ -5,10 +5,11 @@ export default function Home() {
     <main>
       <section className="hero">
         <div>
-          <h1>Your trips, your meals and your money, in one app.</h1>
+          <h1>Your money, your trips and your favorite places, in one app.</h1>
           <p className="lede">
-            Wooli is an iPhone app for planning a trip day by day, ranking the places you eat,
-            and keeping an easy budget. Everything stays on your phone and in your own iCloud.
+            Wooli is an iPhone app for keeping a budget, planning a trip day by day, ranking the
+            places you eat and the movies you watch, and saving recipes. Turn on just the parts you
+            want. Everything stays on your phone and in your own iCloud.
           </p>
           <span className="store-badge" aria-label="Coming soon to the App Store">
             <span>Coming soon to the</span>
@@ -48,7 +49,7 @@ export default function Home() {
             <p>Lay out a trip city by city, then fill in each day. Flights and trains sit inside the day you leave, with times, seats and booking codes.</p>
             <ul>
               <li>Breakfast, lunch and dinner slots on every day, ready to fill in.</li>
-              <li>Pin places from Apple Maps and see each day on a map.</li>
+              <li>Find places with Apple Maps, open their full listing and see each day on a map.</li>
               <li>Invite the people you&apos;re travelling with to plan together.</li>
             </ul>
           </div>
@@ -59,9 +60,9 @@ export default function Home() {
           <div>
             <p>Rank every place you eat by comparing it to the ones you already know. Your best meal is a 10, and everything else falls into place behind it.</p>
             <ul>
-              <li>Meals from your trips are ready to rank as soon as the day is over.</li>
-              <li>Share your list with friends and see where you agree.</li>
-              <li>Save a place straight from the share button in Apple Maps.</li>
+              <li>Keep a Want to Try list, and save places straight from Apple Maps.</li>
+              <li>Share an Instagram reel and Wooli finds the restaurants in it.</li>
+              <li>Log every visit, share your list with friends, or keep one list with your partner.</li>
             </ul>
           </div>
         </article>
@@ -71,9 +72,21 @@ export default function Home() {
           <div>
             <p>Set a plan for each category and see what&apos;s left this month. Enter spending yourself for free, or bring in your bank transactions through SimpleFIN.</p>
             <ul>
-              <li>Review new transactions in a few taps, with rules that learn your merchants.</li>
-              <li>Five years of history, net worth and recurring bills.</li>
+              <li>Spending Pace shows whether this month is on track against your usual months.</li>
+              <li>Review new transactions in a few taps, with suggested categories and rules.</li>
+              <li>Recurring bills and income, net worth and reports.</li>
               <li>A private period tracker you can lock with Face ID, if you want it.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article className="feature more">
+          <h2>Movies &amp; Recipes</h2>
+          <div>
+            <p>Rank the films you watch the same way you rank restaurants, and keep the recipes you find on Instagram.</p>
+            <ul>
+              <li>Search any film, say how you felt, then compare it to ones you&apos;ve seen.</li>
+              <li>Share a recipe reel and Wooli splits it into ingredients and steps.</li>
             </ul>
           </div>
         </article>
@@ -82,8 +95,8 @@ export default function Home() {
       <section className="yours">
         <h2>Your data stays yours.</h2>
         <p>
-          Wooli has no accounts, no ads and no analytics. Trips and your Eats list sync through
-          your own iCloud, and your bank data goes straight from SimpleFIN to your phone. We never
+          Wooli has no accounts, no ads and no analytics. Trips, Eats, Movies and Recipes sync
+          through your own iCloud, and your bank data goes straight from SimpleFIN to your phone. We never
           see any of it.
         </p>
         <p><Link href="/privacy">Read the privacy policy</Link></p>
