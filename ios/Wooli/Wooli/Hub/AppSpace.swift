@@ -8,6 +8,8 @@ import SwiftData
 /// Adding an app: a case here, a Today card in `TodayView`, and its root
 /// screen in `SpaceRoot`. Optional apps reuse `WooliModule` for on/off and Face ID.
 enum AppSpace: String, CaseIterable, Identifiable {
+    // `period` is the Health app (Period is its first section); the raw value
+    // stays so saved order and on/off settings carry over.
     case today, budget, trips, eats, movies, recipes, period
     var id: String { rawValue }
 
@@ -19,7 +21,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .eats: "Eats"
         case .movies: "Movies"
         case .recipes: "Recipes"
-        case .period: "Period"
+        case .period: "Health"
         }
     }
 
@@ -31,7 +33,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .eats: "fork.knife"
         case .movies: "film"
         case .recipes: "frying.pan"
-        case .period: WooliModule.period.systemImage
+        case .period: "heart.fill"
         }
     }
 
@@ -56,7 +58,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .eats: "Rank every place you've eaten, Beli-style. Trip meals show up to rank."
         case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .recipes: "Share a recipe reel from Instagram; its caption becomes ingredients and steps."
-        case .period: "Track your cycle with private predictions."
+        case .period: "Your health, kept private — starting with your cycle and its predictions."
         }
     }
 

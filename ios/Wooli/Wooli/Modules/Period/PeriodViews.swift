@@ -21,7 +21,7 @@ enum PeriodStatus {
             if daysToNext == 0 { return "Next period expected today" }
             return "Period is \(-daysToNext) day\(daysToNext == -1 ? "" : "s") later than predicted"
         }()
-        return ("Day \(cycleDay)", nextText)
+        return ("Cycle day \(cycleDay)", nextText)
     }
 }
 private func flowColor(_ flow: String) -> Color { Color(hex: CycleMath.flowColors[flow] ?? "#ef4444") }
@@ -41,6 +41,7 @@ struct PeriodView: View {
 
         ScrollView {
             VStack(spacing: 16) {
+                Text("Period").font(.title3.bold()).frame(maxWidth: .infinity, alignment: .leading)
                 VStack(spacing: 12) {
                     HStack {
                         Button("Previous month", systemImage: "chevron.left") { shift(-1) }.labelStyle(.iconOnly)
@@ -99,7 +100,7 @@ struct PeriodView: View {
             .padding(16)
         }
         .background(Theme.background)
-        .navigationTitle("Period")
+        .navigationTitle("Health")
         .toolbar {
             Button("Log period", systemImage: "plus") { creating = true }
         }
