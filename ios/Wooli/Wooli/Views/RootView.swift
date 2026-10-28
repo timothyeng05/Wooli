@@ -237,37 +237,41 @@ private struct SpaceRoot: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        switch space {
-        case .today:
-            TodayView()
-        case .budget:
-            BudgetTabView(reviewCount: reviewCount)
-        case .trips:
-            NavigationStack {
-                TripsListView()
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
-            }
-        case .eats:
-            NavigationStack {
-                EatsListView()
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
-            }
-        case .movies:
-            NavigationStack {
-                MoviesListView()
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
-            }
-        case .recipes:
-            NavigationStack {
-                RecipesListView()
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
-            }
-        case .period:
-            NavigationStack {
-                moduleScreen(.period)
-                    .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+        Group {
+            switch space {
+            case .today:
+                TodayView()
+            case .budget:
+                BudgetTabView(reviewCount: reviewCount)
+            case .trips:
+                NavigationStack {
+                    TripsListView()
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
+            case .eats:
+                NavigationStack {
+                    EatsListView()
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
+            case .movies:
+                NavigationStack {
+                    MoviesListView()
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
+            case .recipes:
+                NavigationStack {
+                    RecipesListView()
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
+            case .period:
+                NavigationStack {
+                    moduleScreen(.period)
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
             }
         }
+        // Optional apps show theirs inside `moduleScreen`, after Face ID.
+        .appGuide(space, ready: space.module == nil)
     }
 }
 

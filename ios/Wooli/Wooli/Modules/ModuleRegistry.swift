@@ -106,7 +106,7 @@ struct ModuleGate<Content: View>: View {
 @ViewBuilder
 func moduleScreen(_ module: WooliModule) -> some View {
     switch module {
-    case .period: ModuleGate(module: .period) { PeriodView() }
+    case .period: ModuleGate(module: .period) { PeriodView().appGuide(.period) }
     }
 }
 
@@ -114,6 +114,7 @@ func moduleScreen(_ module: WooliModule) -> some View {
 
 struct ModulesSettingsView: View {
     @State private var lineup = AppLineup.shared
+    @State private var tipsReset = false
 
     var body: some View {
         List {
@@ -124,6 +125,16 @@ struct ModulesSettingsView: View {
             }
             ForEach(AppSpace.allCases.filter { $0.module != nil }) { space in
                 ModuleSettingsSection(space: space, module: space.module!, isEnabled: lineup.isEnabled(space))
+            }
+            Section {
+                Button("Show app tips again") {
+                    AppGuide.resetAll()
+                    tipsReset = true
+                }
+                .disabled(tipsReset)
+            } footer: {
+                Text(tipsReset ? "Each app shows its tips the next time you open it."
+                               : "The quick pointers each app shows the first time you open it.")
             }
         }
         .environment(\.editMode, .constant(.active))
