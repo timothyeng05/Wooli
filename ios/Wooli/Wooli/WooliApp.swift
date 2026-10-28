@@ -21,6 +21,12 @@ struct WooliApp: App {
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }
+        #if DEBUG
+        // `-sampleApps`: fill Eats, Movies and Recipes for screenshots.
+        if ProcessInfo.processInfo.arguments.contains("-sampleApps") {
+            ModuleSampleData.seedApps(context: container.mainContext)
+        }
+        #endif
     }
 
     var body: some Scene {
