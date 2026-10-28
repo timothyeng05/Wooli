@@ -1,0 +1,55 @@
+<!doctype html>
+<html data-theme="light">
+<head><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css">
+<meta charset="utf-8">
+<title>Wooli — cover</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--background); }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; background: var(--background); }
+  .cover svg { position: absolute; left: 480px; top: 0; }
+  .t1 { fill: var(--ticket-start); }
+  .t2 { fill: var(--ticket-end); }
+  .notch { fill: var(--background); }
+  .teal { fill: var(--accent-teal); }
+  .rose { fill: var(--accent-rose); }
+  .yellow { fill: var(--accent-yellow); }
+  .route { stroke: var(--on-ticket); stroke-width: 3; stroke-dasharray: 6 8; stroke-linecap: round; fill: none; }
+  .stop { fill: var(--on-ticket); }
+  .r22 { rx: var(--radius-l); }
+  .pill { rx: 28px; }
+  .name {
+    position: absolute; left: 40px; bottom: 76px; margin: 0;
+    font-family: var(--font-sans); font-weight: 700; font-size: 120px; line-height: .92;
+    letter-spacing: -0.02em; color: var(--text); max-width: 440px;
+  }
+  .tagline {
+    position: absolute; left: 44px; bottom: 44px; margin: 0; max-width: 440px;
+    font-family: var(--font-sans); font-size: 14px; line-height: 20px; color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+<div class="cover">
+  <svg width="480" height="288" viewBox="0 0 480 288" aria-hidden="true">
+    <!--
+      blocks: ticket-start 300×176 (radius-l), ticket-end 190×176 (radius-l, bleeds right), accent-teal / accent-rose / accent-yellow pills (health, fun, food) 56 tall (radius-full)
+      arrangement: one boarding-pass slab with a stub beside it, a strip of unequal accent pills under it bleeding off the right
+      pattern: literal motif (the boarding pass): notches cut in background, one dashed route in on-ticket between two stops; README: "every screen opens with a TicketCard"
+      steps & radii: gaps space-12, inset space-20; radius-l, radius-full (pill = half of 56); notch 18 as in TicketCard
+    -->
+    <rect class="t1 r22" x="0" y="20" width="300" height="176"/>
+    <rect class="t2 r22" x="312" y="20" width="190" height="176"/>
+    <circle class="notch" cx="0" cy="108" r="9"/>
+    <circle class="notch" cx="306" cy="108" r="15"/>
+    <path class="route" d="M48 136 Q150 52 252 136"/>
+    <circle class="stop" cx="48" cy="136" r="7"/>
+    <circle class="stop" cx="252" cy="136" r="7"/>
+    <rect class="teal pill" x="0" y="212" width="132" height="56"/>
+    <rect class="rose pill" x="144" y="212" width="88" height="56"/>
+    <rect class="yellow pill" x="244" y="212" width="260" height="56"/>
+  </svg>
+  <h1 class="name">Wooli</h1>
+  <p class="tagline">Budget, trips &amp; places to eat.</p>
+</div>
+</body>
+</html>

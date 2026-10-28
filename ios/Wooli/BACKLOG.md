@@ -206,6 +206,24 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ---
 
+## Phase D — Design system (designed 2026-10-28, waiting on the user to schedule)
+
+The design for the whole app lives in `DesignSystem/`. Build plan, exact values and "done when" checks per item: `DesignSystem/IMPLEMENTATION.md`. Visual targets: `DesignSystem/reference/`. Do the items in order; each ships on its own.
+
+| ID | Item | Status |
+|----|------|--------|
+| D1 | Tokens in `Theme.swift` (navy-tinted neutrals, group colours, `Space`, `Radius`, `WooliFont`) | todo |
+| D2 | Design lint script + CI step, with a baseline that can only go down | todo |
+| D3 | Shared components in `Shared/DesignSystem/` (Button, ItemRow, EmptyState, SectionBand, HeroCard, TicketCard, motifs) | todo |
+| D4 | Budget: route hero, review band, group bands, recurring departures board (category → group mapping needs the user's OK) | todo |
+| D5 | Trips: shared ticket/bands, cities all travel blue, Eats "to try" under each city | todo |
+| D6 | Eats: passport hero, `RankStamp` replaces the score ring, face-off, postcard notes | todo |
+| D7 | Movies (cinema stub), Recipes (postcard), Period (route hero) | todo |
+| D8 | Today: departures board "Next up" + stickers | todo |
+| D9 | Suitcase stickers (needs a product decision on milestones first) | todo |
+
+---
+
 ## Phase 2 — Existing backlog (carried over)
 
 1. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).
@@ -220,6 +238,8 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 ---
 
 ## Decisions
+
+- **2026-10-28** — Design system adopted as the target look (`DesignSystem/`): blue actions, seven group colours used the same way in every module, green/red only for money, one travel-motif hero per module (ticket for Trips only), shared components and trimmed scales. Eats drops the Beli-style score ring for passport stamps. Order of work is Phase D; scheduling is the user's call.
 
 - **2026-10-12** — Keep transactions for 5 years (replaces the 2026-09-26 two-month rule). Review stays scoped to last month + this month.
 

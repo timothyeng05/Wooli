@@ -1,0 +1,375 @@
+/* Wooli — static web recreations of the SwiftUI components in
+   ios/Wooli/Wooli/Views/Theme.swift. Values copied from the Swift code;
+   sizes are iOS points at the default (Large) Dynamic Type size. */
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+.w-stack { display: flex; flex-direction: column; gap: 12px; }
+.w-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* CardModifier: padding 20, card fill, radius-m continuous corners, hairline, faint shadow */
+.w-card {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-20);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+}
+
+/* SectionLabel: the eyebrow style (11pt bold, 1.1pt tracking, uppercase) in text-tertiary */
+.w-section-label {
+  font-size: 11px;
+  line-height: 13px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* CardHeader: headline title, subheadline subtitle (2pt gap), trailing view on the first baseline */
+.w-card-header { display: flex; align-items: baseline; gap: 8px; }
+.w-card-header__text { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-width: 0; }
+.w-card-header__title { font-size: 17px; line-height: 22px; font-weight: 600; color: var(--text); }
+.w-card-header__subtitle { font-size: 15px; line-height: 20px; color: var(--text-secondary); }
+.w-card-header__trailing { font-size: 15px; line-height: 20px; color: var(--brand); font-weight: 500; }
+
+/* PendingBadge: .caption2 semibold, 6×2 padding, pending-soft capsule, pending text, dashed outline (proposed) */
+.w-pending-badge {
+  display: inline-block;
+  font-size: 11px;
+  line-height: 13px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: var(--pending-soft);
+  color: var(--pending);
+  border: 1px dashed color-mix(in srgb, var(--pending) 45%, transparent);
+}
+
+/* BarGauge: 8pt capsule, track behind, tint fill (brand by default) */
+.w-bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--track);
+  overflow: hidden;
+}
+.w-bar > i {
+  position: absolute; inset: 0 auto 0 0;
+  border-radius: var(--radius-full);
+  background: var(--tint, var(--brand));
+}
+
+/* CategoryTile: rounded square, radius-s, category colour at 14%, emoji at 48% of size */
+.w-category-tile {
+  --size: 40px;
+  width: var(--size); height: var(--size);
+  display: grid; place-items: center;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--tint, var(--text-tertiary)) 14%, transparent);
+  font-size: calc(var(--size) * 0.48);
+  line-height: 1;
+}
+
+/* RangePicker: equal-width capsule chips, 4pt apart; selected = text fill with card label */
+.w-range { display: flex; gap: var(--space-4); }
+.w-range button {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  padding: 6px 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.w-range button[aria-pressed="true"] { background: var(--text); color: var(--card); }
+
+/* ChangeLabel: subheadline medium, monospaced digits; arrow + amount (+ percent) in income/expense, period in text-secondary */
+.w-change {
+  display: inline-flex; align-items: baseline; gap: var(--space-8);
+  font-size: 15px; line-height: 20px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.w-change__delta { display: inline-flex; gap: var(--space-4); }
+.w-change__delta b { font-weight: 700; font-size: 12px; }
+.w-change--good .w-change__delta { color: var(--income); }
+.w-change--bad .w-change__delta { color: var(--expense); }
+.w-change__period { color: var(--text-secondary); }
+
+.w-amount-hero { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* ——— Travel language (proposed): Trips' boarding pass, city headers and plan kinds, for every module ——— */
+
+/* TicketCard: TripTravelCard's boarding pass. ticket-start→ticket-end at 135°, radius-l, padding 16,
+   18pt notches on both sides at mid-height (cut in the page colour), blue lift, white eyebrows. */
+.w-ticket {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-16);
+  border-radius: var(--radius-l);
+  background: linear-gradient(135deg, var(--ticket-start), var(--ticket-end));
+  box-shadow: var(--shadow-ticket);
+  color: var(--on-ticket);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.w-ticket::before, .w-ticket::after {
+  content: ""; position: absolute; top: 50%; width: 18px; height: 18px; margin-top: -9px;
+  border-radius: 50%; background: var(--notch, var(--background));
+}
+.w-ticket::before { left: -9px; }
+.w-ticket::after { right: -9px; }
+.w-ticket__caption { color: var(--on-ticket); font-size: 11px; line-height: 13px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
+.w-ticket__ends { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: var(--space-12); }
+.w-ticket__end:last-child { text-align: right; }
+.w-ticket__code { font-family: var(--font-rounded); font-size: 28px; line-height: 32px; font-weight: 900; letter-spacing: -0.01em; }
+.w-ticket__place { font-size: 13px; line-height: 18px; }
+.w-ticket__route { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; }
+.w-ticket__route i { width: 22px; border-top: 2px dashed var(--ticket-rule); }
+.w-ticket__route span {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--on-ticket); color: var(--ticket-start); font-size: 13px; font-weight: 700;
+}
+.w-ticket__meta { font-size: 12px; line-height: 16px; font-weight: 500; }
+.w-ticket__amount { font-size: 32px; line-height: 38px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.w-ticket__panel { background: var(--ticket-panel); border-radius: var(--radius-s); padding: 0 var(--space-12); }
+.w-ticket__row { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-8) 0; }
+.w-ticket__row + .w-ticket__row { border-top: 1px solid var(--ticket-rule); }
+.w-ticket__row-title { flex: 1; font-size: 15px; line-height: 20px; font-weight: 600; }
+.w-ticket__row-detail { font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.w-ticket__flag { color: var(--ticket-highlight); font-weight: 700; font-size: 12px; }
+
+/* SectionBand: TripLegHeader, the city header. Tint wash 16%→5% left to right, 22% tint hairline,
+   radius-l, padding 16; a 44pt gradient badge (its number at 19pt bold in on-tint: white on blue/rose/violet/slate, on-accent ink on teal/amber/pink/yellow) with a tinted glow; band-title; chevron in the tint. */
+.w-band {
+  --tint: var(--accent-blue);
+  box-sizing: border-box; width: 100%;
+  display: flex; align-items: center; gap: var(--space-12);
+  padding: var(--space-16);
+  border-radius: var(--radius-l);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--tint) 16%, var(--card)),
+    color-mix(in srgb, var(--tint) 5%, var(--card)));
+  border: 1px solid color-mix(in srgb, var(--tint) 22%, transparent);
+}
+.w-band__badge {
+  flex: none; width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 82%, #ffffff), var(--tint));
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--tint) 35%, transparent);
+  color: var(--on-tint, #ffffff); font-size: 19px; font-weight: 700;
+}
+.w-band__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.w-band__title { display: flex; align-items: center; gap: 8px; font-size: 20px; line-height: 25px; font-weight: 700; color: var(--text); }
+.w-band__summary { font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+.w-band__now {
+  font-size: 11px; line-height: 13px; font-weight: 800; letter-spacing: 0.4px;
+  padding: 2px 6px; border-radius: var(--radius-full);
+  background: var(--text); color: var(--card);
+}
+.w-band__chevron { color: var(--tint); font-weight: 700; font-size: 13px; }
+
+/* TimelineItem: a plan on a day. Time column, 30pt kind circle (gradient + glow, white symbol),
+   title and place. A meal placeholder is a dashed tint ring on a 10% wash. */
+.w-timeline { display: flex; flex-direction: column; }
+.w-tl { --tint: var(--kind-activity); --on-tint: #ffffff; display: grid; grid-template-columns: 52px 30px 1fr; gap: var(--space-12); align-items: center; padding: var(--space-8) 0; }
+.w-tl__time { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; text-align: right; }
+.w-tl__dot {
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 82%, #ffffff), var(--tint));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tint) 35%, transparent);
+  color: var(--on-tint, #ffffff); font-size: 14px; font-weight: 700;
+}
+.w-tl--placeholder .w-tl__dot {
+  background: color-mix(in srgb, var(--tint) 10%, transparent); box-shadow: none;
+  border: 1.5px dashed color-mix(in srgb, var(--tint) 60%, transparent); box-sizing: border-box; color: var(--text-secondary);
+}
+.w-tl__title { font-size: 15px; line-height: 20px; font-weight: 600; color: var(--text); }
+.w-tl__place { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+.w-tl--placeholder .w-tl__title { color: var(--text-secondary); font-weight: 500; }
+
+/* Shared accents: set --tint and the matching --on-tint in one class. White on blue/rose/violet/slate, on-accent ink on teal/amber/pink/yellow. */
+.w-tint-blue { --tint: var(--accent-blue); --on-tint: #ffffff; }
+.w-tint-teal { --tint: var(--accent-teal); --on-tint: var(--on-accent); }
+.w-tint-rose { --tint: var(--accent-rose); --on-tint: #ffffff; }
+.w-tint-violet { --tint: var(--accent-violet); --on-tint: #ffffff; }
+.w-tint-amber { --tint: var(--accent-amber); --on-tint: var(--on-accent); }
+.w-tint-pink { --tint: var(--accent-pink); --on-tint: var(--on-accent); }
+.w-tint-yellow { --tint: var(--accent-yellow); --on-tint: var(--on-accent); }
+.w-tint-slate { --tint: var(--accent-slate); --on-tint: #ffffff; }
+
+/* Groups: colour follows what a thing is, in every module. Use these, not the raw hues, for sections and categories. */
+.w-group-travel { --tint: var(--group-travel); --on-tint: #ffffff; }
+.w-group-food { --tint: var(--group-food); --on-tint: var(--on-accent); }
+.w-group-home { --tint: var(--group-home); --on-tint: #ffffff; }
+.w-group-health { --tint: var(--group-health); --on-tint: var(--on-accent); }
+.w-group-fun { --tint: var(--group-fun); --on-tint: #ffffff; }
+.w-group-shopping { --tint: var(--group-shopping); --on-tint: var(--on-accent); }
+.w-group-money { --tint: var(--group-money); --on-tint: #ffffff; }
+
+/* Button: primary = solid brand blue (one per screen), secondary = brand-soft with brand-dark label,
+   tertiary = outline. Capsule, callout 600, 12×20 padding. Accents are never button colours. */
+.w-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-size: 16px; line-height: 21px; font-weight: 600;
+  padding: var(--space-12) var(--space-20); border-radius: var(--radius-full); border: 1px solid transparent; cursor: pointer;
+}
+.w-button--primary { background: var(--brand); color: var(--on-brand); box-shadow: var(--shadow-button); }
+.w-button--secondary { background: var(--brand-soft); color: var(--brand-dark); }
+.w-button--tertiary { background: transparent; color: var(--brand-dark); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+.w-button--block { width: 100%; }
+
+/* ——— One way to do each thing (proposed) ——— */
+
+/* ItemRow: the one list row. Leading slot (40pt: CategoryTile, logo, poster, stamp or kind dot),
+   title (body 500) + subtitle (footnote, text-tertiary), trailing slot (amount, badge, rank or chevron).
+   Rows inside a card are divided by a border hairline that starts at the text, not the edge. */
+.w-list { display: flex; flex-direction: column; }
+.w-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-12); padding: var(--space-12) 0; position: relative; }
+.w-item + .w-item::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; border-top: 1px solid var(--border); }
+.w-item__text { min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.w-item__title { display: flex; align-items: center; gap: var(--space-8); font-size: 17px; line-height: 22px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-item__subtitle { font-size: 13px; line-height: 18px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-item__trailing { display: flex; align-items: center; gap: var(--space-8); font-size: 17px; line-height: 22px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.w-item__chevron { color: var(--text-tertiary); font-weight: 700; font-size: 15px; }
+.w-item__bar { grid-column: 2 / 4; margin-top: var(--space-8); }
+.w-amount--in { color: var(--income); }
+.w-amount--pending { color: var(--pending); }
+.w-poster { width: 40px; height: 56px; border-radius: var(--radius-s); background: var(--tint, var(--accent-slate)); display: grid; place-items: center; color: var(--on-tint, #fff); font-size: 18px; }
+.w-logo { width: 40px; height: 40px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--border); display: grid; place-items: center; font-family: var(--font-rounded); font-weight: 700; background: color-mix(in srgb, var(--tint, var(--accent-blue)) 15%, var(--card)); color: var(--text); }
+
+/* EmptyState: one per module. 64pt brand-soft circle with a brand SF Symbol, headline title,
+   one subheadline sentence in text-secondary, one primary Button. */
+.w-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-12); padding: var(--space-24) var(--space-16); }
+.w-empty__icon { width: 64px; height: 64px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-dark); display: grid; place-items: center; font-size: 28px; font-weight: 700; }
+.w-empty__title { font-size: 17px; line-height: 22px; font-weight: 600; color: var(--text); }
+.w-empty__body { font-size: 15px; line-height: 20px; color: var(--text-secondary); max-width: 280px; margin-bottom: var(--space-4); }
+
+/* RankStamp (Eats, Movies): a passport stamp instead of a score. Double ring in the tier ink,
+   the rank in `code` (SF Rounded black), the tier in `eyebrow`, tilted -8°.
+   Tiers: loved = brand, fine = stamp-fine (teal), skip = text-tertiary (all 4.5:1+ on card, both themes). */
+.w-stamp {
+  --ink: var(--brand); --stamp: 92px;
+  width: var(--stamp); height: var(--stamp); border-radius: 50%; flex: none;
+  display: grid; place-items: center; align-content: center; gap: 2px;
+  color: var(--ink); border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 3px var(--card), inset 0 0 0 4px var(--ink);
+  transform: rotate(-8deg); background: var(--card);
+}
+.w-stamp--fine { --ink: var(--stamp-fine); }
+.w-stamp--nope { --ink: var(--text-tertiary); }
+.w-stamp__rank { font-family: var(--font-rounded); font-weight: 900; font-size: calc(var(--stamp) * 0.32); line-height: 1; font-variant-numeric: tabular-nums; }
+.w-stamp__tier { font-size: 11px; line-height: 13px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
+.w-stamp__place { font-size: 9px; line-height: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; opacity: .9; }
+.w-stamp--sm { --stamp: 40px; border-width: 2px; box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 3px var(--ink); }
+.w-stamp--sm .w-stamp__rank { font-size: 15px; }
+.w-stamp--sm .w-stamp__tier, .w-stamp--sm .w-stamp__place { display: none; }
+.w-want { display: inline-flex; align-items: center; gap: var(--space-4); padding: 2px var(--space-8); border-radius: var(--radius-full); background: var(--ticket-highlight); color: var(--on-accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-amber) 45%, transparent); font-size: 11px; line-height: 15px; font-weight: 700; }
+
+/* FaceOff: Eats' "which was better?" as two ticket stubs, tap one. */
+.w-faceoff { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-8); }
+.w-stub { border-radius: var(--radius-m); padding: var(--space-16) var(--space-12); text-align: center; display: flex; flex-direction: column; gap: var(--space-4); background: var(--card); border: 2px solid var(--border); position: relative; }
+.w-stub--picked { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent); }
+.w-stub__name { font-weight: 700; font-size: 20px; line-height: 25px; color: var(--text); }
+.w-stub__meta { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+.w-faceoff__or { font-size: 11px; font-weight: 700; letter-spacing: 1.1px; color: var(--text-tertiary); }
+
+/* Screen templates (previews only): a 375pt phone, a large title, and the edit form. */
+.w-phone { width: 375px; box-sizing: border-box; border-radius: 40px; border: 10px solid var(--night); background: var(--background); padding: var(--space-16); display: flex; flex-direction: column; gap: var(--space-16); overflow: hidden; }
+.w-screens { display: flex; gap: var(--space-24); flex-wrap: wrap; align-items: flex-start; }
+.w-nav { display: flex; align-items: flex-end; justify-content: space-between; padding-top: var(--space-8); }
+.w-nav__title { font-size: 34px; line-height: 41px; font-weight: 700; color: var(--text); }
+.w-nav__action { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: var(--on-brand); display: grid; place-items: center; font-size: 22px; font-weight: 600; }
+.w-nav__back { font-size: 17px; color: var(--brand); }
+.w-display { font-family: var(--font-serif); font-size: 34px; line-height: 40px; font-weight: 800; color: var(--text); }
+.w-meta { font-size: 15px; line-height: 20px; color: var(--text-secondary); }
+.w-form { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 0 var(--space-16); }
+.w-field { display: flex; justify-content: space-between; align-items: center; gap: var(--space-12); padding: var(--space-12) 0; font-size: 17px; line-height: 22px; color: var(--text); }
+.w-field + .w-field { border-top: 1px solid var(--border); }
+.w-field__value { color: var(--text-secondary); }
+.w-form-label { font-size: 13px; line-height: 18px; color: var(--text-secondary); padding: 0 var(--space-16); margin-bottom: calc(var(--space-8) * -1); }
+.w-seg { display: flex; padding: 2px; background: var(--track); border-radius: var(--radius-s); }
+.w-seg span { flex: 1; text-align: center; padding: 6px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); border-radius: var(--radius-s); }
+.w-seg span[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow-card); }
+.w-spacer { flex: 1; }
+
+/* ——— Travel motifs (proposed): one hero object per module, matched to what it is ——— */
+
+/* HeroCard: the hero for every overview that isn't a journey. The ticket's gradient and type, no notches. */
+.w-hero {
+  box-sizing: border-box; width: 100%;
+  padding: var(--space-16); border-radius: var(--radius-l);
+  background: linear-gradient(135deg, var(--ticket-start), var(--ticket-end));
+  box-shadow: var(--shadow-ticket); color: var(--on-ticket);
+  display: flex; flex-direction: column; gap: var(--space-12);
+}
+
+/* RouteProgress: time as a journey. Dashed road ahead, solid road travelled, a you-are-here pin. */
+.w-route { display: block; width: 100%; height: auto; }
+.w-route__ahead { fill: none; stroke: var(--ticket-rule); stroke-width: 3; stroke-dasharray: 5 7; stroke-linecap: round; }
+.w-route__done { fill: none; stroke: var(--on-ticket); stroke-width: 3; stroke-linecap: round; }
+.w-route__stop { fill: var(--on-ticket); }
+.w-route__end { fill: var(--ticket-rule); }
+.w-route__pin { fill: var(--ticket-highlight); }
+.w-route__pin-dot { fill: var(--ticket-start); }
+.w-route__labels { display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; font-weight: 500; }
+
+/* DepartureBoard: scheduled things with a status. Navy board, split-flap cells, mono type. */
+.w-board { background: var(--board); border-radius: var(--radius-m); padding: var(--space-12) var(--space-16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); font-family: var(--font-mono); }
+.w-board__head, .w-board__row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 64px; align-items: center; gap: var(--space-8); }
+.w-board__head { font-size: 11px; line-height: 13px; font-weight: 600; letter-spacing: 1.1px; color: var(--board-muted); padding-bottom: var(--space-8); }
+.w-board__row { padding: 6px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.w-flap { display: flex; gap: 2px; }
+.w-flap b { min-width: 10px; text-align: center; padding: 3px 2px; border-radius: 3px; background: var(--board-cell); color: var(--on-board); font-size: 13px; line-height: 16px; font-weight: 600; box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35); }
+.w-board__what { font-family: var(--font-sans); font-size: 15px; line-height: 20px; color: var(--on-ticket); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-board__status { text-align: right; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.8px; color: var(--on-board); }
+.w-board__status--done { color: var(--board-muted); }
+.w-board__status--late { color: var(--board-late); }
+
+/* LuggageTag: a label you attach (category, tag, person). Group tint wash, tint edge, a punched hole. */
+.w-tag { display: inline-flex; align-items: center; gap: var(--space-8); padding: 5px var(--space-12) 5px var(--space-8); border-radius: 4px var(--radius-full) var(--radius-full) 4px; background: color-mix(in srgb, var(--tint, var(--accent-slate)) 16%, var(--card)); box-shadow: inset 0 0 0 1.5px var(--tint, var(--accent-slate)); color: var(--text); font-size: 13px; line-height: 18px; font-weight: 600; }
+.w-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--background); box-shadow: 0 0 0 1.5px var(--tint, var(--accent-slate)); }
+
+/* Postcard: one place or memory. Card, stamp box top-right (dotted, group tint), wavy postmark, serif title. */
+.w-postcard { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-m); padding: var(--space-20); box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: var(--space-8); }
+.w-postcard__stamp { position: absolute; top: var(--space-16); right: var(--space-16); width: 44px; height: 52px; border-radius: 4px; border: 2px dotted var(--tint, var(--brand)); background: color-mix(in srgb, var(--tint, var(--brand)) 14%, var(--card)); display: grid; place-items: center; font-size: 22px; }
+.w-postcard__mark { position: absolute; top: 34px; right: 8px; width: 72px; height: 28px; opacity: .6; }
+.w-postcard__mark path { fill: none; stroke: var(--text-tertiary); stroke-width: 1.5; }
+.w-postcard__from { font-size: 11px; line-height: 13px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; color: var(--text-tertiary); }
+.w-postcard__title { font-family: var(--font-serif); font-size: 22px; line-height: 28px; font-weight: 800; color: var(--text); padding-right: 64px; }
+.w-postcard__body { font-size: 17px; line-height: 24px; color: var(--text); }
+
+/* CinemaStub: Movies only. Group-fun body, perforation, a tear-off stub with the rank. */
+.w-cinema { display: flex; border-radius: var(--radius-m); overflow: hidden; color: #ffffff; box-shadow: 0 5px 20px color-mix(in srgb, var(--group-fun) 30%, transparent); }
+.w-cinema__body { flex: 1; background: var(--group-fun); padding: var(--space-16); display: flex; flex-direction: column; gap: var(--space-4); }
+.w-cinema__stub { width: 84px; flex: none; background: var(--group-fun); border-left: 2px dashed rgba(255, 255, 255, 0.6); display: grid; place-items: center; align-content: center; gap: 2px; }
+.w-cinema__eyebrow { font-size: 11px; line-height: 13px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
+.w-cinema__title { font-size: 22px; line-height: 28px; font-weight: 700; }
+.w-cinema__meta { font-size: 13px; line-height: 18px; }
+.w-cinema__rank { font-family: var(--font-rounded); font-size: 28px; line-height: 32px; font-weight: 900; }
+
+/* SuitcaseSticker: milestones you've collected. Tilted, group-coloured, three shapes. */
+.w-stickers { display: flex; flex-wrap: wrap; gap: var(--space-12); align-items: center; padding: var(--space-8) 0; }
+.w-sticker { display: inline-flex; align-items: center; gap: var(--space-4); padding: var(--space-8) var(--space-12); background: var(--tint); color: var(--on-tint, #fff); font-size: 13px; line-height: 16px; font-weight: 700; box-shadow: 0 2px 0 rgba(15, 27, 51, 0.15); }
+.w-sticker--round { border-radius: 50% / 45%; padding: var(--space-12) var(--space-16); }
+.w-sticker--pill { border-radius: var(--radius-full); }
+.w-sticker--label { border-radius: 6px; }
+.w-sticker:nth-child(3n+1) { transform: rotate(-6deg); }
+.w-sticker:nth-child(3n+2) { transform: rotate(4deg); }
+.w-sticker:nth-child(3n) { transform: rotate(-2deg); }
+
+/* Hero stamp strip (Eats): the last few stamps on the passport hero. */
+.w-hero__stamps { display: flex; gap: var(--space-8); }
+.w-hero__stamps .w-stamp { --ink: var(--on-ticket); background: transparent; box-shadow: inset 0 0 0 2px transparent, inset 0 0 0 3px var(--on-ticket); }
