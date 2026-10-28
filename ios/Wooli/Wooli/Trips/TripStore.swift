@@ -261,31 +261,71 @@ final class TripStore: CKSyncEngineDelegate {
     private func engine(for trip: Trip) -> CKSyncEngine? { trip.isMine ? privateEngine : sharedEngine }
 
     #if DEBUG
-    /// Demo trip for Simulator checks (`-sampleTrip`): three days in Tokyo,
-    /// starting next week. Added once.
+    /// Demo trip for Simulator checks and screenshots (`-sampleTrip`): a
+    /// week in Japan starting next week — fly into Tokyo, train to Kyoto,
+    /// then Osaka — with stays, sights, meals and ideas. Added once.
     func addSampleTrip() {
-        guard !trips.contains(where: { $0.name == "Tokyo (sample)" }) else { return }
+        guard !trips.contains(where: { $0.name == "Japan in autumn" }) else { return }
         let cal = Calendar.current
         let start = cal.date(byAdding: .day, value: 7, to: .now)!
-        let trip = Trip(name: "Tokyo (sample)", destination: "Tokyo", startDay: DayKey.key(start),
-                        endDay: DayKey.key(cal.date(byAdding: .day, value: 2, to: start)!))
+        func day(_ n: Int) -> String { DayKey.key(cal.date(byAdding: .day, value: n - 1, to: start)!) }
+        var trip = Trip(name: "Japan in autumn", destination: "Japan", startDay: day(1), endDay: day(7))
+        trip.legs = [TripLeg(name: "Tokyo", emoji: "🗼", startDay: day(1), endDay: day(3)),
+                     TripLeg(name: "Kyoto", emoji: "⛩️", startDay: day(3), endDay: day(5)),
+                     TripLeg(name: "Osaka", emoji: "🏯", startDay: day(5), endDay: day(7))]
         save(trip)
-        let day1 = DayKey.key(start), day2 = DayKey.key(cal.date(byAdding: .day, value: 1, to: start)!)
-        let samples: [(String?, TripItem.Kind, String, Int?, Double, Double)] = [
-            (day1, .stay, "Park Hyatt Tokyo", 15 * 60, 35.6856, 139.6907),
-            (day1, .activity, "Meiji Jingu", 10 * 60, 35.6764, 139.6993),
-            (day1, .meal, "Ichiran Shibuya", 13 * 60, 35.6611, 139.7011),
-            (day1, .activity, "Shibuya Sky", 18 * 60, 35.6585, 139.7023),
-            (day2, .meal, "Tsukiji Outer Market", 8 * 60, 35.6655, 139.7707),
-            (day2, .activity, "teamLab Planets", 11 * 60, 35.6491, 139.7898),
-            (day2, .activity, "Senso-ji", 16 * 60, 35.7148, 139.7967),
-            (nil, .activity, "Fushimi Inari day trip", nil, 34.9671, 135.7727),
-            (nil, .meal, "Omoide Yokocho", nil, 35.6930, 139.6995),
+
+        let samples: [(String?, TripItem.Kind, String, Int?, Double, Double, String?)] = [
+            (day(1), .stay, "Park Hyatt Tokyo", 15 * 60, 35.6856, 139.6907, day(3)),
+            (day(1), .activity, "Meiji Jingu", 10 * 60, 35.6764, 139.6993, nil),
+            (day(1), .meal, "Ichiran Shibuya", 13 * 60, 35.6611, 139.7011, nil),
+            (day(1), .activity, "Shibuya Sky", 18 * 60, 35.6585, 139.7023, nil),
+            (day(2), .meal, "Tsukiji Outer Market", 8 * 60, 35.6655, 139.7707, nil),
+            (day(2), .activity, "teamLab Planets", 11 * 60, 35.6491, 139.7898, nil),
+            (day(2), .activity, "Senso-ji", 16 * 60, 35.7148, 139.7967, nil),
+            (day(3), .stay, "Ace Hotel Kyoto", 15 * 60, 35.0050, 135.7640, day(5)),
+            (day(3), .meal, "Nishiki Market", 13 * 60, 35.0050, 135.7649, nil),
+            (day(4), .activity, "Fushimi Inari Taisha", 7 * 60, 34.9671, 135.7727, nil),
+            (day(4), .activity, "Arashiyama Bamboo Grove", 11 * 60, 35.0170, 135.6713, nil),
+            (day(4), .activity, "Kinkaku-ji", 15 * 60, 35.0394, 135.7292, nil),
+            (day(5), .stay, "Conrad Osaka", 15 * 60, 34.6946, 135.4930, day(7)),
+            (day(5), .activity, "Osaka Castle", 16 * 60, 34.6873, 135.5262, nil),
+            (day(6), .meal, "Kuromon Market", 10 * 60, 34.6656, 135.5066, nil),
+            (day(6), .activity, "Dotonbori", 19 * 60, 34.6687, 135.5013, nil),
+            (nil, .activity, "Nara Park day trip", nil, 34.6851, 135.8430, nil),
+            (nil, .meal, "Omoide Yokocho", nil, 35.6930, 139.6995, nil),
         ]
         for (i, s) in samples.enumerated() {
-            save(TripItem(tripID: trip.id, day: s.0, kind: s.1, title: s.2, time: s.3,
-                          place: TripPlace(name: s.2, latitude: s.4, longitude: s.5),
-                          createdAt: Date.now.addingTimeInterval(Double(i))))
+            var item = TripItem(tripID: trip.id, day: s.0, kind: s.1, title: s.2, time: s.3,
+                                place: TripPlace(name: s.2, latitude: s.4, longitude: s.5),
+                                createdAt: Date.now.addingTimeInterval(Double(i)))
+            item.checkOutDay = s.6
+            save(item)
+        }
+
+        var flight = TripTransport(mode: .flight)
+        flight.flightNumber = "CX548"
+        flight.airline = "Cathay Pacific"
+        flight.fromAirport = "HKG"
+        flight.toAirport = "HND"
+        flight.arriveTime = 6 * 60 + 20
+        flight.arriveTerminal = "3"
+        flight.cabin = "Economy"
+        flight.seats = "42A, 42B"
+        flight.confirmation = "QX7M2P"
+        save(TripItem(tripID: trip.id, day: day(1), kind: .transit, title: "CX548 Hong Kong → Tokyo", time: 1 * 60 + 5,
+                      transport: flight, createdAt: Date.now.addingTimeInterval(-3)))
+        for (n, from, to, depart, arrive, a, b) in [
+            (3, "Tokyo Station", "Kyoto Station", 9 * 60, 11 * 60 + 15, (35.6812, 139.7671), (34.9858, 135.7588)),
+            (5, "Kyoto Station", "Shin-Osaka Station", 11 * 60, 11 * 60 + 15, (34.9858, 135.7588), (34.7334, 135.5001)),
+        ] {
+            var train = TripTransport(mode: .train)
+            train.fromStation = TripPlace(name: from, latitude: a.0, longitude: a.1)
+            train.toStation = TripPlace(name: to, latitude: b.0, longitude: b.1)
+            train.arriveTime = arrive
+            train.seats = "Car 7 · 12D, 12E"
+            save(TripItem(tripID: trip.id, day: day(n), kind: .transit, title: "Shinkansen \(from) → \(to)", time: depart,
+                          transport: train, createdAt: Date.now.addingTimeInterval(-2)))
         }
     }
     #endif
