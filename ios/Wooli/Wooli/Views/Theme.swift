@@ -1,35 +1,142 @@
 import SwiftUI
 import UIKit
 
-/// Design tokens mirroring the web app (Tailwind gray scale + primary blue).
+/// Design tokens from `DesignSystem/` (values: `DesignSystem/tokens.json`).
 enum Theme {
-    static let brand = Color(light: 0x2563EB, dark: 0x3B82F6)      // primary-600 / 500
-    static let brandDark = Color(light: 0x1D4ED8, dark: 0x60A5FA)  // primary-700
-    static let brandSoft = Color(light: 0xEFF6FF, dark: 0x172554)  // primary-50
-    static let background = Color(light: 0xF9FAFB, dark: 0x0A0A0A) // gray-50
-    static let card = Color(light: 0xFFFFFF, dark: 0x171717)
-    static let border = Color(light: 0xE5E7EB, dark: 0x262626)     // gray-200
-    static let track = Color(light: 0xF3F4F6, dark: 0x262626)      // gray-100
-    static let text = Color(light: 0x111827, dark: 0xEDEDED)       // gray-900
-    static let textSecondary = Color(light: 0x6B7280, dark: 0xA3A3A3) // gray-500
-    static let textTertiary = Color(light: 0x9CA3AF, dark: 0x737373)  // gray-400
-    static let income = Color(light: 0x16A34A, dark: 0x22C55E)     // green-600
-    static let expense = Color(light: 0xEF4444, dark: 0xF87171)    // red-500
-    static let pending = Color(light: 0xD97706, dark: 0xFBBF24)    // amber-600
-    static let pendingSoft = Color(light: 0xFFFBEB, dark: 0x451A03) // amber-50
-    static let lastMonth = Color(light: 0xD1D5DB, dark: 0x525252)  // gray-300
-    static let thisMonth = Color(light: 0xF97316, dark: 0xFB923C)  // orange-500
+    // Brand: blue is for actions.
+    static let brand = Color(light: 0x2563EB, dark: 0x60A5FA)
+    static let brandDark = Color(light: 0x1D4ED8, dark: 0x93C5FD)
+    static let brandSoft = Color(light: 0xF0F5FF, dark: 0x1B2F5C)
+    static let onBrand = Color(light: 0xFFFFFF, dark: 0x0F1B33)
 
-    static let gradient = LinearGradient(colors: [Color(hex: "#3b82f6"), Color(hex: "#60a5fa")],
+    // Navy-tinted neutrals.
+    static let background = Color(light: 0xEEF3FA, dark: 0x070D1C)
+    static let card = Color(light: 0xFFFFFF, dark: 0x13213D)
+    static let border = Color(light: 0xD8E2F0, dark: 0x22314F)
+    static let track = Color(light: 0xE3EAF5, dark: 0x1D2B4A)
+    static let text = Color(light: 0x0F1B33, dark: 0xEEF2FA)
+    static let textSecondary = Color(light: 0x475877, dark: 0xB3C0D9)
+    static let textTertiary = Color(light: 0x5F6F8E, dark: 0x8D9BBA)
+
+    // Money: green and red only ever mean income and spending.
+    static let income = Color(light: 0x15803D, dark: 0x4ADE80)
+    static let expense = Color(light: 0xB91C1C, dark: 0xF87171)
+    static let pending = Color(light: 0xB45309, dark: 0xFBBF24)
+    static let pendingSoft = Color(light: 0xFFF4DC, dark: 0x3A2606)
+    static let lastMonth = Color(light: 0xC7D2E3, dark: 0x3A4C72)
+    static let thisMonth = brand
+
+    // Ticket (Trips hero) — the same in light and dark.
+    static let ticketStart = Color(light: 0x1E3A8A, dark: 0x1E3A8A)
+    static let ticketEnd = Color(light: 0x2563EB, dark: 0x2563EB)
+    static let onTicket = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
+    static let ticketPanel = Color(light: 0x0F1B33, dark: 0x0F1B33, alpha: 0.16)
+    static let ticketRule = Color(light: 0xFFFFFF, dark: 0xFFFFFF, alpha: 0.4)
+    static let ticketHighlight = Color(light: 0xFEF3C7, dark: 0xFEF3C7)
+
+    // Departures board and night surfaces.
+    static let night = Color(light: 0x050812, dark: 0x050812)
+    static let board = Color(light: 0x0F1B33, dark: 0x0F1B33)
+    static let boardCell = Color(light: 0xFFFFFF, dark: 0xFFFFFF, alpha: 0.08)
+    static let onBoard = ticketHighlight
+    static let boardMuted = Color(light: 0xB3C0D9, dark: 0xB3C0D9)
+    static let boardLate = Color(light: 0xF87171, dark: 0xF87171)
+
+    static let stampFine = Color(light: 0x0F766E, dark: 0x2DD4BF)
+
+    // Accents: constant in both modes; group and plan-kind colours alias these.
+    static let onAccent = Color(light: 0x0F1B33, dark: 0x0F1B33)
+    static let accentBlue = Color(light: 0x2563EB, dark: 0x2563EB)
+    static let accentTeal = Color(light: 0x0D9488, dark: 0x0D9488)
+    static let accentRose = Color(light: 0xE11D48, dark: 0xE11D48)
+    static let accentViolet = Color(light: 0x7C3AED, dark: 0x7C3AED)
+    static let accentAmber = Color(light: 0xD97706, dark: 0xD97706)
+    static let accentPink = Color(light: 0xEC4899, dark: 0xEC4899)
+    static let accentYellow = Color(light: 0xFACC15, dark: 0xFACC15)
+    static let accentSlate = Color(light: 0x64748B, dark: 0x64748B)
+
+    // Launch screen and logo.
+    static let launchBackground = Color(light: 0x3B82F6, dark: 0x3B82F6)
+    static let logoOutline = Color(light: 0x1D4ED8, dark: 0x1D4ED8)
+    static let logoInner = Color(light: 0x2563EB, dark: 0x2563EB)
+    static let logoWool = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
+
+    static let gradient = LinearGradient(colors: [launchBackground, Color(hex: "#60a5fa")],
                                          startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    // Shadows
+    static let cardShadow = Color(light: 0x0F1B33, dark: 0x000000, alpha: 0.06, darkAlpha: 0.3)
+    static let ticketShadow = brand.opacity(0.3)
+    static let buttonShadow = brand.opacity(0.3)
+
+    /// What kind of thing something is, the same colour in every module.
+    enum Group: String, CaseIterable {
+        case travel, food, home, health, fun, shopping, money
+
+        var color: Color {
+            switch self {
+            case .travel: Theme.accentBlue
+            case .food: Theme.accentYellow
+            case .home: Theme.accentViolet
+            case .health: Theme.accentTeal
+            case .fun: Theme.accentRose
+            case .shopping: Theme.accentPink
+            case .money: Theme.accentSlate
+            }
+        }
+
+        /// Text and icons placed on `color`.
+        var onColor: Color {
+            switch self {
+            case .travel, .home, .fun, .money: .white
+            case .food, .health, .shopping: Theme.onAccent
+            }
+        }
+    }
+}
+
+enum Space {
+    static let xs: CGFloat = 4, s: CGFloat = 8, m: CGFloat = 12, l: CGFloat = 16, xl: CGFloat = 20, xxl: CGFloat = 24
+}
+
+/// "Full" is `Capsule()` or `Circle()`.
+enum Radius {
+    static let small: CGFloat = 10, card: CGFloat = 14, hero: CGFloat = 22
+}
+
+/// The four styles Dynamic Type doesn't cover.
+enum WooliFont {
+    case amount, display, code, eyebrow
+}
+
+private struct WooliFontModifier: ViewModifier {
+    let style: WooliFont
+    @ScaledMetric(relativeTo: .largeTitle) private var amount: CGFloat = 32
+    @ScaledMetric(relativeTo: .largeTitle) private var display: CGFloat = 34
+    @ScaledMetric(relativeTo: .title) private var code: CGFloat = 28
+    @ScaledMetric(relativeTo: .caption2) private var eyebrow: CGFloat = 11
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .amount: content.font(.system(size: amount, weight: .bold)).monospacedDigit()
+        case .display: content.font(.system(size: display, weight: .heavy, design: .serif))
+        case .code: content.font(.system(size: code, weight: .black, design: .rounded))
+        case .eyebrow: content.font(.system(size: eyebrow, weight: .bold)).tracking(1.1).textCase(.uppercase)
+        }
+    }
+}
+
+extension View {
+    func wooliFont(_ style: WooliFont) -> some View { modifier(WooliFontModifier(style: style)) }
 }
 
 extension Color {
-    init(light: UInt32, dark: UInt32) {
+    init(light: UInt32, dark: UInt32, alpha: CGFloat = 1, darkAlpha: CGFloat? = nil) {
         self.init(uiColor: UIColor { traits in
-            let v = traits.userInterfaceStyle == .dark ? dark : light
+            let isDark = traits.userInterfaceStyle == .dark
+            let v = isDark ? dark : light
             return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
-                           blue: CGFloat(v & 0xff) / 255, alpha: 1)
+                           blue: CGFloat(v & 0xff) / 255, alpha: isDark ? (darkAlpha ?? alpha) : alpha)
         })
     }
 
@@ -52,7 +159,7 @@ struct CardModifier: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border))
-            .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
+            .shadow(color: Theme.cardShadow, radius: 2, y: 1)
     }
 }
 
@@ -267,7 +374,7 @@ struct WooliLogo: View {
     var body: some View {
         Canvas { ctx, canvasSize in
             let s = canvasSize.width / 100
-            let outline = Color(hex: "#1d4ed8"), inner = Color(hex: "#2563eb")
+            let outline = Theme.logoOutline, inner = Theme.logoInner
             func circle(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat, _ color: Color) {
                 ctx.fill(Path(ellipseIn: CGRect(x: (cx - r) * s, y: (cy - r) * s, width: 2 * r * s, height: 2 * r * s)), with: .color(color))
             }

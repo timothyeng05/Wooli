@@ -96,6 +96,16 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case finance, food, health, culture, travel
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
+
+    var group: Theme.Group {
+        switch self {
+        case .finance: .money
+        case .food: .food
+        case .health: .health
+        case .culture: .fun
+        case .travel: .travel
+        }
+    }
 }
 
 /// Which apps the user turned on and how they ranked them — chosen in
