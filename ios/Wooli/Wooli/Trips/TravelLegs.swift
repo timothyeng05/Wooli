@@ -102,7 +102,11 @@ enum TravelLegs {
     /// Minutes the leg takes: from its ticket's arrival, or "Duration: 1h 30m".
     static func minutes(of item: TripItem) -> Int? {
         if let t = item.transport, let arrive = t.arriveTime, let depart = item.time {
-            return (arrive + t.arriveDayOffset * 1440 - depart + 1440 * 2) % (1440 * 3)
+            // Flights count each end in its own time zone.
+            if let minutes = t.durationMinutes(departDay: item.day, departTime: depart) { return minutes }
+            // Otherwise by the clock; arriving earlier than you left means the next day.
+            let minutes = arrive + t.arriveDayOffset * 1440 - depart
+            return minutes > 0 ? minutes : minutes + 1440 > 0 ? minutes + 1440 : nil
         }
         guard let match = item.notes.firstMatch(of: /Duration: (?:(\d+)h)? ?(?:(\d+)m)?/) else { return nil }
         let total = (Int(match.1 ?? "") ?? 0) * 60 + (Int(match.2 ?? "") ?? 0)

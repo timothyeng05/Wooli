@@ -351,7 +351,8 @@ struct TripTravelCard: View {
         let time: String? = item.time.map { depart in
             let start = TripTransport.timeText(depart)
             guard let minutes else { return start }
-            return "\(start)–\(TripTransport.timeText((depart + minutes) % 1440))"
+            // The arrival as it reads where you land (a flight can cross time zones).
+            return "\(start)–\(TripTransport.timeText(item.transport?.arriveTime ?? (depart + minutes) % 1440))"
         }
         return [time ?? "No time yet", minutes.map(TripTransport.durationText)].compactMap { $0 }.joined(separator: " · ")
     }
