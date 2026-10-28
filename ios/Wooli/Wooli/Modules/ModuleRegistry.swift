@@ -117,12 +117,10 @@ struct ModulesSettingsView: View {
 
     var body: some View {
         List {
+            AppLineupRows()
             Section {
-                AppLineupRows()
-            } header: {
-                Text("Your apps")
             } footer: {
-                Text("Drag to rank them — the order sets Today and the ☰ app switcher. Turning an app off hides it; your data stays until you delete it. Everything stays on this iPhone and your own iCloud.")
+                Text("Drag to rank them within each group — the order sets Today and the ☰ app switcher. Turning an app off hides it; your data stays until you delete it. Everything stays on this iPhone and your own iCloud.")
             }
             ForEach(AppSpace.allCases.filter { $0.module != nil }) { space in
                 ModuleSettingsSection(space: space, module: space.module!, isEnabled: lineup.isEnabled(space))

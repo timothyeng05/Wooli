@@ -8,6 +8,8 @@ import SwiftData
 /// Adding an app: a case here, a Today card in `TodayView`, and its root
 /// screen in `SpaceRoot`. Optional apps reuse `WooliModule` for on/off and Face ID.
 enum AppSpace: String, CaseIterable, Identifiable {
+    // `period` is the Health app (Period is its first section); the raw value
+    // stays so saved order and on/off settings carry over.
     case today, budget, trips, eats, movies, recipes, period
     var id: String { rawValue }
 
@@ -19,7 +21,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .eats: "Eats"
         case .movies: "Movies"
         case .recipes: "Recipes"
-        case .period: "Period"
+        case .period: "Health"
         }
     }
 
@@ -31,7 +33,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .eats: "fork.knife"
         case .movies: "film"
         case .recipes: "frying.pan"
-        case .period: WooliModule.period.systemImage
+        case .period: "heart.fill"
         }
     }
 
@@ -56,7 +58,19 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .eats: "Rank every place you've eaten, Beli-style. Trip meals show up to rank."
         case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .recipes: "Share a recipe reel from Instagram; its caption becomes ingredients and steps."
-        case .period: "Track your cycle with private predictions."
+        case .period: "Your health, kept private — starting with your cycle and its predictions."
+        }
+    }
+
+    /// Its group in the ☰ switcher and Settings → Apps; nil for Today.
+    var theme: AppTheme? {
+        switch self {
+        case .today: nil
+        case .budget: .finance
+        case .eats, .recipes: .food
+        case .period: .health
+        case .movies: .culture
+        case .trips: .travel
         }
     }
 
@@ -75,6 +89,13 @@ enum AppSpace: String, CaseIterable, Identifiable {
     fileprivate var storedEnabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? (module == nil)
     }
+}
+
+/// App groups, in the order they're listed.
+enum AppTheme: String, CaseIterable, Identifiable {
+    case finance, food, health, culture, travel
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
 }
 
 /// Which apps the user turned on and how they ranked them — chosen in
@@ -130,18 +151,18 @@ final class AppLineup {
         UserDefaults.standard.set(on, forKey: space.enabledKey)
     }
 
-    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
-        order.move(fromOffsets: source, toOffset: destination)
-        saveOrder()
-    }
-
     /// Reorder within the enabled apps only (Edit Today lists just those);
     /// apps that are off keep their slots in the full ranking.
     func moveInstalled(fromOffsets source: IndexSet, toOffset destination: Int) {
-        var ranked = installed
+        move(within: installed, fromOffsets: source, toOffset: destination)
+    }
+
+    /// Reorder a subset of apps (e.g. one theme); the rest keep their slots.
+    func move(within subset: [AppSpace], fromOffsets source: IndexSet, toOffset destination: Int) {
+        var ranked = subset
         ranked.move(fromOffsets: source, toOffset: destination)
         var next = ranked.makeIterator()
-        order = order.map { enabled.contains($0) ? next.next()! : $0 }
+        order = order.map { subset.contains($0) ? next.next()! : $0 }
         saveOrder()
     }
 
@@ -150,32 +171,40 @@ final class AppLineup {
     }
 }
 
-/// Rank + toggle list for apps. Used in onboarding and Settings → Apps; the
-/// containing List must be in edit mode for the drag handles.
+/// Rank + toggle list for apps, one section per theme (drag to rank within
+/// it). Used in onboarding and Settings → Apps; the containing List must be
+/// in edit mode for the drag handles.
 struct AppLineupRows: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
     @State private var lineup = AppLineup.shared
 
     var body: some View {
-        ForEach(lineup.order) { space in
-            Toggle(isOn: Binding(get: { lineup.isEnabled(space) }, set: { on in
-                withAnimation { lineup.setEnabled(space, on) }
-                if on, app.mode == .sample, let module = space.module { ModuleSampleData.seed(module, context: context) }
-            })) {
-                HStack(spacing: 12) {
-                    AppIconTile(space, size: 36)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(space.title).font(.body.weight(.semibold))
-                        Text(space.pitch).font(.caption).foregroundStyle(Theme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+        ForEach(AppTheme.allCases) { theme in
+            let apps = lineup.order.filter { $0.theme == theme }
+            Section(theme.title) {
+                ForEach(apps) { row($0) }
+                    .onMove { lineup.move(within: apps, fromOffsets: $0, toOffset: $1) }
+            }
+        }
+    }
+
+    private func row(_ space: AppSpace) -> some View {
+        Toggle(isOn: Binding(get: { lineup.isEnabled(space) }, set: { on in
+            withAnimation { lineup.setEnabled(space, on) }
+            if on, app.mode == .sample, let module = space.module { ModuleSampleData.seed(module, context: context) }
+        })) {
+            HStack(spacing: 12) {
+                AppIconTile(space, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(space.title).font(.body.weight(.semibold))
+                    Text(space.pitch).font(.caption).foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.trailing, 8)
-            .opacity(lineup.isEnabled(space) ? 1 : 0.6)
         }
-        .onMove { lineup.move(fromOffsets: $0, toOffset: $1) }
+        .padding(.trailing, 8)
+        .opacity(lineup.isEnabled(space) ? 1 : 0.6)
     }
 }
 

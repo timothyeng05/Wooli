@@ -347,7 +347,13 @@ struct SidebarDrawer: View {
                     sectionTitle("APPS").padding(.top, 16)
 
                     spaceButton(.today)
-                    ForEach(lineup.installed) { spaceButton($0) }
+                    ForEach(AppTheme.allCases) { theme in
+                        let apps = lineup.installed.filter { $0.theme == theme }
+                        if !apps.isEmpty {
+                            sectionTitle(theme.title.uppercased()).padding(.top, 10)
+                            ForEach(apps) { spaceButton($0) }
+                        }
+                    }
 
                     if app.space == .budget {
                         Divider()
