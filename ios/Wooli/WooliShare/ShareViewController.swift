@@ -2,7 +2,7 @@ import UIKit
 import SwiftUI
 
 /// Wooli in the share sheet: shows the place shared from Apple Maps and
-/// hands it to the app (via the App Group) for Eats or a trip's Ideas. An
+/// hands it to the app (via the App Group) for Eats, Sights or a trip's Ideas. An
 /// Instagram reel goes straight to the app, which works out from the caption
 /// whether it's a recipe or places to eat.
 final class ShareViewController: UIViewController {
@@ -82,6 +82,7 @@ final class ShareModel {
 struct ShareView: View {
     let model: ShareModel
     private let orange = Color(red: 0.976, green: 0.451, blue: 0.086)
+    private let violet = Color(red: 0.486, green: 0.227, blue: 0.929)
 
     var body: some View {
         NavigationStack {
@@ -92,7 +93,7 @@ struct ShareView: View {
                 case .ready(let place):
                     ready(place)
                 case .notAPlace:
-                    message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats, a trip or Recipes.")
+                    message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats, Sights, a trip or Recipes.")
                 case .saveFailed:
                     message("Couldn't hand this to Wooli", detail: "Open Wooli once, then try sharing again.")
                 }
@@ -121,19 +122,31 @@ struct ShareView: View {
             .padding(.top, 8)
             Spacer(minLength: 0)
             VStack(spacing: 10) {
-                Button { model.send(place, to: .eats) } label: {
-                    Label("I've been — rank it", systemImage: "fork.knife").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                // A restaurant leads with Eats; anything else leads with Sights.
+                if place.isFood {
+                    action("I've been — rank it", systemImage: "fork.knife", tint: orange, prominent: true) { model.send(place, to: .eats) }
+                    action("Want to try", systemImage: "bookmark", tint: orange, prominent: false) { model.send(place, to: .eatsWishlist) }
+                    action("Save to Sights", systemImage: "mappin.and.ellipse", tint: violet, prominent: false) { model.send(place, to: .sights) }
+                } else {
+                    action("Save to Sights", systemImage: "mappin.and.ellipse", tint: violet, prominent: true) { model.send(place, to: .sights) }
+                    action("I've been — rank it in Eats", systemImage: "fork.knife", tint: orange, prominent: false) { model.send(place, to: .eats) }
+                    action("Want to try in Eats", systemImage: "bookmark", tint: orange, prominent: false) { model.send(place, to: .eatsWishlist) }
                 }
-                .buttonStyle(.borderedProminent).tint(orange)
-                Button { model.send(place, to: .eatsWishlist) } label: {
-                    Label("Want to try", systemImage: "bookmark").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
-                }
-                .buttonStyle(.bordered).tint(orange)
                 Button { model.send(place, to: .tripIdeas) } label: {
                     Label("Add to a trip's Ideas", systemImage: "airplane").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.bordered)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func action(_ title: String, systemImage: String, tint: Color, prominent: Bool, run: @escaping () -> Void) -> some View {
+        let label = Label(title, systemImage: systemImage).font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+        if prominent {
+            Button(action: run) { label }.buttonStyle(.borderedProminent).tint(tint)
+        } else {
+            Button(action: run) { label }.buttonStyle(.bordered).tint(tint)
         }
     }
 

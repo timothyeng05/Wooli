@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import MapKit
 import CloudKit
 
@@ -327,6 +328,8 @@ struct TripDetailView: View {
     @State private var store = TripStore.shared
     /// Your Eats rankings, for the "What we ate" card and meal scores.
     @State private var eatsBook = EatsBook.shared
+    /// Sights you still want to see, for each city's "N to see" row.
+    @Query(filter: #Predicate<SightEntry> { $0.visitedDay == "" }) private var sightsToSee: [SightEntry]
     @State private var editingItem: TripItem?
     /// A ranked meal opened on its Eats page.
     @State private var eatsMeal: TripItem?
@@ -402,6 +405,10 @@ struct TripDetailView: View {
                             let toTry = wishCount(in: leg)
                             if toTry > 0 && !collapsed.contains(leg.id) {
                                 LegToTryRow(cityName: leg.name, count: toTry)
+                            }
+                            let toSee = sightCount(in: leg)
+                            if toSee > 0 && !collapsed.contains(leg.id) {
+                                LegToSeeRow(cityName: leg.name, count: toSee)
                             }
                         }
                     }
@@ -707,6 +714,12 @@ struct TripDetailView: View {
     private func wishCount(in leg: TripLeg) -> Int {
         guard !leg.isHome, !leg.name.isEmpty else { return 0 }
         return eatsBook.wishlist.filter { $0.city?.caseInsensitiveCompare(leg.name) == .orderedSame }.count
+    }
+
+    /// Sights "Want to go" places whose address is in this city.
+    private func sightCount(in leg: TripLeg) -> Int {
+        guard !leg.isHome, !leg.name.isEmpty else { return 0 }
+        return sightsToSee.filter { $0.city?.caseInsensitiveCompare(leg.name) == .orderedSame }.count
     }
 
     private func travelCard(_ trip: Trip, from: TripLeg?, to: TripLeg?, start: String, end: String,

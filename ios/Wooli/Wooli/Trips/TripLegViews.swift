@@ -232,6 +232,31 @@ struct LegToTryRow: View {
     }
 }
 
+/// "2 to see in Tokyo": places saved to Want to go in Sights that are in this city.
+struct LegToSeeRow: View {
+    @Environment(AppModel.self) private var app
+    let cityName: String
+    let count: Int
+
+    var body: some View {
+        Button { app.open(.sights) } label: {
+            ItemRow(title: "\(count) to see in \(cityName)", subtitle: Text("From your Sights Want to go list"), leading: {
+                Image(systemName: AppSpace.sights.systemImage)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(AppSpace.sights.tint, in: Circle())
+            }, trailing: {
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+            })
+            .padding(.horizontal, Space.l)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.border))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 extension TripItem.Kind {
     /// Symbols on the kind's colour: dark ink on yellow, white elsewhere.
     var onColor: Color { self == .meal ? Theme.onAccent : .white }

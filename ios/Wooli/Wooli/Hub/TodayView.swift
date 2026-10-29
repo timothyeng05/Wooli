@@ -33,6 +33,7 @@ struct TodayView: View {
                             case .budget: BudgetTodayCard()
                             case .trips: TripsTodayCard()
                             case .eats: EatsTodayCard()
+                            case .sights: SightsTodayCard()
                             case .movies: MoviesTodayCard()
                             case .recipes: RecipesTodayCard()
                             case .period: PeriodTodayCard()
@@ -277,6 +278,24 @@ private struct EatsTodayCard: View {
             TodayCard(space: .eats, headline: "\(entries.count) place\(entries.count == 1 ? "" : "s") ranked", detail: "Top: \(best.title)")
         } else {
             TodayCard(space: .eats, headline: "Start your list", detail: "Rank places you've eaten against each other.")
+        }
+    }
+}
+
+// MARK: - Sights
+
+private struct SightsTodayCard: View {
+    @Query(sort: \SightEntry.createdAt, order: .reverse) private var sights: [SightEntry]
+
+    var body: some View {
+        let waiting = sights.filter { !$0.isVisited }
+        if let next = waiting.first {
+            TodayCard(space: .sights, headline: "\(waiting.count) place\(waiting.count == 1 ? "" : "s") to see",
+                      detail: "Latest: \(next.name)")
+        } else if !sights.isEmpty {
+            TodayCard(space: .sights, headline: "\(sights.count) place\(sights.count == 1 ? "" : "s") seen", detail: "Add somewhere new to visit.")
+        } else {
+            TodayCard(space: .sights, headline: "Save a place to see", detail: "Landmarks, museums and parks from Apple Maps.")
         }
     }
 }

@@ -26,7 +26,7 @@ enum ModuleSampleData {
         try? context.save()
     }
 
-    /// Eats places and wishes, ranked movies and two recipes, for Simulator
+    /// Eats places and wishes, saved sights, ranked movies and two recipes, for Simulator
     /// screenshots (`-sampleApps`). Skips any app that already has data.
     @MainActor static func seedApps(context: ModelContext) {
         let cal = Calendar.current
@@ -71,6 +71,20 @@ enum ModuleSampleData {
                 movie.rank = Double(films.count - i)
                 movie.watchedDay = DayKey.key(cal.date(byAdding: .day, value: -(i * 9 + 3), to: .now)!)
                 context.insert(movie)
+            }
+        }
+
+        if ((try? context.fetchCount(FetchDescriptor<SightEntry>())) ?? 0) == 0 {
+            let sights: [(String, String, Double, Double, Int?)] = [
+                ("Statue of Liberty", "Liberty Island, New York", 40.6892, -74.0445, 40),
+                ("The Metropolitan Museum of Art", "1000 5th Ave, New York", 40.7794, -73.9632, 12),
+                ("High Line", "New York, NY", 40.7480, -74.0048, nil),
+                ("Brooklyn Bridge", "Brooklyn Bridge, New York", 40.7061, -73.9969, nil),
+                ("Top of the Rock", "30 Rockefeller Plaza, New York", 40.7593, -73.9794, nil),
+            ]
+            for s in sights {
+                let day = s.4.map { DayKey.key(cal.date(byAdding: .day, value: -$0, to: .now)!) } ?? ""
+                context.insert(SightEntry(name: s.0, place: TripPlace(name: s.0, address: s.1, latitude: s.2, longitude: s.3), visitedDay: day))
             }
         }
 

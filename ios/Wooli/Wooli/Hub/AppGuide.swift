@@ -59,6 +59,16 @@ struct AppGuide {
             Tip(symbol: "person.2", title: "Friends and partner",
                 detail: "Share your list to see each other's scores. ♥ Partner makes one list you both edit."),
         ]
+        case .sights: [
+            Tip(symbol: "plus", title: "Save a place",
+                detail: "Tap + and search Apple Maps for a landmark, museum, park or viewpoint."),
+            Tip(symbol: "square.and.arrow.up", title: "Share from Maps",
+                detail: "Share a place from Apple Maps to Wooli and choose Save to Sights."),
+            Tip(symbol: "checkmark.circle", title: "Been there?",
+                detail: "Swipe a place right to move it from Want to go to Been, or open it to set the day."),
+            Tip(symbol: "airplane", title: "Plan a trip around it",
+                detail: "Open a place and tap Add to a trip's Ideas. Trips show the sights saved for each city."),
+        ]
         case .movies: [
             Tip(symbol: "magnifyingglass", title: "Add a movie",
                 detail: "Tap + and search by title."),

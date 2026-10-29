@@ -10,7 +10,7 @@ import SwiftData
 enum AppSpace: String, CaseIterable, Identifiable {
     // `period` is the Health app (Period is its first section); the raw value
     // stays so saved order and on/off settings carry over.
-    case today, budget, trips, eats, movies, recipes, period
+    case today, budget, trips, eats, sights, movies, recipes, period
     var id: String { rawValue }
 
     var title: String {
@@ -19,6 +19,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: "Budget"
         case .trips: "Trips"
         case .eats: "Eats"
+        case .sights: "Sights"
         case .movies: "Movies"
         case .recipes: "Recipes"
         case .period: "Health"
@@ -31,6 +32,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: "dollarsign"
         case .trips: "airplane"
         case .eats: "fork.knife"
+        case .sights: "mappin.and.ellipse"
         case .movies: "film"
         case .recipes: "frying.pan"
         case .period: "heart.fill"
@@ -43,6 +45,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: Theme.brand
         case .trips: Color(hex: "#0ea5e9")
         case .eats: Color(hex: "#f97316")
+        case .sights: Theme.accentViolet
         case .movies: Color(hex: "#e11d48")
         case .recipes: Color(hex: "#16a34a")
         case .period: WooliModule.period.tint
@@ -56,6 +59,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .budget: "Connect your bank, plan each month, and see where your money goes."
         case .trips: "Plan trips day by day on Apple Maps — together, if you like."
         case .eats: "Rank every place you've eaten, Beli-style. Trip meals show up to rank."
+        case .sights: "Save landmarks, museums and parks you want to see, then add them to a trip."
         case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .recipes: "Share a recipe reel from Instagram; its caption becomes ingredients and steps."
         case .period: "Your health, kept private — starting with your cycle and its predictions."
@@ -67,7 +71,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         switch self {
         case .today: nil
         case .budget: .finance
-        case .eats, .recipes: .food
+        case .eats, .sights, .recipes: .explore
         case .period: .health
         case .movies: .culture
         case .trips: .travel
@@ -93,14 +97,14 @@ enum AppSpace: String, CaseIterable, Identifiable {
 
 /// App groups, in the order they're listed.
 enum AppTheme: String, CaseIterable, Identifiable {
-    case finance, food, health, culture, travel
+    case finance, explore, health, culture, travel
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
 
     var group: Theme.Group {
         switch self {
         case .finance: .money
-        case .food: .food
+        case .explore: .food
         case .health: .health
         case .culture: .fun
         case .travel: .travel

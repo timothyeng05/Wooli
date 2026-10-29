@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Places shared to Wooli from Apple Maps (the WooliShare extension),
 /// shown one at a time when the app comes to the front.
@@ -74,6 +75,7 @@ struct SharedPlaceSheet: View {
         switch place.destination {
         case .eats: rank
         case .tripIdeas: SharedPlaceTripPicker(place: place)
+        case .sights: SharedPlaceSightsSheet(place: place)
         // Saved by `SharedPlaceInbox.check` before any sheet shows.
         case .eatsWishlist: EmptyView()
         }
@@ -98,14 +100,17 @@ struct SharedPlaceSheet: View {
 /// Which trip's Ideas to add a shared place to.
 struct SharedPlaceTripPicker: View {
     let place: SharedPlace
+    /// Called instead of switching to Trips, for callers that stay where they are (Sights).
+    let onAdded: ((Trip) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var app
     @State private var store = TripStore.shared
     @State private var kind: TripItem.Kind
 
-    init(place: SharedPlace) {
+    init(place: SharedPlace, onAdded: ((Trip) -> Void)? = nil) {
         self.place = place
+        self.onAdded = onAdded
         _kind = State(initialValue: place.isFood ? .meal : .activity)
     }
 
@@ -156,8 +161,63 @@ struct SharedPlaceTripPicker: View {
 
     private func add(to trip: Trip) {
         store.save(TripItem(tripID: trip.id, day: nil, kind: kind, title: place.name, place: place.tripPlace))
-        app.space = .trips
-        SharedPlaceInbox.shared.tripToOpenAfter = trip.id
+        if let onAdded {
+            onAdded(trip)
+        } else {
+            app.space = .trips
+            SharedPlaceInbox.shared.tripToOpenAfter = trip.id
+        }
+        dismiss()
+    }
+}
+
+/// A place shared from Apple Maps to Sights: saved as Want to go or Been.
+/// One you already have just moves to the tab you pick.
+struct SharedPlaceSightsSheet: View {
+    let place: SharedPlace
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var app
+    @Query private var sights: [SightEntry]
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: Space.xl) {
+                VStack(spacing: Space.xs) {
+                    Text(place.name).font(.title3.weight(.bold)).multilineTextAlignment(.center)
+                    if !place.address.isEmpty {
+                        Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
+                    }
+                }
+                Spacer(minLength: 0)
+                VStack(spacing: Space.m) {
+                    Button { save(visited: false) } label: {
+                        Label("Want to go", systemImage: "bookmark").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.wooliPrimary)
+                    Button { save(visited: true) } label: {
+                        Label("I've been here", systemImage: "checkmark").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.wooliSecondary)
+                }
+            }
+            .padding(Space.xl)
+            .navigationTitle("Save to Sights")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private func save(visited: Bool) {
+        let day = visited ? DayKey.key(.now) : ""
+        if let existing = sights.first(where: { $0.isSamePlace(as: place.tripPlace) }) {
+            if existing.visitedDay.isEmpty || !visited { existing.visitedDay = day }
+            existing.updatedAt = .now
+        } else {
+            context.insert(SightEntry(name: place.name, place: place.tripPlace, visitedDay: day))
+        }
+        app.space = .sights
         dismiss()
     }
 }
