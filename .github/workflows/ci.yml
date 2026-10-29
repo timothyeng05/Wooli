@@ -17,6 +17,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test
+      - run: npm run lint:design
       # Lint has pre-existing errors across the codebase; report without failing
       # the build until they're burned down.
       - run: npm run lint

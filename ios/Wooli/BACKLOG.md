@@ -213,7 +213,7 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 | ID | Item | Status |
 |----|------|--------|
 | D1 | Tokens in `Theme.swift` (navy-tinted neutrals, group colours, `Space`, `Radius`, `WooliFont`) | ✅ done — Claude, 2026-10-28 (not built) |
-| D2 | Design lint script + CI step, with a baseline that can only go down | 🔨 in progress — Claude, 2026-10-29 |
+| D2 | Design lint script + CI step, with a baseline that can only go down | ✅ done — Claude, 2026-10-29 |
 | D3 | Shared components in `Shared/DesignSystem/` (Button, ItemRow, EmptyState, SectionBand, HeroCard, TicketCard, motifs) | todo |
 | D4 | Budget: route hero, review band, group bands, recurring departures board (category → group mapping needs the user's OK) | todo |
 | D5 | Trips: shared ticket/bands, cities all travel blue, Eats "to try" under each city | todo |
@@ -254,6 +254,7 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 
 ## Done
 
+- **2026-10-29 · Claude** — **D2 design lint.** `scripts/design-lint.sh` (`npm run lint:design`, CI step after tests) counts matching lines of `Color(hex:`, numeric `cornerRadius:`, `.font(.system(size:` and numeric `.padding(` in the iOS Swift files, excluding `Theme.swift` and `Shared/DesignSystem/`, and fails if any count is above `scripts/design-lint-baseline.txt` (today: 84 / 48 / 43 / 208). When a step removes old code, run `scripts/design-lint.sh --update` and commit the lower baseline. Checked locally: passes now, fails after adding one `Color(hex:)`. The CI run itself not yet seen.
 - **2026-10-28 · Claude** — **D1 design tokens.** `Theme.swift` now holds every colour in `DesignSystem/IMPLEMENTATION.md` (navy-tinted neutrals, brand, ticket, board, stamp, accents, launch/logo), `Theme.Group` (seven group colours + `onColor`), `Space`, `Radius`, `WooliFont` + `.wooliFont(_:)` (Dynamic Type–scaled), and the card/ticket/button shadows; old names kept, `thisMonth` is now an alias of `brand`, the card shadow uses `cardShadow`, the logo uses `logoOutline`/`logoInner`. `Color(light:dark:)` gained optional alpha. `AppTheme.group` added in `AppSpace.swift` (finance→money, food, health, culture→fun, travel). Not built — no Xcode in the session; the diff touches `Theme.swift` plus that one `AppSpace.swift` property the plan asks for. Not checked: light/dark screens against `reference/`.
 - **2026-10-27 · Claude** — Period is no longer an app of its own: the app is now **Health** (heart icon, in the Health group) with Period as its first section — title "Health", a "Period" heading above the calendar, and the Today card headline reads "Cycle day N". Kept the `period` raw value and `WooliModule.period` (Face ID, on/off, Settings section stay "Period"), so saved order and settings carry over. Not built — no Xcode in the session.
 - **2026-10-27 · Claude** — Apps grouped by theme (`AppTheme`, `AppSpace.theme`): **Finance** (Budget), **Food** (Eats, Recipes), **Health** (Period), **Culture** (Movies), **Travel** (Trips). The ☰ switcher shows a header per group (Today stays on top; empty groups hidden). Settings → Apps and onboarding list one section per group, drag to rank within a group (`AppLineup.move(within:)`, which `moveInstalled` now uses too). Today's cards keep the user's own order, still set in Edit Today. Not built — no Xcode in the session.
