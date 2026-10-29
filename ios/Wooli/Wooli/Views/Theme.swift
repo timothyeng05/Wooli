@@ -152,19 +152,19 @@ extension Color {
 /// White rounded card with a hairline border — the web app's
 /// `bg-white rounded-xl border border-gray-200 shadow-sm`.
 struct CardModifier: ViewModifier {
-    var padding: CGFloat = 20
+    var padding: CGFloat = Space.xl
     func body(content: Content) -> some View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.border))
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.border))
             .shadow(color: Theme.cardShadow, radius: 2, y: 1)
     }
 }
 
 extension View {
-    func card(padding: CGFloat = 20) -> some View { modifier(CardModifier(padding: padding)) }
+    func card(padding: CGFloat = Space.xl) -> some View { modifier(CardModifier(padding: padding)) }
 
     /// Gray page background used behind cards.
     func pageBackground() -> some View {
@@ -178,8 +178,7 @@ struct SectionLabel: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(text.uppercased())
-            .font(.caption.weight(.semibold))
-            .tracking(0.8)
+            .wooliFont(.eyebrow)
             .foregroundStyle(Theme.textTertiary)
     }
 }
@@ -213,6 +212,7 @@ struct PendingBadge: View {
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Theme.pendingSoft, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.pending.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
             .foregroundStyle(Theme.pending)
     }
 }
@@ -246,7 +246,7 @@ struct CategoryTile: View {
     var body: some View {
         let tint = category.map { Color(hex: $0.colorHex) } ?? Theme.textTertiary
         ZStack {
-            RoundedRectangle(cornerRadius: size * 0.25, style: .continuous).fill(tint.opacity(0.14))
+            RoundedRectangle(cornerRadius: min(Radius.small, size * 0.25), style: .continuous).fill(tint.opacity(0.14))
             if let category {
                 Text(category.icon).font(.system(size: size * 0.48))
             } else {
