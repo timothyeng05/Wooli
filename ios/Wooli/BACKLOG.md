@@ -213,7 +213,7 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 | ID | Item | Status |
 |----|------|--------|
 | D1 | Tokens in `Theme.swift` (navy-tinted neutrals, group colours, `Space`, `Radius`, `WooliFont`) | ✅ done — Claude, 2026-10-28 (not built) |
-| D2 | Design lint script + CI step, with a baseline that can only go down | todo |
+| D2 | Design lint script + CI step, with a baseline that can only go down | 🔨 in progress — Claude, 2026-10-29 |
 | D3 | Shared components in `Shared/DesignSystem/` (Button, ItemRow, EmptyState, SectionBand, HeroCard, TicketCard, motifs) | todo |
 | D4 | Budget: route hero, review band, group bands, recurring departures board (category → group mapping needs the user's OK) | todo |
 | D5 | Trips: shared ticket/bands, cities all travel blue, Eats "to try" under each city | todo |
