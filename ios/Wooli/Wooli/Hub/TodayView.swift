@@ -24,6 +24,8 @@ struct TodayView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, 4)
 
+                    NextUpBoard()
+
                     // In the order the user ranked them.
                     ForEach(lineup.todayCards) { space in
                         Group {
