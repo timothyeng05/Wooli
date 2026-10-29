@@ -19,14 +19,21 @@ struct RecipesListView: View {
 
     var body: some View {
         List {
-            if recipes.isEmpty {
-                ContentUnavailableView {
-                    Label("Save your first recipe", systemImage: AppSpace.recipes.systemImage)
-                } description: {
-                    Text("In Instagram, tap Share on a recipe reel, pick Wooli, then Save as a recipe. The caption becomes ingredients and steps.")
-                } actions: {
-                    Button("Add a recipe") { adding = true }.buttonStyle(.borderedProminent)
+            Section {
+                HeroCard(eyebrow: "Your recipes") {
+                    Text("\(recipes.count) saved").wooliFont(.amount)
+                    let reels = recipes.filter { $0.link != nil }.count
+                    Text(reels > 0 ? "\(reels) from Instagram reels" : "Share a recipe reel to Wooli to add one")
+                        .font(.footnote)
                 }
+                .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.l))
+                .listRowBackground(Color.clear)
+            }
+            if recipes.isEmpty {
+                WooliEmptyState(symbol: AppSpace.recipes.systemImage, title: "Save your first recipe",
+                                message: "In Instagram, tap Share on a recipe reel, pick Wooli, then Save as a recipe. The caption becomes ingredients and steps.",
+                                actionTitle: "Add recipe") { adding = true }
+                    .listRowBackground(Color.clear)
             } else {
                 ForEach(shown) { recipe in
                     NavigationLink { RecipeDetail(recipe: recipe) } label: { RecipeRow(recipe: recipe) }
@@ -61,17 +68,21 @@ struct RecipeRow: View {
     let recipe: RecipeEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(recipe.displayTitle).font(.headline).foregroundStyle(Theme.text).lineLimit(2)
-            if !recipe.summary.isEmpty {
-                Text(recipe.summary).font(.subheadline).foregroundStyle(Theme.textSecondary)
-            }
+        ItemRow(title: recipe.displayTitle, subtitle: subtitle, leading: {
+            Image(systemName: AppSpace.recipes.systemImage)
+                .font(.headline)
+                .foregroundStyle(Theme.Group.food.onColor)
+                .frame(width: 40, height: 40)
+                .background(Theme.Group.food.color, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+        }, trailing: {
             if recipe.link != nil {
-                Label("Instagram", systemImage: "play.rectangle").font(.caption).foregroundStyle(Theme.textTertiary)
+                Image(systemName: "play.rectangle").foregroundStyle(Theme.textTertiary)
+                    .accessibilityLabel("From Instagram")
             }
-        }
-        .padding(.vertical, 4)
+        })
     }
+
+    private var subtitle: Text? { recipe.summary.isEmpty ? nil : Text(recipe.summary) }
 }
 
 extension RecipeEntry {
@@ -93,7 +104,7 @@ struct RecipeDetail: View {
         List {
             Section {
                 Text(recipe.displayTitle)
-                    .font(.system(size: 28, weight: .heavy, design: .serif))
+                    .wooliFont(.display)
                     .foregroundStyle(Theme.text)
                 if let link = recipe.link {
                     Link(destination: link) { Label("Watch on Instagram", systemImage: "play.rectangle") }
@@ -121,7 +132,12 @@ struct RecipeDetail: View {
                 }
             }
             if !recipe.notes.isEmpty {
-                Section("Notes") { Text(recipe.notes) }
+                Section {
+                    Postcard(from: recipe.link != nil ? "Instagram" : "your kitchen", title: "Notes",
+                             message: recipe.notes, stamp: "🍳", group: .food)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
             }
             if !recipe.caption.isEmpty {
                 Section("Caption") {

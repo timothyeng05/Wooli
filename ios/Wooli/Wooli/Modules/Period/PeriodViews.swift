@@ -41,6 +41,7 @@ struct PeriodView: View {
 
         ScrollView {
             VStack(spacing: 16) {
+                hero(list)
                 Text("Period").font(.title3.bold()).frame(maxWidth: .infinity, alignment: .leading)
                 VStack(spacing: 12) {
                     HStack {
@@ -106,6 +107,21 @@ struct PeriodView: View {
         }
         .sheet(item: $editing) { PeriodEntryEditor(entry: $0) }
         .sheet(isPresented: $creating) { PeriodEntryEditor(entry: nil) }
+    }
+
+    /// Where you are in the cycle, as a road from day 1 to about the average length.
+    private func hero(_ list: [CycleMath.Entry]) -> some View {
+        let status = PeriodStatus.text(periods)
+        let ongoing = periods.contains { $0.endDay == nil }
+        return HeroCard(eyebrow: "Cycle") {
+            Text(status.headline).wooliFont(.amount)
+            if !status.detail.isEmpty { Text(status.detail).font(.footnote) }
+            if !ongoing, list.count >= 2, let day = CycleMath.cycleDay(list, today: .now) {
+                let length = max(CycleMath.averageCycleLength(list), 1)
+                RouteProgress(progress: Double(day) / Double(length), startLabel: "Day 1",
+                              middleLabel: "Day \(day)", endLabel: "About day \(length)")
+            }
+        }
     }
 
     private func range(_ p: PeriodEntry) -> String {

@@ -12,6 +12,15 @@ struct MoviesListView: View {
     @State private var ranking: MovieSearch.Result?
     @State private var detail: MovieEntry?
 
+    /// Your latest film on a cinema stub, or an invitation when the list is empty.
+    private func hero(_ ordered: [MovieEntry]) -> some View {
+        let latest = ordered.max { $0.createdAt < $1.createdAt }
+        return CinemaStub(
+            title: latest?.title ?? "Your list · 0 movies",
+            meta: latest.map { [$0.byline, $0.genre].filter { !$0.isEmpty }.joined(separator: " · ") },
+            rank: latest.flatMap { latest in ordered.firstIndex { $0.id == latest.id }.map { $0 + 1 } })
+    }
+
     var body: some View {
         let candidates = movies.map(\.candidate)
         let scores = EatsRanking.scores(candidates)
@@ -19,14 +28,16 @@ struct MoviesListView: View {
         let ordered = EatsRanking.ordered(candidates).compactMap { byID[$0.id] }
 
         List {
+            Section {
+                hero(ordered)
+                    .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.l))
+                    .listRowBackground(Color.clear)
+            }
             if ordered.isEmpty {
-                ContentUnavailableView {
-                    Label("Start your list", systemImage: "film")
-                } description: {
-                    Text("Add movies you've seen and rank them against each other. Scores follow where they land.")
-                } actions: {
-                    Button("Add a movie") { adding = true }.buttonStyle(.borderedProminent)
-                }
+                WooliEmptyState(symbol: "film", title: "Add a movie you loved",
+                                message: "Rank the movies you've seen against each other; where they land sets their place on your list.",
+                                actionTitle: "Add movie") { adding = true }
+                    .listRowBackground(Color.clear)
             } else {
                 Section("Your list") {
                     ForEach(Array(ordered.enumerated()), id: \.element.id) { index, movie in
@@ -77,29 +88,24 @@ struct MoviesListView: View {
     }
 }
 
-/// One ranked film: position, poster, title, year and director, score.
+/// One ranked film: poster, title, director and genre, and its stamp.
 struct MovieRow: View {
     let movie: MovieEntry
     let index: Int
     let score: Double?
 
     var body: some View {
-        HStack(spacing: 12) {
-            MoviePoster(url: movie.posterURL, width: 46)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(index). \(movie.title)").font(.headline).foregroundStyle(Theme.text).lineLimit(2)
-                if !movie.byline.isEmpty {
-                    Text(movie.byline).font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
-                }
-                if !movie.genre.isEmpty {
-                    Text(movie.genre).font(.caption).foregroundStyle(Theme.textTertiary).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 8)
-            if let score { MealScoreBadge(score: score, size: 46, rank: index, usesOwnRank: false) }
-        }
-        .padding(.vertical, 4)
+        ItemRow(title: movie.title, subtitle: subtitle, leading: {
+            MoviePoster(url: movie.posterURL, width: 40)
+        }, trailing: {
+            if let score { MealScoreBadge(score: score, size: 40, rank: index, usesOwnRank: false) }
+        })
         .contentShape(Rectangle())
+    }
+
+    private var subtitle: Text? {
+        let facts = [movie.byline, movie.genre].filter { !$0.isEmpty }
+        return facts.isEmpty ? nil : Text(facts.joined(separator: " · "))
     }
 }
 
