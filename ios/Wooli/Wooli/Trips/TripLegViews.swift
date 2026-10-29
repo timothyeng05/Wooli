@@ -232,6 +232,11 @@ struct LegToTryRow: View {
     }
 }
 
+extension TripItem.Kind {
+    /// Symbols on the kind's colour: dark ink on yellow, white elsewhere.
+    var onColor: Color { self == .meal ? Theme.onAccent : .white }
+}
+
 // MARK: - Travel between legs
 
 /// A boarding-pass style card for moving between legs: the two places, how

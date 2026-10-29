@@ -214,9 +214,6 @@ struct TripItem: Identifiable, Codable, Hashable {
             case .note: "#64748b"
             }
         }
-
-        /// Symbols on the kind's colour: dark ink on yellow, white elsewhere.
-        var onColor: Color { self == .meal ? Theme.onAccent : .white }
     }
 
     var id: String = UUID().uuidString
