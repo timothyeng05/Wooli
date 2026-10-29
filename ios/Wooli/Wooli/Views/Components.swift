@@ -12,69 +12,8 @@ struct TransactionRow: View {
     @State private var showQuick = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            if quickEdit {
-                Button { showQuick = true } label: {
-                    CategoryTile(category: category, size: 40)
-                        .overlay(alignment: .bottomTrailing) {
-                            if transaction.ruleApplied && !transaction.needsReview {
-                                Image(systemName: "forward.fill")
-                                    .font(.system(size: 10))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, Theme.brand)
-                                    .padding(3)
-                                    .background(Circle().fill(Theme.card))
-                                    .offset(x: 2, y: 2)
-                                    .accessibilityLabel("Categorized by a rule")
-                            }
-                        }
-                }
-                .buttonStyle(.borderless)
-                .padding(.trailing, 2).padding(.bottom, 2)
-                .accessibilityLabel("Change category, currently \(category?.name ?? "uncategorized")")
-            } else {
-                CategoryTile(category: category, size: 40)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(transaction.title)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                    if transaction.isPending { PendingBadge() }
-                    if !transaction.splitParentId.isEmpty {
-                        Label("Split", systemImage: "arrow.triangle.branch")
-                            .labelStyle(.iconOnly)
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(Theme.brand)
-                            .accessibilityLabel("Part of a split transaction")
-                    }
-                }
-                HStack(spacing: 4) {
-                    if let category {
-                        if transaction.aiSuggested && transaction.needsReview {
-                            Image(systemName: "sparkles").foregroundStyle(Theme.brand)
-                                .accessibilityLabel("Suggested by Apple Intelligence")
-                        }
-                        Text(category.name)
-                    } else {
-                        Text("Uncategorized").foregroundStyle(Theme.pending)
-                    }
-                    if let tag = transaction.tags.first {
-                        Text("#\(tag)").foregroundStyle(TagStyle.color(tag))
-                    }
-                    if let accountName {
-                        Text("·")
-                        Text(accountName).lineLimit(1)
-                    }
-                }
-                .font(.footnote)
-                .foregroundStyle(Theme.textTertiary)
-                .lineLimit(1)
-            }
-            .layoutPriority(1)
-            Spacer(minLength: 8)
-            HStack(spacing: 6) {
+        ItemRow(title: transaction.title, subtitle: subtitle, leading: { tile }, trailing: {
+            HStack(spacing: Space.s) {
                 Text(transaction.amount.signedCurrency())
                     .font(.body.weight(.semibold).monospacedDigit())
                     .foregroundStyle(amountColor)
@@ -86,11 +25,61 @@ struct TransactionRow: View {
                         .accessibilityLabel("Needs review")
                 }
             }
-        }
-        .padding(.vertical, 2)
+        }, below: {
+            if let tag = transaction.tags.first { LuggageTag("#\(tag)", group: .money) }
+        }, badge: {
+            if transaction.isPending { PendingBadge() }
+            if !transaction.splitParentId.isEmpty {
+                Label("Split", systemImage: "arrow.triangle.branch")
+                    .labelStyle(.iconOnly)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Theme.brand)
+                    .accessibilityLabel("Part of a split transaction")
+            }
+        })
         .opacity(transaction.isHidden ? 0.5 : 1)
         .sheet(isPresented: $showQuick) {
             QuickCategorySheet(transaction: transaction)
+        }
+    }
+
+    /// "Category · Account", with Apple Intelligence's sparkle and an amber "Uncategorized".
+    private var subtitle: Text {
+        let name: Text
+        if let category {
+            if transaction.aiSuggested && transaction.needsReview {
+                name = Text("\(Text(Image(systemName: "sparkles")).foregroundStyle(Theme.brand)) \(category.name)")
+            } else {
+                name = Text(category.name)
+            }
+        } else {
+            name = Text("Uncategorized").foregroundStyle(Theme.pending)
+        }
+        guard let accountName else { return name }
+        return Text("\(name) · \(Text(accountName))")
+    }
+
+    @ViewBuilder private var tile: some View {
+        if quickEdit {
+            Button { showQuick = true } label: {
+                CategoryTile(category: category, size: 40)
+                    .overlay(alignment: .bottomTrailing) {
+                        if transaction.ruleApplied && !transaction.needsReview {
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 10))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, Theme.brand)
+                                .padding(3)
+                                .background(Circle().fill(Theme.card))
+                                .offset(x: 2, y: 2)
+                                .accessibilityLabel("Categorized by a rule")
+                        }
+                    }
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Change category, currently \(category?.name ?? "uncategorized")")
+        } else {
+            CategoryTile(category: category, size: 40)
         }
     }
 

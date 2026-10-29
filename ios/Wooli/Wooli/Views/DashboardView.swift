@@ -8,7 +8,6 @@ struct DashboardView: View {
     @Query private var accounts: [LocalAccount]
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
-    @Query private var snapshots: [BalanceSnapshot]
     @Query(sort: \Person.name) private var people: [Person]
     @Query private var recurringItems: [RecurringItem]
     @State private var layoutRows: [DashboardLayoutRow] = DashboardLayoutStore.load()
@@ -17,7 +16,6 @@ struct DashboardView: View {
     @AppStorage("displayName") private var displayName = ""
     @State private var showSettings = false
     @State private var showCustomize = false
-    @State private var range: ChartRange = .month3
 
     /// Visible cards in the user's chosen order. Any card not yet represented
     /// in `layoutRows` (a fresh install, or a card added in a later update)
@@ -65,6 +63,9 @@ struct DashboardView: View {
 
                     SyncStatusLine()
 
+                    SpendingHeroCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
+                                     recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
+
                     ForEach(orderedCards) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
                                 plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
@@ -99,11 +100,7 @@ struct DashboardView: View {
     private func cardView(for card: DashboardCard, ledger: Ledger, thisMonth: DateInterval, month: MonthSummary,
                           plan: BudgetPlan, plannedIncome: Double, plannedExpenses: Double,
                           reviewItems: [LocalTransaction], relevantTransactions: [LocalTransaction]) -> some View {
-        let visibleAccountIds = Set(accounts.filter { selectedPersonId == nil || $0.ownerId == selectedPersonId }.map(\.providerAccountId))
         switch card {
-        case .pace:
-            PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
-                     recurring: recurringItems.filter { selectedPersonId == nil || visibleAccountIds.contains($0.accountId) })
         case .review:
             if !reviewItems.isEmpty {
                 ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
@@ -112,10 +109,6 @@ struct DashboardView: View {
             BudgetSummaryCard(month: thisMonth, summary: month, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
         case .recurring:
             RecurringCard()
-        case .netWorth:
-            NetWorthCard(accounts: accounts, snapshots: snapshots, range: $range)
-        case .spending:
-            SpendingComparisonCard(transactions: relevantTransactions, ledger: ledger)
         case .transactions:
             VStack(alignment: .leading, spacing: 12) {
                 CardHeader(title: "Transactions") {
@@ -143,41 +136,32 @@ struct DashboardView: View {
 
 /// A card on the Dashboard the user can reorder or hide from "Edit Home".
 enum DashboardCard: String, CaseIterable, Identifiable {
-    case pace, review, budget, recurring, netWorth, spending, transactions
+    case review, budget, recurring, transactions
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .pace: "Spending Pace"
         case .review: "To Review"
         case .budget: "Budget"
         case .recurring: "Recurring"
-        case .netWorth: "Net Worth"
-        case .spending: "Spending Comparison"
         case .transactions: "Recent Transactions"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .pace: "This month's spend vs. an even pace"
         case .review: "Transactions waiting for a category"
         case .budget: "Income and expenses vs. planned"
         case .recurring: "Bills, subscriptions, and paychecks"
-        case .netWorth: "Chart with ranges"
-        case .spending: "This month vs. last month"
         case .transactions: "Last 5"
         }
     }
 
     var icon: String {
         switch self {
-        case .pace: "gauge.with.needle"
         case .review: "checkmark.square"
         case .budget: "map"
         case .recurring: "arrow.triangle.2.circlepath"
-        case .netWorth: "chart.line.uptrend.xyaxis"
-        case .spending: "chart.bar"
         case .transactions: "list.bullet"
         }
     }
@@ -460,73 +444,35 @@ struct ReviewPreviewCard: View {
     var body: some View {
         let ready = items.filter { $0.categoryId != nil }
 
-        VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: "To Review · \(items.count)") {
-                Button("See all") { app.showReview = true }
-                    .font(.subheadline.weight(.medium))
-            }
-            ForEach(items.prefix(4)) { tx in
-                TransactionRow(transaction: tx, category: ledger.category(for: tx), quickEdit: false)
-            }
-            if !ready.isEmpty {
-                Button {
-                    withAnimation(.snappy) {
-                        for tx in ready { Categorizer.confirm(tx, categories: categories, context: context) }
-                    }
-                    confirmedPulse.toggle()
-                } label: {
-                    Text("Mark \(ready.count) as reviewed")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+        VStack(spacing: Space.s) {
+            SectionBand(title: "Needs review", summary: "Transactions waiting for a category",
+                        badge: .number(items.count))
+            VStack(spacing: 0) {
+                ForEach(Array(items.prefix(4).enumerated()), id: \.element.id) { index, tx in
+                    if index > 0 { ItemRowDivider() }
+                    TransactionRow(transaction: tx, category: ledger.category(for: tx), quickEdit: false)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .sensoryFeedback(.success, trigger: confirmedPulse)
+                HStack(spacing: Space.m) {
+                    if !ready.isEmpty {
+                        Button {
+                            withAnimation(.snappy) {
+                                for tx in ready { Categorizer.confirm(tx, categories: categories, context: context) }
+                            }
+                            confirmedPulse.toggle()
+                        } label: {
+                            Text("Mark \(ready.count) as reviewed")
+                        }
+                        .buttonStyle(.wooliPrimary)
+                        .sensoryFeedback(.success, trigger: confirmedPulse)
+                    }
+                    Button("Review all") { app.showReview = true }
+                        .buttonStyle(.wooliSecondary)
+                }
+                .padding(.top, Space.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .card()
         }
-        .card()
-    }
-}
-
-/// Net worth with a range picker and a line chart.
-struct NetWorthCard: View {
-    @Environment(AppModel.self) private var app
-    let accounts: [LocalAccount]
-    let snapshots: [BalanceSnapshot]
-    @Binding var range: ChartRange
-    var showsLink = true
-
-    var body: some View {
-        let visible = accounts.filter { !$0.isHidden }
-        let netWorth = visible.reduce(0) { $0 + $1.netWorthValue }
-        let history = BalanceHistory(snapshots: snapshots)
-        let series = history.series(for: visible, from: range.startDate(earliest: history.earliest)) { account, balance in
-            account.kind.isAsset ? balance : -abs(balance)
-        }
-        let change = netWorth - (series.first?.value ?? netWorth)
-
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Net Worth")
-            Text(netWorth.currency())
-                .font(.system(size: 32, weight: .bold)).monospacedDigit()
-                .foregroundStyle(Theme.text)
-                .contentTransition(.numericText())
-            ChangeLabel(change: change, base: series.first?.value, period: range.periodLabel)
-
-            NetWorthChart(points: series, tint: Theme.brand)
-                .frame(height: 140)
-                .padding(.top, 6)
-
-            RangePicker(selection: $range)
-
-            if showsLink {
-                Button("View accounts") { app.selectedTab = .accounts }
-                    .font(.subheadline.weight(.medium))
-                    .padding(.top, 2)
-            }
-        }
-        .card()
     }
 }
 

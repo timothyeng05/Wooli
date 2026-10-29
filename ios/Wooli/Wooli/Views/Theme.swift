@@ -242,9 +242,11 @@ struct BarGauge: View {
 struct CategoryTile: View {
     let category: BudgetCategory?
     var size: CGFloat = 40
+    /// A group colour to use instead of the category's own.
+    var groupTint: Color?
 
     var body: some View {
-        let tint = category.map { Color(hex: $0.colorHex) } ?? Theme.textTertiary
+        let tint = groupTint ?? category.map { Color(hex: $0.colorHex) } ?? Theme.textTertiary
         ZStack {
             RoundedRectangle(cornerRadius: min(Radius.small, size * 0.25), style: .continuous).fill(tint.opacity(0.14))
             if let category {

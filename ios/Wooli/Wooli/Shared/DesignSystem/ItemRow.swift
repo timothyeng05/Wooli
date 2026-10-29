@@ -2,36 +2,62 @@ import SwiftUI
 
 /// The one list row in Wooli: a 40pt leading slot, a title and subtitle, and a trailing slot.
 /// Pass a `CategoryTile`, institution logo, poster, small `RankStamp` or kind dot as `leading`;
-/// a money amount, small `RankStamp`, chip or chevron as `trailing`.
-struct ItemRow<Leading: View, Trailing: View, Below: View>: View {
+/// a money amount, small `RankStamp`, chip or chevron as `trailing`. `badge` sits right after the
+/// title (Pending, split); `below` holds a `BarGauge` or `LuggageTag`.
+struct ItemRow<Leading: View, Trailing: View, Below: View, Badge: View>: View {
     let title: String
-    var subtitle: String?
+    /// Facts separated by "·". Text so a fact can carry its own colour or symbol.
+    var subtitle: Text?
     @ViewBuilder var leading: Leading
     @ViewBuilder var trailing: Trailing
     @ViewBuilder var below: Below
+    @ViewBuilder var badge: Badge
 
     var body: some View {
         HStack(spacing: Space.m) {
             leading.frame(width: ItemRowMetrics.leadingWidth)
             VStack(alignment: .leading, spacing: Space.xs) {
-                Text(title).font(.body.weight(.medium)).foregroundStyle(Theme.text)
+                HStack(spacing: Space.s) {
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
+                    badge
+                }
                 if let subtitle {
-                    Text(subtitle).font(.footnote).foregroundStyle(Theme.textTertiary)
+                    subtitle.font(.footnote).foregroundStyle(Theme.textTertiary).lineLimit(1)
                 }
                 below
             }
+            .layoutPriority(1)
             Spacer(minLength: Space.s)
             trailing
         }
         .padding(.vertical, Space.m)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 
 extension ItemRow where Below == EmptyView {
-    init(title: String, subtitle: String? = nil,
+    init(title: String, subtitle: Text? = nil,
+         @ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing,
+         @ViewBuilder badge: () -> Badge) {
+        self.init(title: title, subtitle: subtitle, leading: leading, trailing: trailing,
+                  below: { EmptyView() }, badge: badge)
+    }
+}
+
+extension ItemRow where Below == EmptyView, Badge == EmptyView {
+    init(title: String, subtitle: Text? = nil,
          @ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing) {
-        self.init(title: title, subtitle: subtitle, leading: leading, trailing: trailing, below: { EmptyView() })
+        self.init(title: title, subtitle: subtitle, leading: leading, trailing: trailing,
+                  below: { EmptyView() }, badge: { EmptyView() })
+    }
+}
+
+extension ItemRow where Badge == EmptyView {
+    init(title: String, subtitle: Text? = nil,
+         @ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing,
+         @ViewBuilder below: () -> Below) {
+        self.init(title: title, subtitle: subtitle, leading: leading, trailing: trailing,
+                  below: below, badge: { EmptyView() })
     }
 }
 
@@ -86,7 +112,7 @@ struct ItemRowAmount: View {
                 ItemRowAmount(text: "+$2,400.00", tone: .income)
             }
             ItemRowDivider()
-            ItemRow(title: "Groceries", subtitle: "$212 of $400", leading: {
+            ItemRow(title: "Groceries", subtitle: Text("$212 of $400"), leading: {
                 Text("🛒").frame(width: 40, height: 40)
             }, trailing: {
                 Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)

@@ -53,6 +53,15 @@ struct RecurringView: View {
                 .padding(.vertical, 6)
             }
 
+            let departures = month.departures()
+            if !departures.isEmpty {
+                Section {
+                    DepartureBoard(rows: departures)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             if !month.late.isEmpty {
                 Section {
                     ForEach(month.late) { item in
@@ -234,7 +243,6 @@ struct RecurringEditor: View {
 /// Dashboard card: what's still due this month and the next few charges.
 struct RecurringCard: View {
     @Query(sort: \RecurringItem.nextDate) private var allItems: [RecurringItem]
-    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var accounts: [LocalAccount]
 
     private var items: [RecurringItem] {
@@ -244,7 +252,6 @@ struct RecurringCard: View {
 
     var body: some View {
         let month = RecurringMonth(items: items)
-        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         NavigationLink {
             RecurringView()
         } label: {
@@ -259,19 +266,8 @@ struct RecurringCard: View {
                     Text("Bills and subscriptions will show up here once Wooli has seen them repeat.")
                         .font(.footnote).foregroundStyle(Theme.textTertiary)
                 }
-                ForEach(month.upcoming.prefix(3)) { occurrence in
-                    HStack(spacing: 12) {
-                        CategoryTile(category: occurrence.item.categoryId.flatMap { byId[$0] }, size: 34)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(occurrence.item.title).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
-                            Text(occurrence.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                                .font(.caption).foregroundStyle(Theme.textTertiary)
-                        }
-                        Spacer()
-                        Text(occurrence.item.amount.signedCurrency()).font(.subheadline.weight(.semibold)).monospacedDigit()
-                            .foregroundStyle(occurrence.item.amount > 0 ? Theme.income : Theme.text)
-                    }
-                }
+                let departures = month.departures(limit: 3)
+                if !departures.isEmpty { DepartureBoard(rows: departures) }
                 if !month.late.isEmpty {
                     Label("\(month.late.count) haven't shown up when expected", systemImage: "exclamationmark.circle")
                         .font(.footnote).foregroundStyle(Theme.pending)
@@ -308,5 +304,23 @@ struct MarkRecurringButton: View {
                 .font(.subheadline.weight(.medium))
         }
         .sheet(item: $editing) { RecurringEditor(item: $0) }
+    }
+}
+
+extension RecurringMonth {
+    /// Late, due and just-paid charges as departures-board rows, soonest first.
+    /// A paid charge drops off the board a day after it posted.
+    func departures(limit: Int = 5, now: Date = .now) -> [DepartureRow] {
+        var rows = late.map {
+            DepartureRow(date: $0.nextDate, title: $0.title, amount: $0.amount.signedCurrency(), status: .late)
+        }
+        rows += upcoming.map {
+            DepartureRow(date: $0.date, title: $0.item.title, amount: $0.item.amount.signedCurrency(), status: .due)
+        }
+        let dayAgo = now.addingTimeInterval(-86_400)
+        rows += paid.filter { $0.lastDate >= dayAgo }.map {
+            DepartureRow(date: $0.lastDate, title: $0.title, amount: $0.amount.signedCurrency(), status: .paid)
+        }
+        return Array(rows.sorted { $0.date < $1.date }.prefix(limit))
     }
 }

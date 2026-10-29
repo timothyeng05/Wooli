@@ -180,7 +180,7 @@ private struct LeftToBudgetBanner: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 20).padding(.vertical, 16)
-        .background(over ? Theme.expense : Theme.income, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(over ? Theme.expense : Theme.income, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityHint(over ? "You've planned more spending than income." : "Income not yet assigned to a category.")
     }
@@ -196,15 +196,8 @@ private struct BudgetSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-                Spacer()
-                Text("Planned").frame(width: 90, alignment: .trailing)
-                Text("Remaining").frame(width: 80, alignment: .trailing)
-            }
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(Theme.textTertiary)
-            .padding(.horizontal, 4)
+            Text(title).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                .padding(.horizontal, Space.xs)
 
             ForEach(groups) { group in
                 GroupBudgetCard(group: group, plan: plan, isIncome: isIncome, month: month, editing: editing)
@@ -229,65 +222,75 @@ private struct GroupBudgetCard: View {
         let budgeted = groupLevel ? children : children.filter { $0.monthlyTarget > 0 }
         let unbudgeted = groupLevel ? [] : children.filter { $0.monthlyTarget == 0 }
 
-        VStack(spacing: 0) {
-            // Group row
-            HStack(spacing: 10) {
-                Button {
-                    withAnimation(.snappy) { open.toggle() }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .rotationEffect(.degrees(open ? 0 : -90))
-                        .font(.caption.weight(.bold))
-                        .frame(width: 28, height: 28)
-                        .overlay(Circle().strokeBorder(Theme.border))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.text)
-                NavigationLink {
-                    CategoryBudgetView(group: group, month: month)
-                } label: {
-                    Text(group.name).font(.headline).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
-                }
-                .buttonStyle(.plain)
-                Spacer(minLength: 4)
-                if byCategory && !groupLevel {
-                    Text(plan.planned(group).currency(cents: false)).font(.body.weight(.semibold)).monospacedDigit()
-                        .frame(width: 90, alignment: .trailing)
-                } else {
-                    PlannedField(value: $group.monthlyTarget, id: group.id, editing: editing)
-                }
-                RemainingPill(planned: plan.planned(group) + plan.rollover(group), actual: plan.actual(group), isIncome: isIncome)
+        let designGroup = Theme.Group.forBudgetGroup(named: group.name)
+        let planned = plan.planned(group)
+        let actual = abs(plan.actual(group))
+
+        VStack(spacing: Space.s) {
+            Button {
+                withAnimation(.snappy) { open.toggle() }
+            } label: {
+                SectionBand(title: group.name,
+                            summary: planned > 0
+                                ? "\(actual.currency(cents: false)) of \(planned.currency(cents: false))"
+                                : "\(actual.currency(cents: false)) \(isIncome ? "earned" : "spent")",
+                            badge: .emoji(group.icon), group: designGroup, isCollapsed: !open)
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .buttonStyle(.plain)
 
             if open {
-                ForEach(budgeted) { child in
-                    Divider().overlay(Theme.border)
-                    CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: !groupLevel, month: month, editing: editing)
-                }
-                if !unbudgeted.isEmpty {
-                    if showUnbudgeted {
-                        ForEach(unbudgeted) { child in
-                            Divider().overlay(Theme.border)
-                            CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: true, month: month, editing: editing)
+                VStack(spacing: 0) {
+                    HStack(spacing: Space.s) {
+                        NavigationLink {
+                            CategoryBudgetView(group: group, month: month)
+                        } label: {
+                            Label("Details", systemImage: "chevron.right")
+                                .labelStyle(.titleOnly)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Theme.brandDark)
                         }
+                        .buttonStyle(.plain)
+                        Spacer(minLength: 4)
+                        if byCategory && !groupLevel {
+                            Text(planned.currency(cents: false)).font(.body.weight(.semibold)).monospacedDigit()
+                                .frame(width: 90, alignment: .trailing)
+                        } else {
+                            PlannedField(value: $group.monthlyTarget, id: group.id, editing: editing)
+                        }
+                        RemainingPill(planned: planned + plan.rollover(group), actual: plan.actual(group), isIncome: isIncome)
                     }
-                    Divider().overlay(Theme.border)
-                    Button {
-                        withAnimation(.snappy) { showUnbudgeted.toggle() }
-                    } label: {
-                        Label(showUnbudgeted ? "Hide unbudgeted" : "Show \(unbudgeted.count) unbudgeted",
-                              systemImage: showUnbudgeted ? "eye.slash" : "eye")
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16).padding(.vertical, 14)
+                    .padding(.vertical, Space.s)
+
+                    ForEach(budgeted) { child in
+                        ItemRowDivider()
+                        CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: !groupLevel,
+                                          month: month, tint: designGroup.color, editing: editing)
                     }
-                    .buttonStyle(.plain)
+                    if !unbudgeted.isEmpty {
+                        if showUnbudgeted {
+                            ForEach(unbudgeted) { child in
+                                ItemRowDivider()
+                                CategoryBudgetRow(category: child, plan: plan, isIncome: isIncome, showsField: true,
+                                                  month: month, tint: designGroup.color, editing: editing)
+                            }
+                        }
+                        ItemRowDivider()
+                        Button {
+                            withAnimation(.snappy) { showUnbudgeted.toggle() }
+                        } label: {
+                            Label(showUnbudgeted ? "Hide unbudgeted" : "Show \(unbudgeted.count) unbudgeted",
+                                  systemImage: showUnbudgeted ? "eye.slash" : "eye")
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, Space.m)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .card(padding: Space.l)
             }
         }
-        .card(padding: 0)
     }
 }
 
@@ -297,6 +300,7 @@ private struct CategoryBudgetRow: View {
     let isIncome: Bool
     let showsField: Bool
     let month: DateInterval
+    let tint: Color
     var editing: FocusState<String?>.Binding
 
     var body: some View {
@@ -306,42 +310,46 @@ private struct CategoryBudgetRow: View {
         // The bar below already shows progress against the plan, so the
         // amount caption would just repeat it — only show one or the other.
         let showsBar = showsField && planned > 0
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text(category.icon).font(.title3).frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    NavigationLink {
-                        CategoryBudgetView(group: category, month: month)
-                    } label: {
-                        Text(category.name).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.75)
-                    }
-                    .buttonStyle(.plain)
-                    if carried != 0 {
-                        Text(carried > 0 ? "+\(carried.currency(cents: false)) rolled over" : "\(abs(carried).currency(cents: false)) overspent last month")
-                            .font(.caption).foregroundStyle(carried > 0 ? Theme.income : Theme.expense)
-                    } else if actual != 0 && !showsBar {
-                        Text("\(abs(actual).currency(cents: false)) \(isIncome ? "earned" : "spent")")
-                            .font(.caption).foregroundStyle(Theme.textTertiary)
-                    }
-                }
-                Spacer(minLength: 4)
-                if showsField {
+        ItemRow(title: category.name, subtitle: subtitle(carried: carried, actual: actual, showsBar: showsBar), leading: {
+            NavigationLink {
+                CategoryBudgetView(group: category, month: month)
+            } label: {
+                CategoryTile(category: category, size: 40, groupTint: tint)
+            }
+            .buttonStyle(.plain)
+        }, trailing: {
+            if showsField {
+                HStack(spacing: Space.s) {
                     PlannedField(value: $category.monthlyTarget, id: category.id, editing: editing)
                     RemainingPill(planned: planned + carried, actual: actual, isIncome: isIncome)
-                } else {
-                    Text(abs(actual).currency(cents: false)).font(.subheadline).monospacedDigit()
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 80, alignment: .trailing)
                 }
+            } else {
+                Text(abs(actual).currency(cents: false)).font(.subheadline).monospacedDigit()
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 80, alignment: .trailing)
             }
-            .padding(.leading, showsField ? 14 : 28).padding(.trailing, 14).padding(.vertical, 10)
-
+        }, below: {
             if showsBar {
-                BarGauge(value: max(actual, 0), total: planned,
-                         tint: !isIncome && actual > planned ? Theme.expense : Theme.income, height: 3)
+                BarGauge(value: max(actual, 0), total: planned, tint: barTint(planned: planned, actual: actual))
             }
+        })
+    }
+
+    private func subtitle(carried: Double, actual: Double, showsBar: Bool) -> Text? {
+        if carried != 0 {
+            return Text(carried > 0 ? "+\(carried.currency(cents: false)) rolled over" : "\(abs(carried).currency(cents: false)) overspent last month")
+                .foregroundStyle(carried > 0 ? Theme.income : Theme.expense)
+        } else if actual != 0 && !showsBar {
+            return Text("\(abs(actual).currency(cents: false)) \(isIncome ? "earned" : "spent")")
         }
-        .background(showsField ? Color.clear : Theme.background.opacity(0.5))
+        return nil
+    }
+
+    /// The group colour, amber near the limit, red over it.
+    private func barTint(planned: Double, actual: Double) -> Color {
+        if isIncome { return Theme.income }
+        if actual > planned { return Theme.expense }
+        return actual >= planned * 0.85 ? Theme.pending : tint
     }
 }
 
