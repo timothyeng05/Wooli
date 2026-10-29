@@ -96,7 +96,7 @@ struct MovieRow: View {
                 }
             }
             Spacer(minLength: 8)
-            if let score { MealScoreBadge(score: score, size: 46) }
+            if let score { MealScoreBadge(score: score, size: 46, rank: index, usesOwnRank: false) }
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -239,10 +239,7 @@ struct MovieDetail: View {
                         }
                     }
                     HStack(spacing: 10) {
-                        Text(score.formatted(.number.precision(.fractionLength(1))))
-                            .font(.headline.weight(.bold)).monospacedDigit().foregroundStyle(.white)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(MealScoreBadge.ink(score), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        MealScoreBadge(score: score, size: 58, rank: position, usesOwnRank: false)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(movie.sentiment.movieLabel).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
                             Text("#\(position) of \(ordered.count) on your list").font(.caption).foregroundStyle(Theme.textSecondary)

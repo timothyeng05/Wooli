@@ -2,26 +2,29 @@ import SwiftUI
 import MapKit
 import CloudKit
 
-/// The score in a thin ring, Beli-style: the number carries the color
-/// (green 7+, amber 4–6.9, red below), the ring stays quiet.
+/// A place's mark on a list: a passport stamp with its rank and tier (Loved / Fine / Skip).
+/// The tier comes from the score's band; without a `rank` it is your own list's position for
+/// that score, and a friend's place passes `nil` to print the tier word alone.
 struct MealScoreBadge: View {
     let score: Double
     var size: CGFloat = 30
+    var rank: Int?
+    /// Pass `false` for a place that isn't on your list (a friend's pick).
+    var usesOwnRank = true
+    var place: String?
+    var total: Int?
 
     var body: some View {
-        Text(score.formatted(.number.precision(.fractionLength(1))))
-            .font(.system(size: size * 0.36, weight: .semibold, design: .rounded)).monospacedDigit()
-            .foregroundStyle(Self.ink(score))
-            .frame(width: size, height: size)
-            .background(Circle().fill(Theme.card))
-            .overlay(Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: max(1, size * 0.035)))
-            .accessibilityLabel("Score \(score.formatted(.number.precision(.fractionLength(1)))) out of 10")
+        RankStamp(rank: rank ?? (usesOwnRank ? Self.ownRank(of: score) : nil), tier: .init(score: score),
+                  place: place, total: total, size: .custom(size))
     }
 
-    /// Slightly deeper than the feeling colors so the number reads on white.
-    static func ink(_ score: Double) -> Color {
-        score >= 7 ? Color(hex: "#1f9d55") : score >= 4 ? Color(hex: "#e5a50a") : Color(hex: "#dc2626")
+    /// Position of `score` on your own list (ties share a position).
+    @MainActor static func ownRank(of score: Double) -> Int {
+        EatsBook.shared.scores.values.filter { $0 > score + 0.0001 }.count + 1
     }
+
+    static func ink(_ score: Double) -> Color { RankStamp.Tier(score: score).ink }
 }
 
 /// A friend's initials in a colored circle.
@@ -39,6 +42,22 @@ struct FriendAvatar: View {
             .frame(width: size, height: size)
             .background(Color(hex: hex).gradient, in: Circle())
             .accessibilityLabel(friend.name)
+    }
+}
+
+/// A stub gets a blue ring while it's being tapped.
+private struct StubChoiceStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.overlay(
+            RoundedRectangle(cornerRadius: Radius.hero, style: .continuous)
+                .strokeBorder(Theme.brand, lineWidth: configuration.isPressed ? 3 : 0)
+        )
+    }
+}
+
+private struct Line: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { $0.move(to: CGPoint(x: 0, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
     }
 }
 
@@ -125,6 +144,7 @@ struct RankFlow: View {
     private func compare(against other: RankCandidate) -> some View {
         VStack(spacing: 16) {
             Text("Which was better?").font(.headline).foregroundStyle(Theme.textSecondary)
+            Text(stepText).wooliFont(.eyebrow).foregroundStyle(Theme.textTertiary)
             HStack(spacing: 12) {
                 choice(candidate) { answer(newIsBetter: true) }
                 Text("or").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textTertiary)
@@ -142,6 +162,13 @@ struct RankFlow: View {
         .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
     }
 
+    /// "Step 2 of about 5": how many comparisons a list this size takes, and where this one falls.
+    private var stepText: String {
+        let total = max(Int(ceil(log2(Double(peers.count + 1)))), 1)
+        let left = max(Int(ceil(log2(Double(high - low + 1)))), 1)
+        return "Step \(min(max(total - left + 1, 1), total)) of about \(total)"
+    }
+
     private func choice(_ place: RankCandidate, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
@@ -149,17 +176,20 @@ struct RankFlow: View {
                 Text(place.title).font(.subheadline.weight(.bold)).foregroundStyle(Theme.text)
                     .multilineTextAlignment(.center).lineLimit(3)
                 if !place.subtitle.isEmpty {
+                    // The stub's perforation.
+                    Rectangle().fill(.clear).frame(height: 1)
+                        .overlay(Line().stroke(Theme.border, style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])))
                     Text(place.subtitle).font(.caption).foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.center).lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 130)
-            .padding(12)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.border))
-            .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+            .padding(Space.m)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Radius.hero, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.hero, style: .continuous).strokeBorder(Theme.border))
+            .shadow(color: Theme.cardShadow, radius: 6, y: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(StubChoiceStyle())
         // Hold to see it again before choosing.
         .contextMenu {
             Button("Pick this one", systemImage: "checkmark", action: action)
@@ -170,6 +200,7 @@ struct RankFlow: View {
 
     private func preview(_ place: RankCandidate) -> some View {
         let score = EatsRanking.scores(others)[place.id]
+        let position = (EatsRanking.ordered(others).firstIndex { $0.id == place.id } ?? 0) + 1
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -179,7 +210,7 @@ struct RankFlow: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if let score { MealScoreBadge(score: score, size: 46) }
+                if let score { MealScoreBadge(score: score, size: 46, rank: position) }
             }
             if let sentiment = place.sentiment {
                 Label(label(sentiment), systemImage: sentiment.symbol)
@@ -203,7 +234,7 @@ struct RankFlow: View {
         let ordered = EatsRanking.ordered(all)
         let position = (ordered.firstIndex { $0.id == ranked.id } ?? 0) + 1
         return VStack(spacing: 14) {
-            MealScoreBadge(score: score, size: 88)
+            MealScoreBadge(score: score, size: 88, rank: position, total: ordered.count)
             Text("#\(position) of \(ordered.count) on your list").font(.headline).foregroundStyle(Theme.text)
             Button {
                 onFinish(sentiment, rank)
@@ -374,13 +405,31 @@ struct EatsListView: View {
             EatsPlaceDetail(place: place)
         }
         .overlay {
-            if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) }
+            if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card)) }
         }
         .alert("Eats", isPresented: Binding(get: { book.lastError != nil }, set: { if !$0 { book.lastError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(book.lastError ?? "")
         }
+    }
+
+    // MARK: Header
+
+    /// The hero: how many places and cities, and your latest stamps.
+    private func passport(_ ordered: [EatsPlace]) -> some View {
+        let cities = Set(ordered.compactMap(\.city)).count
+        let latest = ordered.sorted { $0.createdAt > $1.createdAt }.prefix(4)
+        return HeroCard(eyebrow: "Your passport") {
+            Text("\(ordered.count) place\(ordered.count == 1 ? "" : "s")").wooliFont(.amount)
+            if cities > 0 { Text("\(cities) cit\(cities == 1 ? "y" : "ies")").font(.footnote) }
+            HStack(spacing: Space.m) {
+                ForEach(Array(latest)) { place in
+                    MealScoreBadge(score: book.scores[place.id] ?? 0, size: 52)
+                }
+            }
+        }
+        .padding(Space.l)
     }
 
     // MARK: Header
@@ -503,6 +552,13 @@ struct EatsListView: View {
 
     private func list(_ shown: [EatsPlace], total: Int, waiting: [TripItem], scores: [String: Double]) -> some View {
         List {
+            if tab == .been, tripID == nil, !book.mine.isEmpty {
+                Section {
+                    passport(book.mine)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+            }
             if tab == .been {
                 if tripID == nil {
                     Section {
@@ -799,7 +855,7 @@ struct EatsPlaceRow: View {
                 }
             }
             .padding(.top, 14)
-            if let score { MealScoreBadge(score: score, size: 50) }
+            if let score { MealScoreBadge(score: score, size: 50, rank: index) }
         }
         .padding(.vertical, 16)
         .contentShape(Rectangle())
@@ -818,7 +874,7 @@ struct EatsMap: View {
             ForEach(places.filter { $0.coordinate != nil }) { place in
                 Annotation(place.name, coordinate: place.coordinate!) {
                     Button { onSelect?(place) } label: {
-                        MealScoreBadge(score: scores[place.id] ?? 0, size: 34)
+                        MealScoreBadge(score: scores[place.id] ?? 0, size: 40)
                             .background(Circle().fill(Theme.card))
                             .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
                     }
@@ -910,7 +966,7 @@ struct FriendListView: View {
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).year())
         let yours = book.mine.first { $0.isSamePlace(as: place) }
             .flatMap { book.scores[$0.id] }
-            .map { "You: \($0.formatted(.number.precision(.fractionLength(1))))" }
+            .map { "You: #\(MealScoreBadge.ownRank(of: $0)) · \(RankStamp.Tier(score: $0).word)" }
         return [yours, date].compactMap { $0 }.joined(separator: " · ")
     }
 }
@@ -1028,16 +1084,13 @@ struct EatsPlaceDetail: View {
     private func titleBlock(score: Double) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(place.name)
-                .font(.system(size: 34, weight: .heavy, design: .serif))
+                .wooliFont(.display)
                 .foregroundStyle(Theme.text)
                 .lineLimit(3).minimumScaleFactor(0.7)
                 .onLongPressGesture { renaming = true }
                 .padding(.top, place.coordinate == nil ? 0 : -PlaceHeroMap.titleOverlap)
             HStack(spacing: 10) {
-                Text(score.formatted(.number.precision(.fractionLength(1))))
-                    .font(.headline.weight(.bold)).monospacedDigit().foregroundStyle(.white)
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(MealScoreBadge.ink(score), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                MealScoreBadge(score: score, size: 92, place: place.city)
                 Text(place.sentiment.label).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textSecondary)
                 Spacer()
                 Button("Rank again") { reranking = true }
@@ -1062,11 +1115,11 @@ struct EatsPlaceDetail: View {
             Text("Scores").font(.title3.weight(.bold)).foregroundStyle(Theme.text)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
-                    scoreTile(score: score, badge: "You", title: "Your rating", detail: "#\(position) of \(count) on your list")
+                    scoreTile(score: score, badge: "You", rank: position, title: "Your rating", detail: "#\(position) of \(count) on your list")
                     let friends = book.friendScores(for: place)
                     if !friends.isEmpty {
                         let average = friends.map(\.score).reduce(0, +) / Double(friends.count)
-                        scoreTile(score: (average * 10).rounded() / 10, badge: "\(friends.count)", title: "Friend score",
+                        scoreTile(score: (average * 10).rounded() / 10, badge: "\(friends.count)", rank: nil, title: "Friend score",
                                   detail: friends.prefix(2).map(\.friend.name).joined(separator: ", "))
                     }
                 }
@@ -1075,9 +1128,9 @@ struct EatsPlaceDetail: View {
         }
     }
 
-    private func scoreTile(score: Double, badge: String, title: String, detail: String) -> some View {
+    private func scoreTile(score: Double, badge: String, rank: Int?, title: String, detail: String) -> some View {
         HStack(spacing: 12) {
-            MealScoreBadge(score: score, size: 58)
+            MealScoreBadge(score: score, size: 58, rank: rank, usesOwnRank: rank != nil)
                 .overlay(alignment: .bottomTrailing) {
                     Text(badge).font(.caption2.weight(.bold)).foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 3)

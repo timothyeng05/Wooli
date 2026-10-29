@@ -49,7 +49,7 @@ struct FriendsNearTripCard: View {
                 Text(pick.friend.name).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
             Spacer(minLength: 8)
-            MealScoreBadge(score: pick.score, size: 32)
+            MealScoreBadge(score: pick.score, size: 36, usesOwnRank: false)
             Button(added ? "Added" : "Ideas", systemImage: added ? "checkmark" : "plus") { addToIdeas(pick) }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
@@ -97,6 +97,6 @@ struct FriendsNearTripCard: View {
 
     private func addToIdeas(_ pick: Pick) {
         store.save(TripItem(tripID: trip.id, day: nil, kind: .meal, title: pick.place.name, place: pick.place.tripPlace,
-                            notes: "\(pick.friend.name) rated it \(pick.score.formatted(.number.precision(.fractionLength(1))))"))
+                            notes: "\(pick.friend.name): \(RankStamp.Tier(score: pick.score).word)"))
     }
 }

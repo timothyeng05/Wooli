@@ -563,7 +563,7 @@ struct TripDetailView: View {
                     Text(summary).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if let best, let score = eatsBook.scores[best.id] { MealScoreBadge(score: score, size: 34) }
+                if let best, let score = eatsBook.scores[best.id] { MealScoreBadge(score: score, size: 40) }
                 Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Theme.textTertiary)
             }
             .card()
@@ -892,7 +892,7 @@ struct TripItemRow: View {
                         .background(Color(hex: item.kind.colorHex).gradient, in: Capsule())
                 }
                 if let score {
-                    MealScoreBadge(score: score, size: 28)
+                    MealScoreBadge(score: score, size: 36)
                 }
             }
         }
@@ -1132,7 +1132,7 @@ struct TripItemEditor: View {
                 Section {
                     if let status = eatsStatus {
                         HStack(spacing: 12) {
-                            MealScoreBadge(score: status.score, size: 40)
+                            MealScoreBadge(score: status.score, size: 40, rank: status.position)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(status.sentiment.label).font(.subheadline.weight(.semibold))
                                 Text("#\(status.position) of \(status.count) on your list")
