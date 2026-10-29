@@ -30,7 +30,7 @@ struct TripsListView: View {
             if store.trips.isEmpty {
                 Section {
                     VStack(spacing: 12) {
-                        Image(systemName: "suitcase.rolling.fill").font(.system(size: 40)).foregroundStyle(Theme.brand)
+                        Image(systemName: "suitcase.rolling.fill").font(.largeTitle).foregroundStyle(Theme.brand)
                         Text("Plan a trip together").font(.headline)
                         Text("Collect ideas, plan each day on Apple Maps, and invite someone to plan it with you — they join with their own Apple Account.")
                             .font(.subheadline).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
@@ -64,7 +64,7 @@ struct TripsListView: View {
                 Image(systemName: "suitcase.fill")
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
-                    .background(Theme.brand.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(Theme.brand.gradient, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(trip.name.isEmpty ? "Untitled trip" : trip.name).font(.body.weight(.medium))
                     Text([trip.destination, trip.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -394,12 +394,15 @@ struct TripDetailView: View {
                                 withAnimation(.snappy) { toggle(leg, trip: trip) }
                             } label: {
                                 TripLegHeader(leg: leg, number: trip.number(of: leg),
-                                              colorHex: trip.colorHex(of: leg),
                                               planCount: planCounts[leg.id] ?? 0,
                                               isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(DayKey.key(.now)))
                             }
                             .buttonStyle(.plain)
                             .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
+                            let toTry = wishCount(in: leg)
+                            if toTry > 0 && !collapsed.contains(leg.id) {
+                                LegToTryRow(cityName: leg.name, count: toTry)
+                            }
                         }
                     }
                 } header: {
@@ -450,7 +453,7 @@ struct TripDetailView: View {
             }
         }
         .overlay {
-            if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) }
+            if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card)) }
         }
     }
 
@@ -463,7 +466,7 @@ struct TripDetailView: View {
                 // Re-frame on the chosen city; `initialPosition` only applies once.
                 .id(city?.id ?? "all")
                 .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                 .overlay {
                     if let city, shown.isEmpty {
                         Text("No places in \(city.name.isEmpty ? "this city" : city.name) yet")
@@ -477,7 +480,7 @@ struct TripDetailView: View {
                     HStack(spacing: 8) {
                         mapChip("All", color: Theme.brand, selected: city == nil) { mapCity = nil }
                         ForEach(trip.legs.filter { !$0.isHome }) { leg in
-                            mapChip(leg.name.isEmpty ? "City \(trip.number(of: leg))" : leg.name, color: Color(hex: trip.colorHex(of: leg)),
+                            mapChip(leg.name.isEmpty ? "City \(trip.number(of: leg))" : leg.name, color: Theme.Group.travel.color,
                                     selected: city?.id == leg.id) { mapCity = leg.id }
                         }
                     }
@@ -682,7 +685,7 @@ struct TripDetailView: View {
         // The day's leg color down the left edge.
         .overlay(alignment: .leading) {
             if let leg {
-                Capsule().fill(Color(hex: trip.colorHex(of: leg)).gradient).frame(width: 4).padding(.vertical, 22)
+                Capsule().fill(Theme.Group.travel.color.gradient).frame(width: 4).padding(.vertical, 22)
             }
         }
     }
@@ -698,6 +701,12 @@ struct TripDetailView: View {
             }
         }
         return counts
+    }
+
+    /// Eats "Want to try" places whose address is in this city.
+    private func wishCount(in leg: TripLeg) -> Int {
+        guard !leg.isHome, !leg.name.isEmpty else { return 0 }
+        return eatsBook.wishlist.filter { $0.city?.caseInsensitiveCompare(leg.name) == .orderedSame }.count
     }
 
     private func travelCard(_ trip: Trip, from: TripLeg?, to: TripLeg?, start: String, end: String,
@@ -808,7 +817,7 @@ struct TripItemRow: View {
     var body: some View {
         switch stayRole {
         case .night, .checkOut: continuation
-        case .checkIn: full.padding(10).background(Color(hex: item.kind.colorHex).opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        case .checkIn: full.padding(10).background(Color(hex: item.kind.colorHex).opacity(0.1), in: RoundedRectangle(cornerRadius: Radius.small))
         case nil: full
         }
     }
@@ -839,7 +848,7 @@ struct TripItemRow: View {
             let tint = Color(hex: item.kind.colorHex)
             Image(systemName: item.kind.symbol)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(item.isMealPlaceholder ? tint : .white)
+                .foregroundStyle(item.isMealPlaceholder ? tint : item.kind.onColor)
                 .frame(width: 32, height: 32)
                 // An empty meal slot is an outline; a real plan is solid.
                 .background(item.isMealPlaceholder ? AnyShapeStyle(tint.opacity(0.1)) : AnyShapeStyle(tint.gradient), in: Circle())
@@ -878,7 +887,7 @@ struct TripItemRow: View {
                 }
                 if stayRole == .checkIn {
                     Text(item.stayEnd == nil ? "Check-in" : day.flatMap(item.stayLabel(on:)) ?? "Check-in")
-                        .font(.caption2.weight(.bold)).foregroundStyle(.white)
+                        .font(.caption2.weight(.bold)).foregroundStyle(item.kind.onColor)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Color(hex: item.kind.colorHex).gradient, in: Capsule())
                 }
@@ -912,7 +921,7 @@ struct PlaceMapCard: View {
                 .mapStyle(.standard(pointsOfInterest: .excludingAll))
                 .allowsHitTesting(false)
                 .frame(height: 170)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
                 .overlay(alignment: .bottomLeading) {
                     if mapItem != nil {
                         Label("Photos & info", systemImage: "photo.on.rectangle")
@@ -1178,8 +1187,8 @@ struct TripItemEditor: View {
                 TextField("Notes", text: $item.notes, axis: .vertical)
                     .lineLimit(1...6)
                     .padding(14)
-                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.1)))
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: Radius.hero, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.hero, style: .continuous).strokeBorder(.white.opacity(0.1)))
                     .padding(.horizontal, 16)
                     .padding(.top, 20)
                 if !isNew {
@@ -1473,7 +1482,7 @@ struct DayMapView: View {
                 List {
                     ForEach(Array(stops.enumerated()), id: \.element.id) { index, stop in
                         HStack {
-                            Text("\(index + 1)").font(.caption.weight(.bold)).foregroundStyle(.white)
+                            Text("\(index + 1)").font(.caption.weight(.bold)).foregroundStyle(stop.kind.onColor)
                                 .frame(width: 22, height: 22).background(Color(hex: stop.kind.colorHex), in: Circle())
                             Text(stop.title).lineLimit(1)
                             Spacer()

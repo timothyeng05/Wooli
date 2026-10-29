@@ -184,57 +184,16 @@ enum TripRow: Identifiable {
 struct TripLegHeader: View {
     let leg: TripLeg
     let number: Int
-    let colorHex: String
     let planCount: Int
     let isCollapsed: Bool
     let isNow: Bool
 
     var body: some View {
-        let color = Color(hex: colorHex)
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(color.gradient)
-                if leg.emoji.isEmpty || leg.emoji == "📍" {
-                    Text("\(number)").font(.headline.weight(.bold)).foregroundStyle(.white)
-                } else {
-                    Text(leg.emoji).font(.title3)
-                }
-            }
-            .frame(width: 44, height: 44)
-            .shadow(color: color.opacity(0.35), radius: 6, y: 3)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(leg.name.isEmpty ? "City \(number)" : leg.name)
-                        .font(.title3.weight(.bold)).foregroundStyle(Theme.text)
-                    if isNow {
-                        Text("NOW").font(.caption2.weight(.heavy)).foregroundStyle(.white)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(color, in: Capsule())
-                    }
-                }
-                Text(summary).font(.caption).foregroundStyle(Theme.textSecondary)
-                if isCollapsed {
-                    // Folded cities keep their plans; say so, so it doesn't read as empty.
-                    Label("Folded · tap to show its days", systemImage: "eye.slash")
-                        .font(.caption.weight(.semibold)).foregroundStyle(color)
-                }
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.down")
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(color)
-                .rotationEffect(.degrees(isCollapsed ? -90 : 0))
-        }
-        .padding(14)
-        .background(
-            LinearGradient(colors: [color.opacity(0.16), color.opacity(0.05)], startPoint: .leading, endPoint: .trailing),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(color.opacity(0.22)))
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(isCollapsed ? "Shows this city's days" : "Hides this city's days")
+        SectionBand(title: leg.name.isEmpty ? "City \(number)" : leg.name, summary: summary,
+                    badge: leg.emoji.isEmpty || leg.emoji == "📍" ? .number(number) : .emoji(leg.emoji),
+                    group: .travel, isNow: isNow, isCollapsed: isCollapsed)
+            .contentShape(Rectangle())
+            .accessibilityHint(isCollapsed ? "Shows this city's days" : "Hides this city's days")
     }
 
     private var summary: String {
@@ -242,7 +201,34 @@ struct TripLegHeader: View {
         let range = start == end ? start.formatted(.dateTime.month(.abbreviated).day())
             : (start..<end.addingTimeInterval(1)).formatted(.interval.month(.abbreviated).day())
         let nights = leg.nights == 0 ? "Day trip" : "\(leg.nights) night\(leg.nights == 1 ? "" : "s")"
-        return "\(range) · \(nights) · \(planCount) plan\(planCount == 1 ? "" : "s")"
+        let line = "\(range) · \(nights) · \(planCount) plan\(planCount == 1 ? "" : "s")"
+        // Folded cities keep their plans; say so, so it doesn't read as empty.
+        return isCollapsed ? line + "\nFolded · tap to show its days" : line
+    }
+}
+
+/// "3 to try in Tokyo": places saved to Want to try in Eats that are in this city.
+struct LegToTryRow: View {
+    @Environment(AppModel.self) private var app
+    let cityName: String
+    let count: Int
+
+    var body: some View {
+        Button { app.open(.eats) } label: {
+            ItemRow(title: "\(count) to try in \(cityName)", subtitle: Text("From your Eats Want to try list"), leading: {
+                Image(systemName: "fork.knife")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.Group.food.onColor)
+                    .frame(width: 30, height: 30)
+                    .background(Theme.Group.food.color, in: Circle())
+            }, trailing: {
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+            })
+            .padding(.horizontal, Space.l)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.border))
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -267,82 +253,70 @@ struct TripTravelCard: View {
     var body: some View {
         let modes = TravelLegs.modes(of: items)
         let main = TravelLegs.mainMode(of: items)
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                endpoint(fromName ?? "Home", caption: fromName == nil ? "Getting there" : "From", alignment: .leading)
-                route(symbols: modes.isEmpty ? [Self.mode(for: items).symbol] : modes.map(\.symbol))
-                endpoint(toName ?? "Home", caption: toName == nil ? "Heading home" : "To", alignment: .trailing)
-            }
-            Text([dateText,
-                  modes.count > 1 ? modes.map(\.label).joined(separator: " + ") : main?.label,
-                  distanceKm.map { "~\(Int($0.rounded()).formatted()) km" }]
-                .compactMap { $0 }.joined(separator: " · "))
-                .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.85))
+        TicketCard(eyebrow: dateText) {
+            VStack(alignment: .leading, spacing: Space.m) {
+                HStack(spacing: Space.s) {
+                    endpoint(fromName ?? "Home", caption: fromName == nil ? "Getting there" : "From", alignment: .leading)
+                    route(symbols: modes.isEmpty ? [Self.mode(for: items).symbol] : modes.map(\.symbol))
+                    endpoint(toName ?? "Home", caption: toName == nil ? "Heading home" : "To", alignment: .trailing)
+                }
+                Text([modes.count > 1 ? modes.map(\.label).joined(separator: " + ") : main?.label,
+                      distanceKm.map { "~\(Int($0.rounded()).formatted()) km" }]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption.weight(.medium)).foregroundStyle(Theme.onTicket.opacity(0.85))
 
-            if items.isEmpty {
-                Button(action: onAdd) {
-                    Label("Add how you're getting there", systemImage: "plus")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(items) { item in
-                        Button { onSelect(item) } label: {
-                            HStack(alignment: .center, spacing: 10) {
-                                Image(systemName: TravelLegs.mode(of: item).symbol)
-                                    .font(.caption.weight(.bold)).foregroundStyle(Self.gradient[0])
-                                    .frame(width: 26, height: 26)
-                                    .background(.white, in: Circle())
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(TravelLegs.title(of: item)).font(.subheadline.weight(.semibold)).lineLimit(2)
-                                    Text(legDetail(item)).font(.caption.weight(.medium)).monospacedDigit().opacity(0.8)
+                if items.isEmpty {
+                    Button(action: onAdd) {
+                        Label("Add how you're getting there", systemImage: "plus")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.onTicket)
+                            .frame(maxWidth: .infinity).padding(.vertical, Space.m)
+                            .background(Theme.ticketPanel, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(items) { item in
+                            Button { onSelect(item) } label: {
+                                HStack(alignment: .center, spacing: Space.m) {
+                                    Image(systemName: TravelLegs.mode(of: item).symbol)
+                                        .font(.caption.weight(.bold)).foregroundStyle(Theme.ticketStart)
+                                        .frame(width: 26, height: 26)
+                                        .background(Theme.onTicket, in: Circle())
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(TravelLegs.title(of: item)).font(.subheadline.weight(.semibold)).lineLimit(2)
+                                        Text(legDetail(item)).font(.caption.weight(.medium)).monospacedDigit()
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    Image(systemName: "chevron.right").font(.caption2.weight(.bold))
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).opacity(0.6)
+                                .foregroundStyle(Theme.onTicket)
+                                .padding(.vertical, Space.s)
+                                .contentShape(Rectangle())
                             }
-                            .foregroundStyle(.white)
-                            .padding(.vertical, 9)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if item.id != items.last?.id {
-                            Rectangle().fill(.white.opacity(0.2)).frame(height: 1)
+                            .buttonStyle(.plain)
+                            if item.id != items.last?.id {
+                                Rectangle().fill(Theme.ticketRule).frame(height: 1)
+                            }
                         }
                     }
+                    .padding(.horizontal, Space.m)
+                    .background(Theme.ticketPanel, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
                 }
-                .padding(.horizontal, 12)
-                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            ForEach(meeting) { item in
-                Button { onSelect(item) } label: {
-                    Label {
-                        Text("Meeting " + meetingText(item)).lineLimit(2)
-                    } icon: {
-                        Image(systemName: TravelLegs.mode(of: item) == .other ? "person.2.fill" : TravelLegs.mode(of: item).symbol)
+                ForEach(meeting) { item in
+                    Button { onSelect(item) } label: {
+                        Label {
+                            Text("Meeting " + meetingText(item)).lineLimit(2)
+                        } icon: {
+                            Image(systemName: TravelLegs.mode(of: item) == .other ? "person.2.fill" : TravelLegs.mode(of: item).symbol)
+                        }
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.onTicket)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(16)
-        .background(
-            LinearGradient(colors: Self.gradient, startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
-        // Ticket notches.
-        .mask {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .overlay(alignment: .leading) { Circle().frame(width: 18).offset(x: -9).blendMode(.destinationOut) }
-                .overlay(alignment: .trailing) { Circle().frame(width: 18).offset(x: 9).blendMode(.destinationOut) }
-                .compositingGroup()
-        }
-        .shadow(color: Self.gradient[1].opacity(0.3), radius: 10, y: 5)
-        .padding(.vertical, 4)
+        .padding(.vertical, Space.xs)
     }
 
     /// "21:00–22:30 · 1h 30m", from what's known.
@@ -397,7 +371,7 @@ struct TripTravelCard: View {
     }
 
     private var dashes: some View {
-        Line().stroke(.white.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 4]))
+        Line().stroke(Theme.ticketRule, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 4]))
             .frame(height: 2)
     }
 
@@ -409,7 +383,7 @@ struct TripTravelCard: View {
 
     /// Every travel card (and the flight / train ticket) uses the same dark
     /// to light blue, so stays, food and activities can have their own colors.
-    static let gradient = [Color(hex: "#1e3a8a"), Color(hex: "#3b82f6")]
+    static let gradient = [Theme.ticketStart, Theme.ticketEnd]
 
     /// Best guess at how you're travelling, from the bookings' wording.
     static func mode(for items: [TripItem]) -> (symbol: String, label: String?) {

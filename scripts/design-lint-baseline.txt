@@ -1,4 +1,4 @@
-color_hex 84
-corner_radius 47
-font_system_size 42
-padding_number 199
+color_hex 80
+corner_radius 28
+font_system_size 38
+padding_number 192

@@ -63,8 +63,8 @@ struct TransportTicket: View {
         .padding(.top, 18)
         .foregroundStyle(.white)
         .background(LinearGradient(colors: TripTravelCard.gradient, startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.18)))
+                    in: RoundedRectangle(cornerRadius: Radius.hero, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.hero, style: .continuous).strokeBorder(.white.opacity(0.18)))
         .shadow(color: TripTravelCard.gradient[1].opacity(0.45), radius: 24, y: 12)
     }
 
@@ -189,9 +189,9 @@ struct TransportTicket: View {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     if let date {
                         Text(TripTransport.timeText(TripTransport.minutes(date)))
-                            .font(.system(size: 24, weight: .bold)).monospacedDigit()
+                            .wooliFont(.amount)
                     } else {
-                        Text("Set time").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                        Text("Set time").font(.headline).foregroundStyle(.white.opacity(0.6))
                             .underline(pattern: .dash, color: .white.opacity(0.5))
                     }
                     if offset > 0 && date != nil {
@@ -253,10 +253,10 @@ struct TransportTicket: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(empty ? 0 : 0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.white.opacity(empty ? 0 : 0.12), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay {
             if empty {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
                     .strokeBorder(.white.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
             }
         }
@@ -433,7 +433,7 @@ struct AirportLabel: View {
                 .font(.subheadline.weight(.heavy)).monospaced()
                 .foregroundStyle(Theme.brand)
                 .frame(width: 52, height: 34)
-                .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 // "Hong Kong", not "Hong Kong, Hong Kong" (same for Singapore, Macao…).
                 let country = Locale.current.localizedString(forRegionCode: airport.country)

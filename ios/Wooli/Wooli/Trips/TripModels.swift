@@ -39,9 +39,6 @@ struct TripLeg: Identifiable, Codable, Hashable {
     var nights: Int {
         max(Calendar.current.dateComponents([.day], from: DayKey.date(startDay), to: DayKey.date(endDay)).day ?? 0, 0)
     }
-
-    /// Leg colors, matching the web app's leg palette.
-    static let colorHexes = ["#2563eb", "#0d9488", "#e11d48", "#7c3aed", "#4f46e5", "#d97706"]
 }
 
 extension TripLeg {
@@ -144,11 +141,6 @@ struct Trip: Identifiable, Codable, Hashable {
         (legs.filter { !$0.isHome }.firstIndex { $0.id == leg.id } ?? 0) + 1
     }
 
-    func colorHex(of leg: TripLeg) -> String {
-        let index = legs.firstIndex { $0.id == leg.id } ?? 0
-        return TripLeg.colorHexes[index % TripLeg.colorHexes.count]
-    }
-
     static func tripID(from zoneID: CKRecordZone.ID) -> String? {
         zoneID.zoneName.hasPrefix(zonePrefix) ? String(zoneID.zoneName.dropFirst(zonePrefix.count)) : nil
     }
@@ -215,13 +207,16 @@ struct TripItem: Identifiable, Codable, Hashable {
         /// get their own color so a day reads at a glance.
         var colorHex: String {
             switch self {
-            case .activity: "#ec4899"
-            case .meal: "#f97316"
+            case .activity: "#e11d48"
+            case .meal: "#facc15"
             case .transit: "#2563eb"
-            case .stay: "#8b5cf6"
+            case .stay: "#7c3aed"
             case .note: "#64748b"
             }
         }
+
+        /// Symbols on the kind's colour: dark ink on yellow, white elsewhere.
+        var onColor: Color { self == .meal ? Theme.onAccent : .white }
     }
 
     var id: String = UUID().uuidString

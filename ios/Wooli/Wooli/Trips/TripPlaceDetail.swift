@@ -87,7 +87,7 @@ struct TripPlaceDetail: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(displayTitle)
-                .font(.system(size: 34, weight: .heavy, design: .serif))
+                .wooliFont(.display)
                 .foregroundStyle(Theme.text)
                 .lineLimit(3).minimumScaleFactor(0.7)
                 .padding(.top, item.place == nil ? 0 : -PlaceHeroMap.titleOverlap)
@@ -115,7 +115,7 @@ struct TripPlaceDetail: View {
             TextField("Highlights, what you'd do again, tips for next time…", text: $item.notes, axis: .vertical)
                 .lineLimit(4...14)
                 .padding(14)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             Text(trip.isShared ? "Everyone on this trip can see these notes." : "Saved with the trip.")
                 .font(.caption).foregroundStyle(Theme.textTertiary)
         }
