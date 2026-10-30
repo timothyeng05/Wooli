@@ -51,6 +51,16 @@ enum TripLayout {
             items.filter { $0.day == day && $0.kind == .transit && TravelLegs.isSomeoneElse($0) }
         }
 
+        // No city marked "Where you're leaving from": a one-day first city with
+        // travel on that day is where you set off (a red-eye out of New York
+        // is the way to the next city, not the way into New York).
+        let startsTrip: TripLeg? = {
+            guard !trip.legs.contains(where: \.isHome), trip.legs.count > 1,
+                  let first = days.first, let leg = trip.leg(for: first),
+                  leg.startDay == leg.endDay, !transit(on: first).isEmpty else { return nil }
+            return leg
+        }()
+
         var blocks: [TripDayBlock] = []
         var used = Set<String>()
         var previousLeg: TripLeg?
@@ -78,7 +88,7 @@ enum TripLayout {
             var block = TripDayBlock(day: day, number: index + 1, leg: leg)
             block.meeting = meeting(on: day)
             used.formUnion(block.meeting.map(\.id))
-            if leg.isHome {
+            if leg.isHome || leg.id == startsTrip?.id {
                 // Where the trip starts: its travel is the way out, landing at the next city.
                 block.arriving = leg.id != previousLeg?.id
                 let hop = transit(on: day)
