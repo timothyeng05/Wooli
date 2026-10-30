@@ -137,10 +137,12 @@ enum ReelPlaces {
         return lines.indices.compactMap { index in
             let line = lines[index]
             guard let pin = line.range(of: "📍") else { return nil }
-            let text = line[pin.upperBound...]
+            let raw = line[pin.upperBound...]
                 .replacingOccurrences(of: "@", with: "")
                 .replacingOccurrences(of: "_", with: " ") // @lucali_bk → "lucali bk" for Maps
                 .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters.subtracting(CharacterSet(charactersIn: "'&"))))
+            // "(there's multiple locations)" is a remark, not part of the name.
+            let text = stripRemarks(raw)
             guard !text.isEmpty else { return nil }
             let parts = text.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             let rest = parts.count > 1 ? parts[1] : ""
@@ -149,8 +151,38 @@ enum ReelPlaces {
                 guard let name = nameAbove(index, in: lines) else { return nil }
                 return Spot(name: name, address: text)
             }
-            return looksLikeAddress(rest) ? Spot(name: parts[0], address: rest) : Spot(name: parts[0], area: rest)
+            let (name, localName) = splitLocalName(parts[0])
+            if looksLikeAddress(rest) { return Spot(name: name, localName: localName, address: rest) }
+            // A chain with several branches lists them under the pin; use the first (the flagship).
+            return Spot(name: name, localName: localName, address: rest.isEmpty ? branchAddress(after: index, in: lines) : "", area: rest)
         }
+    }
+
+    /// Text in brackets removed ("Lucali (cash only)", "泸西老弄堂 (there's multiple locations").
+    /// A closing bracket the punctuation trim already took is optional.
+    private static func stripRemarks(_ text: String) -> String {
+        text.replacing(try! Regex("\\s*[(（][^)）]*[)）]?"), with: "").trimmingCharacters(in: .whitespaces)
+    }
+
+    /// "lu xi lao long tang 泸西老弄堂" → the Latin name and the Chinese one, so Maps can
+    /// be asked with either. Text that starts with Chinese, or has none, stays whole.
+    private static func splitLocalName(_ text: String) -> (name: String, localName: String) {
+        guard let i = text.firstIndex(where: { $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) } }),
+              i > text.startIndex else { return (text, "") }
+        let name = text[..<i].trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? (text, "") : (name, String(text[i...]).trimmingCharacters(in: .whitespaces))
+    }
+
+    /// The address on a bullet right under the pin:
+    ///
+    ///     📍 Lu Xi Lao Long Tang (there's multiple locations)
+    ///     - Flagship Store (Dingxi Road): 685 Dingxi Road, Changning District
+    private static func branchAddress(after index: Int, in lines: [String]) -> String {
+        guard let line = lines[(index + 1)...].first, line.hasPrefix("-") || line.hasPrefix("•") else { return "" }
+        var text = line.drop { "-•– ".contains($0) }
+        if let colon = text.firstIndex(of: ":") { text = text[text.index(after: colon)...] }
+        let address = stripRemarks(String(text))
+        return looksLikeAddress(address) ? address : ""
     }
 
     /// A word streets have ("No. 20 Guangdong Road", "肇嘉浜路"), or with
