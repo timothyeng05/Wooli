@@ -26,6 +26,12 @@ final class TripStore: CKSyncEngineDelegate {
     @ObservationIgnored let container = CKContainer(identifier: containerID)
     @ObservationIgnored private var privateEngine: CKSyncEngine?
     @ObservationIgnored private var sharedEngine: CKSyncEngine?
+    /// Saves per trip/item since launch, and the count each record had when it
+    /// was last handed to the engine. The engine clears a queued save once it
+    /// succeeds, even if the record was edited again while it was uploading;
+    /// the two counts tell us when that happened so the newer edit is queued again.
+    @ObservationIgnored private var editCount: [String: Int] = [:]
+    @ObservationIgnored private var sentEditCount: [String: Int] = [:]
     @ObservationIgnored private var privateState: CKSyncEngine.State.Serialization?
     @ObservationIgnored private var sharedState: CKSyncEngine.State.Serialization?
     @ObservationIgnored private let log = Logger(subsystem: "com.timothyeng.wooli", category: "Trips")
@@ -221,8 +227,16 @@ final class TripStore: CKSyncEngineDelegate {
     // MARK: - Editing
 
     func save(_ trip: Trip) {
+        var trip = trip
         let isNew = !trips.contains { $0.id == trip.id }
-        if let i = trips.firstIndex(where: { $0.id == trip.id }) { trips[i] = trip } else { trips.append(trip) }
+        // A screen's copy can be older than what the last upload stored: keep the newest change tag.
+        if let i = trips.firstIndex(where: { $0.id == trip.id }) {
+            trip.systemFields = trips[i].systemFields ?? trip.systemFields
+            trips[i] = trip
+        } else {
+            trips.append(trip)
+        }
+        editCount[trip.id, default: 0] += 1
         persist()
         guard let engine = engine(for: trip) else { return }
         if isNew && trip.isMine {
@@ -232,7 +246,14 @@ final class TripStore: CKSyncEngineDelegate {
     }
 
     func save(_ item: TripItem) {
-        if let i = items.firstIndex(where: { $0.id == item.id }) { items[i] = item } else { items.append(item) }
+        var item = item
+        if let i = items.firstIndex(where: { $0.id == item.id }) {
+            item.systemFields = items[i].systemFields ?? item.systemFields
+            items[i] = item
+        } else {
+            items.append(item)
+        }
+        editCount[item.id, default: 0] += 1
         persist()
         guard let trip = trip(item.tripID), let engine = engine(for: trip) else { return }
         engine.state.add(pendingRecordZoneChanges: [.saveRecord(CKRecord.ID(recordName: item.id, zoneID: trip.zoneID))])
@@ -529,7 +550,14 @@ final class TripStore: CKSyncEngineDelegate {
             persist()
 
         case .sentRecordZoneChanges(let sent):
-            for record in sent.savedRecords { storeSystemFields(of: record) }
+            for record in sent.savedRecords {
+                storeSystemFields(of: record)
+                // Edited again while this upload was in flight: the engine just cleared that save.
+                let name = record.recordID.recordName
+                if let sentCount = sentEditCount[name], sentCount != editCount[name, default: 0] {
+                    syncEngine.state.add(pendingRecordZoneChanges: [.saveRecord(record.recordID)])
+                }
+            }
             for failure in sent.failedRecordSaves { handleFailedSave(failure, engine: syncEngine) }
             if needsFullUpload && !sent.savedRecords.isEmpty && sent.failedRecordSaves.isEmpty { needsFullUpload = false }
             persist()
@@ -563,8 +591,14 @@ final class TripStore: CKSyncEngineDelegate {
             engine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID)])
             return nil
         }
-        if let trip = trip(recordID.recordName) { return trip.record() }
-        if let item = items.first(where: { $0.id == recordID.recordName }) { return item.record(in: recordID.zoneID) }
+        if let trip = trip(recordID.recordName) {
+            sentEditCount[trip.id] = editCount[trip.id, default: 0]
+            return trip.record()
+        }
+        if let item = items.first(where: { $0.id == recordID.recordName }) {
+            sentEditCount[item.id] = editCount[item.id, default: 0]
+            return item.record(in: recordID.zoneID)
+        }
         // Deleted here since it was queued: nothing to send.
         engine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID)])
         return nil
