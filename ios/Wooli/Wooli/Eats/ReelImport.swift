@@ -173,12 +173,16 @@ enum ReelPlaces {
         return name.isEmpty ? (text, "") : (name, String(text[i...]).trimmingCharacters(in: .whitespaces))
     }
 
-    /// The address on a bullet right under the pin:
+    /// The address on a bullet right under the pin, or on a plain line that has a street word:
     ///
     ///     📍 Lu Xi Lao Long Tang (there's multiple locations)
     ///     - Flagship Store (Dingxi Road): 685 Dingxi Road, Changning District
+    ///
+    ///     📍 Sheng Yong Xing Shanghai
+    ///     5F, Bund 5, 20 Guangdong Road, Huangpu
     private static func branchAddress(after index: Int, in lines: [String]) -> String {
-        guard let line = lines[(index + 1)...].first, line.hasPrefix("-") || line.hasPrefix("•") else { return "" }
+        guard let line = lines[(index + 1)...].first else { return "" }
+        guard line.hasPrefix("-") || line.hasPrefix("•") else { return looksLikeAddress(line, numbersCount: false) ? line : "" }
         var text = line.drop { "-•– ".contains($0) }
         if let colon = text.firstIndex(of: ":") { text = text[text.index(after: colon)...] }
         let address = stripRemarks(String(text))
@@ -428,7 +432,7 @@ struct ReelImportSheet: View {
             } footer: {
                 if result.caption == nil {
                     Text("Instagram didn't share this reel's caption. Add the place by name.")
-                } else if result.found.isEmpty {
+                } else if result.found.isEmpty && result.missing.isEmpty {
                     Text("No places found in the caption. Add the place by name.")
                 } else if !result.missing.isEmpty {
                     Text("Not found on Apple Maps: \(result.missing.joined(separator: ", "))")
