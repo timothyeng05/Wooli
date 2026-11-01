@@ -463,31 +463,64 @@ private struct SpendingHistoryCard: View {
 /// One category group for a month: planned amount, breakdown, and transactions.
 struct CategoryBudgetView: View {
     @Bindable var group: BudgetCategory
+    /// The month the page opens on; the history chart ends here.
     let month: DateInterval
 
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query private var accounts: [LocalAccount]
+    /// A bar tapped in the history chart; the page shows that month.
+    @State private var selected: DateInterval?
+    @State private var pickedDate: Date?
+
+    private var memberIds: Set<String> {
+        Set(categories.filter { $0.parentId == group.id }.map(\.id) + [group.id])
+    }
+
+    /// What the group earned or spent in `interval`.
+    private func total(in interval: DateInterval, ledger: Ledger) -> Double {
+        if group.isIncome {
+            return transactions.filter {
+                interval.contains($0.transactedAt) && !$0.isHidden && ledger.isVisible($0)
+                    && $0.categoryId.map(memberIds.contains) == true
+            }.reduce(0) { $0 + $1.amount }
+        }
+        let summary = MonthSummary(transactions: transactions, in: interval,
+                                   categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
+        // Top-level groups roll up under spendingByGroup; a single leaf
+        // category (tapped directly, not via its parent) needs its own total.
+        return group.parentId == nil ? (summary.spendingByGroup[group.id] ?? 0) : (summary.spendingByCategory[group.id] ?? 0)
+    }
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
+        let opened = self.month
+        let month = selected ?? opened
         let summary = MonthSummary(transactions: transactions, in: month,
                                    categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
         let children = categories.filter { $0.parentId == group.id }
-        let memberIds = Set(children.map(\.id) + [group.id])
         let items = transactions.filter {
             month.contains($0.transactedAt) && !$0.isHidden && ledger.isVisible($0)
                 && $0.categoryId.map(memberIds.contains) == true
         }
-        // Top-level groups roll up under spendingByGroup; a single leaf
-        // category (tapped directly, not via its parent) needs its own total.
-        let actual = group.isIncome ? items.reduce(0) { $0 + $1.amount }
-            : (group.parentId == nil ? (summary.spendingByGroup[group.id] ?? 0) : (summary.spendingByCategory[group.id] ?? 0))
+        let actual = total(in: month, ledger: ledger)
+        let history = (0..<6).reversed().map { offset -> (start: Date, total: Double) in
+            let start = Calendar.current.date(byAdding: .month, value: -offset, to: opened.start)!
+            return (start, total(in: .month(containing: start), ledger: ledger))
+        }
+        // Months before the first one with activity don't pull the average down.
+        let active = Array(history.drop { $0.total == 0 })
+        let average = active.isEmpty ? 0 : active.reduce(0) { $0 + $1.total } / Double(active.count)
+        let window = DateInterval(start: history[0].start, end: opened.end)
+        let top = transactions.filter {
+            window.contains($0.transactedAt) && !$0.isHidden && !$0.isTransfer && ledger.isVisible($0)
+                && $0.categoryId.map(memberIds.contains) == true && ($0.amount > 0) == group.isIncome
+        }.sorted { abs($0.amount) > abs($1.amount) }.prefix(5)
 
         ScrollView {
             VStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 12) {
-                    SectionLabel(group.isIncome ? "Earned" : "Spent")
+                    SectionLabel("\(group.isIncome ? "Earned" : "Spent") · \(month.start.formatted(.dateTime.month(.wide).year()))")
                     Text(actual.currency())
                         .font(.system(size: 32, weight: .bold)).monospacedDigit().foregroundStyle(Theme.text)
                     if group.monthlyTarget > 0 {
@@ -524,6 +557,50 @@ struct CategoryBudgetView: View {
                 }
                 .card()
 
+                VStack(alignment: .leading, spacing: 12) {
+                    CardHeader(title: group.isIncome ? "Earned" : "Spent", subtitle: "Last 6 months · tap a month")
+                    Chart(history, id: \.start) { entry in
+                        BarMark(x: .value("Month", entry.start, unit: .month), y: .value("Total", entry.total))
+                            .foregroundStyle(entry.start == month.start ? Color(hex: group.colorHex) : Color(hex: group.colorHex).opacity(0.3))
+                            .cornerRadius(4)
+                        if group.monthlyTarget > 0 {
+                            RuleMark(y: .value("Planned", group.monthlyTarget))
+                                .foregroundStyle(Theme.textTertiary)
+                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        }
+                    }
+                    .chartXSelection(value: $pickedDate)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .month)) { _ in
+                            AxisValueLabel(format: .dateTime.month(.abbreviated), centered: true)
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                            AxisGridLine().foregroundStyle(Theme.border)
+                            AxisValueLabel {
+                                if let v = value.as(Double.self) { Text(v.formatted(.currency(code: "USD").notation(.compactName))) }
+                            }
+                        }
+                    }
+                    .frame(height: 160)
+                    .onChange(of: pickedDate) { _, date in
+                        if let date { selected = .month(containing: date) }
+                    }
+                    Divider()
+                    LabeledContent("Average per month") {
+                        Text(average.currency(cents: false)).font(.body.weight(.semibold)).monospacedDigit()
+                    }
+                    .foregroundStyle(Theme.text)
+                    if group.monthlyTarget > 0 {
+                        LabeledContent("Planned") {
+                            Text(group.monthlyTarget.currency(cents: false)).font(.body.weight(.semibold)).monospacedDigit()
+                        }
+                        .foregroundStyle(Theme.text)
+                    }
+                }
+                .card()
+
                 if !children.isEmpty && !group.isIncome {
                     VStack(alignment: .leading, spacing: 12) {
                         CardHeader(title: "Breakdown")
@@ -540,8 +617,23 @@ struct CategoryBudgetView: View {
                     .card()
                 }
 
+                if !top.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        CardHeader(title: "Top transactions", subtitle: "Last 6 months")
+                        ForEach(Array(top)) { tx in
+                            NavigationLink {
+                                TransactionDetailView(transaction: tx)
+                            } label: {
+                                TransactionRow(transaction: tx, category: ledger.category(for: tx))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .card()
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
-                    CardHeader(title: "Transactions")
+                    CardHeader(title: "Transactions", subtitle: month.start.formatted(.dateTime.month(.wide).year()))
                     if items.isEmpty {
                         Text("Nothing this month").font(.subheadline).foregroundStyle(Theme.textTertiary)
                     }
