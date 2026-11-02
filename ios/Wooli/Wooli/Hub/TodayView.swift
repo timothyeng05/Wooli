@@ -24,8 +24,6 @@ struct TodayView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, 4)
 
-                    NextUpBoard()
-
                     // In the order the user ranked them.
                     ForEach(lineup.todayCards) { space in
                         Group {
@@ -138,14 +136,14 @@ struct TodayCard<Extra: View>: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { app.open(space) }
-        } label: {
-            TodayCardBody(systemImage: space.systemImage, tint: space.tint, title: space.title,
-                          headline: headline, detail: detail) { extra }
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens \(space.title)")
+        // A tap gesture, not a Button, so a Button inside `extra` (Budget's
+        // review pill) still gets its own taps.
+        TodayCardBody(systemImage: space.systemImage, tint: space.tint, title: space.title,
+                      headline: headline, detail: detail) { extra }
+            .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { app.open(space) } }
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Opens \(space.title)")
     }
 }
 
@@ -227,11 +225,17 @@ private struct BudgetTodayCard: View {
                 BarGauge(value: summary.spending, total: planned, tint: left >= 0 ? Theme.brand : Theme.expense)
             }
             if toReview > 0 {
-                Label("\(toReview) transactions to review", systemImage: "tray.full")
-                    .font(.footnote.weight(.medium))
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Theme.pendingSoft, in: Capsule())
-                    .foregroundStyle(Theme.pending)
+                Button {
+                    app.open(.budget)
+                    app.showReview = true
+                } label: {
+                    Label("Review \(toReview) transactions", systemImage: "tray.full")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Theme.pendingSoft, in: Capsule())
+                        .foregroundStyle(Theme.pending)
+                }
+                .buttonStyle(.plain)
             }
         }
     }

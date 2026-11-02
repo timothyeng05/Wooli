@@ -70,11 +70,8 @@ enum AppSpace: String, CaseIterable, Identifiable {
     var theme: AppTheme? {
         switch self {
         case .today: nil
-        case .budget: .finance
-        case .eats, .sights, .recipes: .explore
-        case .period: .health
-        case .movies: .culture
-        case .trips: .travel
+        case .budget, .period: .personal
+        case .trips, .eats, .sights, .movies, .recipes: .explore
         }
     }
 
@@ -97,17 +94,14 @@ enum AppSpace: String, CaseIterable, Identifiable {
 
 /// App groups, in the order they're listed.
 enum AppTheme: String, CaseIterable, Identifiable {
-    case finance, explore, health, culture, travel
+    case personal, explore
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
 
     var group: Theme.Group {
         switch self {
-        case .finance: .money
-        case .explore: .food
-        case .health: .health
-        case .culture: .fun
-        case .travel: .travel
+        case .personal: .money
+        case .explore: .travel
         }
     }
 }

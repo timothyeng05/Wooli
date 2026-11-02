@@ -63,10 +63,14 @@ struct DashboardView: View {
 
                     SyncStatusLine()
 
+                    if !reviewItems.isEmpty {
+                        ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
+                    }
+
                     SpendingHeroCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
                                      recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
 
-                    ForEach(orderedCards) { card in
+                    ForEach(orderedCards.filter { $0 != .review }) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
                                 plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
                                 reviewItems: reviewItems, relevantTransactions: relevantTransactions)
