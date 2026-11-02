@@ -3,7 +3,8 @@ import SwiftData
 
 // MARK: - Your list
 
-/// Movies' main screen: every film you've ranked, best first, with its score.
+/// Movies' main screen: Seen (ranked, best first) and Want to see, with
+/// filter pills, sort and search like Eats.
 struct MoviesListView: View {
     @Environment(\.modelContext) private var context
     @Query private var movies: [MovieEntry]
@@ -13,6 +14,20 @@ struct MoviesListView: View {
     @State private var ranking: MovieSearch.Result?
     @State private var promoting: MovieEntry?
     @State private var detail: MovieEntry?
+    @State private var tab = Tab.seen
+    @State private var sort = Sort.rank
+    @State private var genre: String?
+    @State private var decade: String?
+    @State private var director: String?
+    @State private var feeling: String?
+    @State private var query = ""
+
+    enum Tab: Hashable { case seen, wantToSee }
+
+    enum Sort: String, CaseIterable, Identifiable {
+        case rank = "Rank", recent = "Recent", year = "Newest film", name = "A–Z"
+        var id: String { rawValue }
+    }
 
     /// Your latest film on a cinema stub, or an invitation when the list is empty.
     private func hero(_ ordered: [MovieEntry]) -> some View {
@@ -24,42 +39,65 @@ struct MoviesListView: View {
     }
 
     var body: some View {
-        let wishlist = movies.filter(\.isWishlist)
+        let wishlist = movies.filter(\.isWishlist).sorted { $0.createdAt > $1.createdAt }
         let ranked = movies.filter { !$0.isWishlist }
         let candidates = ranked.map(\.candidate)
         let scores = EatsRanking.scores(candidates)
         let byID = Dictionary(ranked.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let ordered = EatsRanking.ordered(candidates).compactMap { byID[$0.id] }
+        // Rank numbers stay each film's place on the whole list, whatever's filtered.
+        let position = Dictionary(ordered.enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { a, _ in a })
+        let pool = tab == .seen ? ordered : wishlist
+        let shown = sorted(filtered(pool))
 
         List {
+            if tab == .seen {
+                Section {
+                    hero(ordered)
+                        .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.l))
+                        .listRowBackground(Color.clear)
+                }
+            }
             Section {
-                hero(ordered)
+                controls(pool, wishCount: wishlist.count)
                     .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.l))
                     .listRowBackground(Color.clear)
             }
-            if !wishlist.isEmpty {
-                Section("Want to see") {
-                    ForEach(wishlist) { movie in
-                        wishRow(movie)
-                    }
+            if pool.isEmpty {
+                if tab == .seen {
+                    WooliEmptyState(symbol: "film", title: "Add a movie you loved",
+                                    message: "Rank the movies you've seen against each other; where they land sets their place on your list.",
+                                    actionTitle: "Add movie") { adding = true }
+                        .listRowBackground(Color.clear)
+                } else {
+                    WooliEmptyState(symbol: "popcorn", title: "Nothing saved to watch",
+                                    message: "Search a film and tap Want to see to keep it here until you've watched it.",
+                                    actionTitle: "Find a movie") { adding = true }
+                        .listRowBackground(Color.clear)
                 }
-            }
-            if ordered.isEmpty {
-                WooliEmptyState(symbol: "film", title: "Add a movie you loved",
-                                message: "Rank the movies you've seen against each other; where they land sets their place on your list.",
-                                actionTitle: "Add movie") { adding = true }
-                    .listRowBackground(Color.clear)
+            } else if shown.isEmpty {
+                ContentUnavailableView {
+                    Label("No matches", systemImage: "line.3.horizontal.decrease.circle")
+                } actions: {
+                    Button("Clear filters") { clearFilters() }
+                }
+                .listRowBackground(Color.clear)
             } else {
-                Section("Your list") {
-                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, movie in
-                        Button { detail = movie } label: {
-                            MovieRow(movie: movie, index: index + 1, score: scores[movie.id])
+                Section {
+                    ForEach(shown) { movie in
+                        if tab == .seen {
+                            Button { detail = movie } label: {
+                                MovieRow(movie: movie, index: position[movie.id] ?? 0, score: scores[movie.id])
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            wishRow(movie)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
         }
+        .searchable(text: $query, prompt: "Title, director or genre")
         .navigationTitle("Movies")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -117,6 +155,62 @@ struct MoviesListView: View {
         }
     }
 
+    // MARK: Filters
+
+    /// Tabs, then pills for what this list actually has, then sort.
+    private func controls(_ pool: [MovieEntry], wishCount: Int) -> some View {
+        let genres = Set(pool.flatMap(\.genre.commaParts)).sorted()
+        let decades = Set(pool.compactMap(\.decade)).sorted(by: >)
+        let directors = Set(pool.flatMap(\.director.commaParts)).sorted()
+        let feelings = MealSentiment.allCases.filter { s in pool.contains { $0.sentiment == s } }.map(\.movieLabel)
+        return VStack(alignment: .leading, spacing: 14) {
+            UnderlineTabs(tabs: [(Tab.seen, "Seen"), (Tab.wantToSee, wishCount > 0 ? "Want to see · \(wishCount)" : "Want to see")],
+                          selection: Binding(get: { tab }, set: { tab = $0; clearFilters() }))
+            if pool.count > 1 {
+                FilterPillRow(isFiltering: isFiltering, onClear: clearFilters) {
+                    if genres.count > 1 || genre != nil { FilterPill(title: "Genre", value: $genre, options: genres) }
+                    if decades.count > 1 || decade != nil { FilterPill(title: "Decade", value: $decade, options: decades) }
+                    if tab == .seen, feelings.count > 1 || feeling != nil { FilterPill(title: "Feeling", value: $feeling, options: feelings) }
+                    if directors.count > 1 || director != nil { FilterPill(title: "Director", value: $director, options: directors) }
+                }
+                SortMenu(options: tab == .seen ? Sort.allCases : [.recent, .year, .name], selection: $sort)
+            }
+        }
+    }
+
+    private var isFiltering: Bool { genre != nil || decade != nil || director != nil || feeling != nil }
+
+    private func clearFilters() {
+        genre = nil
+        decade = nil
+        director = nil
+        feeling = nil
+        query = ""
+        if tab == .wantToSee && sort == .rank { sort = .recent }
+    }
+
+    private func filtered(_ list: [MovieEntry]) -> [MovieEntry] {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        return list.filter { movie in
+            (genre == nil || movie.genre.commaParts.contains(genre!))
+                && (decade == nil || movie.decade == decade)
+                && (director == nil || movie.director.commaParts.contains(director!))
+                && (feeling == nil || movie.sentiment.movieLabel == feeling)
+                && (text.isEmpty || movie.title.localizedStandardContains(text) || movie.director.localizedStandardContains(text)
+                    || movie.genre.localizedStandardContains(text))
+        }
+    }
+
+    /// Rank keeps the list's own order (best first; wishes newest first).
+    private func sorted(_ list: [MovieEntry]) -> [MovieEntry] {
+        switch sort {
+        case .rank: list
+        case .recent: list.sorted { tab == .seen ? ($0.watchedDay, $0.createdAt) > ($1.watchedDay, $1.createdAt) : $0.createdAt > $1.createdAt }
+        case .year: list.sorted { $0.year > $1.year }
+        case .name: list.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
+    }
+
     /// A saved-but-unseen film: same row as the list, with a way to rank it once you have.
     private func wishRow(_ movie: MovieEntry) -> some View {
         ItemRow(title: movie.title, subtitle: wishSubtitle(movie), leading: {
@@ -135,6 +229,14 @@ struct MoviesListView: View {
     private func wishSubtitle(_ movie: MovieEntry) -> Text? {
         let facts = [movie.byline, movie.genre].filter { !$0.isEmpty }
         return facts.isEmpty ? nil : Text(facts.joined(separator: " · "))
+    }
+}
+
+extension MovieEntry {
+    /// "1990s", or nil without a year.
+    var decade: String? {
+        guard let y = Int(year.prefix(4)), y > 1800 else { return nil }
+        return "\(y / 10 * 10)s"
     }
 }
 

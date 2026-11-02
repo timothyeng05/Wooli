@@ -21,6 +21,18 @@ final class RecipeEntry {
     var sourceURL: String = ""
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
+    // Tags for the list's filters, filled in by `RecipeTagger` (Apple
+    // Intelligence, on the phone) and editable in the editor. "" = unknown.
+    /// Breakfast, Dinner, Dessert… (`RecipeTags.meals`)
+    var meal: String = ""
+    var cuisine: String = ""
+    /// Chicken, Pasta, Vegetables… (`RecipeTags.mains`)
+    var mainIngredient: String = ""
+    /// Rough total time; 0 = unknown.
+    var minutes: Int = 0
+    /// `RecipeTagger.version` once tagged (by the tagger or by hand), so each
+    /// recipe is tagged once and a better tagger can redo old ones.
+    var tagVersion: Int = 0
 
     init(_ draft: RecipeDraft) {
         apply(draft)
@@ -31,7 +43,12 @@ final class RecipeEntry {
     var link: URL? { URL(string: sourceURL) }
 
     var draft: RecipeDraft {
-        RecipeDraft(title: title, ingredients: ingredientsText, steps: stepsText, notes: notes, caption: caption, sourceURL: sourceURL)
+        var draft = RecipeDraft(title: title, ingredients: ingredientsText, steps: stepsText, notes: notes, caption: caption, sourceURL: sourceURL)
+        draft.meal = meal
+        draft.cuisine = cuisine
+        draft.mainIngredient = mainIngredient
+        draft.minutes = minutes
+        return draft
     }
 
     func apply(_ draft: RecipeDraft) {
@@ -41,7 +58,17 @@ final class RecipeEntry {
         notes = draft.notes
         caption = draft.caption
         sourceURL = draft.sourceURL
+        meal = draft.meal
+        cuisine = draft.cuisine
+        mainIngredient = draft.mainIngredient
+        minutes = draft.minutes
+        if draft.tagsEdited { tagVersion = RecipeTagger.version }
         updatedAt = .now
+    }
+
+    /// "Dinner · Italian · 25 min"
+    var tagLine: String {
+        [meal, cuisine, RecipeTags.timeLabel(minutes)].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// "8 ingredients · 5 steps"
@@ -60,6 +87,12 @@ struct RecipeDraft: Equatable {
     var notes = ""
     var caption = ""
     var sourceURL = ""
+    var meal = ""
+    var cuisine = ""
+    var mainIngredient = ""
+    var minutes = 0
+    /// Set when the user changes a tag, so the tagger leaves the recipe alone.
+    var tagsEdited = false
 
     init(title: String = "", ingredients: String = "", steps: String = "", notes: String = "", caption: String = "", sourceURL: String = "") {
         self.title = title
@@ -269,5 +302,36 @@ enum RecipeParser {
             text = String(text[..<end])
         }
         return text.count > 80 ? String(text.prefix(80)).trimmingCharacters(in: .whitespaces) + "…" : text
+    }
+}
+
+/// The fixed choices the tagger picks from, so the filters don't split
+/// "Italian" and "Italian-American".
+enum RecipeTags {
+    static let meals = ["Breakfast", "Lunch", "Dinner", "Snack", "Side", "Dessert", "Drink", "Sauce"]
+    static let cuisines = ["American", "British", "Caribbean", "Chinese", "French", "Greek", "Indian", "Italian",
+                           "Japanese", "Korean", "Mediterranean", "Mexican", "Middle Eastern", "Spanish", "Thai",
+                           "Vietnamese", "Other"]
+    static let mains = ["Chicken", "Beef", "Pork", "Lamb", "Fish", "Seafood", "Eggs", "Tofu", "Beans & lentils",
+                        "Pasta", "Rice", "Noodles", "Bread", "Potatoes", "Vegetables", "Fruit", "Chocolate", "Cheese", "Other"]
+
+    /// Time filter buckets, in order.
+    static let times = ["Under 30 min", "30–60 min", "Over an hour"]
+
+    static func timeBucket(_ minutes: Int) -> String? {
+        switch minutes {
+        case ..<1: nil
+        case ..<30: times[0]
+        case ...60: times[1]
+        default: times[2]
+        }
+    }
+
+    /// "25 min", "1 hr 30 min"; "" when unknown.
+    static func timeLabel(_ minutes: Int) -> String {
+        guard minutes > 0 else { return "" }
+        if minutes < 60 { return "\(minutes) min" }
+        let h = minutes / 60, m = minutes % 60
+        return m == 0 ? "\(h) hr" : "\(h) hr \(m) min"
     }
 }

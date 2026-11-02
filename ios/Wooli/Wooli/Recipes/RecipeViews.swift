@@ -3,21 +3,58 @@ import SwiftData
 
 // MARK: - Your recipes
 
-/// Recipes' main screen: everything you've saved, newest first.
+/// Recipes' main screen: everything you've saved, with filter pills
+/// (meal, cuisine, main ingredient, time, where it came from), sort and search.
 struct RecipesListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \RecipeEntry.createdAt, order: .reverse) private var recipes: [RecipeEntry]
     @State private var adding = false
     @State private var query = ""
+    @State private var sort = Sort.newest
+    @State private var meal: String?
+    @State private var cuisine: String?
+    @State private var main: String?
+    @State private var time: String?
+    @State private var source: String?
 
-    /// Matches the name or any ingredient ("what can I make with leeks?").
+    enum Sort: String, CaseIterable, Identifiable {
+        case newest = "Newest", name = "A–Z", quickest = "Quickest", fewest = "Fewest ingredients"
+        var id: String { rawValue }
+    }
+
+    private static let fromInstagram = "From Instagram", yourOwn = "Your own"
+
+    /// Matches the name or any ingredient ("what can I make with leeks?"), then the pills.
     private var shown: [RecipeEntry] {
         let term = query.trimmingCharacters(in: .whitespaces)
-        guard !term.isEmpty else { return recipes }
-        return recipes.filter { $0.title.localizedStandardContains(term) || $0.ingredientsText.localizedStandardContains(term) }
+        let matching = recipes.filter { r in
+            (term.isEmpty || r.title.localizedStandardContains(term) || r.ingredientsText.localizedStandardContains(term))
+                && (meal == nil || r.meal == meal) && (cuisine == nil || r.cuisine == cuisine)
+                && (main == nil || r.mainIngredient == main) && (time == nil || RecipeTags.timeBucket(r.minutes) == time)
+                && (source == nil || (r.link != nil) == (source == Self.fromInstagram))
+        }
+        switch sort {
+        case .newest: return matching
+        case .name: return matching.sorted { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
+        // Unknown times go last.
+        case .quickest: return matching.sorted { ($0.minutes == 0 ? Int.max : $0.minutes) < ($1.minutes == 0 ? Int.max : $1.minutes) }
+        case .fewest: return matching.sorted { $0.ingredients.count < $1.ingredients.count }
+        }
+    }
+
+    private var isFiltering: Bool { meal != nil || cuisine != nil || main != nil || time != nil || source != nil }
+
+    private func clearFilters() {
+        meal = nil
+        cuisine = nil
+        main = nil
+        time = nil
+        source = nil
+        query = ""
     }
 
     var body: some View {
+        let shown = shown
         List {
             Section {
                 HeroCard(eyebrow: "Your recipes") {
@@ -35,15 +72,33 @@ struct RecipesListView: View {
                                 actionTitle: "Add recipe") { adding = true }
                     .listRowBackground(Color.clear)
             } else {
-                ForEach(shown) { recipe in
-                    NavigationLink { RecipeDetail(recipe: recipe) } label: { RecipeRow(recipe: recipe) }
+                if recipes.count > 1 {
+                    Section {
+                        controls
+                            .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.l))
+                            .listRowBackground(Color.clear)
+                    }
+                }
+                if shown.isEmpty {
+                    ContentUnavailableView {
+                        Label("No matches", systemImage: "line.3.horizontal.decrease.circle")
+                    } actions: {
+                        Button("Clear filters") { clearFilters() }
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                Section {
+                    ForEach(shown) { recipe in
+                        NavigationLink { RecipeDetail(recipe: recipe) } label: { RecipeRow(recipe: recipe) }
+                    }
                 }
             }
         }
-        .overlay {
-            if !recipes.isEmpty && shown.isEmpty { ContentUnavailableView.search(text: query) }
-        }
         .searchable(text: $query, prompt: "Recipe or ingredient")
+        // Tag new and older recipes in the background; the pills fill in as it goes.
+        .task(id: recipes.filter { $0.tagVersion < RecipeTagger.version }.count) {
+            await RecipeTagger.tagUntagged(recipes)
+        }
         .navigationTitle("Recipes")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -60,6 +115,30 @@ struct RecipesListView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { adding = false } } }
             }
+        }
+    }
+}
+
+private extension RecipesListView {
+    /// Pills only for tags the list actually has more than one of.
+    var controls: some View {
+        let present = { (values: [String], order: [String]) in order.filter(Set(values).contains) }
+        let meals = present(recipes.map(\.meal), RecipeTags.meals)
+        let cuisines = present(recipes.map(\.cuisine), RecipeTags.cuisines)
+        let mains = present(recipes.map(\.mainIngredient), RecipeTags.mains)
+        let times = present(recipes.compactMap { RecipeTags.timeBucket($0.minutes) }, RecipeTags.times)
+        let reels = recipes.filter { $0.link != nil }.count
+        return VStack(alignment: .leading, spacing: 14) {
+            FilterPillRow(isFiltering: isFiltering, onClear: clearFilters) {
+                if meals.count > 1 || meal != nil { FilterPill(title: "Meal", value: $meal, options: meals) }
+                if mains.count > 1 || main != nil { FilterPill(title: "Main", value: $main, options: mains) }
+                if cuisines.count > 1 || cuisine != nil { FilterPill(title: "Cuisine", value: $cuisine, options: cuisines) }
+                if times.count > 1 || time != nil { FilterPill(title: "Time", value: $time, options: times) }
+                if (reels > 0 && reels < recipes.count) || source != nil {
+                    FilterPill(title: "Source", value: $source, options: [Self.fromInstagram, Self.yourOwn])
+                }
+            }
+            SortMenu(options: Sort.allCases, selection: $sort)
         }
     }
 }
@@ -82,7 +161,13 @@ struct RecipeRow: View {
         })
     }
 
-    private var subtitle: Text? { recipe.summary.isEmpty ? nil : Text(recipe.summary) }
+    private var subtitle: Text? {
+        // Tags plus the ingredient count once tagged; the step count too before then.
+        let count = recipe.ingredients.count
+        let line = recipe.tagLine.isEmpty ? recipe.summary
+            : [recipe.tagLine, count > 0 ? "\(count) ingredients" : ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        return line.isEmpty ? nil : Text(line)
+    }
 }
 
 extension RecipeEntry {
@@ -106,6 +191,10 @@ struct RecipeDetail: View {
                 Text(recipe.displayTitle)
                     .wooliFont(.display)
                     .foregroundStyle(Theme.text)
+                let tags = [recipe.tagLine, recipe.mainIngredient].filter { !$0.isEmpty }.joined(separator: " · ")
+                if !tags.isEmpty {
+                    Text(tags).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                }
                 if let link = recipe.link {
                     Link(destination: link) { Label("Watch on Instagram", systemImage: "play.rectangle") }
                 }
@@ -224,6 +313,22 @@ struct RecipeEditor: View {
             } footer: {
                 Text("One step per line.")
             }
+            Section {
+                tagPicker("Meal", $draft.meal, RecipeTags.meals)
+                tagPicker("Main ingredient", $draft.mainIngredient, RecipeTags.mains)
+                tagPicker("Cuisine", $draft.cuisine, RecipeTags.cuisines)
+                Picker("Time", selection: Binding(get: { draft.minutes }, set: { draft.minutes = $0; draft.tagsEdited = true })) {
+                    Text("Not set").tag(0)
+                    ForEach([10, 15, 20, 30, 45, 60, 90, 120, 180, 240], id: \.self) { Text(RecipeTags.timeLabel($0)).tag($0) }
+                    if draft.minutes > 0 && ![10, 15, 20, 30, 45, 60, 90, 120, 180, 240].contains(draft.minutes) {
+                        Text(RecipeTags.timeLabel(draft.minutes)).tag(draft.minutes)
+                    }
+                }
+            } header: {
+                Text("Tags")
+            } footer: {
+                Text("Wooli fills these in with Apple Intelligence; change any that are wrong.")
+            }
             Section("Notes") {
                 TextField("Your changes, who liked it", text: $draft.notes, axis: .vertical).lineLimit(1...8)
             }
@@ -234,6 +339,13 @@ struct RecipeEditor: View {
                 Button("Save") { onSave(draft) }
                     .disabled([draft.title, draft.ingredients, draft.steps].allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
             }
+        }
+    }
+
+    private func tagPicker(_ title: String, _ value: Binding<String>, _ options: [String]) -> some View {
+        Picker(title, selection: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0; draft.tagsEdited = true })) {
+            Text("Not set").tag("")
+            ForEach(options, id: \.self) { Text($0).tag($0) }
         }
     }
 
