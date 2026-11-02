@@ -72,6 +72,12 @@ enum ModuleSampleData {
                 movie.watchedDay = DayKey.key(cal.date(byAdding: .day, value: -(i * 9 + 3), to: .now)!)
                 context.insert(movie)
             }
+            for (i, w) in [("Oppenheimer", "2023", "Christopher Nolan", "Drama"),
+                            ("Poor Things", "2023", "Yorgos Lanthimos", "Comedy")].enumerated() {
+                context.insert(MovieEntry(MovieSearch.Result(id: "sample:wish:\(i)", title: w.0, year: w.1,
+                                                              director: w.2, genre: w.3, posterURL: "", synopsis: ""),
+                                           wishlist: true))
+            }
         }
 
         if ((try? context.fetchCount(FetchDescriptor<SightEntry>())) ?? 0) == 0 {

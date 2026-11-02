@@ -19,61 +19,42 @@ struct DepartureRow: Identifiable {
     var status: Status = .due
 }
 
-/// An airport departures board for scheduled things with a status: bills, reservations, the next leg.
-/// Up to five rows, soonest first; it doesn't scroll ("See all" opens the full list).
+/// Upcoming bills and scheduled things with a status, as a plain list: title,
+/// date and status on the left, amount on the right. Up to five rows, soonest
+/// first; it doesn't scroll ("See all" opens the full list).
 struct DepartureBoard: View {
     let rows: [DepartureRow]
 
     var body: some View {
-        VStack(spacing: Space.s) {
-            HStack {
-                Text("Due").frame(width: 92, alignment: .leading)
-                Text("What")
-                Spacer()
-                Text("Status")
-            }
-            .wooliFont(.eyebrow).foregroundStyle(Theme.boardMuted)
-            ForEach(rows.prefix(5)) { row in
-                HStack(spacing: Space.s) {
-                    HStack(spacing: Space.xs) {
-                        cells(row.date.formatted(.dateTime.month(.abbreviated)).uppercased())
-                        cells(row.date.formatted(.dateTime.day(.twoDigits)))
-                    }
-                    .frame(width: 92, alignment: .leading)
-                    Text(row.title).font(.body).foregroundStyle(Theme.onTicket).lineLimit(1)
-                    if let amount = row.amount {
-                        Text(amount).font(.body).monospacedDigit().foregroundStyle(Theme.onTicket)
+        VStack(spacing: 0) {
+            ForEach(Array(rows.prefix(5).enumerated()), id: \.element.id) { index, row in
+                if index > 0 { Divider() }
+                HStack(alignment: .firstTextBaseline, spacing: Space.s) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.title).font(.body.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(row.date.formatted(.dateTime.month(.abbreviated).day()))
+                            Text(row.status.word.capitalized).fontWeight(.semibold).foregroundStyle(color(row.status))
+                        }
+                        .font(.footnote).foregroundStyle(Theme.textSecondary)
                     }
                     Spacer(minLength: Space.s)
-                    Text(row.status.word).font(.footnote.weight(.bold)).foregroundStyle(color(row.status))
+                    if let amount = row.amount {
+                        Text(amount).font(.body).monospacedDigit().foregroundStyle(Theme.text)
+                    }
                 }
+                .padding(.vertical, 10)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(row.date.formatted(.dateTime.month(.wide).day())), \(row.title)\(row.amount.map { ", \($0)" } ?? ""), \(row.status.word.lowercased())")
-            }
-        }
-        .padding(Space.l)
-        .background(Theme.board, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.boardCell))
-    }
-
-    /// Split-flap style: one cell per character.
-    private func cells(_ text: String) -> some View {
-        HStack(spacing: 2) {
-            ForEach(Array(text.enumerated()), id: \.offset) { _, ch in
-                Text(String(ch))
-                    .font(.system(.callout, design: .monospaced).weight(.bold))
-                    .foregroundStyle(Theme.onBoard)
-                    .frame(width: 18, height: 26)
-                    .background(Theme.boardCell, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
             }
         }
     }
 
     private func color(_ status: DepartureRow.Status) -> Color {
         switch status {
-        case .due: Theme.onBoard
-        case .paid: Theme.boardMuted
-        case .late: Theme.boardLate
+        case .due: Theme.pending
+        case .paid: Theme.income
+        case .late: Theme.expense
         }
     }
 }

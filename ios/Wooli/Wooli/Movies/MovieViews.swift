@@ -9,7 +9,9 @@ struct MoviesListView: View {
     @Query private var movies: [MovieEntry]
     @State private var adding = false
     @State private var picked: MovieSearch.Result?
+    @State private var wished: MovieSearch.Result?
     @State private var ranking: MovieSearch.Result?
+    @State private var promoting: MovieEntry?
     @State private var detail: MovieEntry?
 
     /// Your latest film on a cinema stub, or an invitation when the list is empty.
@@ -22,9 +24,11 @@ struct MoviesListView: View {
     }
 
     var body: some View {
-        let candidates = movies.map(\.candidate)
+        let wishlist = movies.filter(\.isWishlist)
+        let ranked = movies.filter { !$0.isWishlist }
+        let candidates = ranked.map(\.candidate)
         let scores = EatsRanking.scores(candidates)
-        let byID = Dictionary(movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let byID = Dictionary(ranked.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let ordered = EatsRanking.ordered(candidates).compactMap { byID[$0.id] }
 
         List {
@@ -32,6 +36,13 @@ struct MoviesListView: View {
                 hero(ordered)
                     .listRowInsets(EdgeInsets(top: Space.s, leading: Space.l, bottom: Space.s, trailing: Space.l))
                     .listRowBackground(Color.clear)
+            }
+            if !wishlist.isEmpty {
+                Section("Want to see") {
+                    ForEach(wishlist) { movie in
+                        wishRow(movie)
+                    }
+                }
             }
             if ordered.isEmpty {
                 WooliEmptyState(symbol: "film", title: "Add a movie you loved",
@@ -56,24 +67,32 @@ struct MoviesListView: View {
             }
         }
         .sheet(isPresented: $adding, onDismiss: {
-            guard let result = picked else { return }
-            picked = nil
-            // Already ranked: open it instead of adding it twice. Films added
-            // before the move to TMDB have iTunes ids, so match title and year too.
-            if let existing = movies.first(where: { $0.appleID == result.id || ($0.title == result.title && $0.year == result.year) }) {
-                detail = existing
-            } else {
-                ranking = result
+            // Already on the list: open it (or rank it, if it was only a wish)
+            // instead of adding it twice. Films added before the move to TMDB
+            // have iTunes ids, so match title and year too.
+            if let result = picked {
+                picked = nil
+                if let existing = movies.first(where: { $0.appleID == result.id || ($0.title == result.title && $0.year == result.year) }) {
+                    if existing.isWishlist { promoting = existing } else { detail = existing }
+                } else {
+                    ranking = result
+                }
+            }
+            if let result = wished {
+                wished = nil
+                if !movies.contains(where: { $0.appleID == result.id || ($0.title == result.title && $0.year == result.year) }) {
+                    context.insert(MovieEntry(result, wishlist: true))
+                }
             }
         }) {
             NavigationStack {
-                MovieSearchView { picked = $0 }
+                MovieSearchView(onPick: { picked = $0 }, onWish: { wished = $0 })
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { adding = false } } }
             }
         }
         .sheet(item: $ranking) { result in
             RankFlow(candidate: RankCandidate(id: result.id, title: result.title, subtitle: result.byline),
-                     others: movies.map(\.candidate),
+                     others: candidates,
                      onFinish: { sentiment, rank in
                          let movie = MovieEntry(result)
                          movie.sentiment = sentiment
@@ -82,9 +101,40 @@ struct MoviesListView: View {
                      },
                      symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel })
         }
+        .sheet(item: $promoting) { movie in
+            RankFlow(candidate: movie.candidate, others: candidates.filter { $0.id != movie.id },
+                     onFinish: { sentiment, rank in
+                         movie.sentiment = sentiment
+                         movie.rank = rank
+                         movie.isWishlist = false
+                         movie.watchedDay = DayKey.key(.now)
+                         movie.createdAt = .now
+                     },
+                     symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel })
+        }
         .sheet(item: $detail) { movie in
             MovieDetail(movie: movie)
         }
+    }
+
+    /// A saved-but-unseen film: same row as the list, with a way to rank it once you have.
+    private func wishRow(_ movie: MovieEntry) -> some View {
+        ItemRow(title: movie.title, subtitle: wishSubtitle(movie), leading: {
+            MoviePoster(url: movie.posterURL, width: 40)
+        }, trailing: {
+            Button("Seen it") { promoting = movie }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(.secondary).controlSize(.small)
+                .fixedSize()
+        })
+        .swipeActions {
+            Button("Remove", role: .destructive) { context.delete(movie) }
+        }
+    }
+
+    private func wishSubtitle(_ movie: MovieEntry) -> Text? {
+        let facts = [movie.byline, movie.genre].filter { !$0.isEmpty }
+        return facts.isEmpty ? nil : Text(facts.joined(separator: " · "))
     }
 }
 
@@ -132,6 +182,7 @@ struct MoviePoster: View {
 /// Find a film by title on TMDB.
 struct MovieSearchView: View {
     let onPick: (MovieSearch.Result) -> Void
+    let onWish: (MovieSearch.Result) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var results: [MovieSearch.Result] = []
@@ -143,24 +194,28 @@ struct MovieSearchView: View {
         List {
             Section {
                 ForEach(results) { result in
-                    Button {
-                        picking = result.id
-                        Task {
-                            onPick(await MovieSearch.details(result))
-                            dismiss()
+                    HStack(spacing: 12) {
+                        MoviePoster(url: result.posterURL, width: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.title).font(.headline).foregroundStyle(Theme.text).lineLimit(2)
+                            Text(result.byline).font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
                         }
-                    } label: {
-                        HStack(spacing: 12) {
-                            MoviePoster(url: result.posterURL, width: 40)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.title).font(.headline).foregroundStyle(Theme.text)
-                                Text(result.byline).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                        Spacer()
+                        if picking == result.id {
+                            ProgressView()
+                        } else {
+                            // Stacked so two buttons don't squeeze the title on a phone.
+                            VStack(alignment: .trailing, spacing: 6) {
+                                Button("Seen it") { pick(result, wish: false) }
+                                    .buttonStyle(.borderedProminent)
+                                Button("Want to see") { pick(result, wish: true) }
+                                    .buttonStyle(.bordered).tint(.secondary)
                             }
-                            Spacer()
-                            if picking == result.id { ProgressView() }
+                            .font(.subheadline.weight(.semibold))
+                            .buttonBorderShape(.capsule).controlSize(.small)
+                            .fixedSize()
                         }
                     }
-                    .buttonStyle(.plain)
                     .disabled(picking != nil)
                 }
             } footer: {
@@ -203,6 +258,15 @@ struct MovieSearchView: View {
             } catch {
                 if !Task.isCancelled { failed = true }
             }
+        }
+    }
+
+    private func pick(_ result: MovieSearch.Result, wish: Bool) {
+        picking = result.id
+        Task {
+            let detailed = await MovieSearch.details(result)
+            if wish { onWish(detailed) } else { onPick(detailed) }
+            dismiss()
         }
     }
 }

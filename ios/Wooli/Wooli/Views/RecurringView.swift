@@ -57,6 +57,7 @@ struct RecurringView: View {
             if !departures.isEmpty {
                 Section {
                     DepartureBoard(rows: departures)
+                        .padding(.horizontal, Space.l)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                 }

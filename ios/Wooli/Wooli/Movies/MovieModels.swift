@@ -27,8 +27,10 @@ final class MovieEntry {
     var notes: String = ""
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
+    /// Saved to watch, not ranked yet; doesn't count toward your list or score.
+    var isWishlist: Bool = false
 
-    init(_ result: MovieSearch.Result) {
+    init(_ result: MovieSearch.Result, wishlist: Bool = false) {
         title = result.title
         year = result.year
         director = result.director
@@ -37,6 +39,7 @@ final class MovieEntry {
         synopsis = result.synopsis
         appleID = result.id
         watchedDay = DayKey.key(.now)
+        isWishlist = wishlist
     }
 
     var sentiment: MealSentiment {

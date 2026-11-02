@@ -67,8 +67,9 @@ struct DashboardView: View {
                         ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
                     }
 
-                    SpendingHeroCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
-                                     recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
+                    PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
+                             recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
+                    SpendingComparisonCard(transactions: relevantTransactions, ledger: ledger)
 
                     ForEach(orderedCards.filter { $0 != .review }) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
