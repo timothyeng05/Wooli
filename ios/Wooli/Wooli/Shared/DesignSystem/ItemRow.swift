@@ -99,14 +99,14 @@ struct ItemRowAmount: View {
 #Preview {
     LightDark {
         VStack(spacing: 0) {
-            ItemRow(title: "Blue Bottle Coffee", subtitle: "Dining · Oct 28") {
+            ItemRow(title: "Blue Bottle Coffee", subtitle: Text("Dining · Oct 28")) {
                 Text("☕️").frame(width: 40, height: 40)
                     .background(Theme.Group.food.color.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
             } trailing: {
                 ItemRowAmount(text: "-$6.50")
             }
             ItemRowDivider()
-            ItemRow(title: "Paycheck", subtitle: "Income · Oct 27") {
+            ItemRow(title: "Paycheck", subtitle: Text("Income · Oct 27")) {
                 Text("💼").frame(width: 40, height: 40)
             } trailing: {
                 ItemRowAmount(text: "+$2,400.00", tone: .income)
