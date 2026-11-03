@@ -52,7 +52,7 @@ struct SplitEditor: View {
                             }
                             .buttonStyle(.borderless)
                             Spacer(minLength: 8)
-                            TextField("$0.00", value: $part.amount, format: .currency(code: "USD"))
+                            TextField("$0.00", value: amountBinding(for: part.id), format: .currency(code: "USD"))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .font(.body.monospacedDigit())
@@ -132,6 +132,20 @@ struct SplitEditor: View {
         } else {
             parts = existing.map { .init(categoryId: $0.categoryId, amount: abs($0.amount)) }
         }
+    }
+
+    /// Editing a part's amount rebalances the last *other* part so the total stays put.
+    private func amountBinding(for id: UUID) -> Binding<Double> {
+        Binding(
+            get: { parts.first { $0.id == id }?.amount ?? 0 },
+            set: { newValue in
+                guard let i = parts.firstIndex(where: { $0.id == id }) else { return }
+                parts[i].amount = newValue
+                guard let j = parts.indices.last(where: { $0 != i }) else { return }
+                let others = parts.indices.filter { $0 != j }.reduce(0) { $0 + parts[$1].amount }
+                parts[j].amount = max(((total - others) * 100).rounded() / 100, 0)
+            }
+        )
     }
 
     private func splitEvenly() {
