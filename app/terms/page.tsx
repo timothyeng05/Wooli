@@ -6,7 +6,7 @@ export default function TermsPage() {
   return (
     <main className="doc">
       <h1>Terms of use</h1>
-      <p className="updated">Last updated October 27, 2026</p>
+      <p className="updated">Last updated November 3, 2026</p>
 
       <p>
         These terms cover your use of the Wooli app for iPhone. Wooli is licensed to you under
@@ -38,7 +38,7 @@ export default function TermsPage() {
       <p>
         Bank connections are provided by SimpleFIN Bridge under their own terms and fees, which you
         agree to with them directly. Maps and place information come from Apple, and movie details
-        from Apple&apos;s iTunes Search. Instagram reels you share are read from Instagram. Wooli
+        from TMDB. Recipe tags are estimates from Apple Intelligence; check cooking times and ingredients yourself. Instagram reels you share are read from Instagram. Wooli
         isn&apos;t responsible for these services.
       </p>
 

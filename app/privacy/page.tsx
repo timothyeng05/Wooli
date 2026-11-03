@@ -6,18 +6,18 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated October 27, 2026</p>
+      <p className="updated">Last updated November 3, 2026</p>
 
       <p>
         Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
-        watched, saving recipes, keeping a budget and tracking your period. <strong>Wooli does not collect any data.</strong> The developer has no
+        watched, saving sights and recipes, keeping a budget and tracking your period. <strong>Wooli does not collect any data.</strong> The developer has no
         servers that receive your information and cannot see it.
       </p>
 
       <h2>Where your information lives</h2>
       <ul>
-        <li><strong>On your iPhone.</strong> Budget categories, transactions you enter or import, period entries and your settings are stored on your device.</li>
-        <li><strong>In your own iCloud.</strong> Trips, your Eats list, your Movies list and your saved recipes sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data.</li>
+        <li><strong>On your iPhone.</strong> Everything you add is stored on your device. Your settings, such as which apps are on, stay only on your device.</li>
+        <li><strong>In your own iCloud.</strong> Your budget (categories, accounts, transactions, rules and recurring bills), period entries, trips, and your Eats, Sights, Movies and Recipes lists sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data. If iCloud is off, everything stays on your iPhone.</li>
         <li><strong>When you share.</strong> If you invite someone to a trip or share your Eats list, they can see what you shared, and anyone you allow to make changes (for example a partner sharing one Eats list with you) can edit it. You can stop sharing at any time.</li>
       </ul>
 
@@ -34,8 +34,10 @@ export default function PrivacyPage() {
       <p>
         Place search, maps and place details come from Apple Maps, and Face ID (if you turn it on) is
         handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
-        Suggested categories for transactions are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your
-        transactions aren&apos;t sent anywhere to do this.
+        Suggested categories for transactions, and the meal, cuisine and cooking-time tags on your recipes,
+        are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your transactions and recipes
+        aren&apos;t sent anywhere to do this. If you open a place in Google Maps, Google receives that place&apos;s
+        name and address, under Google&apos;s privacy policy.
       </p>
 
       <h2>Movie search</h2>
@@ -66,7 +68,7 @@ export default function PrivacyPage() {
       <h2>Deleting your data</h2>
       <p>
         Delete items in the app, or delete the app to remove what&apos;s stored on your iPhone. To remove
-        synced trips, Eats places, movies and recipes, delete them in the app, or remove Wooli&apos;s data in Settings →
+        what&apos;s synced to iCloud, delete it in the app, or remove Wooli&apos;s data in Settings →
         your name → iCloud → Manage Account Storage.
       </p>
 

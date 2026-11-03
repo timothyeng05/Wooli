@@ -12,9 +12,9 @@ export default function SupportPage() {
 
       <h2>Common questions</h2>
 
-      <h3>My trips aren&apos;t showing on my other iPhone or iPad.</h3>
+      <h3>My data isn&apos;t showing on my other iPhone or iPad.</h3>
       <p>
-        Trips sync through iCloud. Make sure both devices are signed in to the same Apple Account and
+        Wooli syncs through iCloud. Make sure both devices are signed in to the same Apple Account and
         that iCloud Drive is on in Settings → your name → iCloud. Changes can take a minute to appear.
       </p>
 
@@ -62,9 +62,15 @@ export default function SupportPage() {
         same list. Friends you invite can see your list but not change it.
       </p>
 
+      <h3>A recipe has the wrong tags.</h3>
+      <p>
+        Open the recipe, tap Edit, and change the meal, cuisine, main ingredient or time under Tags.
+        Wooli won&apos;t re-tag a recipe you&apos;ve changed by hand.
+      </p>
+
       <h3>How do I delete my data?</h3>
       <p>
-        Delete items in the app, or delete the app. Synced trips, Eats places, movies and recipes can also be removed in
+        Delete items in the app, or delete the app. Anything synced to iCloud can also be removed in
         Settings → your name → iCloud → Manage Account Storage. See the <a href="/privacy">privacy policy</a> for details.
       </p>
     </main>

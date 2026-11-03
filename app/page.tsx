@@ -63,6 +63,7 @@ export default function Home() {
               <li>Keep a Want to Try list, and save places straight from Apple Maps.</li>
               <li>Share an Instagram reel and Wooli finds the restaurants in it.</li>
               <li>Log every visit, share your list with friends, or keep one list with your partner.</li>
+              <li>Sights keeps the landmarks, museums and parks you want to see, ready to add to a trip.</li>
             </ul>
           </div>
         </article>
@@ -73,10 +74,16 @@ export default function Home() {
             <p>Set a plan for each category and see what&apos;s left this month. Enter spending yourself for free, or bring in your bank transactions through SimpleFIN.</p>
             <ul>
               <li>Spending Pace shows whether this month is on track against your usual months.</li>
-              <li>Review new transactions in a few taps, with suggested categories and rules.</li>
+              <li>Review new transactions in a tap from Today, with suggested categories and rules.</li>
               <li>Recurring bills and income, net worth and reports.</li>
-              <li>A private period tracker you can lock with Face ID, if you want it.</li>
             </ul>
+          </div>
+        </article>
+
+        <article className="feature money">
+          <h2>Health</h2>
+          <div>
+            <p>A private period tracker that learns your cycle and predicts the next one. Lock it with Face ID if you like.</p>
           </div>
         </article>
 
@@ -86,7 +93,9 @@ export default function Home() {
             <p>Rank the films you watch the same way you rank restaurants, and keep the recipes you find on Instagram.</p>
             <ul>
               <li>Search any film, say how you felt, then compare it to ones you&apos;ve seen.</li>
+              <li>Keep a Want to See list, and filter your films by genre, decade or director.</li>
               <li>Share a recipe reel and Wooli splits it into ingredients and steps.</li>
+              <li>Recipes are tagged by meal, cuisine, main ingredient and time, so you can find dinner in under 30 minutes.</li>
             </ul>
           </div>
         </article>
@@ -95,9 +104,8 @@ export default function Home() {
       <section className="yours">
         <h2>Your data stays yours.</h2>
         <p>
-          Wooli has no accounts, no ads and no analytics. Trips, Eats, Movies and Recipes sync
-          through your own iCloud, and your bank data goes straight from SimpleFIN to your phone. We never
-          see any of it.
+          Wooli has no accounts, no ads and no analytics. Everything you add syncs through your own
+          iCloud, and your bank data goes straight from SimpleFIN to your phone. We never see any of it.
         </p>
         <p><Link href="/privacy">Read the privacy policy</Link></p>
       </section>
