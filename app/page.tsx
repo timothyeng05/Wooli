@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Screens from "./screens";
 
 export default function Home() {
   return (
@@ -41,6 +42,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <Screens />
 
       <section className="features">
         <article className="feature trips">
