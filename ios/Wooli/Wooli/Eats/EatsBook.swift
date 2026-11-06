@@ -230,6 +230,16 @@ final class EatsBook {
         TripStore.shared.queueEats(saving: [recordID(place)])
     }
 
+    /// Saves changes to a place you want to try (its notes or name).
+    func updateWish(_ place: EatsPlace) {
+        guard let i = wishlist.firstIndex(where: { $0.id == place.id }) else { return }
+        var place = place
+        place.systemFields = wishlist[i].systemFields
+        wishlist[i] = place
+        persist()
+        TripStore.shared.queueEats(saving: [recordID(place)])
+    }
+
     func removeFromWishlist(_ place: EatsPlace) {
         wishlist.removeAll { $0.id == place.id }
         persist()

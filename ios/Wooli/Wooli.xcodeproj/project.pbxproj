@@ -310,6 +310,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wooli uses your location to sort your Eats places by distance. It stays on your iPhone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -350,6 +351,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wooli uses Face ID to unlock modules you choose to protect, like Period.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wooli uses your location to sort your Eats places by distance. It stays on your iPhone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

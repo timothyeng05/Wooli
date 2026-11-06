@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated November 3, 2026</p>
+      <p className="updated">Last updated November 6, 2026</p>
 
       <p>
         Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
@@ -36,7 +36,9 @@ export default function PrivacyPage() {
         handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
         Suggested categories for transactions, and the meal, cuisine and cooking-time tags on your recipes,
         are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your transactions and recipes
-        aren&apos;t sent anywhere to do this. If you open a place in Google Maps, Google receives that place&apos;s
+        aren&apos;t sent anywhere to do this. If you tap Near me in Eats, iOS gives Wooli your current
+        location to show your places by distance; it&apos;s used on your iPhone only, and isn&apos;t saved or
+        sent anywhere. If you open a place in Google Maps, Google receives that place&apos;s
         name and address, under Google&apos;s privacy policy.
       </p>
 

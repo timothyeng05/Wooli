@@ -53,6 +53,12 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
+    /// Metres from `location`, if the place has a pin.
+    func distance(from location: CLLocation) -> CLLocationDistance? {
+        guard let latitude, let longitude else { return nil }
+        return location.distance(from: CLLocation(latitude: latitude, longitude: longitude))
+    }
+
     var tripPlace: TripPlace? {
         guard let latitude, let longitude else { return nil }
         return TripPlace(name: name, address: address, latitude: latitude, longitude: longitude, mapItemID: mapItemID)
@@ -71,6 +77,13 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         guard let line = notes.split(separator: "\n").first?.trimmingCharacters(in: .whitespaces),
               !line.isEmpty, !line.hasPrefix("http") else { return nil }
         return line
+    }
+
+    /// The Instagram post this was saved from, if your notes have its link.
+    var reelURL: URL? {
+        notes.split(whereSeparator: \.isNewline).lazy
+            .compactMap { URL(string: $0.trimmingCharacters(in: .whitespaces)) }
+            .first(where: SharedPlaceHandoff.isInstagramPost)
     }
 
     /// The city from the address, for the City filter: the last part that
