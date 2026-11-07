@@ -67,9 +67,8 @@ struct DashboardView: View {
                         ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
                     }
 
-                    PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
-                             recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
-                    SpendingComparisonCard(transactions: relevantTransactions, ledger: ledger)
+                    SpendingCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
+                                 recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
 
                     ForEach(orderedCards.filter { $0 != .review }) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
@@ -344,8 +343,9 @@ struct PlanRow: View {
 /// number that answers "am I on track?" The line follows how a month
 /// normally goes (bills on their days, the rest by weekday habits; see
 /// `SpendingPace`) and ends at all planned expenses — or, with three to six
-/// full months of history, is the average of those months.
-struct PaceCard: View {
+/// full months of history, is the average of those months. Last month's
+/// running total is drawn behind both for comparison.
+struct SpendingCard: View {
     let transactions: [LocalTransaction]
     let ledger: Ledger
     let month: DateInterval
@@ -355,7 +355,11 @@ struct PaceCard: View {
     var body: some View {
         let current = cumulativeSpending(transactions, in: month, through: .now,
                                          categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
+        let lastMonth = DateInterval.month(containing: Calendar.current.date(byAdding: .month, value: -1, to: month.start)!)
+        let previous = cumulativeSpending(transactions, in: lastMonth,
+                                          categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
         let spent = current.last?.value ?? 0
+        let lastAtSameDay = previous.indices.contains(current.count - 1) ? previous[current.count - 1].value : (previous.last?.value ?? 0)
         let daysInMonth = Calendar.current.range(of: .day, in: .month, for: month.start)?.count ?? 30
         let dayOfMonth = min(current.count, daysInMonth)
         let pace = SpendingPace(target: target, month: month, items: recurring, transactions: transactions, ledger: ledger)
@@ -365,7 +369,7 @@ struct PaceCard: View {
         let tint = over ? Theme.expense : Theme.income
 
         VStack(alignment: .leading, spacing: 10) {
-            CardHeader(title: "Spending Pace", subtitle: month.start.formatted(.dateTime.month(.wide)))
+            CardHeader(title: "Spending", subtitle: month.start.formatted(.dateTime.month(.wide)))
             if target > 0 {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(abs(target - spent).currency(cents: false)) \(over ? "over" : "left")")
@@ -381,6 +385,12 @@ struct PaceCard: View {
             }
 
             Chart {
+                ForEach(Array(([0.0] + previous.map(\.value)).enumerated()).dropFirst(target > 0 ? 0 : 1), id: \.offset) { day, value in
+                    LineMark(x: .value("Day", day), y: .value("Spent", value), series: .value("Series", "Last month"))
+                        .foregroundStyle(Theme.lastMonth)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.stepEnd)
+                }
                 if target > 0 {
                     // Starts from 0 before the 1st so a bill on day 1 shows as a step.
                     ForEach(Array(([0.0] + pace.expected).enumerated()), id: \.offset) { day, value in
@@ -407,14 +417,39 @@ struct PaceCard: View {
                         .symbolSize(50)
                 }
             }
-            .chartXScale(domain: (target > 0 ? 0 : 1)...max(daysInMonth, 2))
+            .chartXScale(domain: (target > 0 ? 0 : 1)...max(daysInMonth, previous.count, 2))
             .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .frame(height: 120)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine().foregroundStyle(Theme.border)
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.currency(code: "USD").notation(.compactName)))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                }
+            }
+            .frame(height: 170)
+
+            HStack(spacing: 16) {
+                LegendDot(color: tint, label: "This month")
+                if target > 0 { LegendDot(color: Theme.textTertiary, label: "Usual pace") }
+                LegendDot(color: Theme.lastMonth, label: "Last month")
+            }
+            .frame(maxWidth: .infinity)
 
             if target > 0 {
                 Text("\(abs(paceDiff).currency(cents: false)) \(paceDiff >= 0 ? "under" : "over") your usual pace")
                     .font(.footnote.weight(.medium)).foregroundStyle(Theme.textSecondary)
+            }
+            if lastAtSameDay > 0 {
+                let diff = spent - lastAtSameDay
+                Text("\(abs(diff).currency(cents: false)) \(diff <= 0 ? "less" : "more") than this time last month")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(diff <= 0 ? Theme.income : Theme.expense)
+            }
+            if target > 0 {
                 Text(paceCaption(pace))
                     .font(.caption).foregroundStyle(Theme.textTertiary)
             } else {
@@ -503,77 +538,6 @@ struct NetWorthChart: View {
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
         .accessibilityLabel("Net worth over time")
-    }
-}
-
-/// Cumulative spending this month vs. last month.
-struct SpendingComparisonCard: View {
-    let transactions: [LocalTransaction]
-    let ledger: Ledger
-
-    var body: some View {
-        let cal = Calendar.current
-        let thisMonth = DateInterval.month(containing: .now)
-        let lastMonth = DateInterval.month(containing: cal.date(byAdding: .month, value: -1, to: .now)!)
-        let current = cumulativeSpending(transactions, in: thisMonth, through: .now,
-                                         categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
-        let previous = cumulativeSpending(transactions, in: lastMonth,
-                                          categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
-        let spent = current.last?.value ?? 0
-        let dayIndex = current.count
-        let lastAtSameDay = previous.indices.contains(dayIndex - 1) ? previous[dayIndex - 1].value : (previous.last?.value ?? 0)
-
-        VStack(alignment: .leading, spacing: 10) {
-            CardHeader(title: "Spending", subtitle: "This month vs. last month")
-            Text(spent.currency())
-                .font(.system(size: 28, weight: .bold)).monospacedDigit()
-                .foregroundStyle(Theme.text)
-            if lastAtSameDay > 0 {
-                let diff = spent - lastAtSameDay
-                Text("\(abs(diff).currency()) \(diff <= 0 ? "less" : "more") than this time last month")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(diff <= 0 ? Theme.income : Theme.expense)
-            }
-
-            Chart {
-                ForEach(Array(previous.enumerated()), id: \.offset) { i, point in
-                    LineMark(x: .value("Day", i + 1), y: .value("Spent", point.value), series: .value("Month", "Last"))
-                        .foregroundStyle(Theme.lastMonth)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.stepEnd)
-                }
-                ForEach(Array(current.enumerated()), id: \.offset) { i, point in
-                    AreaMark(x: .value("Day", i + 1), y: .value("Spent", point.value))
-                        .foregroundStyle(Theme.thisMonth.opacity(0.15))
-                        .interpolationMethod(.stepEnd)
-                    LineMark(x: .value("Day", i + 1), y: .value("Spent", point.value), series: .value("Month", "This"))
-                        .foregroundStyle(Theme.thisMonth)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5))
-                        .interpolationMethod(.stepEnd)
-                }
-            }
-            .chartXScale(domain: 1...31)
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine().foregroundStyle(Theme.border)
-                    AxisValueLabel {
-                        if let v = value.as(Double.self) {
-                            Text(v.formatted(.currency(code: "USD").notation(.compactName)))
-                                .foregroundStyle(Theme.textTertiary)
-                        }
-                    }
-                }
-            }
-            .frame(height: 170)
-
-            HStack(spacing: 16) {
-                LegendDot(color: Theme.thisMonth, label: "This month")
-                LegendDot(color: Theme.lastMonth, label: "Last month")
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .card()
     }
 }
 
