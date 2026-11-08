@@ -17,12 +17,6 @@
 	<true/>
 	<key>GooglePlacesAPIKey</key>
 	<string>$(GOOGLE_PLACES_API_KEY)</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Wooli reads your cycle and symptoms from Apple Health to show your calendar and predict your next period. This stays on your iPhone.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Wooli saves the periods and symptoms you log to Apple Health, so they stay in one place.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Wooli uses your location to show Eats places near you. It stays on your iPhone.</string>
 	<key>TMDBAPIKey</key>
 	<string>$(TMDB_API_KEY)</string>
 	<key>UIBackgroundModes</key>

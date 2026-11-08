@@ -1319,27 +1319,26 @@ struct PlaceSearchView: View {
 
     var body: some View {
         List {
-            ForEach(searcher.results, id: \.self) { mapItem in
-                Button { pick(mapItem) } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(mapItem.name ?? "Place").foregroundStyle(Theme.text)
-                        if let address = mapItem.address?.shortAddress ?? mapItem.address?.fullAddress {
-                            Text(address).font(.caption).foregroundStyle(Theme.textSecondary)
-                        }
+            if searcher.results.isEmpty {
+                // As you type: Apple's suggestions, several at once.
+                ForEach(searcher.suggestions, id: \.self) { suggestion in
+                    Button { Task { await pick(suggestion) } } label: {
+                        row(suggestion.title, suggestion.subtitle)
+                    }
+                    .disabled(searcher.resolving)
+                }
+            } else {
+                // After Search on the keyboard: every place that matches.
+                ForEach(searcher.results, id: \.self) { mapItem in
+                    Button { pick(mapItem) } label: {
+                        row(mapItem.name ?? "Place", mapItem.address?.shortAddress ?? mapItem.address?.fullAddress ?? "")
                     }
                 }
             }
             if !searcher.googleResults.isEmpty {
                 Section("From Google Maps") {
                     ForEach(searcher.googleResults) { result in
-                        Button { onPick(result.place); dismiss() } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.name).foregroundStyle(Theme.text)
-                                if !result.address.isEmpty {
-                                    Text(result.address).font(.caption).foregroundStyle(Theme.textSecondary)
-                                }
-                            }
-                        }
+                        Button { onPick(result.place); dismiss() } label: { row(result.name, result.address) }
                     }
                 }
             }
@@ -1354,7 +1353,7 @@ struct PlaceSearchView: View {
                 } else if !searcher.searchedGoogle {
                     Button("Not finding it? Search Google Maps", systemImage: "magnifyingglass") { searcher.searchGoogle(query) }
                         .font(.subheadline)
-                } else if searcher.googleResults.isEmpty && searcher.results.isEmpty {
+                } else if searcher.googleResults.isEmpty && searcher.suggestions.isEmpty && searcher.results.isEmpty {
                     Text("No matches on Apple or Google Maps.").font(.subheadline).foregroundStyle(Theme.textSecondary)
                 }
             }
@@ -1369,9 +1368,23 @@ struct PlaceSearchView: View {
         .searchFocused($searchFocused)
         .onAppear { searchFocused = true }
         .onChange(of: query) { _, text in searcher.search(text) }
+        .onSubmit(of: .search) { searcher.searchAll(query) }
         .task { await searcher.focus(on: near) }
         .navigationTitle("Find a place")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ title: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).foregroundStyle(Theme.text)
+            if !subtitle.isEmpty {
+                Text(subtitle).font(.caption).foregroundStyle(Theme.textSecondary)
+            }
+        }
+    }
+
+    private func pick(_ suggestion: MKLocalSearchCompletion) async {
+        if let mapItem = await searcher.resolve(suggestion) { pick(mapItem) }
     }
 
     private func pick(_ mapItem: MKMapItem) {
@@ -1384,17 +1397,32 @@ struct PlaceSearchView: View {
     }
 }
 
-/// Apple Maps search kept to the trip's destination and sorted by distance
-/// from it — the system only *biases* toward a region, so places near the
-/// phone would otherwise come first.
+/// Apple Maps search kept to the trip's destination. While you type it lists
+/// `MKLocalSearchCompleter` suggestions (many per keystroke; a plain search
+/// only returns its best guess for half a word); Search on the keyboard runs
+/// a full search, sorted by distance from the destination — the system only
+/// *biases* toward a region, so places near the phone would otherwise come first.
 @MainActor
 @Observable
 final class PlaceSearcher {
+    private(set) var suggestions: [MKLocalSearchCompletion] = []
+    /// Full-search results, after Search on the keyboard.
     private(set) var results: [MKMapItem] = []
     /// Results limited to the destination's area.
     private(set) var nearDestinationOnly = false
+    /// Looking up the suggestion you tapped.
+    private(set) var resolving = false
     @ObservationIgnored private var region: MKCoordinateRegion?
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private let completer = MKLocalSearchCompleter()
+    @ObservationIgnored private let listener = CompleterListener()
+    @ObservationIgnored private var text = ""
+
+    init() {
+        completer.resultTypes = [.pointOfInterest, .address]
+        completer.delegate = listener
+        listener.onUpdate = { [weak self] in self?.completed($0) }
+    }
 
     func focus(on destination: String) async {
         guard !destination.isEmpty else { return }
@@ -1403,18 +1431,46 @@ final class PlaceSearcher {
         if let response = try? await MKLocalSearch(request: request).start() {
             region = response.boundingRegion
             nearDestinationOnly = true
+            applyRegion()
+            if !text.isEmpty { completer.queryFragment = text }
         }
     }
 
     func search(_ text: String) {
+        self.text = text.trimmingCharacters(in: .whitespaces)
         task?.cancel()
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else {
-            results = []
-            return
+        results = []
+        googleResults = []
+        searchedGoogle = false
+        if self.text.isEmpty {
+            completer.cancel()
+            suggestions = []
+        } else {
+            completer.queryFragment = self.text
         }
+    }
+
+    /// Suggestions arrived for the text as it is now.
+    private func completed(_ found: [MKLocalSearchCompletion]) {
+        guard !text.isEmpty else { return }
+        suggestions = found
+        // Apple has nothing: once typing pauses, ask Google.
+        task?.cancel()
+        guard found.isEmpty, GooglePlaces.isConfigured else { return }
+        let text = text
         task = Task {
-            try? await Task.sleep(for: .milliseconds(300)) // wait for typing to pause
-            guard !Task.isCancelled else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled, text == self.text else { return }
+            await runGoogle(text)
+        }
+    }
+
+    /// Every match for the text, not just suggestions.
+    func searchAll(_ text: String) {
+        let text = text.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return }
+        task?.cancel()
+        task = Task {
             let request = MKLocalSearch.Request()
             request.naturalLanguageQuery = text
             request.resultTypes = [.pointOfInterest, .address]
@@ -1427,17 +1483,32 @@ final class PlaceSearcher {
             let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
             guard !Task.isCancelled else { return }
             results = center.map { c in items.sorted { $0.location.distance(from: c) < $1.location.distance(from: c) } } ?? items
-            googleResults = []
-            searchedGoogle = false
-            // Apple came up empty: ask Google straight away.
-            if items.isEmpty && GooglePlaces.isConfigured { await runGoogle(text) }
+            if items.isEmpty && suggestions.isEmpty && GooglePlaces.isConfigured && !searchedGoogle { await runGoogle(text) }
         }
+    }
+
+    /// The place behind a suggestion.
+    func resolve(_ suggestion: MKLocalSearchCompletion) async -> MKMapItem? {
+        resolving = true
+        defer { resolving = false }
+        return try? await MKLocalSearch(request: MKLocalSearch.Request(completion: suggestion)).start().mapItems.first
     }
 
     /// For places outside the destination, like a day trip.
     func searchEverywhere(_ text: String) {
         nearDestinationOnly = false
+        applyRegion()
         search(text)
+    }
+
+    private func applyRegion() {
+        if nearDestinationOnly, let region {
+            completer.region = region
+            completer.regionPriority = .required
+        } else {
+            completer.region = MKCoordinateRegion(.world)
+            completer.regionPriority = .default
+        }
     }
 
     // MARK: Google fallback
@@ -1460,12 +1531,29 @@ final class PlaceSearcher {
         let radius = near.map { max($0.span.latitudeDelta, $0.span.longitudeDelta) * 111_000 / 2 } ?? 30_000
         let found = await GooglePlaces.search(text, near: near?.center, radius: max(radius, 5_000))
         guard !Task.isCancelled else { return }
-        // Drop what Apple already listed (same name within 150 m).
+        // Drop what Apple already listed (same name; within 150 m for full results).
         googleResults = found.filter { google in
             let pin = CLLocation(latitude: google.latitude, longitude: google.longitude)
-            return !results.contains { ($0.name ?? "").localizedCaseInsensitiveCompare(google.name) == .orderedSame && $0.location.distance(from: pin) < 150 }
+            let same = { (name: String?) in (name ?? "").localizedCaseInsensitiveCompare(google.name) == .orderedSame }
+            return !results.contains { same($0.name) && $0.location.distance(from: pin) < 150 }
+                && !suggestions.contains { same($0.title) }
         }
         searchedGoogle = true
+    }
+}
+
+/// Hands `MKLocalSearchCompleter`'s results to `PlaceSearcher`, which
+/// can't be an NSObject delegate itself (it's @Observable).
+@MainActor
+private final class CompleterListener: NSObject, MKLocalSearchCompleterDelegate {
+    var onUpdate: ([MKLocalSearchCompletion]) -> Void = { _ in }
+
+    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        MainActor.assumeIsolated { onUpdate(completer.results) }
+    }
+
+    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        MainActor.assumeIsolated { onUpdate([]) }
     }
 }
 
