@@ -1,29 +1,25 @@
 import Foundation
 import SwiftData
 
-/// Demo data for modules in sample mode: ~6 months of periods.
-/// Only seeds when the module has no data yet.
+/// Demo data for sample mode and Simulator screenshots.
 enum ModuleSampleData {
-    static func seed(_ module: WooliModule, context: ModelContext) {
+    /// ~6 months of periods, kept in memory so demo data never reaches Apple Health.
+    static func periods() -> [Period] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
         var rng = SeededRNG(seed: 11)
-        switch module {
-        case .period:
-            guard ((try? context.fetchCount(FetchDescriptor<PeriodEntry>())) ?? 0) == 0 else { return }
-            // Walk back from a recent start: cycles 27–30 days, periods 4–6 days.
-            var start = cal.date(byAdding: .day, value: -Int.random(in: 9...14, using: &rng), to: today)!
-            let flows = ["light", "medium", "heavy"]
-            for _ in 0..<7 {
-                let length = Int.random(in: 4...6, using: &rng)
-                let e = PeriodEntry(startDay: start, endDay: cal.date(byAdding: .day, value: length - 1, to: start))
-                e.flowRaw = flows.randomElement(using: &rng)!
-                e.symptoms = Array(CycleMath.symptoms.shuffled(using: &rng).prefix(Int.random(in: 0...3, using: &rng)))
-                context.insert(e)
-                start = cal.date(byAdding: .day, value: -Int.random(in: 27...30, using: &rng), to: start)!
-            }
+        // Walk back from a recent start: cycles 27–30 days, periods 4–6 days.
+        var start = cal.date(byAdding: .day, value: -Int.random(in: 9...14, using: &rng), to: today)!
+        let flows = ["light", "medium", "heavy"]
+        var periods: [Period] = []
+        for _ in 0..<7 {
+            let length = Int.random(in: 4...6, using: &rng)
+            periods.append(Period(start: start, end: cal.date(byAdding: .day, value: length - 1, to: start)!,
+                                  flow: flows.randomElement(using: &rng)!,
+                                  symptoms: Array(CycleMath.symptoms.shuffled(using: &rng).prefix(Int.random(in: 0...3, using: &rng)))))
+            start = cal.date(byAdding: .day, value: -Int.random(in: 27...30, using: &rng), to: start)!
         }
-        try? context.save()
+        return periods
     }
 
     /// Eats places and wishes, saved sights, ranked movies and two recipes, for Simulator

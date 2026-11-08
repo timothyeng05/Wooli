@@ -63,13 +63,6 @@ enum ICloudSyncService {
             }
         }
 
-        if let periods = try? context.fetch(FetchDescriptor<PeriodEntry>()) {
-            for p in periods {
-                p.updatedAt = .now
-                count += 1
-            }
-        }
-
         do {
             try context.save()
             logger.info("Successfully touched and queued \(count) records for iCloud export")

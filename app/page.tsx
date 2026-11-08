@@ -6,11 +6,12 @@ export default function Home() {
     <main>
       <section className="hero">
         <div>
-          <h1>Your money, your trips and your favorite places, in one app.</h1>
+          <h1>Your trips, your favorite places and the things you love, in one app.</h1>
           <p className="lede">
-            Wooli is an iPhone app for keeping a budget, planning a trip day by day, ranking the
-            places you eat and the movies you watch, and saving recipes. Turn on just the parts you
-            want. Everything stays on your phone and in your own iCloud.
+            Wooli is an iPhone app for planning a trip day by day, ranking the places you eat and
+            the movies you watch, and saving recipes. It also has a budget and a private health
+            tracker if you want them. Turn on just the parts you want. Everything stays on your
+            phone and in your own iCloud.
           </p>
           <span className="store-badge" aria-label="Coming soon to the App Store">
             <span>Coming soon to the</span>
@@ -35,10 +36,6 @@ export default function Home() {
               <small>Japanese, Ryogoku, Tokyo</small>
             </div>
             <span className="score">9.8</span>
-          </div>
-          <div className="budget">
-            <div className="row"><span>Restaurants</span><span>$372 of $600</span></div>
-            <div className="bar"><i /></div>
           </div>
         </div>
       </section>
@@ -71,25 +68,6 @@ export default function Home() {
           </div>
         </article>
 
-        <article className="feature money">
-          <h2>Budget</h2>
-          <div>
-            <p>Set a plan for each category and see what&apos;s left this month. Enter spending yourself for free, or bring in your bank transactions through SimpleFIN.</p>
-            <ul>
-              <li>Spending Pace shows whether this month is on track against your usual months.</li>
-              <li>Review new transactions in a tap from Today, with suggested categories and rules.</li>
-              <li>Recurring bills and income, net worth and reports.</li>
-            </ul>
-          </div>
-        </article>
-
-        <article className="feature money">
-          <h2>Health</h2>
-          <div>
-            <p>A private period tracker that learns your cycle and predicts the next one. Lock it with Face ID if you like.</p>
-          </div>
-        </article>
-
         <article className="feature more">
           <h2>Movies &amp; Recipes</h2>
           <div>
@@ -102,13 +80,34 @@ export default function Home() {
             </ul>
           </div>
         </article>
+
+        <p className="group-label">Personal</p>
+
+        <article className="feature money">
+          <h2>Budget</h2>
+          <div>
+            <p>Set a plan for each category and see what&apos;s left this month. Enter spending yourself for free, or bring in your bank transactions through SimpleFIN, a separate service with its own small yearly fee.</p>
+            <ul>
+              <li>Spending Pace shows whether this month is on track against your usual months.</li>
+              <li>Review new transactions in a tap from Today, with suggested categories and rules.</li>
+              <li>Recurring bills and income, net worth and reports.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article className="feature money">
+          <h2>Health</h2>
+          <div>
+            <p>A private period tracker built on Apple Health. It reads your cycle, predicts the next one, and saves what you log back to Health. Lock it with Face ID if you like.</p>
+          </div>
+        </article>
       </section>
 
       <section className="yours">
         <h2>Your data stays yours.</h2>
         <p>
-          Wooli has no accounts, no ads and no analytics. Everything you add syncs through your own
-          iCloud, and your bank data goes straight from SimpleFIN to your phone. We never see any of it.
+          Wooli has no accounts, no ads and no analytics. Your lists and budget sync through your own
+          iCloud, your cycle stays in Apple Health, and your bank data goes straight from SimpleFIN to your phone. We never see any of it.
         </p>
         <p><Link href="/privacy">Read the privacy policy</Link></p>
       </section>

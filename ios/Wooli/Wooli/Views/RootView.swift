@@ -53,9 +53,8 @@ struct RootView: View {
             if args.contains("-drawer") { app.isSidebarOpen = true }
             // `-calibration`: the first-run review shown after connecting a bank.
             if args.contains("-calibration") { app.showCalibration = true }
-            // `-module period`: enable that module (seeding sample data) and open it.
+            // `-module period`: enable that module and open it.
             if let i = args.firstIndex(of: "-module"), i + 1 < args.count, let module = WooliModule(rawValue: args[i + 1]) {
-                if app.mode == .sample { ModuleSampleData.seed(module, context: context) }
                 if let space = AppSpace.allCases.first(where: { $0.module == module }) {
                     AppLineup.shared.setEnabled(space, true)
                     app.space = space

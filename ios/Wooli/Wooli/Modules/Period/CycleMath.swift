@@ -89,6 +89,32 @@ enum CycleMath {
         return offset >= 0 && offset < averagePeriodLength(entries, calendar: calendar)
     }
 
+    /// One day of flow from Apple Health.
+    struct FlowDay {
+        var day: Date
+        /// Health's "start of cycle" flag.
+        var isCycleStart: Bool
+    }
+
+    /// Splits flow days into periods, each its days in order. One blank day
+    /// stays in the same period (spotting skips days) unless the next day
+    /// starts a new cycle; apps that flag every day can't split a run of days.
+    static func groupFlowDays(_ flowDays: [FlowDay], calendar: Calendar = .current) -> [[Date]] {
+        var groups: [[Date]] = []
+        for flowDay in flowDays.sorted(by: { $0.day < $1.day }) {
+            let day = calendar.startOfDay(for: flowDay.day)
+            guard let last = groups.last?.last else { groups.append([day]); continue }
+            let gap = days(from: last, to: day, calendar: calendar)
+            if gap == 0 { continue }
+            if gap > 2 || (gap == 2 && flowDay.isCycleStart) {
+                groups.append([day])
+            } else {
+                groups[groups.count - 1].append(day)
+            }
+        }
+        return groups
+    }
+
     /// Self-checks, run from the DEBUG self-test. Returns failures (empty = all pass).
     static func selfTest() -> [String] {
         var cal = Calendar(identifier: .gregorian)
@@ -139,6 +165,13 @@ enum CycleMath {
         check(isPeriodDay(d(2026, 9, 4, 23, 30), in: three, today: d(2026, 9, 20), calendar: cal), "late evening is same day")
         check(!isPeriodDay(d(2026, 9, 5, 0, 30), in: three, today: d(2026, 9, 20), calendar: cal), "just after midnight is next day")
         check(cycleDay(three, today: d(2026, 9, 1, 23, 45), calendar: cal) == 1, "late evening cycle day 1")
+
+        // Flow days from Health: repeats collapse, one blank day joins, more splits
+        func flow(_ day: Int, start: Bool = false) -> FlowDay { FlowDay(day: d(2026, 9, day), isCycleStart: start) }
+        let joined = groupFlowDays([flow(1, start: true), flow(1), flow(2, start: true), flow(4)], calendar: cal)
+        check(joined.count == 1 && joined[0].count == 3, "flow days join across a blank day")
+        check(groupFlowDays([flow(1), flow(5)], calendar: cal).count == 2, "three blank days split")
+        check(groupFlowDays([flow(1), flow(3, start: true)], calendar: cal).count == 2, "cycle start after a blank day splits")
         return failures
     }
 }

@@ -49,7 +49,7 @@ A motif is used only where it means something. Each screen gets at most one hero
 | `HeroCard` + RouteProgress | Time as a road, with you on it | The Budget month, savings goals, Period, trip countdowns |
 | `HeroCard` + stamps | Places you've been | The Eats passport |
 | `CinemaStub` | A film you saw | Movies only |
-| `DepartureBoard` | Scheduled, with a status | Recurring bills, Today's "Next up" |
+| `DepartureBoard` | Scheduled, with a status | Recurring bills |
 | `LuggageTag` | A label you attach | Categories, #tags, splits |
 | `Postcard` | One place or memory | Eats notes, recipes "from" somewhere, trip summaries |
 | `RankStamp` | Where something ranks for you | Eats and Movies rows |
@@ -90,6 +90,7 @@ A motif is used only where it means something. Each screen gets at most one hero
 - **Lists:** `ItemRow`, the one row for every module, and `EmptyState`.
 - **Actions:** `Button` (primary blue, secondary soft blue, tertiary outline).
 - **Heroes:** `HeroCard`, `TicketCard` (Trips only) and `CinemaStub` (Movies only).
+- **App icons:** illustrated objects with real light, one per app, in `app-icons/` (SVG source) and `Assets.xcassets/AppIcons` (PNG). `AppIconTile` shows them; SF Symbols stay for everything inside a screen.
 - **Travel motifs:** `DepartureBoard`, `LuggageTag`, `Postcard` and `SuitcaseSticker`.
 - **Sections:** `SectionBand` (section header) and `TimelineItem` (plan row).
 - **Eats and Movies:** `RankStamp`, plus the face-off shown in the Eats screens.

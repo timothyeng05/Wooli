@@ -19,7 +19,7 @@ Wooli's look is defined in `ios/Wooli/DesignSystem/`. Follow it for every UI cha
 - Colours come from `Theme` only. Blue (`Theme.brand`) means "you can act on this". Group colours (`Theme.Group`: travel blue, food yellow, home violet, health teal, fun rose, shopping pink, money slate) say what something is, the same in every module. Green and red are for money amounts only, with a sign and an arrow.
 - Text on teal, pink, yellow and amber is `Theme.onAccent` (navy); on blue, rose, violet and slate it's white. Yellow is a fill, never a thin line or a small dot on white.
 - Scales only: `Space` (4, 8, 12, 16, 20, 24), `Radius` (10, 14, 22, or Capsule/Circle), Dynamic Type styles plus `.wooliFont(.amount | .display | .code | .eyebrow)`. No `Color(hex:)`, numeric `cornerRadius:` or `.font(.system(size:))` in views.
-- Screens use one of three templates (Overview, Detail, Edit). An Overview has exactly one hero object, matched to the module: `TicketCard` for Trips only, `HeroCard` (with a route or stamps) for Budget, Eats, Recipes and Period, `CinemaStub` for Movies, `DepartureBoard` for Today.
+- Screens use one of three templates (Overview, Detail, Edit). An Overview has exactly one hero object, matched to the module: `TicketCard` for Trips only, `HeroCard` (with a route or stamps) for Budget, Eats, Recipes and Period, `CinemaStub` for Movies, and on Today `TicketCard` when a trip is close, otherwise `HeroCard`.
 - Lists use `ItemRow`; empty screens use `EmptyState`; actions use `WooliButtonStyle` (one primary per screen).
 
 ## Checking your work

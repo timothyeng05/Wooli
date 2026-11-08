@@ -157,7 +157,7 @@ private struct TransactionListRow: View {
             if tx.needsReview {
                 if tx.categoryId != nil {
                     Button("Reviewed", systemImage: "checkmark") {
-                        withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
+                        _ = withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
                     }
                     .tint(Theme.income)
                 } else {

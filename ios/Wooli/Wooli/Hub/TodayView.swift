@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// The hub: one glanceable card per app, then the app grid. Tapping a card
-/// switches into that app. Cards follow the user's ranking (`AppLineup`).
+/// The hub: `TodayBoard`, then the app grid. Tiles follow the user's ranking
+/// (`AppLineup`), and hiding one in Edit Today keeps its app in the grid.
 struct TodayView: View {
     @Environment(AppModel.self) private var app
     @AppStorage("displayName") private var displayName = ""
@@ -24,27 +24,7 @@ struct TodayView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .padding(.horizontal, 4)
 
-                    // In the order the user ranked them.
-                    ForEach(lineup.todayCards) { space in
-                        Group {
-                            switch space {
-                            case .budget: BudgetTodayCard()
-                            case .trips: TripsTodayCard()
-                            case .eats: EatsTodayCard()
-                            case .sights: SightsTodayCard()
-                            case .movies: MoviesTodayCard()
-                            case .recipes: RecipesTodayCard()
-                            case .period: PeriodTodayCard()
-                            case .today: EmptyView()
-                            }
-                        }
-                        .contextMenu {
-                            Button("Hide from Today", systemImage: "eye.slash") {
-                                withAnimation { lineup.setShowsCard(space, false) }
-                            }
-                            Button("Edit Today", systemImage: "slider.horizontal.3") { showEdit = true }
-                        }
-                    }
+                    TodayBoard(showEdit: $showEdit)
                     if lineup.todayCards.isEmpty && !lineup.installed.isEmpty {
                         Button { showEdit = true } label: {
                             Label("All cards are hidden. Edit Today", systemImage: "slider.horizontal.3")
@@ -59,7 +39,7 @@ struct TodayView: View {
                     #endif
 
                     SectionLabel("Your apps").padding(.top, 8).padding(.horizontal, 4)
-                    AppGrid(apps: lineup.installed)
+                    AppGrid(apps: lineup.recentFirst(lineup.installed))
                 }
                 .padding(16)
             }
@@ -87,30 +67,33 @@ struct EditTodayView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach(lineup.installed) { space in
-                        Toggle(isOn: Binding(get: { lineup.showsCard(space) },
-                                             set: { on in withAnimation { lineup.setShowsCard(space, on) } })) {
-                            HStack(spacing: 12) {
-                                AppIconTile(space, size: 32)
-                                Text(space.title).font(.body.weight(.semibold))
+                ForEach(AppTheme.allCases) { theme in
+                    let apps = lineup.installed.filter { $0.theme == theme }
+                    if !apps.isEmpty {
+                        Section(theme.title) {
+                            ForEach(apps) { space in
+                                Toggle(isOn: Binding(get: { lineup.showsCard(space) },
+                                                     set: { on in withAnimation { lineup.setShowsCard(space, on) } })) {
+                                    HStack(spacing: 12) {
+                                        AppIconTile(space, size: 32)
+                                        Text(space.title).font(.body.weight(.semibold))
+                                    }
+                                }
+                            }
+                            .onMove { from, to in
+                                withAnimation { lineup.move(within: apps, fromOffsets: from, toOffset: to) }
+                                movedPulse.toggle()
                             }
                         }
                     }
-                    .onMove { from, to in
-                        withAnimation { lineup.moveInstalled(fromOffsets: from, toOffset: to) }
-                        movedPulse.toggle()
-                    }
-                } header: {
-                    Text("Cards")
-                } footer: {
-                    Text("Drag to reorder — this also orders the app grid and the ☰ switcher. Hidden cards' apps stay in Your apps.")
                 }
                 Section {
                     Button("Add or remove apps", systemImage: "square.grid.2x2") {
                         dismiss()
                         app.sidebarDestination = .settings
                     }
+                } footer: {
+                    Text("Drag to order Personal and the ☰ switcher. Explore and Your apps show what you opened most recently first.")
                 }
             }
             .environment(\.editMode, .constant(.active))
@@ -125,33 +108,6 @@ struct EditTodayView: View {
 }
 
 // MARK: - Card chrome
-
-/// Shared look for every Today card: app icon + name, a headline, a detail
-/// line, optional extra content. The whole card opens the app.
-struct TodayCard<Extra: View>: View {
-    let space: AppSpace
-    let headline: String
-    var detail: String = ""
-    @ViewBuilder var extra: Extra
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-        // A tap gesture, not a Button, so a Button inside `extra` (Budget's
-        // review pill) still gets its own taps.
-        TodayCardBody(systemImage: space.systemImage, tint: space.tint, title: space.title,
-                      headline: headline, detail: detail) { extra }
-            .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { app.open(space) } }
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Opens \(space.title)")
-    }
-}
-
-extension TodayCard where Extra == EmptyView {
-    init(space: AppSpace, headline: String, detail: String = "") {
-        self.init(space: space, headline: headline, detail: detail) { EmptyView() }
-    }
-}
 
 struct TodayCardBody<Extra: View>: View {
     let systemImage: String
@@ -187,165 +143,6 @@ struct TodayCardBody<Extra: View>: View {
         }
         .card(padding: 16)
         .contentShape(Rectangle())
-    }
-}
-
-// MARK: - Budget
-
-private struct BudgetTodayCard: View {
-    @Environment(AppModel.self) private var app
-    @Query private var accounts: [LocalAccount]
-    @Query private var transactions: [LocalTransaction]
-    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
-
-    init() {
-        // This month and the review window (from last month on), not years of history.
-        let start = ReviewWindow.start
-        _transactions = Query(filter: #Predicate<LocalTransaction> { $0.transactedAt >= start })
-    }
-
-    var body: some View {
-        let ledger = Ledger(categories: categories, accounts: accounts)
-        let month = DateInterval.month(containing: .now)
-        let summary = MonthSummary(transactions: transactions, in: month,
-                                   categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
-        let planned = BudgetPlan(categories: categories, transactions: transactions, month: month, ledger: ledger).plannedExpenses
-        let toReview = ledger.reviewQueue(transactions).count
-        let left = planned - summary.spending
-
-        let headline = planned > 0
-            ? (left >= 0 ? "\(left.currency(cents: false)) left" : "\((-left).currency(cents: false)) over")
-            : "\(summary.spending.currency(cents: false)) spent"
-        let detail = planned > 0
-            ? "\(summary.spending.currency(cents: false)) of \(planned.currency(cents: false)) this month"
-            : "This month"
-
-        TodayCard(space: .budget, headline: headline, detail: detail) {
-            if planned > 0 {
-                BarGauge(value: summary.spending, total: planned, tint: left >= 0 ? Theme.brand : Theme.expense)
-            }
-            if toReview > 0 {
-                Button {
-                    app.open(.budget)
-                    app.showReview = true
-                } label: {
-                    Label("Review \(toReview) transactions", systemImage: "tray.full")
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Theme.pendingSoft, in: Capsule())
-                        .foregroundStyle(Theme.pending)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-// MARK: - Trips
-
-private struct TripsTodayCard: View {
-    @State private var store = TripStore.shared
-
-    var body: some View {
-        let today = DayKey.key(.now)
-        let current = store.trips.first { $0.startDay <= today && $0.endDay >= today }
-        let next = store.trips.filter { $0.startDay > today }.min { $0.startDay < $1.startDay }
-
-        if let current {
-            let day = (current.days.firstIndex(of: today) ?? 0) + 1
-            TodayCard(space: .trips, headline: "Day \(day) of \(current.days.count)",
-                      detail: [current.name, current.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
-        } else if let next {
-            let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: .now),
-                                                       to: DayKey.date(next.startDay)).day ?? 0
-            TodayCard(space: .trips, headline: days == 1 ? "\(next.name) tomorrow" : "\(next.name) in \(days) days",
-                      detail: next.dateRangeText)
-        } else {
-            TodayCard(space: .trips, headline: "Plan a trip", detail: "Ideas, day plans on Apple Maps, and someone to plan with.")
-        }
-    }
-}
-
-// MARK: - Eats
-
-private struct EatsTodayCard: View {
-    @State private var book = EatsBook.shared
-
-    var body: some View {
-        let entries = book.mine
-        let waiting = EatsRanking.toRank(entries: entries).count
-        let best = EatsRanking.ordered(entries.map(\.candidate)).first
-        if waiting > 0 {
-            TodayCard(space: .eats, headline: "\(waiting) meal\(waiting == 1 ? "" : "s") to rank",
-                      detail: "From your trips — a few taps each.")
-        } else if let best {
-            TodayCard(space: .eats, headline: "\(entries.count) place\(entries.count == 1 ? "" : "s") ranked", detail: "Top: \(best.title)")
-        } else {
-            TodayCard(space: .eats, headline: "Start your list", detail: "Rank places you've eaten against each other.")
-        }
-    }
-}
-
-// MARK: - Sights
-
-private struct SightsTodayCard: View {
-    @Query(sort: \SightEntry.createdAt, order: .reverse) private var sights: [SightEntry]
-
-    var body: some View {
-        let waiting = sights.filter { !$0.isVisited }
-        if let next = waiting.first {
-            TodayCard(space: .sights, headline: "\(waiting.count) place\(waiting.count == 1 ? "" : "s") to see",
-                      detail: "Latest: \(next.name)")
-        } else if !sights.isEmpty {
-            TodayCard(space: .sights, headline: "\(sights.count) place\(sights.count == 1 ? "" : "s") seen", detail: "Add somewhere new to visit.")
-        } else {
-            TodayCard(space: .sights, headline: "Save a place to see", detail: "Landmarks, museums and parks from Apple Maps.")
-        }
-    }
-}
-
-// MARK: - Movies
-
-private struct MoviesTodayCard: View {
-    @Query private var movies: [MovieEntry]
-
-    var body: some View {
-        if let best = EatsRanking.ordered(movies.map(\.candidate)).first {
-            TodayCard(space: .movies, headline: "\(movies.count) movie\(movies.count == 1 ? "" : "s") ranked", detail: "Top: \(best.title)")
-        } else {
-            TodayCard(space: .movies, headline: "Start your list", detail: "Rank movies you've seen against each other.")
-        }
-    }
-}
-
-// MARK: - Recipes
-
-private struct RecipesTodayCard: View {
-    @Query(sort: \RecipeEntry.createdAt, order: .reverse) private var recipes: [RecipeEntry]
-
-    var body: some View {
-        if let latest = recipes.first {
-            TodayCard(space: .recipes, headline: "\(recipes.count) recipe\(recipes.count == 1 ? "" : "s") saved", detail: "Latest: \(latest.displayTitle)")
-        } else {
-            TodayCard(space: .recipes, headline: "Save your first recipe", detail: "Share a recipe reel from Instagram to Wooli.")
-        }
-    }
-}
-
-// MARK: - Period
-
-private struct PeriodTodayCard: View {
-    @Query(sort: \PeriodEntry.startDay, order: .reverse) private var periods: [PeriodEntry]
-    @State private var lock = ModuleLock.shared
-
-    var body: some View {
-        if lock.isLocked(.period) {
-            // Locked: no cycle details on Today either.
-            TodayCard(space: .period, headline: "Locked", detail: "Open to unlock with Face ID.")
-        } else {
-            let status = PeriodStatus.text(periods)
-            TodayCard(space: .period, headline: status.headline, detail: status.detail)
-        }
     }
 }
 

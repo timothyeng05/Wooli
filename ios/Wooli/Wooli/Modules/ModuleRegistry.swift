@@ -28,7 +28,7 @@ enum WooliModule: String, CaseIterable, Identifiable {
 
     var summary: String {
         switch self {
-        case .period: "Track your cycle and see predictions. Stays on this iPhone and your iCloud."
+        case .period: "Track your cycle and see predictions. Reads and saves through Apple Health."
         }
     }
 
@@ -171,15 +171,17 @@ private struct ModuleSettingsSection: View {
         .confirmationDialog("Delete all \(module.title) data?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { ModuleData.deleteAll(module, context: context) }
         } message: {
-            Text("This removes every \(module.title.lowercased()) entry from this iPhone and your iCloud. It can't be undone.")
+            Text("This removes what Wooli logged in Apple Health. Anything you logged in the Health app or other apps stays there. It can't be undone.")
         }
     }
 }
 
 enum ModuleData {
-    static func deleteAll(_ module: WooliModule, context: ModelContext) {
+    @MainActor static func deleteAll(_ module: WooliModule, context: ModelContext) {
         switch module {
-        case .period: try? context.delete(model: PeriodEntry.self)
+        case .period:
+            try? context.delete(model: PeriodEntry.self)
+            Task { await PeriodStore.shared.deleteEverythingWooliWrote() }
         }
         try? context.save()
     }

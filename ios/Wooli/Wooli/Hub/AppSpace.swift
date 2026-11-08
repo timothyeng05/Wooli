@@ -29,15 +29,18 @@ enum AppSpace: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .today: "sun.max.fill"
-        case .budget: "dollarsign"
-        case .trips: "airplane"
+        case .budget: "wallet.bifold.fill"
+        case .trips: "suitcase.rolling.fill"
         case .eats: "fork.knife"
-        case .sights: "mappin.and.ellipse"
-        case .movies: "film"
-        case .recipes: "frying.pan"
+        case .sights: "binoculars.fill"
+        case .movies: "popcorn.fill"
+        case .recipes: "frying.pan.fill"
         case .period: "heart.fill"
         }
     }
+
+    /// Its illustrated tile in the asset catalog, drawn from `DesignSystem/app-icons`.
+    var iconAsset: String { self == .period ? "icon-health" : "icon-\(rawValue)" }
 
     var tint: Color {
         switch self {
@@ -116,10 +119,13 @@ final class AppLineup {
     static let shared = AppLineup()
     private static let orderKey = "apps.order"
     private static let hiddenCardsKey = "today.hiddenCards"
+    private static let lastOpenedKey = "apps.lastOpened"
 
     private(set) var order: [AppSpace]
     private(set) var enabled: Set<AppSpace>
     private(set) var hiddenCards: Set<AppSpace>
+    /// When each app was last opened, by raw value, in seconds since 1970.
+    private var lastOpened: [String: Double]
 
     private init() {
         let apps = AppSpace.allCases.filter { $0 != .today }
@@ -128,6 +134,7 @@ final class AppLineup {
         // Apps added in a later update go at the end.
         order = stored + apps.filter { !stored.contains($0) }
         enabled = Set(apps.filter(\.storedEnabled))
+        lastOpened = UserDefaults.standard.dictionary(forKey: Self.lastOpenedKey) as? [String: Double] ?? [:]
         if let stored = UserDefaults.standard.string(forKey: Self.hiddenCardsKey) {
             hiddenCards = Set(stored.split(separator: ",").compactMap { AppSpace(rawValue: String($0)) })
         } else {
@@ -144,6 +151,21 @@ final class AppLineup {
     /// Enabled apps that show a card on Today, in rank order.
     var todayCards: [AppSpace] { installed.filter { !hiddenCards.contains($0) } }
 
+    /// Most recently opened first; apps not opened yet keep their rank, after those.
+    func recentFirst(_ apps: [AppSpace]) -> [AppSpace] {
+        apps.enumerated().sorted { a, b in
+            let timeA = lastOpened[a.element.rawValue] ?? 0, timeB = lastOpened[b.element.rawValue] ?? 0
+            return timeA == timeB ? a.offset < b.offset : timeA > timeB
+        }
+        .map(\.element)
+    }
+
+    func noteOpened(_ space: AppSpace) {
+        guard space != .today else { return }
+        lastOpened[space.rawValue] = Date.now.timeIntervalSince1970
+        UserDefaults.standard.set(lastOpened, forKey: Self.lastOpenedKey)
+    }
+
     func showsCard(_ space: AppSpace) -> Bool { !hiddenCards.contains(space) }
 
     func setShowsCard(_ space: AppSpace, _ on: Bool) {
@@ -157,12 +179,6 @@ final class AppLineup {
         guard space != .today else { return }
         if on { enabled.insert(space) } else { enabled.remove(space) }
         UserDefaults.standard.set(on, forKey: space.enabledKey)
-    }
-
-    /// Reorder within the enabled apps only (Edit Today lists just those);
-    /// apps that are off keep their slots in the full ranking.
-    func moveInstalled(fromOffsets source: IndexSet, toOffset destination: Int) {
-        move(within: installed, fromOffsets: source, toOffset: destination)
     }
 
     /// Reorder a subset of apps (e.g. one theme); the rest keep their slots.
@@ -183,8 +199,6 @@ final class AppLineup {
 /// it). Used in onboarding and Settings → Apps; the containing List must be
 /// in edit mode for the drag handles.
 struct AppLineupRows: View {
-    @Environment(AppModel.self) private var app
-    @Environment(\.modelContext) private var context
     @State private var lineup = AppLineup.shared
 
     var body: some View {
@@ -200,7 +214,6 @@ struct AppLineupRows: View {
     private func row(_ space: AppSpace) -> some View {
         Toggle(isOn: Binding(get: { lineup.isEnabled(space) }, set: { on in
             withAnimation { lineup.setEnabled(space, on) }
-            if on, app.mode == .sample, let module = space.module { ModuleSampleData.seed(module, context: context) }
         })) {
             HStack(spacing: 12) {
                 AppIconTile(space, size: 36)
@@ -218,12 +231,14 @@ struct AppLineupRows: View {
 
 /// Rounded app-icon tile, used in the drawer, Today cards, and the app grid.
 struct AppIconTile: View {
-    let systemImage: String
-    let tint: Color
+    var asset: String?
+    var systemImage = ""
+    var tint = Theme.brand
     var size: CGFloat = 40
 
     init(_ space: AppSpace, size: CGFloat = 40) {
-        self.init(systemImage: space.systemImage, tint: space.tint, size: size)
+        self.asset = space.iconAsset
+        self.size = size
     }
 
     init(systemImage: String, tint: Color, size: CGFloat = 40) {
@@ -233,11 +248,17 @@ struct AppIconTile: View {
     }
 
     var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: size * 0.46, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(tint.gradient, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
-            .accessibilityHidden(true)
+        Group {
+            if let asset {
+                Image(asset).resizable().scaledToFit().frame(width: size, height: size)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: size * 0.46, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: size, height: size)
+                    .background(tint.gradient, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

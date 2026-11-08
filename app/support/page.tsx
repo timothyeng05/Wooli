@@ -62,6 +62,13 @@ export default function SupportPage() {
         same list. Friends you invite can see your list but not change it.
       </p>
 
+      <h3>My periods aren&apos;t showing in Health.</h3>
+      <p>
+        Wooli reads your cycle from Apple Health. In Settings → Health → Data Access &amp; Devices → Wooli, turn on
+        access and choose All Recorded Data, so predictions can use your history. Periods logged in another
+        app can be changed only there or in the Health app.
+      </p>
+
       <h3>A recipe has the wrong tags.</h3>
       <p>
         Open the recipe, tap Edit, and change the meal, cuisine, main ingredient or time under Tags.

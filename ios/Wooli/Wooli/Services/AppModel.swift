@@ -43,7 +43,9 @@ final class AppModel {
     var bankMessages: [String] = []
     var lastSyncAt: Date? = SyncService.lastSyncAt
     /// Which app is on screen. Always opens on Today.
-    var space: AppSpace = .today
+    var space: AppSpace = .today {
+        didSet { AppLineup.shared.noteOpened(space) }
+    }
     var selectedTab: AppTab = .dashboard
     var isSidebarOpen = false
     var sidebarDestination: SidebarDestination?
@@ -104,7 +106,6 @@ final class AppModel {
     func startSample(context: ModelContext) {
         DefaultCategories.seedIfNeeded(context)
         SampleData.load(into: context)
-        for module in WooliModule.allCases where module.isEnabled { ModuleSampleData.seed(module, context: context) }
         mode = .sample
         RecurringDetector.refresh(context: context)
         Task { await autoCategorize(context: context) }

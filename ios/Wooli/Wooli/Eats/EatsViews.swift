@@ -322,6 +322,7 @@ struct EatsListView: View {
     @State private var partnerOptions = false
     @State private var tab = Tab.been
     @State private var sort = Sort.score
+    @State private var here = CurrentLocation()
     @State private var city: String?
     @State private var cuisine: String?
     @State private var searching = false
@@ -333,7 +334,7 @@ struct EatsListView: View {
     }
 
     enum Sort: String, CaseIterable, Identifiable {
-        case score = "Score", recent = "Recent", name = "A–Z"
+        case score = "Score", recent = "Recent", distance = "Distance", name = "A–Z"
         var id: String { rawValue }
     }
 
@@ -377,6 +378,9 @@ struct EatsListView: View {
                     .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
             .padding(20)
+        }
+        .onChange(of: sort) {
+            if sort == .distance { here.refresh() }
         }
         .navigationTitle(tripID != nil ? "What we ate" : book.partner == nil ? "Eats" : "Our Eats")
         .navigationBarTitleDisplayMode(.inline)
@@ -498,6 +502,7 @@ struct EatsListView: View {
                 }
                 .labelStyle(.iconOnly).font(.title3).foregroundStyle(PlaceActionBar.ink)
             }
+            if sort == .distance { locationNote }
             if searching {
                 TextField("Search your list", text: $query)
                     .textFieldStyle(.roundedBorder)
@@ -508,6 +513,33 @@ struct EatsListView: View {
         .padding(.top, 8)
         .padding(.bottom, 10)
         .background(Theme.card)
+    }
+
+    /// What's holding up the distance sort, if anything.
+    @ViewBuilder
+    private var locationNote: some View {
+        switch here.status {
+        case .idle:
+            EmptyView()
+        case .locating:
+            Text("Finding where you are…").font(.subheadline).foregroundStyle(Theme.textTertiary)
+        case .denied:
+            HStack {
+                Text("Turn on location to sort by distance.").font(.subheadline).foregroundStyle(Theme.textTertiary)
+                Spacer()
+                if let settings = URL(string: UIApplication.openSettingsURLString) {
+                    Link("Settings", destination: settings)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.brand)
+                }
+            }
+        case .failed:
+            HStack {
+                Text("Couldn't find where you are.").font(.subheadline).foregroundStyle(Theme.textTertiary)
+                Spacer()
+                Button("Try again") { here.refresh() }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.brand)
+            }
+        }
     }
 
     /// An outlined pill that turns solid once a value is picked.
@@ -544,22 +576,39 @@ struct EatsListView: View {
         switch sort {
         case .score: places
         case .recent: places.sorted { ($0.visitedDay, $0.createdAt) > ($1.visitedDay, $1.createdAt) }
+        case .distance: nearestFirst(places)
         case .name: places.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
+    }
+
+    /// Places without a pin go last, in the list's own order.
+    private func nearestFirst(_ places: [EatsPlace]) -> [EatsPlace] {
+        guard let location = here.location else { return places }
+        return places
+            .map { (place: $0, metres: $0.distance(from: location) ?? .infinity) }
+            .sorted { $0.metres < $1.metres }
+            .map(\.place)
+    }
+
+    /// "0.4 mi", once the list is sorted by distance.
+    private func distanceLabel(_ place: EatsPlace) -> String? {
+        guard sort == .distance, let location = here.location else { return nil }
+        return place.distanceText(from: location)
     }
 
     // MARK: List
 
     private func list(_ shown: [EatsPlace], total: Int, waiting: [TripItem], scores: [String: Double]) -> some View {
         List {
-            if tab == .been, tripID == nil, !book.mine.isEmpty {
+            // Sorted by distance you're looking for somewhere to go: the places come first.
+            if tab == .been, tripID == nil, sort != .distance, !book.mine.isEmpty {
                 Section {
                     passport(book.mine)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                 }
             }
-            if tab == .been {
+            if tab == .been, sort != .distance {
                 if tripID == nil {
                     Section {
                         friendsStrip
@@ -681,7 +730,8 @@ struct EatsListView: View {
     private func wishRow(_ wish: EatsPlace) -> some View {
         HStack(alignment: .center, spacing: 8) {
             EatsPlaceRow(place: wish, index: nil, score: nil,
-                         subtitle: "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))")
+                         subtitle: [distanceLabel(wish), "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))"]
+                            .compactMap { $0 }.joined(separator: " · "))
             if let spot = wish.tripPlace {
                 Button("Been") { ranking = .place(spot) }
                     .font(.subheadline.weight(.semibold))
@@ -795,7 +845,7 @@ struct EatsListView: View {
         let trip = tripID == nil && !place.tripID.isEmpty ? TripStore.shared.trip(place.tripID)?.name : nil
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).day().year())
         let visits = place.visits.count > 1 ? "\(place.visits.count) visits" : nil
-        return [trip, date, visits].compactMap { $0 }.joined(separator: " · ")
+        return [distanceLabel(place), trip, date, visits].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func candidate(for request: RankRequest) -> RankCandidate {

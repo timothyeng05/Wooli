@@ -77,29 +77,31 @@ final class ICloudSyncMonitor {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            guard let self else { return }
-            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
-                    as? NSPersistentCloudKitContainer.Event else { return }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+                        as? NSPersistentCloudKitContainer.Event else { return }
 
-            if event.endDate == nil {
-                // Event is currently running
-                self.isSyncing = true
-                self.state = .syncing
-            } else {
-                // Event completed
-                self.isSyncing = false
-                if event.succeeded {
-                    let now = Date.now
-                    self.lastSyncAt = now
-                    UserDefaults.standard.set(now, forKey: Self.lastSyncKey)
-                    self.lastError = nil
-                    self.state = .upToDate
-                    logger.info("iCloud sync event \(String(describing: event.type)) succeeded")
-                } else if let err = event.error {
-                    let desc = Self.detailedDescription(for: event)
-                    logger.error("iCloud sync event error: \(desc)")
-                    self.lastError = desc
-                    self.state = .error(desc)
+                if event.endDate == nil {
+                    // Event is currently running
+                    self.isSyncing = true
+                    self.state = .syncing
+                } else {
+                    // Event completed
+                    self.isSyncing = false
+                    if event.succeeded {
+                        let now = Date.now
+                        self.lastSyncAt = now
+                        UserDefaults.standard.set(now, forKey: Self.lastSyncKey)
+                        self.lastError = nil
+                        self.state = .upToDate
+                        logger.info("iCloud sync event \(String(describing: event.type)) succeeded")
+                    } else if event.error != nil {
+                        let desc = Self.detailedDescription(for: event)
+                        logger.error("iCloud sync event error: \(desc)")
+                        self.lastError = desc
+                        self.state = .error(desc)
+                    }
                 }
             }
         }

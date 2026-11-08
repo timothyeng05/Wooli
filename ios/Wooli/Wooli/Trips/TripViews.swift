@@ -691,7 +691,7 @@ struct TripDetailView: View {
         .card()
         // The day's leg color down the left edge.
         .overlay(alignment: .leading) {
-            if let leg {
+            if leg != nil {
                 Capsule().fill(Theme.Group.travel.color.gradient).frame(width: 4).padding(.vertical, 22)
             }
         }
@@ -1329,9 +1329,34 @@ struct PlaceSearchView: View {
                     }
                 }
             }
+            if !searcher.googleResults.isEmpty {
+                Section("From Google Maps") {
+                    ForEach(searcher.googleResults) { result in
+                        Button { onPick(result.place); dismiss() } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(result.name).foregroundStyle(Theme.text)
+                                if !result.address.isEmpty {
+                                    Text(result.address).font(.caption).foregroundStyle(Theme.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if !query.isEmpty && searcher.nearDestinationOnly {
                 Button("Not here? Search everywhere", systemImage: "globe") { searcher.searchEverywhere(query) }
                     .font(.subheadline)
+            }
+            if !query.isEmpty && GooglePlaces.isConfigured {
+                if searcher.searchingGoogle {
+                    HStack { ProgressView(); Text("Searching Google Maps…").foregroundStyle(Theme.textSecondary) }
+                        .font(.subheadline)
+                } else if !searcher.searchedGoogle {
+                    Button("Not finding it? Search Google Maps", systemImage: "magnifyingglass") { searcher.searchGoogle(query) }
+                        .font(.subheadline)
+                } else if searcher.googleResults.isEmpty && searcher.results.isEmpty {
+                    Text("No matches on Apple or Google Maps.").font(.subheadline).foregroundStyle(Theme.textSecondary)
+                }
             }
         }
         .overlay {
@@ -1402,6 +1427,10 @@ final class PlaceSearcher {
             let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
             guard !Task.isCancelled else { return }
             results = center.map { c in items.sorted { $0.location.distance(from: c) < $1.location.distance(from: c) } } ?? items
+            googleResults = []
+            searchedGoogle = false
+            // Apple came up empty: ask Google straight away.
+            if items.isEmpty && GooglePlaces.isConfigured { await runGoogle(text) }
         }
     }
 
@@ -1409,6 +1438,34 @@ final class PlaceSearcher {
     func searchEverywhere(_ text: String) {
         nearDestinationOnly = false
         search(text)
+    }
+
+    // MARK: Google fallback
+
+    /// Google's matches, shown under Apple's.
+    private(set) var googleResults: [GooglePlaces.Result] = []
+    private(set) var searchingGoogle = false
+    /// Google was asked for the current text (so the button gives way to its results).
+    private(set) var searchedGoogle = false
+
+    func searchGoogle(_ text: String) {
+        task?.cancel()
+        task = Task { await runGoogle(text) }
+    }
+
+    private func runGoogle(_ text: String) async {
+        searchingGoogle = true
+        defer { searchingGoogle = false }
+        let near = nearDestinationOnly ? region : nil
+        let radius = near.map { max($0.span.latitudeDelta, $0.span.longitudeDelta) * 111_000 / 2 } ?? 30_000
+        let found = await GooglePlaces.search(text, near: near?.center, radius: max(radius, 5_000))
+        guard !Task.isCancelled else { return }
+        // Drop what Apple already listed (same name within 150 m).
+        googleResults = found.filter { google in
+            let pin = CLLocation(latitude: google.latitude, longitude: google.longitude)
+            return !results.contains { ($0.name ?? "").localizedCaseInsensitiveCompare(google.name) == .orderedSame && $0.location.distance(from: pin) < 150 }
+        }
+        searchedGoogle = true
     }
 }
 

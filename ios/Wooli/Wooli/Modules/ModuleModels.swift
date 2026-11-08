@@ -4,6 +4,9 @@ import SwiftData
 // Module data. Same CloudKit rules as the budget models: every property has a
 // default, no unique constraints, no required relationships.
 
+/// Periods from before Wooli used Apple Health (see `PeriodStore`). Nothing new
+/// is stored here; entries wait to be moved, then deleted. Stays in the schema so
+/// they can still be read.
 @Model
 final class PeriodEntry {
     var id: String = UUID().uuidString

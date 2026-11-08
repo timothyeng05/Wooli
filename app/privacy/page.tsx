@@ -17,9 +17,26 @@ export default function PrivacyPage() {
       <h2>Where your information lives</h2>
       <ul>
         <li><strong>On your iPhone.</strong> Everything you add is stored on your device. Your settings, such as which apps are on, stay only on your device.</li>
-        <li><strong>In your own iCloud.</strong> Your budget (categories, accounts, transactions, rules and recurring bills), period entries, trips, and your Eats, Sights, Movies and Recipes lists sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data. If iCloud is off, everything stays on your iPhone.</li>
+        <li><strong>In your own iCloud.</strong> Your budget (categories, accounts, transactions, rules and recurring bills), trips, and your Eats, Sights, Movies and Recipes lists sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data. If iCloud is off, everything stays on your iPhone.</li>
         <li><strong>When you share.</strong> If you invite someone to a trip or share your Eats list, they can see what you shared, and anyone you allow to make changes (for example a partner sharing one Eats list with you) can edit it. You can stop sharing at any time.</li>
       </ul>
+
+      <h2>Location (optional)</h2>
+      <p>
+        If you sort Eats by distance and allow it, Wooli reads your location to work out how far away each
+        place is. This happens on your iPhone. Your location is never saved, synced or sent to the developer or
+        anyone else. You can change this at any time in Settings → Apps → Wooli → Location.
+      </p>
+
+      <h2>Apple Health (optional)</h2>
+      <p>
+        If you use the Health app in Wooli and allow it, Wooli reads your periods and related symptoms from
+        Apple Health, and saves the ones you log there. Your cycle lives in Apple Health, not in Wooli&apos;s own
+        storage or iCloud database: Wooli reads it each time to show your calendar and work out predictions on
+        your iPhone. Health data is never sent to the developer or anyone else, and is never used for
+        advertising. You choose what Wooli can access, and can change that at any time in Settings → Health →
+        Data Access &amp; Devices.
+      </p>
 
       <h2>Bank connections (optional)</h2>
       <p>
@@ -38,6 +55,14 @@ export default function PrivacyPage() {
         are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your transactions and recipes
         aren&apos;t sent anywhere to do this. If you open a place in Google Maps, Google receives that place&apos;s
         name and address, under Google&apos;s privacy policy.
+      </p>
+
+      <h2>Google Maps place search</h2>
+      <p>
+        When Apple Maps can&apos;t find a place, or you tap &ldquo;Search Google Maps&rdquo;, your iPhone sends
+        what you typed to Google Places, along with the area you&apos;re searching in (a trip&apos;s destination,
+        never your own location). Nothing is sent to the developer. Google&apos;s privacy policy applies to those
+        requests.
       </p>
 
       <h2>Movie search</h2>
@@ -69,7 +94,8 @@ export default function PrivacyPage() {
       <p>
         Delete items in the app, or delete the app to remove what&apos;s stored on your iPhone. To remove
         what&apos;s synced to iCloud, delete it in the app, or remove Wooli&apos;s data in Settings →
-        your name → iCloud → Manage Account Storage.
+        your name → iCloud → Manage Account Storage. Periods you log are kept in Apple Health: delete them
+        in Wooli or the Health app.
       </p>
 
       <h2>Children</h2>

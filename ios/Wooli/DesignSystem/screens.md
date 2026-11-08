@@ -14,7 +14,7 @@ It's never a stock iOS list on its own, and never more than one hero.
 
 | Module | Hero |
 |---|---|
-| Today | `DepartureBoard` "Next up", then a card of shortcuts and "Your stickers" |
+| Today | A hero that switches between the next trip (`TicketCard`) and the month (`HeroCard`), a To do card only when something is waiting, Personal rings, a row of Explore tiles with real content, then the app grid |
 | Budget | `HeroCard` with RouteProgress: "Left to spend" and the month as a road |
 | Trips | `TicketCard`: the next leg |
 | Eats | `HeroCard` passport: places, cities and the last few stamps |
@@ -97,7 +97,7 @@ Today these are stock iOS lists. They move onto the templates with no new compon
 - **Movies:** Overview with a `CinemaStub` hero (your latest film, or "Your list"), `ItemRow`s with posters and small stamps, and the same face-off.
 - **Recipes:** Overview with `ItemRow`s (CategoryTile, "20 min · 4 ingredients"). The detail screen has a `display` title, `LuggageTag`s, a `Postcard` saying where the recipe is from, and ingredient and step cards.
 - **Period:** Overview with a `HeroCard` and RouteProgress ("Day 12 · next in about 16 days") and a private-mode note.
-- **Today:** a `DepartureBoard` of what's next across modules, a card of shortcuts, and "Your stickers".
+- **Today:** a hero that switches between the next trip (`TicketCard`) and the month (`HeroCard`), a To do card only when something is waiting, Personal rings, a row of Explore tiles with real content, then the app grid.
 
 ## Enforcing it in code
 

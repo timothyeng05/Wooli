@@ -49,7 +49,7 @@ MOVIES & RECIPES
 • Share a recipe reel and Wooli splits it into ingredients and steps
 
 PERIOD (optional)
-• Log your cycle privately, on your phone
+• Track your cycle privately with Apple Health
 
 PRIVATE BY DESIGN
 • Data Not Collected: no analytics, no ads, no tracking

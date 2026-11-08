@@ -7,16 +7,6 @@ import { useState } from "react";
 // Personal / Explore split as the app's ☰ switcher.
 
 const groups = {
-  personal: {
-    title: "Personal",
-    blurb: "Budget and Health: your money and your cycle, kept private.",
-    shots: [
-      { src: "/screens/dashboard.jpg", caption: "The dashboard leads with what needs review." },
-      { src: "/screens/review.jpg", caption: "Review a transaction in a tap or two." },
-      { src: "/screens/budget.jpg", caption: "A plan for every category, month by month." },
-      { src: "/screens/health.jpg", caption: "Health predicts your next period." },
-    ],
-  },
   explore: {
     title: "Explore",
     blurb: "Trips, Eats, Movies and Recipes: the places you go and the things you love.",
@@ -29,12 +19,22 @@ const groups = {
       { src: "/screens/recipes.jpg", caption: "Recipes tagged by meal, cuisine and time." },
     ],
   },
+  personal: {
+    title: "Personal",
+    blurb: "Budget and Health: your money and your cycle, kept private.",
+    shots: [
+      { src: "/screens/dashboard.jpg", caption: "The dashboard leads with what needs review." },
+      { src: "/screens/review.jpg", caption: "Review a transaction in a tap or two." },
+      { src: "/screens/budget.jpg", caption: "A plan for every category, month by month." },
+      { src: "/screens/health.jpg", caption: "Health predicts your next period." },
+    ],
+  },
 } as const;
 
 type Group = keyof typeof groups;
 
 export default function Screens() {
-  const [group, setGroup] = useState<Group>("personal");
+  const [group, setGroup] = useState<Group>("explore");
   const current = groups[group];
 
   return (

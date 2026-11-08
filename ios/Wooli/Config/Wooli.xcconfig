@@ -3,4 +3,8 @@
 // Secrets.xcconfig is git-ignored. Put the TMDB key (movie search) in it:
 //   TMDB_API_KEY = <v3 API key or read access token>
 // Without it the app builds and movie search says it isn't set up.
+// And the Google key (Places API (New); place search falls back to it when
+// Apple Maps finds nothing). Restrict it to the app's bundle id:
+//   GOOGLE_PLACES_API_KEY = <key>
+// Without it place search is Apple Maps only.
 #include? "Secrets.xcconfig"
