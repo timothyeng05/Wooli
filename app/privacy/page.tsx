@@ -61,8 +61,9 @@ export default function PrivacyPage() {
       <p>
         When Apple Maps can&apos;t find a place, or you tap &ldquo;Search Google Maps&rdquo;, your iPhone sends
         what you typed to Google Places, along with the area you&apos;re searching in (a trip&apos;s destination,
-        never your own location). Nothing is sent to the developer. Google&apos;s privacy policy applies to those
-        requests.
+        never your own location). If you share a place to Wooli from Google Maps, your iPhone opens that
+        shared link once with Google to read the place&apos;s name and location. Nothing is sent to the developer.
+        Google&apos;s privacy policy applies to those requests.
       </p>
 
       <h2>Movie search</h2>

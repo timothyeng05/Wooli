@@ -1,7 +1,7 @@
 import UIKit
 import SwiftUI
 
-/// Wooli in the share sheet: shows the place shared from Apple Maps and
+/// Wooli in the share sheet: shows the place shared from Apple or Google Maps and
 /// hands it to the app (via the App Group) for Eats, Sights or a trip's Ideas. An
 /// Instagram reel goes straight to the app, which works out from the caption
 /// whether it's a recipe or places to eat.
@@ -93,7 +93,7 @@ struct ShareView: View {
                 case .ready(let place):
                     ready(place)
                 case .notAPlace:
-                    message("No place here", detail: "Share a place from Apple Maps, or an Instagram reel, to add it to Eats, Sights, a trip or Recipes.")
+                    message("No place here", detail: "Share a place from Apple Maps or Google Maps, or an Instagram reel, to add it to Eats, Sights, a trip or Recipes.")
                 case .saveFailed:
                     message("Couldn't hand this to Wooli", detail: "Open Wooli once, then try sharing again.")
                 }
