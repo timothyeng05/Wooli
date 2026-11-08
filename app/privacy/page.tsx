@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated November 3, 2026</p>
+      <p className="updated">Last updated November 6, 2026</p>
 
       <p>
         Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
@@ -23,8 +23,8 @@ export default function PrivacyPage() {
 
       <h2>Location (optional)</h2>
       <p>
-        If you sort Eats by distance and allow it, Wooli reads your location to work out how far away each
-        place is. This happens on your iPhone. Your location is never saved, synced or sent to the developer or
+        If you tap Near me in Eats and allow it, Wooli reads your location once to show the places near you
+        and how far away each one is. This happens on your iPhone. Your location is never saved, synced or sent to the developer or
         anyone else. You can change this at any time in Settings → Apps → Wooli → Location.
       </p>
 

@@ -322,11 +322,24 @@ struct EatsListView: View {
     @State private var partnerOptions = false
     @State private var tab = Tab.been
     @State private var sort = Sort.score
-    @State private var here = CurrentLocation()
     @State private var city: String?
     @State private var cuisine: String?
     @State private var searching = false
     @State private var query = ""
+    @State private var near: Near?
+    @State private var choosingNear = false
+    @State private var locating = false
+    @State private var wishDetail: EatsPlace?
+
+    /// Show places within 50 miles of here (you, or a city you're going to).
+    struct Near: Equatable {
+        var name: String
+        var latitude: Double
+        var longitude: Double
+        var location: CLLocation { CLLocation(latitude: latitude, longitude: longitude) }
+    }
+
+    static let nearRadius: CLLocationDistance = 50 * 1609.344
 
     enum Tab: String, CaseIterable, Identifiable {
         case been = "Been", wantToTry = "Want to Try"
@@ -334,7 +347,7 @@ struct EatsListView: View {
     }
 
     enum Sort: String, CaseIterable, Identifiable {
-        case score = "Score", recent = "Recent", distance = "Distance", name = "A–Z"
+        case score = "Score", recent = "Recent", name = "A–Z", distance = "Nearest"
         var id: String { rawValue }
     }
 
@@ -379,9 +392,6 @@ struct EatsListView: View {
             }
             .padding(20)
         }
-        .onChange(of: sort) {
-            if sort == .distance { here.refresh() }
-        }
         .navigationTitle(tripID != nil ? "What we ate" : book.partner == nil ? "Eats" : "Our Eats")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -407,6 +417,21 @@ struct EatsListView: View {
         }
         .sheet(item: $detail) { place in
             EatsPlaceDetail(place: place)
+        }
+        // "I've been" on a wish ranks it once its page has closed.
+        .sheet(item: $wishDetail, onDismiss: {
+            if let place = pickedPlace {
+                pickedPlace = nil
+                ranking = .place(place)
+            }
+        }) { wish in
+            EatsWishDetail(place: wish) { pickedPlace = $0 }
+        }
+        .sheet(isPresented: $choosingNear) {
+            NavigationStack {
+                PlaceSearchView(near: "") { setNear(Near(name: $0.name, latitude: $0.latitude, longitude: $0.longitude)) }
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { choosingNear = false } } }
+            }
         }
         .overlay {
             if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card)) }
@@ -464,19 +489,21 @@ struct EatsListView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { Divider() }
             }
-            if cities.count > 1 || cuisines.count > 1 || city != nil || cuisine != nil {
+            if !pool.isEmpty || city != nil || cuisine != nil || near != nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        if city != nil || cuisine != nil {
+                        if city != nil || cuisine != nil || near != nil {
                             Button("Clear", systemImage: "xmark") {
                                 city = nil
                                 cuisine = nil
+                                setNear(nil)
                             }
                             .labelStyle(.iconOnly)
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                             .frame(width: 36, height: 36)
                             .overlay(Circle().strokeBorder(Theme.textTertiary, lineWidth: 1.2))
                         }
+                        nearChip
                         if cities.count > 1 || city != nil { chip("City", value: $city, options: cities) }
                         if cuisines.count > 1 || cuisine != nil { chip("Cuisine", value: $cuisine, options: cuisines) }
                     }
@@ -487,7 +514,7 @@ struct EatsListView: View {
             HStack {
                 Menu {
                     Picker("Sort", selection: $sort) {
-                        ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(Sort.allCases.filter { $0 != .distance || near != nil }) { Text($0.rawValue).tag($0) }
                     }
                 } label: {
                     Label(sort.rawValue, systemImage: "arrow.up.arrow.down")
@@ -502,7 +529,6 @@ struct EatsListView: View {
                 }
                 .labelStyle(.iconOnly).font(.title3).foregroundStyle(PlaceActionBar.ink)
             }
-            if sort == .distance { locationNote }
             if searching {
                 TextField("Search your list", text: $query)
                     .textFieldStyle(.roundedBorder)
@@ -515,33 +541,6 @@ struct EatsListView: View {
         .background(Theme.card)
     }
 
-    /// What's holding up the distance sort, if anything.
-    @ViewBuilder
-    private var locationNote: some View {
-        switch here.status {
-        case .idle:
-            EmptyView()
-        case .locating:
-            Text("Finding where you are…").font(.subheadline).foregroundStyle(Theme.textTertiary)
-        case .denied:
-            HStack {
-                Text("Turn on location to sort by distance.").font(.subheadline).foregroundStyle(Theme.textTertiary)
-                Spacer()
-                if let settings = URL(string: UIApplication.openSettingsURLString) {
-                    Link("Settings", destination: settings)
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.brand)
-                }
-            }
-        case .failed:
-            HStack {
-                Text("Couldn't find where you are.").font(.subheadline).foregroundStyle(Theme.textTertiary)
-                Spacer()
-                Button("Try again") { here.refresh() }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.brand)
-            }
-        }
-    }
-
     /// An outlined pill that turns solid once a value is picked.
     private func chip(_ title: String, value: Binding<String?>, options: [String]) -> some View {
         Menu {
@@ -550,22 +549,71 @@ struct EatsListView: View {
                 Button(option) { value.wrappedValue = option }
             }
         } label: {
-            HStack(spacing: 6) {
-                Text(value.wrappedValue ?? title).lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption.weight(.bold))
-            }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(value.wrappedValue == nil ? Theme.text : .white)
-            .padding(.horizontal, 14).frame(height: 36)
-            .background(Capsule().fill(value.wrappedValue == nil ? Color.clear : PlaceActionBar.ink))
-            .overlay(Capsule().strokeBorder(value.wrappedValue == nil ? Theme.textTertiary : PlaceActionBar.ink, lineWidth: 1.2))
+            chipLabel(value.wrappedValue ?? title, isOn: value.wrappedValue != nil)
         }
+    }
+
+    private func chipLabel(_ text: String, isOn: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(text).lineLimit(1)
+            Image(systemName: "chevron.down").font(.caption.weight(.bold))
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(isOn ? .white : Theme.text)
+        .padding(.horizontal, 14).frame(height: 36)
+        .background(Capsule().fill(isOn ? PlaceActionBar.ink : Color.clear))
+        .overlay(Capsule().strokeBorder(isOn ? PlaceActionBar.ink : Theme.textTertiary, lineWidth: 1.2))
+    }
+
+    /// Near: you, or a place you pick (a city for a trip), within 50 miles, nearest first.
+    private var nearChip: some View {
+        Menu {
+            Button("Anywhere") { setNear(nil) }
+            Button("Near me", systemImage: "location") { locateMe() }
+            Button("Choose a place…", systemImage: "magnifyingglass") { choosingNear = true }
+        } label: {
+            chipLabel(locating ? "Locating…" : near.map { "\($0.name) · 50 mi" } ?? "Near", isOn: near != nil)
+        }
+        .disabled(locating)
+    }
+
+    private func setNear(_ value: Near?) {
+        near = value
+        if value != nil { sort = .distance } else if sort == .distance { sort = .score }
+    }
+
+    private func locateMe() {
+        locating = true
+        Task {
+            defer { locating = false }
+            if let here = await CurrentLocation.fetch() {
+                setNear(Near(name: "Near me", latitude: here.coordinate.latitude, longitude: here.coordinate.longitude))
+            } else {
+                book.lastError = "Wooli can't see where you are. Turn on Location for Wooli in Settings, or choose a place instead."
+            }
+        }
+    }
+
+    /// "1.2 mi", or "34 mi" from 10 miles out.
+    private static func miles(_ meters: CLLocationDistance) -> String {
+        let miles = meters / 1609.344
+        return Measurement(value: miles, unit: UnitLength.miles)
+            .formatted(.measurement(width: .abbreviated, usage: .asProvided,
+                                    numberFormatStyle: .number.precision(.fractionLength(miles < 10 ? 1 : 0))))
+    }
+
+    /// The row's quiet line, with how far away it is when Near is on.
+    private func withDistance(_ place: EatsPlace, _ text: String) -> String {
+        guard let near, let meters = place.distance(from: near.location) else { return text }
+        return [Self.miles(meters), text].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private func filtered(_ places: [EatsPlace]) -> [EatsPlace] {
         let text = query.trimmingCharacters(in: .whitespaces)
+        let center = near?.location
         return places.filter { place in
             (city == nil || place.city == city) && (cuisine == nil || place.cuisine == cuisine)
+                && (center.map { c in place.distance(from: c).map { $0 <= Self.nearRadius } ?? false } ?? true)
                 && (text.isEmpty || place.name.localizedCaseInsensitiveContains(text) || place.address.localizedCaseInsensitiveContains(text)
                     || (place.cuisine?.localizedCaseInsensitiveContains(text) ?? false))
         }
@@ -576,39 +624,28 @@ struct EatsListView: View {
         switch sort {
         case .score: places
         case .recent: places.sorted { ($0.visitedDay, $0.createdAt) > ($1.visitedDay, $1.createdAt) }
-        case .distance: nearestFirst(places)
         case .name: places.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .distance:
+            if let center = near?.location {
+                places.sorted { ($0.distance(from: center) ?? .infinity) < ($1.distance(from: center) ?? .infinity) }
+            } else {
+                places
+            }
         }
-    }
-
-    /// Places without a pin go last, in the list's own order.
-    private func nearestFirst(_ places: [EatsPlace]) -> [EatsPlace] {
-        guard let location = here.location else { return places }
-        return places
-            .map { (place: $0, metres: $0.distance(from: location) ?? .infinity) }
-            .sorted { $0.metres < $1.metres }
-            .map(\.place)
-    }
-
-    /// "0.4 mi", once the list is sorted by distance.
-    private func distanceLabel(_ place: EatsPlace) -> String? {
-        guard sort == .distance, let location = here.location else { return nil }
-        return place.distanceText(from: location)
     }
 
     // MARK: List
 
     private func list(_ shown: [EatsPlace], total: Int, waiting: [TripItem], scores: [String: Double]) -> some View {
         List {
-            // Sorted by distance you're looking for somewhere to go: the places come first.
-            if tab == .been, tripID == nil, sort != .distance, !book.mine.isEmpty {
+            if tab == .been, tripID == nil, !book.mine.isEmpty {
                 Section {
                     passport(book.mine)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                 }
             }
-            if tab == .been, sort != .distance {
+            if tab == .been {
                 if tripID == nil {
                     Section {
                         friendsStrip
@@ -633,6 +670,7 @@ struct EatsListView: View {
                     Button("Clear filters") {
                         city = nil
                         cuisine = nil
+                        setNear(nil)
                         query = ""
                     }
                 }
@@ -643,7 +681,7 @@ struct EatsListView: View {
                     if tab == .been {
                         Button { detail = place } label: {
                             EatsPlaceRow(place: place, index: sort == .score ? index + 1 : nil, score: scores[place.id],
-                                         subtitle: subtitle(place), friends: book.friendScores(for: place).map(\.friend))
+                                         subtitle: withDistance(place, subtitle(place)), friends: book.friendScores(for: place).map(\.friend))
                         }
                         .buttonStyle(.plain)
                     } else {
@@ -726,12 +764,14 @@ struct EatsListView: View {
         }
     }
 
-    /// A saved place: same row as the list, with Been to rank it.
+    /// A saved place: same row as the list (tap for its page), with Been to rank it.
     private func wishRow(_ wish: EatsPlace) -> some View {
         HStack(alignment: .center, spacing: 8) {
-            EatsPlaceRow(place: wish, index: nil, score: nil,
-                         subtitle: [distanceLabel(wish), "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))"]
-                            .compactMap { $0 }.joined(separator: " · "))
+            Button { wishDetail = wish } label: {
+                EatsPlaceRow(place: wish, index: nil, score: nil,
+                             subtitle: withDistance(wish, "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))"))
+            }
+            .buttonStyle(.plain)
             if let spot = wish.tripPlace {
                 Button("Been") { ranking = .place(spot) }
                     .font(.subheadline.weight(.semibold))
@@ -742,7 +782,7 @@ struct EatsListView: View {
             if let url = wish.tripPlace?.mapsURL {
                 Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
             }
-            if let reel = URL(string: wish.notes), SharedPlaceHandoff.isInstagramPost(reel) {
+            if let reel = wish.reelURL {
                 Link(destination: reel) { Label("Watch the reel", systemImage: "play.rectangle") }
             }
         }
@@ -845,7 +885,7 @@ struct EatsListView: View {
         let trip = tripID == nil && !place.tripID.isEmpty ? TripStore.shared.trip(place.tripID)?.name : nil
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).day().year())
         let visits = place.visits.count > 1 ? "\(place.visits.count) visits" : nil
-        return [distanceLabel(place), trip, date, visits].compactMap { $0 }.joined(separator: " · ")
+        return [trip, date, visits].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func candidate(for request: RankRequest) -> RankCandidate {
@@ -1249,6 +1289,135 @@ struct EatsPlaceDetail: View {
 
     private var tagline: String? {
         place.notes.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+    }
+}
+
+/// A place you want to try: where it is, the reel it came from, your notes,
+/// and I've been to rank it.
+struct EatsWishDetail: View {
+    @State private var place: EatsPlace
+    /// Gets the place when you tap I've been; the list ranks it once this closes.
+    let onBeen: (TripPlace) -> Void
+    @State private var book = EatsBook.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var mapItem: MKMapItem?
+    @State private var showingListing = false
+    @State private var confirmRemove = false
+    @State private var renaming = false
+
+    init(place: EatsPlace, onBeen: @escaping (TripPlace) -> Void) {
+        _place = State(initialValue: place)
+        self.onBeen = onBeen
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PlaceHeroMap(coordinate: place.coordinate, name: place.name, tint: Theme.brand) {
+                        if mapItem != nil { showingListing = true }
+                    }
+                    VStack(alignment: .leading, spacing: 22) {
+                        titleBlock
+                        PlaceActionBar(place: place.tripPlace, mapItem: mapItem) { showingListing = true }
+                        notesList
+                        Button("Remove from Want to Try", role: .destructive) { confirmRemove = true }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 4)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(Theme.card)
+            .ignoresSafeArea(edges: .top)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        book.updateWish(place)
+                        dismiss()
+                    }
+                    .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .task(id: place.tripPlace) {
+                guard let spot = place.tripPlace else { return }
+                mapItem = await PlaceMapCard.listing(for: spot)
+            }
+            .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
+            .alert("Rename", isPresented: $renaming) {
+                TextField("Name", text: $place.name)
+                Button("Done") {}
+            }
+            .confirmationDialog("Remove \(place.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                Button("Remove", role: .destructive) {
+                    book.removeFromWishlist(place)
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(place.name)
+                .wooliFont(.display)
+                .foregroundStyle(Theme.text)
+                .lineLimit(3).minimumScaleFactor(0.7)
+                .onLongPressGesture { renaming = true }
+                .padding(.top, place.coordinate == nil ? 0 : -PlaceHeroMap.titleOverlap)
+            HStack(spacing: 10) {
+                Label("Want to try", systemImage: "bookmark.fill")
+                    .font(.subheadline.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                Spacer()
+                if let spot = place.tripPlace {
+                    Button("I've been") {
+                        onBeen(spot)
+                        dismiss()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(PlaceActionBar.ink)
+                }
+            }
+            if let cuisine = place.cuisine {
+                Text(cuisine).font(.headline).foregroundStyle(PlaceActionBar.ink)
+            }
+            if !place.address.isEmpty {
+                Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
+            }
+        }
+    }
+
+    private var notesList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Your notes").font(.title3.weight(.bold)).foregroundStyle(Theme.text).padding(.bottom, 6)
+            if let reel = place.reelURL {
+                PlaceDetailRow(systemImage: "play.rectangle") {
+                    Link(destination: reel) {
+                        HStack {
+                            Text("Watch the reel").foregroundStyle(Theme.text)
+                            Spacer()
+                            Image(systemName: "arrow.up.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                }
+            }
+            PlaceDetailRow(systemImage: "bookmark") {
+                LabeledContent("Saved", value: place.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))
+            }
+            PlaceDetailRow(systemImage: "square.and.pencil") {
+                TextField("Add notes — what to order, who recommended it", text: $place.notes, axis: .vertical)
+                    .lineLimit(1...8)
+            }
+            PlaceDetailRow(systemImage: "pencil.line") {
+                PlaceDetailLink(title: "Rename") { renaming = true }
+            }
+            Text("Friends you share your list with can see your notes.")
+                .font(.caption).foregroundStyle(Theme.textTertiary).padding(.top, 8)
+        }
     }
 }
 

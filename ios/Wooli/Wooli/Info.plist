@@ -22,7 +22,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Wooli saves the periods and symptoms you log to Apple Health, so they stay in one place.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Wooli uses your location to sort your Eats by distance. It stays on your iPhone.</string>
+	<string>Wooli uses your location to show Eats places near you. It stays on your iPhone.</string>
 	<key>TMDBAPIKey</key>
 	<string>$(TMDB_API_KEY)</string>
 	<key>UIBackgroundModes</key>
