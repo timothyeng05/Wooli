@@ -106,6 +106,7 @@ struct TripPlaceDetail: View {
                     Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
                 }
             }
+            AddedByLabel(creatorID: item.creatorID)
         }
     }
 

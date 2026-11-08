@@ -77,6 +77,7 @@ final class TripStore: CKSyncEngineDelegate {
     func start() {
         guard privateEngine == nil else { return }
         load()
+        Task { await People.shared.learnMyID(from: container) }
         startEngines()
         EatsBook.shared.start()
         if needsFullUpload { uploadEverythingMine() }
@@ -108,7 +109,11 @@ final class TripStore: CKSyncEngineDelegate {
         guard let data = try? Data(contentsOf: Self.fileURL),
               let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
         trips = saved.trips
-        items = saved.items
+        items = saved.items.map { item in
+            var item = item
+            if item.creatorID == nil { item.creatorID = CKRecord.creatorID(in: item.systemFields) }
+            return item
+        }
         privateState = saved.privateState
         sharedState = saved.sharedState
         needsFullUpload = saved.needsFullUpload ?? false
@@ -606,6 +611,7 @@ final class TripStore: CKSyncEngineDelegate {
 
     private func apply(_ record: CKRecord) {
         let zoneID = record.recordID.zoneID
+        if let share = record as? CKShare { People.shared.learn(from: share) }
         if EatsBook.isEatsZone(zoneID) {
             EatsBook.shared.apply(record)
             return

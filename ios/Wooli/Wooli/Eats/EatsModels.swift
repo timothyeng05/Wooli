@@ -30,6 +30,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
     var createdAt: Date = .now
     /// CloudKit change tag etc. (your own places only).
     var systemFields: Data?
+    /// iCloud user who first saved it (CloudKit's creator); see `People`.
+    var creatorID: String?
 
     static let recordType = "EatsPlace"
     /// A place you want to try. Its own record type, so it never counts as
@@ -114,7 +116,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
 
     // Field by field, so records from newer or older versions still decode.
     enum CodingKeys: String, CodingKey {
-        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, visits, notes, tripID, tripItemID, createdAt, systemFields
+        case id, name, address, latitude, longitude, mapItemID, sentiment, rank, visitedDay, visits, notes, tripID, tripItemID, createdAt, systemFields, creatorID
     }
 
     init(from decoder: Decoder) throws {
@@ -135,6 +137,7 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         tripItemID = try c.decodeIfPresent(String.self, forKey: .tripItemID) ?? ""
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
         systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
+        creatorID = try c.decodeIfPresent(String.self, forKey: .creatorID) ?? CKRecord.creatorID(in: systemFields)
     }
 
     func record(in zoneID: CKRecordZone.ID, type: String = Self.recordType) -> CKRecord {
@@ -172,6 +175,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         tripItemID = r["tripItemID"] as? String ?? ""
         createdAt = r["createdAt"] as? Date ?? r.creationDate ?? .now
         systemFields = keepSystemFields ? r.encodedSystemFields : nil
+        // A friend's read-only list is all theirs; only shared lists you edit say who added what.
+        creatorID = keepSystemFields ? r.creatorUserRecordID?.recordName : nil
     }
 }
 

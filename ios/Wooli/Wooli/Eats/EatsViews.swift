@@ -933,6 +933,7 @@ struct EatsPlaceRow: View {
                         .labelStyle(.titleAndIcon).imageScale(.small)
                         .font(.subheadline).foregroundStyle(Theme.text).lineLimit(1)
                 }
+                AddedByLabel(creatorID: place.creatorID)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(.subheadline).foregroundStyle(Theme.textTertiary).lineLimit(1).padding(.top, 14)
                 }
@@ -1193,6 +1194,7 @@ struct EatsPlaceDetail: View {
             if !place.address.isEmpty {
                 Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
             }
+            AddedByLabel(creatorID: place.creatorID)
         }
     }
 
@@ -1388,6 +1390,7 @@ struct EatsWishDetail: View {
             if !place.address.isEmpty {
                 Text(place.address).font(.subheadline).foregroundStyle(Theme.textSecondary).textSelection(.enabled)
             }
+            AddedByLabel(creatorID: place.creatorID)
         }
     }
 

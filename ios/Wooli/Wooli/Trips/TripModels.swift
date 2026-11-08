@@ -234,6 +234,8 @@ struct TripItem: Identifiable, Codable, Hashable {
     var checkOutDay: String?
     var createdAt: Date = .now
     var systemFields: Data?
+    /// iCloud user who first saved it (CloudKit's creator); see `People`.
+    var creatorID: String?
 
     static let recordType = "TripItem"
 
@@ -347,6 +349,15 @@ struct TripTransport: Codable, Hashable {
 // MARK: - CloudKit records
 
 extension CKRecord {
+    /// Who created the record, from saved system fields (for files saved
+    /// before `creatorID` was kept).
+    static func creatorID(in systemFields: Data?) -> String? {
+        guard let systemFields, let coder = try? NSKeyedUnarchiver(forReadingFrom: systemFields) else { return nil }
+        coder.requiresSecureCoding = true
+        defer { coder.finishDecoding() }
+        return CKRecord(coder: coder)?.creatorUserRecordID?.recordName
+    }
+
     /// Rebuild from saved system fields (keeps the change tag), or start fresh.
     static func restoring(_ systemFields: Data?, type: String, id: CKRecord.ID) -> CKRecord {
         if let systemFields, let coder = try? NSKeyedUnarchiver(forReadingFrom: systemFields) {
@@ -430,5 +441,6 @@ extension TripItem {
         }
         checkOutDay = r["checkOutDay"] as? String
         systemFields = r.encodedSystemFields
+        creatorID = r.creatorUserRecordID?.recordName
     }
 }

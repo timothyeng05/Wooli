@@ -891,6 +891,8 @@ struct TripItemRow: View {
                 if !item.notes.isEmpty {
                     Text(item.notes).font(.caption).foregroundStyle(Theme.textTertiary).lineLimit(2)
                 }
+                // Empty meal slots come with every new trip; nobody really added them.
+                if !item.isMealPlaceholder { AddedByLabel(creatorID: item.creatorID) }
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
