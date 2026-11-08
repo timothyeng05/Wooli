@@ -64,7 +64,7 @@ struct DashboardView: View {
                     SyncStatusLine()
 
                     if !reviewItems.isEmpty {
-                        ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
+                        ReviewPreviewCard(items: reviewItems, ledger: ledger)
                     }
 
                     PaceCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
@@ -108,7 +108,7 @@ struct DashboardView: View {
         switch card {
         case .review:
             if !reviewItems.isEmpty {
-                ReviewPreviewCard(items: reviewItems, categories: categories, ledger: ledger)
+                ReviewPreviewCard(items: reviewItems, ledger: ledger)
             }
         case .budget:
             BudgetSummaryCard(month: thisMonth, summary: month, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses)
@@ -436,19 +436,14 @@ struct PaceCard: View {
     }
 }
 
-/// A few transactions waiting on a category, plus a one-tap way to clear
-/// whichever of them already have one — the review queue stays for the rest.
+/// A few transactions waiting on a category, with a way into the review queue.
+/// No bulk "mark all as reviewed": each one gets confirmed on its own.
 struct ReviewPreviewCard: View {
     @Environment(AppModel.self) private var app
-    @Environment(\.modelContext) private var context
     let items: [LocalTransaction]
-    let categories: [BudgetCategory]
     let ledger: Ledger
-    @State private var confirmedPulse = false
 
     var body: some View {
-        let ready = items.filter { $0.categoryId != nil }
-
         VStack(spacing: Space.s) {
             SectionBand(title: "Needs review", summary: "Transactions waiting for a category",
                         badge: .number(items.count))
@@ -457,24 +452,10 @@ struct ReviewPreviewCard: View {
                     if index > 0 { ItemRowDivider() }
                     TransactionRow(transaction: tx, category: ledger.category(for: tx), quickEdit: false)
                 }
-                HStack(spacing: Space.m) {
-                    if !ready.isEmpty {
-                        Button {
-                            withAnimation(.snappy) {
-                                for tx in ready { Categorizer.confirm(tx, categories: categories, context: context) }
-                            }
-                            confirmedPulse.toggle()
-                        } label: {
-                            Text("Mark \(ready.count) as reviewed")
-                        }
-                        .buttonStyle(.wooliPrimary)
-                        .sensoryFeedback(.success, trigger: confirmedPulse)
-                    }
-                    Button("Review all") { app.showReview = true }
-                        .buttonStyle(.wooliSecondary)
-                }
-                .padding(.top, Space.s)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Review all") { app.showReview = true }
+                    .buttonStyle(.wooliPrimary)
+                    .padding(.top, Space.s)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .card()
         }
