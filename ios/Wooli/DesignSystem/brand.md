@@ -90,7 +90,7 @@ A motif is used only where it means something. Each screen gets at most one hero
 - **Lists:** `ItemRow`, the one row for every module, and `EmptyState`.
 - **Actions:** `Button` (primary blue, secondary soft blue, tertiary outline).
 - **Heroes:** `HeroCard`, `TicketCard` (Trips only) and `CinemaStub` (Movies only).
-- **App icons:** illustrated objects with real light, one per app, in `app-icons/` (SVG source) and `Assets.xcassets/AppIcons` (PNG). `AppIconTile` shows them; SF Symbols stay for everything inside a screen.
+- **App icons:** the Wooli sheep in clay, holding each app's object on a flat colour, one per app. Source sheet in `app-icons/sheet.webp`, cut to 512 px rounded tiles in `Assets.xcassets/AppIcons` by `app-icons/cut.py` (`python3 cut.py sheet.webp <out-dir>`). `icon-settings` and `icon-mail` are in the catalog but not used yet. `AppIconTile` shows them; SF Symbols stay for everything inside a screen.
 - **Travel motifs:** `DepartureBoard`, `LuggageTag`, `Postcard` and `SuitcaseSticker`.
 - **Sections:** `SectionBand` (section header) and `TimelineItem` (plan row).
 - **Eats and Movies:** `RankStamp`, plus the face-off shown in the Eats screens.

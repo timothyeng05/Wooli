@@ -39,7 +39,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Its illustrated tile in the asset catalog, drawn from `DesignSystem/app-icons`.
+    /// Its illustrated tile in the asset catalog, cut from `DesignSystem/app-icons/sheet.webp`.
     var iconAsset: String { self == .period ? "icon-health" : "icon-\(rawValue)" }
 
     var tint: Color {
