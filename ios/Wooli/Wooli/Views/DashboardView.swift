@@ -37,7 +37,13 @@ struct DashboardView: View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let thisMonth = DateInterval.month(containing: .now)
         let visibleAccounts = Set(accounts.filter { $0.counts(forPerson: selectedPersonId) }.map(\.providerAccountId))
-        let relevantTransactions = transactions.filter { visibleAccounts.contains($0.accountId) }
+        // Every card here looks at most seven months back (the pace line averages
+        // up to six full months), so slice once instead of each card walking five
+        // years of history. `transactions` is sorted newest first.
+        let cutoff = Calendar.current.date(byAdding: .month, value: -(SpendingPace.averageMonths.upperBound + 1),
+                                           to: thisMonth.start) ?? thisMonth.start
+        let relevantTransactions = transactions.prefix { $0.transactedAt >= cutoff }
+            .filter { visibleAccounts.contains($0.accountId) }
         let month = MonthSummary(transactions: relevantTransactions, in: thisMonth,
                                  categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
         let plan = BudgetPlan(categories: categories, transactions: relevantTransactions, month: thisMonth, ledger: ledger)
