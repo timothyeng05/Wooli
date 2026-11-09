@@ -49,7 +49,7 @@ Ordered by priority.
 |----|------|--------|
 | O1 | History retention vs. Reports | ✅ done — keep 5 years |
 | O2 | Household / People filter fixes | ✅ done 2026-11-09 |
-| O3 | Navigation clean-up (duplicate entry points) | todo |
+| O3 | Navigation clean-up (duplicate entry points) | 🟡 mostly done by the ☰ drawer; one question for the user |
 | O4 | Add a unit-test target for the money math | ✅ done 2026-11-09 (first set; grow it) |
 | O5 | Dashboard / Reports performance | ✅ done 2026-11-09 |
 | O6 | Code hygiene from recent edits | ✅ done 2026-11-09 |
@@ -70,6 +70,8 @@ Options:
 - Label mismatch: Dashboard says "Household", Reports says "Everyone".
 - `Person` isn't erased in `AppModel.eraseLocalData` and isn't deduplicated in `Deduplicator`.
 - `PersonEditView` only saves on `onDisappear` — no explicit Save, easy to lose an edit.
+
+**O3 status (2026-11-09, Claude):** the super-app drawer already fixed most of this: `MenuView` and its string routes are gone (the drawer uses the `SidebarDestination` enum), Rules is no longer in Settings, and Categories, Rules, Recurring and Settings all open the same way (a sheet). Left: Settings also opens from the ⋯ menu on Dashboard and Accounts (and from Today). Waiting on the user: keep those shortcuts or make the drawer the only way in.
 
 **O3 — Navigation clean-up.** Settings opens from both the Dashboard gear and Menu; Rules is in both Settings and Menu; Settings is a sheet while its siblings push. Pick one home for each (suggest: Menu owns Budget/Categories/Rules/Recurring/People/Settings; drop the Dashboard gear). Replace `MenuView`'s string routes with an enum.
 
