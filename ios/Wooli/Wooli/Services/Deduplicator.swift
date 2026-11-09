@@ -18,6 +18,8 @@ enum Deduplicator {
         dedupe(FetchDescriptor<TransactionRule>(), key: { "\($0.statementMatch)|\($0.statementText)|\($0.statementTexts.joined(separator: ","))" },
                context: context) { a, b in a.timesApplied >= b.timesApplied }
         dedupe(FetchDescriptor<RecurringItem>(), key: { "\($0.merchant)|\($0.title)" }, context: context) { a, b in a.createdAt >= b.createdAt }
+        // People: the same record twice (synced on two devices). Accounts point at the id, so either copy works.
+        dedupe(FetchDescriptor<Person>(), key: \.id, context: context) { _, _ in true }
         // Modules: one period per start day; keep the newest edit.
         dedupe(FetchDescriptor<PeriodEntry>(), key: { "\($0.startDay.timeIntervalSince1970)" }, context: context) { a, b in a.updatedAt >= b.updatedAt }
         // Movies: one entry per film (added on two devices); keep the newest edit.

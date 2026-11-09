@@ -36,7 +36,7 @@ struct DashboardView: View {
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let thisMonth = DateInterval.month(containing: .now)
-        let visibleAccounts = Set(accounts.filter { selectedPersonId == nil || $0.ownerId == selectedPersonId }.map(\.providerAccountId))
+        let visibleAccounts = Set(accounts.filter { $0.counts(forPerson: selectedPersonId) }.map(\.providerAccountId))
         let relevantTransactions = transactions.filter { visibleAccounts.contains($0.accountId) }
         let month = MonthSummary(transactions: relevantTransactions, in: thisMonth,
                                  categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
@@ -50,7 +50,7 @@ struct DashboardView: View {
                 VStack(spacing: 16) {
                     if !people.isEmpty {
                         Picker("Person", selection: $selectedPersonId) {
-                            Text("Household").tag(String?.none)
+                            Text("Everyone").tag(String?.none)
                             ForEach(people) { person in
                                 Text("\(person.name)").tag(String?.some(person.id))
                             }

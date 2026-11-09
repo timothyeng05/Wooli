@@ -445,6 +445,13 @@ private struct TextListConditionEditor: View {
     @Binding var values: [String]
     var suggestion: String?
     @State private var newValue = ""
+    /// Rows with stable ids, so deleting one doesn't shift text into the wrong field.
+    @State private var rows: [Row] = []
+
+    private struct Row: Identifiable {
+        let id = UUID()
+        var text: String
+    }
 
     var body: some View {
         Form {
@@ -460,17 +467,14 @@ private struct TextListConditionEditor: View {
             }
 
             Section {
-                ForEach(values.indices, id: \.self) { i in
-                    TextField("Value", text: Binding(
-                        get: { values.indices.contains(i) ? values[i] : "" },
-                        set: { if values.indices.contains(i) { values[i] = $0 } }
-                    ), axis: .vertical)
+                ForEach($rows) { $row in
+                    TextField("Value", text: $row.text, axis: .vertical)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .padding(.vertical, 4)
                         .swipeActions {
                             Button("Remove", systemImage: "trash", role: .destructive) {
-                                if values.indices.contains(i) { values.remove(at: i) }
+                                rows.removeAll { $0.id == row.id }
                             }
                         }
                 }
@@ -512,9 +516,14 @@ private struct TextListConditionEditor: View {
                 }
             }
         }
-        
-            .navigationTitle(title)
-        .onAppear { if mode.isEmpty { mode = title == "Merchant name" ? "exact" : "contains" } }
+        .navigationTitle(title)
+        .onAppear {
+            if mode.isEmpty { mode = title == "Merchant name" ? "exact" : "contains" }
+            if rows.map(\.text) != values { rows = values.map { Row(text: $0) } }
+        }
+        .onChange(of: rows.map(\.text)) { _, texts in
+            if texts != values { values = texts }
+        }
     }
 
     private func addNewValue() {
@@ -525,8 +534,8 @@ private struct TextListConditionEditor: View {
     }
 
     private func addValue(_ value: String) {
-        guard !values.contains(value) else { return }
-        values.append(value)
+        guard !rows.contains(where: { $0.text == value }) else { return }
+        rows.append(Row(text: value))
     }
 }
 
@@ -560,8 +569,7 @@ private struct AmountConditionEditor: View {
                 }
             }
         }
-        
-            .navigationTitle("Amount")
+        .navigationTitle("Amount")
     }
 }
 

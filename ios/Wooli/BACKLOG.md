@@ -48,11 +48,11 @@ Ordered by priority.
 | ID | Item | Status |
 |----|------|--------|
 | O1 | History retention vs. Reports | ✅ done — keep 5 years |
-| O2 | Household / People filter fixes | todo |
+| O2 | Household / People filter fixes | ✅ done 2026-11-09 |
 | O3 | Navigation clean-up (duplicate entry points) | todo |
 | O4 | Add a unit-test target for the money math | todo |
 | O5 | Dashboard / Reports performance | 🟡 partly done 2026-10-26 (see Done) |
-| O6 | Code hygiene from recent edits | todo |
+| O6 | Code hygiene from recent edits | ✅ done 2026-11-09 |
 | O7 | Starter rules sanity check | todo |
 | O8 | Sample data goes stale after a month rolls over | ✅ done |
 | O9 | Slow first launch | 🟡 launch screen fixed; verify on device |
@@ -259,6 +259,7 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 
 ## Done
 
+- **2026-11-09 · Claude** — **O2 + O6 clean-up.** O2: accounts assigned to "Everyone" now count for every person on Dashboard and Reports (`LocalAccount.counts(forPerson:)`); the Dashboard picker says "Everyone" like Reports and the account editor; Reset All Data erases people; `Deduplicator` merges duplicate people by id; Edit Person saves as you type instead of on leaving. The Net Worth item was moot (no Net Worth card on the Dashboard any more). O6: removed stray blank lines and fixed indents before `.navigationTitle` (Rules, Transactions), removed the double divider in account settings, and the rule editor's value rows now have stable ids so deleting one can't shift text into the wrong field. The `withAnimation` warning and chart `UnitPoint` anchor were already gone. Built (generic iOS Simulator): no errors or warnings. Not checked in the Simulator.
 - **2026-11-09 · Claude** — **Sheep home-screen icon** (user). `AppIcon.png` is now the waving clay sheep on royal blue. The user's 1600 px image had baked-in rounded corners and a white border, so it was centre-cropped to 1440 px (sheep untouched), scaled to 1024 px and saved without alpha, since iOS masks the corners itself and App Store rejects transparency. Not built — no Xcode in the session.
 - **2026-11-09 · Claude** — **Sheep app icons** (user). The eight illustrated tiles are replaced by the clay Wooli sheep holding each app's object (Today sun, Budget wallet, Health dumbbells, Trips map and suitcase, Eats pasta, Sights binoculars, Movies popcorn, Recipes pan and chef hat). Cut from the user's sheet (`DesignSystem/app-icons/sheet.webp`) by `cut.py` to 512 px tiles with transparent rounded corners; the old SVG sources are gone. `icon-settings` (wrench and gear) and `icon-mail` (envelope) are in the catalog, not yet used. The source sheet is ~450 px per tile, so 512 px is a slight upscale: fine up to the 56pt grid tile, soft if shown larger. Not built — no Xcode in the session.
 - **2026-11-08 · Claude** — **Place search: several suggestions as you type** (user: only one showed at a time). `PlaceSearcher` now feeds `MKLocalSearchCompleter` (POIs and addresses, held to the trip's destination) instead of a debounced `MKLocalSearch`, which returns one best guess for half a word. Tapping a suggestion looks it up; Search on the keyboard still runs the full search (sorted by distance from the destination). Google is asked when Apple has no suggestions and typing pauses (600 ms). New `tools/PlaceSearchCheck` (Mac script, README) checks this around the world: built-in 40 places on every continent → 39 on Apple, 1 only on Google, 0 missed; the user's own 210 trip and Eats places (Japan, Korea, US, Hong Kong, China, Taiwan, Europe, NZ) → 194 on Apple, 14 only on Google, 2 missed (both saved under custom names). Checked in the Simulator ("ichiichi" in the Japan + Seoul trip lists six-plus matches). Not checked: dark mode, the station pickers in the transport editor.

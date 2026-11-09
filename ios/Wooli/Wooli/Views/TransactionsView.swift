@@ -105,8 +105,7 @@ struct TransactionsView: View {
             guard !Task.isCancelled else { return }
             debouncedSearch = search
         }
-        
-            .navigationTitle(accountId == nil ? "Transactions" : "Activity")
+        .navigationTitle(accountId == nil ? "Transactions" : "Activity")
         .refreshable { await app.sync(context: context) }
         .toolbar {
             if accountId == nil {
@@ -271,7 +270,6 @@ struct FiltersSheet: View {
                     }
                 }
             }
-            
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -380,7 +378,6 @@ private struct AmountFilter: View {
                 Text("Matches money in and money out by size.")
             }
         }
-        
-            .navigationTitle("Amounts")
+        .navigationTitle("Amounts")
     }
 }

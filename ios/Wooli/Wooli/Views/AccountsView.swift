@@ -257,8 +257,6 @@ struct AccountDetailView: View {
                     }
                     .padding(.vertical, 6)
                     Divider()
-
-                    Divider()
                     Toggle("Hide account", isOn: $account.isHidden).padding(.vertical, 10)
                     Text("Hidden accounts aren't counted in net worth, budgets, or the review queue.")
                         .font(.footnote).foregroundStyle(Theme.textTertiary)

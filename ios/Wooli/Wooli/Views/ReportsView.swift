@@ -34,7 +34,7 @@ struct ReportsView: View {
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
-        let visibleAccountIds = Set(accounts.filter { selectedPersonId == nil || $0.ownerId == selectedPersonId }.map(\.providerAccountId))
+        let visibleAccountIds = Set(accounts.filter { $0.counts(forPerson: selectedPersonId) }.map(\.providerAccountId))
         let relevantTransactions = transactions.filter { visibleAccountIds.contains($0.accountId) }
         let summary = MonthSummary(transactions: relevantTransactions, in: period.interval,
                                    categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)

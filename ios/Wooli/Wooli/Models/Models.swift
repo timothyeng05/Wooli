@@ -57,6 +57,15 @@ enum AccountKind: String, CaseIterable, Identifiable {
     }
 }
 
+extension LocalAccount {
+    /// Whether this account counts when the person picker is set to `personId`
+    /// (nil = everyone). Accounts assigned to "Everyone" are shared, so they
+    /// count for every person.
+    func counts(forPerson personId: String?) -> Bool {
+        personId == nil || ownerId == nil || ownerId == personId
+    }
+}
+
 @Model
 final class LocalAccount {
     var ownerId: String?

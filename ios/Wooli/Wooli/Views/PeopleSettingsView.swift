@@ -74,9 +74,13 @@ struct PersonEditView: View {
         }
         .navigationTitle("Edit Person")
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear {
-            person.name = name.trimmingCharacters(in: .whitespaces)
-            person.icon = icon.isEmpty ? "👤" : String(icon.prefix(1))
+        // Save as you type, so leaving any way (swipe back, switching apps) keeps the edit.
+        .onChange(of: name) { _, new in
+            let trimmed = new.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { person.name = trimmed }
+        }
+        .onChange(of: icon) { _, new in
+            person.icon = new.isEmpty ? "👤" : String(new.prefix(1))
         }
     }
 }
