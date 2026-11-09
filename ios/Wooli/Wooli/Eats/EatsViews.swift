@@ -112,7 +112,7 @@ struct RankFlow: View {
             .animation(.snappy, value: high)
             .animation(.snappy, value: forgotten)
             .animation(.snappy, value: result)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
@@ -393,9 +393,9 @@ struct EatsListView: View {
             .padding(20)
         }
         .navigationTitle(tripID != nil ? "What we ate" : book.partner == nil ? "Eats" : "Our Eats")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Button("Add a place", systemImage: "plus") { adding = true }
             }
         }
@@ -1021,7 +1021,7 @@ struct FriendListView: View {
                 }
             }
             .navigationTitle(friend.name)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Picker("View", selection: $showMap) {
@@ -1031,7 +1031,7 @@ struct FriendListView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 160)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .wooliTrailing) {
                     Menu("More", systemImage: "ellipsis") {
                         Button("Stop following", systemImage: "person.badge.minus", role: .destructive) { confirmUnfollow = true }
                     }
@@ -1446,7 +1446,7 @@ struct VisitEditor: View {
                 }
             }
             .navigationTitle(isNew ? "Add visit" : "Visit")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

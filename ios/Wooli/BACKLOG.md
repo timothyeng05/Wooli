@@ -225,6 +225,24 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 
 ---
 
+## Phase M — Native Mac app (started 2026-11-09)
+
+The same `Wooli` app target now also builds for macOS (native SwiftUI, not Catalyst or "Designed for iPhone"): one codebase, one bundle id `com.timothyeng.wooli`, same iCloud container, so Mac and iPhone share data. In Xcode pick the **My Mac** destination. iPhone-only calls go through `Shared/Platform.swift` (`.inlineNavigationTitle()`, `.wooliKeyboard`, `.wooliLeading`/`.wooliTrailing`, `.alwaysEditing()`, `Color.platformBackground`, …) or `#if os(iOS)`. The share extension stays iPhone-only (`platformFilter = ios`). Health isn't on the Mac, so Period shows as unavailable there.
+
+Mac build check: `cd ios/Wooli && xcodebuild -scheme Wooli -destination 'platform=macOS' build`.
+
+| ID | Item | Status |
+|----|------|--------|
+| M1 | macOS destination on the app target: project settings, Mac entitlements (sandbox, network, location, CloudKit, push), Mac app icon sizes, platform wrappers, Mac iCloud sharing (`NSSharingService` cloud sharing) and invite accepting | 🟡 written — Claude, 2026-11-09 (not built; needs a Mac build + error fixes) |
+| M2 | Launch check on the Mac: iCloud sync with the iPhone, SimpleFIN sync, sample data (`-sampleData`), Trip/Eats invite from the Mac | todo |
+| M3 | Mac navigation: `NavigationSplitView` sidebar replaces the ☰ drawer on the Mac (drawer swipe gesture is iPhone-only) | todo |
+| M4 | Mac layouts: sensible window size (`.defaultSize`, min size), wider screens use the space (Dashboard, Reports, Transactions table) | todo |
+| M5 | Menus + keyboard shortcuts (New transaction ⌘N, Sync ⌘R, Settings ⌘,), `Settings` scene | todo |
+| M6 | Copy that says "iPhone" where it should say "device" on the Mac | todo |
+| M7 | Release: Mac App Store listing (universal purchase with the iPhone app), Xcode Cloud Mac workflow, screenshots | todo |
+
+---
+
 ## Phase 2 — Existing backlog (carried over)
 
 1. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).
@@ -239,6 +257,8 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 ---
 
 ## Decisions
+
+- **2026-11-09** — Wooli gets a **native Mac app** (user). It's the same app target with macOS added as a destination, so one codebase and shared iCloud data. Mac-specific UI (sidebar, menus, wider layouts) follows in Phase M. (Claude chose same-target over a separate Mac target; the user can change this.)
 
 - **2026-11-03** — Periods live in **Apple Health**, not SwiftData. App Store guideline 5.1.3(ii) reportedly bars personal health information from iCloud, and our SwiftData store syncs to CloudKit. Wooli reads Health, writes what's logged there, and keeps only predictions. Free-text period notes are dropped (Health has no place for them). Garmin comes through Health too (S13), read live and never stored.
 
@@ -259,6 +279,7 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 
 ## Done
 
+- **2026-11-09 · Claude** — **M1: Wooli builds for macOS (written, not built).** Added macOS to the Wooli target (`SDKROOT = auto`, `SUPPORTED_PLATFORMS` + `macosx`, macOS 26, hardened runtime), `Wooli-macOS(-Debug).entitlements`, and Mac icon sizes made from `AppIcon.png`. The share extension is filtered to iOS. New `Shared/Platform.swift` wraps iPhone-only calls; ~120 call sites switched over (same behaviour on iOS). `Theme` dynamic colours use `NSColor` on the Mac. `TripSharing.swift` has a Mac presenter (`NSSharingService` `.cloudSharing`) and an `NSApplicationDelegate` that accepts invites. `NSLocationUsageDescription` added for the Mac. **Not built** — no Xcode in the session — so expect a round of Mac compile fixes; iOS behaviour should be unchanged but also wasn't built.
 - **2026-11-08 · Claude** — **Place search falls back to Google Maps.** Apple Maps misses many restaurants and sights abroad. In "Find a place" (Eats, Trips, Sights, reel import), when Apple finds nothing Wooli asks Google Places (New) text search, biased to the trip's destination; otherwise a "Not finding it? Search Google Maps" button does it on tap. Google's matches show under "From Google Maps", minus ones Apple already listed. `Services/GooglePlaces.swift`; key from `GOOGLE_PLACES_API_KEY` in `Config/Secrets.xcconfig` (hidden without it), sent with `X-Ios-Bundle-Identifier` so a bundle-restricted key works. Google-picked places have no Apple Maps ID, so their detail card shows no Apple listing unless one is found near the pin. Privacy policy and App Privacy notes updated. `ci_scripts/ci_pre_xcodebuild.sh` writes `Secrets.xcconfig` from Xcode Cloud secret env vars (`TMDB_API_KEY`, `GOOGLE_PLACES_API_KEY`); it never overwrites an existing file. Built; a Release build carries both keys; the key returns results from Google with the bundle-id header; the CI script was tested locally in a fake checkout. Not checked: the Simulator, a real Xcode Cloud run.
 - **2026-11-08 · Claude** — **Dashboard "Needs review": removed the bulk "Mark N as reviewed" button** (user: too easy to fat-finger when there are many). The card now has only "Review all" (now the primary button), which opens the review queue to confirm each one. `ReviewPreviewCard` lost its `categories` parameter. Built (Debug, generic iOS Simulator): BUILD SUCCEEDED. Not checked in the Simulator.
 - **2026-11-07 · Claude** — Dashboard: the Spending Pace and Spending (this month vs. last month) cards are one **Spending** card (`SpendingCard`, replacing `PaceCard` + `SpendingComparisonCard`). Headline stays "$X left of $budget"; one chart with this month (solid), usual pace (dashed) and last month (light step line) on a $ axis, a legend, then "$X under your usual pace", "$X less than this time last month" (now whole dollars like the rest of the card) and the pace caption. Not built — no Xcode in the session.

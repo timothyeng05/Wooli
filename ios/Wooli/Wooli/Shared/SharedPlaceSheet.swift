@@ -154,7 +154,7 @@ struct SharedPlaceTripPicker: View {
                 }
             }
             .navigationTitle("Add to a trip")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
@@ -204,7 +204,7 @@ struct SharedPlaceSightsSheet: View {
             }
             .padding(Space.xl)
             .navigationTitle("Save to Sights")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
@@ -260,7 +260,7 @@ struct SharedReelSheet: View {
                     }
                 }
                 .navigationTitle("Instagram reel")
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             }
             .task {

@@ -53,7 +53,7 @@ struct SplitEditor: View {
                             .buttonStyle(.borderless)
                             Spacer(minLength: 8)
                             TextField("$0.00", value: amountBinding(for: part.id), format: .currency(code: "USD"))
-                                .keyboardType(.decimalPad)
+                                .wooliKeyboard(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .font(.body.monospacedDigit())
                                 .frame(width: 110)
@@ -92,7 +92,7 @@ struct SplitEditor: View {
                 }
             }
             .navigationTitle(original.isSplit ? "Edit split" : "Split transaction")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

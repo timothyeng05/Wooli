@@ -85,7 +85,7 @@ struct SightsListView: View {
         }
         .navigationTitle("Sights")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Button("Add a place", systemImage: "plus") { adding = true }
             }
         }

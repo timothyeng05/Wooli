@@ -64,7 +64,7 @@ struct QuickCategorySheet: View {
                                 .lineLimit(1...3)
                                 .font(.callout.monospaced())
                                 .autocorrectionDisabled()
-                                .textInputAutocapitalization(.never)
+                                .wooliCapitalization(.never)
                             if ruleOnStatement {
                                 Text(transaction.transactionDescription)
                                     .font(.caption2.monospaced()).foregroundStyle(Theme.textTertiary)
@@ -99,9 +99,9 @@ struct QuickCategorySheet: View {
                     }
                 }
             }
-            .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search categories")
+            .searchable(text: $search, placement: .wooliAlwaysVisible, prompt: "Search categories")
             .navigationTitle("Category")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -148,7 +148,7 @@ struct QuickCategorySheet: View {
             RuleEngine.applyToExisting(rule, transactions: transactions, categories: byId)
         }
         try? context.save()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.light()
         dismiss()
     }
 }

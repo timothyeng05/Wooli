@@ -288,7 +288,7 @@ struct TransactionDetailView: View {
         }
         .pageBackground()
         .navigationTitle("Transaction")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .toolbar {
             // Only typed-in transactions can be deleted; bank ones would come back on the next sync.
             if transaction.isManual {
@@ -415,7 +415,7 @@ struct SameMerchantSheet: View {
                 }
             }
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
@@ -481,8 +481,8 @@ struct CategoryPickerView: View {
                 }
             }
         }
-        .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
+        .searchable(text: $search, placement: .wooliAlwaysVisible)
         .navigationTitle("Category")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }

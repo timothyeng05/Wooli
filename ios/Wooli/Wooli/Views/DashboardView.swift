@@ -83,9 +83,9 @@ struct DashboardView: View {
             .navigationTitle(greeting)
             .refreshable { await app.sync(context: context) }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
-                ToolbarItem(placement: .topBarTrailing) { SyncButton() }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .wooliLeading) { HamburgerButton() }
+                ToolbarItem(placement: .wooliTrailing) { SyncButton() }
+                ToolbarItem(placement: .wooliTrailing) {
                     Menu {
                         Button("Edit Home", systemImage: "slider.horizontal.3") { showCustomize = true }
                         Button("Settings", systemImage: "gearshape") { showSettings = true }
@@ -258,10 +258,10 @@ struct DashboardCustomizeView: View {
                     Text("Drag to reorder. Turn off what you don't use.")
                 }
             }
-            .environment(\.editMode, .constant(.active))
+            .alwaysEditing()
             .sensoryFeedback(.selection, trigger: movedPulse)
             .navigationTitle("Edit Home")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

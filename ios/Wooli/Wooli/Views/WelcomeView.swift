@@ -219,7 +219,7 @@ struct WelcomeView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .scrollBounceBehavior(.basedOnSize)
-            .environment(\.editMode, .constant(.active))
+            .alwaysEditing()
             Text("You can change this any time in Settings → Apps.")
                 .font(.caption)
                 .foregroundStyle(Color(hex: "#9ca3af"))
@@ -502,9 +502,9 @@ struct ConnectSheet: View {
                         .lineLimit(3...6)
                         .font(.body.monospaced())
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                        .wooliCapitalization(.never)
                     Button("Paste from Clipboard", systemImage: "doc.on.clipboard") {
-                        token = UIPasteboard.general.string ?? token
+                        token = Pasteboard.string ?? token
                     }
                 } header: {
                     Text("Setup Token")
@@ -524,7 +524,7 @@ struct ConnectSheet: View {
                 }
             }
             .navigationTitle("Connect")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

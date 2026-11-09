@@ -6,7 +6,11 @@ struct WooliApp: App {
     let container: ModelContainer
     @State private var app = AppModel()
     /// Hands iCloud trip invites to `TripStore` (see `WooliSceneDelegate`).
+    #if os(iOS)
     @UIApplicationDelegateAdaptor(WooliAppDelegate.self) private var appDelegate
+    #else
+    @NSApplicationDelegateAdaptor(WooliAppDelegate.self) private var appDelegate
+    #endif
 
     init() {
         let schema = Schema([LocalAccount.self, LocalTransaction.self, BudgetCategory.self, MerchantRule.self, BalanceSnapshot.self,

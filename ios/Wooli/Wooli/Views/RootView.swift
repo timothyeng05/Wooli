@@ -181,10 +181,10 @@ struct MainTabView: View {
                 SettingsView()
             }
         }
-        .fullScreenCover(isPresented: $app.showReview) {
+        .wooliFullScreenCover(isPresented: $app.showReview) {
             ReviewView()
         }
-        .fullScreenCover(isPresented: $app.showCalibration) {
+        .wooliFullScreenCover(isPresented: $app.showCalibration) {
             ReviewView(isCalibration: true)
         }
         .onChange(of: scenePhase) { _, phase in
@@ -245,32 +245,32 @@ private struct SpaceRoot: View {
             case .trips:
                 NavigationStack {
                     TripsListView()
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             case .eats:
                 NavigationStack {
                     EatsListView()
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             case .sights:
                 NavigationStack {
                     SightsListView()
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             case .movies:
                 NavigationStack {
                     MoviesListView()
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             case .recipes:
                 NavigationStack {
                     RecipesListView()
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             case .period:
                 NavigationStack {
                     moduleScreen(.period)
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             }
         }
@@ -304,7 +304,7 @@ private struct BudgetTabView: View {
                 // BudgetView is also pushed from the Dashboard, so the tab supplies its own stack.
                 NavigationStack {
                     BudgetView()
-                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                        .toolbar { ToolbarItem(placement: .wooliLeading) { HamburgerButton() } }
                 }
             }
         }
@@ -388,9 +388,7 @@ struct SidebarDrawer: View {
                             app.isSidebarOpen = false
                         }
                         if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
-                            #if os(iOS)
-                            UIApplication.shared.open(url)
-                            #endif
+                            ExternalURL.open(url)
                         }
                     } label: {
                         HStack(spacing: 14) {
@@ -414,7 +412,7 @@ struct SidebarDrawer: View {
 
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(Color(UIColor.systemBackground))
+        .background(Color.platformBackground)
         .gesture(
             DragGesture().onEnded { val in
                 if val.translation.width < -40 {
@@ -494,12 +492,18 @@ struct SidebarDrawer: View {
 @MainActor
 enum NavigationDepth {
     static var isShowingPushedScreen: Bool {
+        #if os(iOS)
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         return windows.filter(\.isKeyWindow).contains { $0.rootViewController.map(hasPushed) ?? false }
+        #else
+        return false
+        #endif
     }
 
+    #if os(iOS)
     private static func hasPushed(_ vc: UIViewController) -> Bool {
         if let nav = vc as? UINavigationController, nav.viewIfLoaded?.window != nil, nav.viewControllers.count > 1 { return true }
         return vc.children.contains(where: hasPushed)
     }
+    #endif
 }

@@ -342,7 +342,7 @@ struct PeriodEntryEditor: View {
                 }
             }
             .navigationTitle(period == nil ? "Log period" : "Edit period")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { save() } }

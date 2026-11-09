@@ -89,10 +89,10 @@ struct AccountsView: View {
             .navigationTitle("Accounts")
             .refreshable { await app.sync(context: context) }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
-                ToolbarItem(placement: .topBarTrailing) { SyncButton() }
-                ToolbarItem(placement: .topBarTrailing) { ManualAddMenu() }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .wooliLeading) { HamburgerButton() }
+                ToolbarItem(placement: .wooliTrailing) { SyncButton() }
+                ToolbarItem(placement: .wooliTrailing) { ManualAddMenu() }
+                ToolbarItem(placement: .wooliTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
                 }
             }
@@ -293,7 +293,7 @@ struct AccountDetailView: View {
         .pageBackground()
         
             .navigationTitle(account.displayName)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }
 

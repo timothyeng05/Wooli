@@ -75,23 +75,25 @@ struct BudgetView: View {
         .scrollDismissesKeyboard(.interactively)
         
             .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .refreshable { await app.sync(context: context) }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .wooliLeading) {
                 Button("Previous Month", systemImage: "chevron.left") { shift(-1) }
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .wooliTrailing) {
                 if !isCurrentMonth {
                     Button("Today") { withAnimation { month = .month(containing: .now) } }
                 }
                 Button("Next Month", systemImage: "chevron.right") { shift(1) }
                     .disabled(isCurrentMonth)
             }
+            #if os(iOS)
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { editing = nil }
             }
+            #endif
         }
     }
 
@@ -363,7 +365,7 @@ private struct PlannedField: View {
 
     var body: some View {
         TextField("$0", value: $draftValue, format: .currency(code: "USD").precision(.fractionLength(0)))
-            .keyboardType(.numberPad)
+            .wooliKeyboard(.numberPad)
             .multilineTextAlignment(.trailing)
             .font(.subheadline.weight(.semibold).monospacedDigit())
             .focused(editing, equals: id)
@@ -530,7 +532,7 @@ struct CategoryBudgetView: View {
                     Divider().padding(.vertical, 4)
                     LabeledContent("Planned each month") {
                         TextField("None", value: $group.monthlyTarget, format: .currency(code: "USD").precision(.fractionLength(0)))
-                            .keyboardType(.decimalPad)
+                            .wooliKeyboard(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 140)
                             .font(.body.weight(.semibold))
@@ -544,7 +546,7 @@ struct CategoryBudgetView: View {
                         if group.rolloverEnabled {
                             LabeledContent("Carried over") {
                                 TextField("$0", value: $group.rolloverBalance, format: .currency(code: "USD").precision(.fractionLength(0)))
-                                    .keyboardType(.numbersAndPunctuation)
+                                    .wooliKeyboard(.numbersAndPunctuation)
                                     .multilineTextAlignment(.trailing)
                                     .frame(maxWidth: 140)
                                     .font(.body.weight(.semibold))
@@ -653,6 +655,6 @@ struct CategoryBudgetView: View {
         .pageBackground()
         
             .navigationTitle("\(group.icon) \(group.name)")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }

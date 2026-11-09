@@ -46,8 +46,8 @@ struct TodayView: View {
             .pageBackground()
             .navigationTitle(greeting)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .wooliLeading) { HamburgerButton() }
+                ToolbarItem(placement: .wooliTrailing) {
                     Button("Edit Today", systemImage: "slider.horizontal.3") { showEdit = true }
                 }
             }
@@ -96,10 +96,10 @@ struct EditTodayView: View {
                     Text("Drag to order Personal and the ☰ switcher. Explore and Your apps show what you opened most recently first.")
                 }
             }
-            .environment(\.editMode, .constant(.active))
+            .alwaysEditing()
             .sensoryFeedback(.selection, trigger: movedPulse)
             .navigationTitle("Edit Today")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

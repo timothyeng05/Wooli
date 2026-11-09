@@ -371,7 +371,7 @@ struct ReelImportSheet: View {
                 }
             }
             .navigationTitle("Places in this reel")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }

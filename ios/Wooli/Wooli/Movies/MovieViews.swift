@@ -100,7 +100,7 @@ struct MoviesListView: View {
         .searchable(text: $query, prompt: "Title, director or genre")
         .navigationTitle("Movies")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Button("Add a movie", systemImage: "plus") { adding = true }
             }
         }
@@ -340,9 +340,9 @@ struct MovieSearchView: View {
                 ContentUnavailableView.search(text: query)
             }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Movie title")
+        .searchable(text: $query, placement: .wooliAlwaysVisible, prompt: "Movie title")
         .navigationTitle("Add a movie")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .task(id: query) {
             let term = query.trimmingCharacters(in: .whitespaces)
             guard !term.isEmpty else {

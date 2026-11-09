@@ -101,7 +101,7 @@ struct RecipesListView: View {
         }
         .navigationTitle("Recipes")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Button("Add a recipe", systemImage: "plus") { adding = true }
             }
         }
@@ -112,7 +112,7 @@ struct RecipesListView: View {
                     adding = false
                 }
                 .navigationTitle("New recipe")
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { adding = false } } }
             }
         }
@@ -240,9 +240,9 @@ struct RecipeDetail: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { Button("Edit") { editing = true } }
+            ToolbarItem(placement: .wooliTrailing) { Button("Edit") { editing = true } }
         }
         .sheet(isPresented: $editing) {
             NavigationStack {
@@ -251,7 +251,7 @@ struct RecipeDetail: View {
                     editing = false
                 }
                 .navigationTitle("Edit recipe")
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { editing = false } } }
             }
         }

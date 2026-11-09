@@ -24,7 +24,7 @@ struct AcknowledgementsView: View {
             }
         }
         .navigationTitle("Acknowledgements")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     private func credit(_ name: String, detail: String, url: String) -> some View {

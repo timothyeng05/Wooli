@@ -147,9 +147,9 @@ struct IconPickerView: View {
             .padding(16)
         }
         .background(Theme.background)
-        .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search icons (e.g. wifi, supplies)")
+        .searchable(text: $search, placement: .wooliAlwaysVisible, prompt: "Search icons (e.g. wifi, supplies)")
         .navigationTitle("Icon")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     private func grid(title: String, emojis: [String]) -> some View {

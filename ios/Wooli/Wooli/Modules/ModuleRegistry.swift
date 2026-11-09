@@ -137,7 +137,7 @@ struct ModulesSettingsView: View {
                                : "The quick pointers each app shows the first time you open it.")
             }
         }
-        .environment(\.editMode, .constant(.active))
+        .alwaysEditing()
         .navigationTitle("Apps")
     }
 }

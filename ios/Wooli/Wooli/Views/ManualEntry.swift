@@ -77,13 +77,13 @@ struct AddAccountSheet: View {
                 }
                 Section {
                     TextField(isDebt ? "Amount owed" : "Current balance", value: $balance, format: .currency(code: "USD"))
-                        .keyboardType(.decimalPad)
+                        .wooliKeyboard(.decimalPad)
                 } footer: {
                     Text("Wooli adds and subtracts the transactions you enter. You can correct the balance any time from the account.")
                 }
             }
             .navigationTitle("New Account")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -148,7 +148,7 @@ struct AddTransactionSheet: View {
 
                     TextField("Amount", value: $amount, format: .currency(code: "USD"))
                         .font(.title2.weight(.semibold).monospacedDigit())
-                        .keyboardType(.decimalPad)
+                        .wooliKeyboard(.decimalPad)
                     TextField(isIncome ? "From" : "Paid to", text: $payee, prompt: Text(isIncome ? "e.g. Paycheck" : "e.g. Trader Joe's"))
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                 }
@@ -179,7 +179,7 @@ struct AddTransactionSheet: View {
                 }
             }
             .navigationTitle(isIncome ? "New Income" : "New Expense")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -242,7 +242,7 @@ struct ManualAccountControls: View {
                     get: { editingBalance ?? abs(account.balance) },
                     set: { editingBalance = $0 }), format: .currency(code: account.currency))
                     .multilineTextAlignment(.trailing)
-                    .keyboardType(.decimalPad)
+                    .wooliKeyboard(.decimalPad)
                     .onSubmit(saveBalance)
             }
             .padding(.vertical, 12)

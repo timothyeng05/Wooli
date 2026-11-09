@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Design tokens from `DesignSystem/` (values: `DesignSystem/tokens.json`).
 enum Theme {
@@ -132,12 +136,21 @@ extension View {
 
 extension Color {
     init(light: UInt32, dark: UInt32, alpha: CGFloat = 1, darkAlpha: CGFloat? = nil) {
+        #if os(iOS)
         self.init(uiColor: UIColor { traits in
             let isDark = traits.userInterfaceStyle == .dark
             let v = isDark ? dark : light
             return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
                            blue: CGFloat(v & 0xff) / 255, alpha: isDark ? (darkAlpha ?? alpha) : alpha)
         })
+        #else
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let v = isDark ? dark : light
+            return NSColor(srgbRed: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
+                           blue: CGFloat(v & 0xff) / 255, alpha: isDark ? (darkAlpha ?? alpha) : alpha)
+        })
+        #endif
     }
 
     init(hex: String) {

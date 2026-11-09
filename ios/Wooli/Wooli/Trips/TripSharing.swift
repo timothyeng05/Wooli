@@ -1,10 +1,15 @@
-import UIKit
 import CloudKit
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// Apple's share sheet for a trip or an Eats list: invite people through
 /// Messages, Mail or a link, choose permissions, and see or remove
 /// participants. Presented from UIKit — `UICloudSharingController`
 /// misbehaves inside a SwiftUI sheet.
+#if os(iOS)
 @MainActor
 enum TripSharingPresenter {
     /// The controller only holds its delegate weakly.
@@ -56,11 +61,68 @@ enum TripSharingPresenter {
     }
 }
 
+#else
+/// Mac version: AppKit's iCloud sharing service, the Mac counterpart of
+/// `UICloudSharingController` (invite, permissions, participants).
+@MainActor
+enum TripSharingPresenter {
+    typealias PermissionOptions = NSSharingService.CloudKitSharingServiceOptions
+
+    /// The service only holds its delegate weakly.
+    private static var delegate: Delegate?
+
+    static func present(share: CKShare, container: CKContainer, trip: Trip) {
+        let tripID = trip.id
+        present(share: share, container: container, title: trip.name,
+                permissions: [.allowReadWrite, .allowReadOnly, .allowPrivate, .allowPublic]) {
+            TripStore.shared.setShared(false, tripID: tripID)
+        }
+    }
+
+    static func present(share: CKShare, container: CKContainer, title: String,
+                        permissions: PermissionOptions,
+                        onStopSharing: @escaping @MainActor () -> Void) {
+        share[CKShare.SystemFieldKey.title] = title
+        let item = NSItemProvider()
+        item.registerCloudKitShare(share, container: container)
+        guard let service = NSSharingService(named: .cloudSharing) else { return }
+        let delegate = Delegate(permissions: permissions, onStopSharing: onStopSharing)
+        self.delegate = delegate
+        service.delegate = delegate
+        service.perform(withItems: [item])
+    }
+
+    final class Delegate: NSObject, NSCloudSharingServiceDelegate {
+        let permissions: PermissionOptions
+        let onStopSharing: @MainActor () -> Void
+
+        init(permissions: PermissionOptions, onStopSharing: @escaping @MainActor () -> Void) {
+            self.permissions = permissions
+            self.onStopSharing = onStopSharing
+        }
+
+        func options(for cloudKitSharingService: NSSharingService, share provider: NSItemProvider) -> PermissionOptions {
+            permissions
+        }
+
+        func sharingService(_ sharingService: NSSharingService, didFailToShareItems items: [Any], error: Error) {
+            Task { @MainActor in TripStore.shared.lastError = "Couldn't update sharing: \(error.localizedDescription)" }
+        }
+
+        func sharingService(_ sharingService: NSSharingService, didStopSharing share: CKShare) {
+            let onStopSharing = onStopSharing
+            Task { @MainActor in onStopSharing() }
+        }
+    }
+}
+#endif
+
 // MARK: - Accepting invites
 
 /// Tapping an iCloud share link opens Wooli (Info.plist `CKSharingSupported`)
 /// and iOS hands the invite to the scene delegate. SwiftUI apps only get a
 /// scene delegate through the app delegate, hence both.
+#if os(iOS)
 final class WooliAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
@@ -87,3 +149,14 @@ final class WooliSceneDelegate: NSObject, UIWindowSceneDelegate {
         }
     }
 }
+#else
+/// On the Mac the app delegate gets the invite directly.
+final class WooliAppDelegate: NSObject, NSApplicationDelegate {
+    func application(_ application: NSApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        Task { @MainActor in
+            TripStore.shared.start()
+            await TripStore.shared.accept(metadata)
+        }
+    }
+}
+#endif

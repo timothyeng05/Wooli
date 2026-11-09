@@ -186,7 +186,7 @@ struct RecurringEditor: View {
                         TextField("Amount", value: Binding(get: { abs(item.amount) },
                                                            set: { item.amount = item.amount < 0 ? -abs($0) : abs($0) }),
                                   format: .currency(code: "USD"))
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            .wooliKeyboard(.decimalPad).multilineTextAlignment(.trailing)
                     }
                     Picker("How often", selection: Binding(get: { item.cadence }, set: {
                         item.cadence = $0
@@ -226,7 +226,7 @@ struct RecurringEditor: View {
             }
             
             .navigationTitle(item.title)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

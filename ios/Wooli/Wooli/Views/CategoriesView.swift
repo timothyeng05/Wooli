@@ -51,8 +51,10 @@ struct CategoriesSettingsView: View {
         
             .navigationTitle("Categories")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { EditButton() }
-            ToolbarItem(placement: .topBarTrailing) {
+            #if os(iOS)
+            ToolbarItem(placement: .wooliTrailing) { EditButton() }
+            #endif
+            ToolbarItem(placement: .wooliTrailing) {
                 Menu {
                     ForEach(groups) { group in
                         Button("\(group.icon) \(group.name)") { newCategoryIn = group }
@@ -247,7 +249,7 @@ private struct CategoryEditor: View {
             }
             
             .navigationTitle(existing == nil ? (isGroup ? "New Group" : "New Category") : (isGroup ? "Edit Group" : "Edit Category"))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

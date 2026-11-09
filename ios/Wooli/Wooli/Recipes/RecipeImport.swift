@@ -73,10 +73,10 @@ struct RecipeImportSheet: View {
                 }
             }
             .navigationTitle("Save recipe")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .bottomBar) {
+                ToolbarItem(placement: .wooliBottomBar) {
                     Button("It's places to eat — find them", systemImage: "fork.knife", action: onPlaces)
                 }
             }

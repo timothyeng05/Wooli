@@ -230,10 +230,10 @@ struct RuleEditor: View {
                     }
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color.platformGroupedBackground)
             
             .navigationTitle(rule == nil ? "Create rule" : "Edit rule")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -466,7 +466,7 @@ private struct TextListConditionEditor: View {
                         set: { if values.indices.contains(i) { values[i] = $0 } }
                     ), axis: .vertical)
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                        .wooliCapitalization(.never)
                         .padding(.vertical, 4)
                         .swipeActions {
                             Button("Remove", systemImage: "trash", role: .destructive) {
@@ -478,7 +478,7 @@ private struct TextListConditionEditor: View {
                     TextField("Add another value", text: $newValue, axis: .vertical)
                         .lineLimit(1...4)
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                        .wooliCapitalization(.never)
                     Button("Add", systemImage: "plus.circle.fill") { addNewValue() }
                         .labelStyle(.iconOnly)
                         .disabled(newValue.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -550,12 +550,12 @@ private struct AmountConditionEditor: View {
             if !rule.amountMatch.isEmpty {
                 LabeledContent(rule.amountMatch == "between" ? "From" : "Amount") {
                     TextField("0", value: $rule.amountValue, format: .currency(code: "USD"))
-                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        .wooliKeyboard(.decimalPad).multilineTextAlignment(.trailing)
                 }
                 if rule.amountMatch == "between" {
                     LabeledContent("To") {
                         TextField("0", value: $rule.amountValue2, format: .currency(code: "USD"))
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            .wooliKeyboard(.decimalPad).multilineTextAlignment(.trailing)
                     }
                 }
             }

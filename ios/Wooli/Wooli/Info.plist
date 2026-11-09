@@ -21,6 +21,8 @@
 	<string>Wooli reads your cycle and symptoms from Apple Health to show your calendar and predict your next period. This stays on your iPhone.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Wooli saves the periods and symptoms you log to Apple Health, so they stay in one place.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Wooli uses your location to show Eats places near you. It stays on your Mac.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Wooli uses your location to show Eats places near you. It stays on your iPhone.</string>
 	<key>TMDBAPIKey</key>

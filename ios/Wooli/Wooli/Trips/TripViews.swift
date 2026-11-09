@@ -152,7 +152,7 @@ struct NewTripFlow: View {
                 }
             }
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(step == .basics ? "Cancel" : "Back") { back() }
@@ -267,7 +267,7 @@ struct TripEditor: View {
                 }
             }
             .navigationTitle(isNew ? "New trip" : "Edit trip")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -317,7 +317,7 @@ struct TripLegEditor: View {
             }
         }
         .navigationTitle(leg.name.isEmpty ? "City" : leg.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }
 
@@ -420,16 +420,16 @@ struct TripDetailView: View {
         }
         .pageBackground()
         .navigationTitle(trip.name.isEmpty ? "Trip" : trip.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .refreshable { await store.fetchChanges() }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Button(trip.isMine && !trip.isShared ? "Invite" : "People", systemImage: "person.crop.circle.badge.plus") {
                     invite(trip)
                 }
                 .disabled(preparingShare)
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Menu("More", systemImage: "ellipsis") {
                     Button("Edit trip", systemImage: "pencil") { editingTrip = trip }
                     Button(trip.isMine ? "Delete trip" : "Leave trip", systemImage: trip.isMine ? "trash" : "rectangle.portrait.and.arrow.right",
@@ -1056,7 +1056,7 @@ struct TripItemEditor: View {
                 if transportForm != nil { ticket } else { form }
             }
             .navigationTitle(isNew ? "Add to trip" : "Edit")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 if transportForm != nil {
@@ -1214,7 +1214,9 @@ struct TripItemEditor: View {
         .scrollDismissesKeyboard(.interactively)
         .ignoresSafeArea(edges: .top)
         .background(TransportTicket.night.ignoresSafeArea())
+        #if os(iOS)
         .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
     }
 
     /// This meal's place on your Eats list: the ranking just made here, or the saved one.
@@ -1365,13 +1367,13 @@ struct PlaceSearchView: View {
                                        description: Text(near.isEmpty ? "Restaurants, sights, hotels, addresses." : "Searching in and around \(near)."))
             }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search places")
+        .searchable(text: $query, placement: .wooliAlwaysVisible, prompt: "Search places")
         .searchFocused($searchFocused)
         .onAppear { searchFocused = true }
         .onChange(of: query) { _, text in searcher.search(text) }
         .task { await searcher.focus(on: near) }
         .navigationTitle("Find a place")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     private func pick(_ mapItem: MKMapItem) {
@@ -1571,7 +1573,7 @@ struct DayMapView: View {
                 .frame(height: 280)
             }
             .navigationTitle(DayKey.date(day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { legs = await Self.routes(between: stops) }
         }

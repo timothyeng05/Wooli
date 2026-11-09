@@ -80,7 +80,7 @@ struct TransportTicket: View {
                               prompt: Text("Add flight no.").font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.55)))
                         .font(.system(size: 26, weight: .heavy, design: .rounded))
-                        .textInputAutocapitalization(.characters)
+                        .wooliCapitalization(.characters)
                         .autocorrectionDisabled()
                         .frame(maxWidth: 190)
                 }
@@ -242,7 +242,7 @@ struct TransportTicket: View {
     private func stubText(_ text: Binding<String>, prompt: String) -> some View {
         TextField(prompt, text: text, prompt: Text(prompt).font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.5)))
             .font(.subheadline.weight(.bold))
-            .textInputAutocapitalization(transport.mode == .flight ? .characters : .never)
+            .wooliCapitalization(transport.mode == .flight ? .characters : .never)
             .autocorrectionDisabled()
     }
 
@@ -286,7 +286,9 @@ private struct TimePickerPopover: View {
         VStack(spacing: 8) {
             Text(title).font(.headline)
             DatePicker(title, selection: $value, displayedComponents: .hourAndMinute)
+                #if os(iOS)
                 .datePickerStyle(.wheel)
+                #endif
                 .labelsHidden()
             HStack {
                 if date != nil {
@@ -414,13 +416,13 @@ struct AirportSearchView: View {
                 ContentUnavailableView.search(text: query)
             }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Code, city or airport")
-        .textInputAutocapitalization(.never)
+        .searchable(text: $query, placement: .wooliAlwaysVisible, prompt: "Code, city or airport")
+        .wooliCapitalization(.never)
         .autocorrectionDisabled()
         .searchFocused($searchFocused)
         .onAppear { searchFocused = true }
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }
 

@@ -77,7 +77,7 @@ struct ReportsView: View {
             .navigationTitle("Reports")
             .refreshable { await app.sync(context: context) }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
+                ToolbarItem(placement: .wooliLeading) { HamburgerButton() }
             }
         }
     }
@@ -186,7 +186,7 @@ private struct SpendingBreakdownCard: View {
         let slices = summary.spendingByGroup.filter { $0.value > 0 }.sorted { $0.value > $1.value }.map { key, value in
             let c = key.flatMap { ledger.categoriesById[$0] }
             return Slice(id: key ?? "none", name: c?.name ?? "Uncategorized", icon: c?.icon ?? "❓",
-                         color: c.map { Color(hex: $0.colorHex) } ?? Color(.systemGray3), amount: value, category: c)
+                         color: c.map { Color(hex: $0.colorHex) } ?? Color.platformGray3, amount: value, category: c)
         }
         let total = slices.reduce(0) { $0 + $1.amount }
 

@@ -115,7 +115,7 @@ struct TripPlaceDetail: View {
             TextField("Highlights, what you'd do again, tips for next time…", text: $item.notes, axis: .vertical)
                 .lineLimit(4...14)
                 .padding(14)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+                .background(Color.platformSecondaryBackground, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             Text(trip.isShared ? "Everyone on this trip can see these notes." : "Saved with the trip.")
                 .font(.caption).foregroundStyle(Theme.textTertiary)
         }

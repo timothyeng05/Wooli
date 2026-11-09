@@ -44,7 +44,7 @@ struct PeopleSettingsView: View {
             }
         }
         .navigationTitle("Household")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }
 
@@ -73,7 +73,7 @@ struct PersonEditView: View {
             }
         }
         .navigationTitle("Edit Person")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .onDisappear {
             person.name = name.trimmingCharacters(in: .whitespaces)
             person.icon = icon.isEmpty ? "👤" : String(icon.prefix(1))

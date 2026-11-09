@@ -19,7 +19,9 @@ struct SettingsView: View {
             Form {
                 Section {
                     TextField("Your first name", text: $displayName)
+                        #if os(iOS)
                         .textContentType(.givenName)
+                        #endif
                 } header: {
                     Text("Name")
                 } footer: {
@@ -166,7 +168,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }

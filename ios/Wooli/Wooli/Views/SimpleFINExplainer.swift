@@ -71,7 +71,7 @@ struct SimpleFINExplainer: View {
             }
             .pageBackground()
             .navigationTitle("How SimpleFIN Works")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

@@ -82,7 +82,9 @@ struct TransactionsView: View {
             }
         }
         .listStyle(.plain)
+        #if os(iOS)
         .listSectionSpacing(0)
+        #endif
         .pageBackground()
         .overlay {
             if visible.isEmpty {
@@ -110,11 +112,11 @@ struct TransactionsView: View {
         .refreshable { await app.sync(context: context) }
         .toolbar {
             if accountId == nil {
-                ToolbarItem(placement: .topBarLeading) { HamburgerButton() }
-                ToolbarItem(placement: .topBarTrailing) { ReviewButton(count: reviewCount) }
-                ToolbarItem(placement: .topBarTrailing) { ManualAddMenu() }
+                ToolbarItem(placement: .wooliLeading) { HamburgerButton() }
+                ToolbarItem(placement: .wooliTrailing) { ReviewButton(count: reviewCount) }
+                ToolbarItem(placement: .wooliTrailing) { ManualAddMenu() }
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .wooliTrailing) {
                 Button {
                     showFilters = true
                 } label: {
@@ -216,7 +218,9 @@ struct FiltersSheet: View {
                     Picker("Date range", selection: $draft.dateRange) {
                         ForEach(TransactionFilter.DateRange.allCases) { Text($0.rawValue).tag($0) }
                     }
+                    #if os(iOS)
                     .pickerStyle(.navigationLink)
+                    #endif
                     .labelsHidden()
                 }
 
@@ -273,7 +277,7 @@ struct FiltersSheet: View {
             }
             
             .navigationTitle("Filters")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -370,11 +374,11 @@ private struct AmountFilter: View {
             Section {
                 LabeledContent("Minimum") {
                     TextField("Any", value: $minAmount, format: .currency(code: "USD"))
-                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        .wooliKeyboard(.decimalPad).multilineTextAlignment(.trailing)
                 }
                 LabeledContent("Maximum") {
                     TextField("Any", value: $maxAmount, format: .currency(code: "USD"))
-                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        .wooliKeyboard(.decimalPad).multilineTextAlignment(.trailing)
                 }
             } footer: {
                 Text("Matches money in and money out by size.")
