@@ -18,6 +18,13 @@
 			remoteGlobalIDString = BB0000000000000000000006;
 			remoteInfo = WooliShare;
 		};
+		DD0000000000000000000021 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000006;
+			remoteInfo = Wooli;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -38,6 +45,7 @@
 		AA0000000000000000000001 /* Wooli.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wooli.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0000000000000000000001 /* WooliShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WooliShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC0000000000000000000001 /* Config/Wooli.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Wooli.xcconfig; sourceTree = "<group>"; };
+		DD0000000000000000000001 /* WooliTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WooliTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -82,6 +90,11 @@
 			path = WooliShare;
 			sourceTree = "<group>";
 		};
+		DD0000000000000000000002 /* WooliTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WooliTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +112,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD0000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -108,6 +128,7 @@
 				CC0000000000000000000001 /* Config/Wooli.xcconfig */,
 				AA0000000000000000000002 /* Wooli */,
 				BB0000000000000000000002 /* WooliShare */,
+				DD0000000000000000000002 /* WooliTests */,
 				AA0000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -117,6 +138,7 @@
 			children = (
 				AA0000000000000000000001 /* Wooli.app */,
 				BB0000000000000000000001 /* WooliShare.appex */,
+				DD0000000000000000000001 /* WooliTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -170,6 +192,29 @@
 			productReference = BB0000000000000000000001 /* WooliShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		DD0000000000000000000006 /* WooliTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DD0000000000000000000010 /* Build configuration list for PBXNativeTarget "WooliTests" */;
+			buildPhases = (
+				DD0000000000000000000007 /* Sources */,
+				DD0000000000000000000003 /* Frameworks */,
+				DD0000000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DD0000000000000000000025 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DD0000000000000000000002 /* WooliTests */,
+			);
+			name = WooliTests;
+			packageProductDependencies = (
+			);
+			productName = WooliTests;
+			productReference = DD0000000000000000000001 /* WooliTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -185,6 +230,10 @@
 					};
 					BB0000000000000000000006 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					DD0000000000000000000006 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = AA0000000000000000000006;
 					};
 				};
 			};
@@ -204,6 +253,7 @@
 			targets = (
 				AA0000000000000000000006 /* Wooli */,
 				BB0000000000000000000006 /* WooliShare */,
+				DD0000000000000000000006 /* WooliTests */,
 			);
 		};
 /* End PBXProject section */
@@ -217,6 +267,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		BB0000000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DD0000000000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -240,6 +297,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD0000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -247,6 +311,11 @@
 			isa = PBXTargetDependency;
 			target = BB0000000000000000000006 /* WooliShare */;
 			targetProxy = BB0000000000000000000021 /* PBXContainerItemProxy */;
+		};
+		DD0000000000000000000025 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA0000000000000000000006 /* Wooli */;
+			targetProxy = DD0000000000000000000021 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -435,6 +504,48 @@
 			};
 			name = Release;
 		};
+		DD0000000000000000000014 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = L3R635GQ6F;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.timothyeng.wooli.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wooli.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wooli";
+			};
+			name = Debug;
+		};
+		DD0000000000000000000015 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = L3R635GQ6F;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.timothyeng.wooli.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wooli.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wooli";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -461,6 +572,15 @@
 			buildConfigurations = (
 				BB0000000000000000000014 /* Debug */,
 				BB0000000000000000000015 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DD0000000000000000000010 /* Build configuration list for PBXNativeTarget "WooliTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DD0000000000000000000014 /* Debug */,
+				DD0000000000000000000015 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
