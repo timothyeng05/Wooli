@@ -218,65 +218,129 @@ enum DefaultCategories {
     }
 
     /// Generic rules that fit almost anyone. Visible and editable in Rules.
-    private static let starterRules: [(merchant: String, category: String)] = [
-        ("uber eats", "Takeout & Delivery"),
-        ("doordash", "Takeout & Delivery"),
-        ("starbucks", "Coffee"),
-        ("mcdonald's", "Restaurants"),
-        ("whole foods", "Groceries"),
-        ("safeway", "Groceries"),
-        ("target", "Shopping"),
-        ("amazon", "Shopping"),
-        ("netflix", "Subscriptions"),
-        ("spotify", "Subscriptions"),
-        ("pg&e", "Utilities & Internet"),
-        ("comcast", "Utilities & Internet"),
-        ("uber ", "Rideshare & Taxi"),
-        ("lyft ", "Rideshare & Taxi"),
-        ("delta air", "Flights"),
-        ("united airlines", "Flights"),
-        ("e-zpass", "Parking & Tolls"),
-        ("ezpass", "Parking & Tolls"),
-        ("atm withdrawal", "Transfer"),
-        ("autopay", "Credit Card Payment"),
+    ///
+    /// Order matters: every matching rule applies, oldest first, so the last
+    /// match wins. Broad rules come first and the narrower ones that should
+    /// beat them come later ("uber" → Rideshare, then "uber eats" → Takeout;
+    /// "amazon" → Shopping, then "prime video" → Subscriptions). Seeding gives
+    /// each rule a createdAt in this order.
+    private static let starterRules: [(merchants: [String], match: String, category: String)] = [
+        (["amazon"], "contains", "Shopping"),
+        // Exact: "contains target" also caught any merchant with "target" in its name.
+        (["target", "target.com"], "exact", "Shopping"),
+        (["uber"], "contains", "Rideshare & Taxi"),
+        (["lyft"], "contains", "Rideshare & Taxi"),
+        (["whole foods"], "contains", "Groceries"),
+        (["safeway"], "contains", "Groceries"),
+        (["starbucks"], "contains", "Coffee"),
+        (["mcdonald's"], "contains", "Restaurants"),
+        (["pg&e"], "contains", "Utilities & Internet"),
+        (["comcast"], "contains", "Utilities & Internet"),
+        (["delta air"], "contains", "Flights"),
+        (["united airlines"], "contains", "Flights"),
+        (["e-zpass"], "contains", "Parking & Tolls"),
+        (["ezpass"], "contains", "Parking & Tolls"),
+        (["atm withdrawal"], "contains", "Transfer"),
+        (["autopay"], "contains", "Credit Card Payment"),
+        // Narrower rules that must beat the broad ones above.
+        (["uber eats"], "contains", "Takeout & Delivery"),
+        (["doordash"], "contains", "Takeout & Delivery"),
+        (["netflix"], "contains", "Subscriptions"),
+        (["spotify"], "contains", "Subscriptions"),
+        (["prime video"], "contains", "Subscriptions"),
+        (["amazon web services"], "contains", "Subscriptions"),
     ]
 
+    private static func category(named name: String, in categories: [BudgetCategory]) -> BudgetCategory? {
+        categories.first { $0.parentId != nil && $0.name == name }
+    }
+
+    private static func makeRule(_ starter: (merchants: [String], match: String, category: String),
+                                 category: BudgetCategory, createdAt: Date) -> TransactionRule {
+        let rule = TransactionRule()
+        rule.createdAt = createdAt
+        rule.merchantMatch = starter.match
+        rule.merchantTexts = starter.merchants
+        rule.setCategoryId = category.id
+        return rule
+    }
+
     static func injectStarterRulesIfMissing(context: ModelContext) {
-        guard !UserDefaults.standard.bool(forKey: "didV1StarterRulesInject_v2") else { return }
+        guard !UserDefaults.standard.bool(forKey: "didV1StarterRulesInject_v2") else {
+            repairStarterRules(context: context)
+            return
+        }
 
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
         // Nothing to attach rules to yet (e.g. still onboarding) — try again next launch,
         // rather than burning the one-time flag before any category exists.
         guard !categories.isEmpty else { return }
         UserDefaults.standard.set(true, forKey: "didV1StarterRulesInject_v2")
+        UserDefaults.standard.set(true, forKey: repairKey)
 
         let existingRules = (try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []
         // Only inject a rule if they don't already have one with that exact merchant string
         let existingMerchants = Set(existingRules.flatMap { $0.merchantTexts })
 
         for (i, starter) in starterRules.enumerated() {
-            guard !existingMerchants.contains(starter.merchant) else { continue }
-            guard let category = categories.first(where: { $0.parentId != nil && $0.name == starter.category }) else { continue }
-            let rule = TransactionRule()
-            rule.createdAt = Date.now.addingTimeInterval(Double(i - starterRules.count))
-            rule.merchantMatch = "contains"
-            rule.merchantTexts = [starter.merchant]
-            rule.setCategoryId = category.id
-            context.insert(rule)
+            guard !starter.merchants.contains(where: existingMerchants.contains) else { continue }
+            guard let category = category(named: starter.category, in: categories) else { continue }
+            context.insert(makeRule(starter, category: category, createdAt: Date.now.addingTimeInterval(Double(i - starterRules.count))))
         }
         try? context.save()
     }
 
     private static func seedStarterRules(_ context: ModelContext) {
         let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        UserDefaults.standard.set(true, forKey: repairKey)
         for (i, starter) in starterRules.enumerated() {
-            guard let category = categories.first(where: { $0.parentId != nil && $0.name == starter.category }) else { continue }
-            let rule = TransactionRule()
-            rule.createdAt = Date.now.addingTimeInterval(Double(i - starterRules.count))
-            rule.merchantMatch = "contains"
-            rule.merchantTexts = [starter.merchant]
-            rule.setCategoryId = category.id
-            context.insert(rule)
+            guard let category = category(named: starter.category, in: categories) else { continue }
+            context.insert(makeRule(starter, category: category, createdAt: Date.now.addingTimeInterval(Double(i - starterRules.count))))
         }
+    }
+
+    private static let repairKey = "didStarterRulesRepair_v3"
+
+    /// One-time fix for starter rules seeded before 2026-11-09, which were in
+    /// an order where "uber" (Rideshare) beat "uber eats" (Takeout) and
+    /// "amazon" had nothing narrower after it, and matched "target" anywhere
+    /// in a merchant name. Only touches rules still in their starter shape.
+    static func repairStarterRules(context: ModelContext) {
+        guard !UserDefaults.standard.bool(forKey: repairKey) else { return }
+        let categories = (try? context.fetch(FetchDescriptor<BudgetCategory>())) ?? []
+        guard !categories.isEmpty else { return }
+        UserDefaults.standard.set(true, forKey: repairKey)
+        let rules = (try? context.fetch(FetchDescriptor<TransactionRule>())) ?? []
+
+        func isStarterShape(_ r: TransactionRule, category name: String) -> Bool {
+            r.statementTexts.isEmpty && r.statementText.isEmpty && r.merchantMatch == "contains"
+                && r.amountMatch.isEmpty && r.amountDirection.isEmpty && r.categoryIds.isEmpty && r.accountIds.isEmpty
+                && r.renameTo.isEmpty && !r.hide && r.addTag.isEmpty
+                && r.setCategoryId != nil && r.setCategoryId == category(named: name, in: categories)?.id
+        }
+
+        // Takeout rules run after Rideshare, so "uber eats" wins.
+        for r in rules where isStarterShape(r, category: "Takeout & Delivery")
+            && !r.merchantTexts.isEmpty && Set(r.merchantTexts).isSubset(of: ["uber eats", "doordash"]) {
+            r.createdAt = .now
+        }
+
+        // "contains target" → "is exactly target / target.com".
+        if let shopping = category(named: "Shopping", in: categories),
+           let r = rules.first(where: { isStarterShape($0, category: "Shopping") && $0.merchantTexts.contains("target") }) {
+            let created = r.createdAt
+            r.merchantTexts.removeAll { $0 == "target" }
+            if r.merchantTexts.isEmpty { context.delete(r) }
+            context.insert(makeRule((["target", "target.com"], "exact", "Shopping"), category: shopping, createdAt: created))
+        }
+
+        // Prime Video and AWS → Subscriptions, newer than "amazon" → Shopping.
+        let existingMerchants = Set(rules.flatMap { $0.merchantTexts })
+        if let subscriptions = category(named: "Subscriptions", in: categories) {
+            for merchant in ["prime video", "amazon web services"] where !existingMerchants.contains(merchant) {
+                context.insert(makeRule(([merchant], "contains", "Subscriptions"), category: subscriptions, createdAt: .now))
+            }
+        }
+        try? context.save()
     }
 }
