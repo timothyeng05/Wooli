@@ -73,6 +73,8 @@ final class WooliAppDelegate: NSObject, UIApplicationDelegate {
 final class WooliSceneDelegate: NSObject, UIWindowSceneDelegate {
     // The link was tapped while Wooli wasn't running.
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        // The waving sheep, above the app, on a cold launch.
+        if let windowScene = scene as? UIWindowScene { MainActor.assumeIsolated { SplashWindow.show(in: windowScene) } }
         if let metadata = connectionOptions.cloudKitShareMetadata { accept(metadata) }
     }
 
