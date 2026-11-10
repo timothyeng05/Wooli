@@ -27,6 +27,16 @@ actor BackgroundStore {
         RecurringDetector.refresh(context: modelContext)
     }
 
+    /// The launch passes from `RootView` that read every transaction or rule.
+    func launchHousekeeping(pruneHistory: Bool, refreshRecurring: Bool) {
+        if pruneHistory { TransactionRetention.pruneOlderTransactions(context: modelContext) }
+        DefaultCategories.injectStarterRulesIfMissing(context: modelContext)
+        RolloverService.closeMonths(context: modelContext)
+        RuleEngine.consolidate(context: modelContext)
+        Categorizer.refreshKeywordHints(context: modelContext)
+        if refreshRecurring { RecurringDetector.refresh(context: modelContext) }
+    }
+
     // MARK: - SyncService logic
 
     func sync() async throws -> SyncService.Summary {

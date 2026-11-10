@@ -139,7 +139,6 @@ enum TransactionRetention {
     }
 
     /// Delete transactions older than the retention window.
-    @MainActor
     static func pruneOlderTransactions(context: ModelContext) {
         let cutoff = start
         try? context.delete(model: LocalTransaction.self, where: #Predicate { $0.transactedAt < cutoff })

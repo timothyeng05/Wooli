@@ -87,7 +87,6 @@ enum RuleEngine {
     /// Rules that reach the same category by different means (different
     /// match modes, amount/account/category conditions, or other actions)
     /// are left alone rather than guessed at.
-    @MainActor
     @discardableResult
     static func consolidate(context: ModelContext) -> Int {
         // A rule with both a statement AND a merchant condition can't be

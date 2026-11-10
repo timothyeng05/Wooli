@@ -18,21 +18,18 @@ struct RootView: View {
         .tint(Theme.brand)
         .task {
             TripStore.shared.start()
+            // One-off passes: each returns straight away once done, or when there is no import file.
             ICloudSyncService.autoPushOnceIfNeeded(context: context)
-            if app.mode == .live { TransactionRetention.pruneOlderTransactions(context: context) }
             if app.mode == .sample { SampleData.rollForward(context: context) }
-            DefaultCategories.injectStarterRulesIfMissing(context: context)
-            RolloverService.closeMonths(context: context)
             RuleImporter.importIfPresent(context: context)
             WebDataImporter.importIfPresent(context: context)
-            RuleEngine.consolidate(context: context)
-            Categorizer.refreshKeywordHints(context: context)
+            try? context.save() // So the background pass sees everything above.
+            // Passes that read every transaction or rule run off the main
+            // thread, so the first screen (often not Budget) isn't held up.
+            await BackgroundStore.make(context.container).launchHousekeeping(pruneHistory: app.mode == .live,
+                                                                            refreshRecurring: app.mode != .onboarding)
             syncIfStale()
-            if app.mode != .onboarding {
-                try? context.save() // So the background pass sees everything above.
-                await BackgroundStore.make(context.container).refreshRecurring()
-                await app.autoCategorize(context: context)
-            }
+            if app.mode != .onboarding { await app.autoCategorize(context: context) }
         }
         #if DEBUG
         .task {
