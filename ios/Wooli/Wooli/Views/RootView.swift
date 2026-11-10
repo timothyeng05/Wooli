@@ -114,41 +114,14 @@ struct MainTabView: View {
 
     var body: some View {
         @Bindable var app = app
-        ZStack(alignment: .leading) {
-            SpaceRoot(space: lineup.isEnabled(app.space) ? app.space : .today, reviewCount: reviewCount)
-                .id(app.space)
-                .transition(.opacity)
-
-            if app.isSidebarOpen {
-                Color.black.opacity(0.35)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            app.isSidebarOpen = false
-                        }
-                    }
-                    .transition(.opacity)
-
-                SidebarDrawer()
-                    .frame(width: 290)
-                    .ignoresSafeArea(edges: .vertical)
-                    .transition(.move(edge: .leading))
-                    .zIndex(1)
-            }
-        }
-        // Swipe in from the left edge to open the ☰ drawer — except on a
-        // pushed screen, where that swipe is iOS's "back".
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12, coordinateSpace: .global).onChanged { drag in
-                guard !app.isSidebarOpen, drag.startLocation.x < 28,
-                      drag.translation.width > 60, abs(drag.translation.height) < drag.translation.width,
-                      !NavigationDepth.isShowingPushedScreen else { return }
-                app.isSidebarOpen = true
-            }
-        )
-        .animation(.easeInOut(duration: 0.25), value: app.isSidebarOpen)
-        .animation(.easeInOut(duration: 0.2), value: app.space)
-        .sheet(item: $app.sidebarDestination) { dest in
+        #if os(macOS)
+        let shell = MacShellView(reviewCount: reviewCount)
+        #else
+        let shell = drawerShell
+        #endif
+        shell
+        // On the Mac these are sidebar items and the Settings window (`MacShellView`).
+        .sheet(item: drawerSheet) { dest in
             switch dest {
             case .categories:
                 NavigationStack {
@@ -226,6 +199,55 @@ struct MainTabView: View {
             Text(trips.lastError ?? "")
         }
     }
+
+    private var drawerSheet: Binding<SidebarDestination?> {
+        #if os(macOS)
+        .constant(nil)
+        #else
+        Binding(get: { app.sidebarDestination }, set: { app.sidebarDestination = $0 })
+        #endif
+    }
+
+    #if os(iOS)
+    /// The iPhone shell: the current app with the ☰ drawer over it.
+    private var drawerShell: some View {
+        @Bindable var app = app
+        return ZStack(alignment: .leading) {
+            SpaceRoot(space: lineup.isEnabled(app.space) ? app.space : .today, reviewCount: reviewCount)
+                .id(app.space)
+                .transition(.opacity)
+
+            if app.isSidebarOpen {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            app.isSidebarOpen = false
+                        }
+                    }
+                    .transition(.opacity)
+
+                SidebarDrawer()
+                    .frame(width: 290)
+                    .ignoresSafeArea(edges: .vertical)
+                    .transition(.move(edge: .leading))
+                    .zIndex(1)
+            }
+        }
+        // Swipe in from the left edge to open the ☰ drawer — except on a
+        // pushed screen, where that swipe is iOS's "back".
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12, coordinateSpace: .global).onChanged { drag in
+                guard !app.isSidebarOpen, drag.startLocation.x < 28,
+                      drag.translation.width > 60, abs(drag.translation.height) < drag.translation.width,
+                      !NavigationDepth.isShowingPushedScreen else { return }
+                app.isSidebarOpen = true
+            }
+        )
+        .animation(.easeInOut(duration: 0.25), value: app.isSidebarOpen)
+        .animation(.easeInOut(duration: 0.2), value: app.space)
+    }
+    #endif
 }
 
 /// The root screen of each app. Budget keeps its own tab bar; the others are
@@ -390,6 +412,8 @@ struct SidebarDrawer: View {
                         if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
                             #if os(iOS)
                             UIApplication.shared.open(url)
+                            #else
+                            NSWorkspace.shared.open(url)
                             #endif
                         }
                     } label: {
@@ -414,7 +438,7 @@ struct SidebarDrawer: View {
 
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(Color(UIColor.systemBackground))
+        .background(Theme.systemBackground)
         .gesture(
             DragGesture().onEnded { val in
                 if val.translation.width < -40 {
@@ -440,7 +464,7 @@ struct SidebarDrawer: View {
             withAnimation(.easeInOut(duration: 0.2)) { app.open(space) }
         } label: {
             HStack(spacing: 12) {
-                AppIconTile(space, size: 30)
+                AppIconTile(space, size: 44)
                 Text(space.title)
                     .font(.body.weight(isCurrent ? .semibold : .medium))
                     .foregroundStyle(Theme.text)
@@ -452,7 +476,7 @@ struct SidebarDrawer: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
             .background(isCurrent ? Theme.brandSoft : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .padding(.horizontal, 8)
             .contentShape(Rectangle())
@@ -494,12 +518,19 @@ struct SidebarDrawer: View {
 @MainActor
 enum NavigationDepth {
     static var isShowingPushedScreen: Bool {
+        #if os(macOS)
+        return false
+        #else
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
         return windows.filter(\.isKeyWindow).contains { $0.rootViewController.map(hasPushed) ?? false }
+        #endif
     }
+
+    #if os(iOS)
 
     private static func hasPushed(_ vc: UIViewController) -> Bool {
         if let nav = vc as? UINavigationController, nav.viewIfLoaded?.window != nil, nav.viewControllers.count > 1 { return true }
         return vc.children.contains(where: hasPushed)
     }
+    #endif
 }

@@ -60,6 +60,12 @@ final class TripStore: CKSyncEngineDelegate {
     private static let environment: String = {
         #if targetEnvironment(simulator)
         return "development"
+        #elseif os(macOS)
+        // A Mac app carries its CloudKit environment as an entitlement (Wooli-macOS*.entitlements).
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(task, "com.apple.developer.icloud-container-environment" as CFString, nil) as? String
+        else { return "production" }
+        return value.lowercased()
         #else
         return Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") == nil ? "production" : "development"
         #endif
@@ -181,7 +187,13 @@ final class TripStore: CKSyncEngineDelegate {
     struct ImportBundle: Codable {
         var trip: Trip
         var items: [TripItem]
+        /// Only add `items`; leave the trip itself as this device has it. Set by
+        /// Claude's `wooli_add_to_trip`, whose copy of the trip may be out of date.
+        var itemsOnly: Bool?
     }
+
+    /// Where an import is picked up from, for writers in the same app (the Mac's MCP server).
+    static var pendingImportURL: URL { importURL }
 
     private static var importURL: URL { URL.documentsDirectory.appending(path: "trip-import.json") }
 
@@ -203,7 +215,7 @@ final class TripStore: CKSyncEngineDelegate {
                 trip.zoneOwner = existing.zoneOwner
                 trip.isShared = existing.isShared
             }
-            save(trip)
+            if bundle.itemsOnly != true || self.trip(trip.id) == nil { save(trip) }
             for var item in bundle.items {
                 item.systemFields = items.first { $0.id == item.id }?.systemFields
                 save(item)

@@ -1,3 +1,4 @@
+#if os(iOS)
 import ImageIO
 import SwiftUI
 
@@ -157,3 +158,4 @@ private struct SplashPlayer: UIViewRepresentable {
 #Preview {
     SplashView {}
 }
+#endif

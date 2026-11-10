@@ -267,7 +267,7 @@ struct ManualAccountControls: View {
                 }
             }
         } message: {
-            Text("This removes the account, every transaction in it, and its balance history from this iPhone and your iCloud.")
+            Text("This removes the account, every transaction in it, and its balance history from this \(ThisDevice.name) and your iCloud.")
         }
     }
 

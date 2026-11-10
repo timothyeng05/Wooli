@@ -5,9 +5,11 @@ import CoreLocation
 /// The location stays on the phone.
 enum CurrentLocation {
     static func fetch() async -> CLLocation? {
+        #if os(iOS)
         // Holding a session is what asks for permission (iOS 18+).
         let session = CLServiceSession(authorization: .whenInUse)
         defer { session.invalidate() }
+        #endif
         do {
             for try await update in CLLocationUpdate.liveUpdates() {
                 if let location = update.location { return location }

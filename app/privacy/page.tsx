@@ -6,31 +6,31 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated November 6, 2026</p>
+      <p className="updated">Last updated November 9, 2026</p>
 
       <p>
-        Wooli is an iPhone app for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
+        Wooli is an app for iPhone and Mac for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
         watched, saving sights and recipes, keeping a budget and tracking your period. <strong>Wooli does not collect any data.</strong> The developer has no
         servers that receive your information and cannot see it.
       </p>
 
       <h2>Where your information lives</h2>
       <ul>
-        <li><strong>On your iPhone.</strong> Everything you add is stored on your device. Your settings, such as which apps are on, stay only on your device.</li>
-        <li><strong>In your own iCloud.</strong> Your budget (categories, accounts, transactions, rules and recurring bills), trips, and your Eats, Sights, Movies and Recipes lists sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data. If iCloud is off, everything stays on your iPhone.</li>
+        <li><strong>On your devices.</strong> Everything you add is stored on your iPhone or Mac. Your settings, such as which apps are on, stay only on your device.</li>
+        <li><strong>In your own iCloud.</strong> Your budget (categories, accounts, transactions, rules and recurring bills), trips, and your Eats, Sights, Movies and Recipes lists sync through Apple&apos;s CloudKit to the private database in your iCloud account, so they&apos;re on all your devices. Only you, and people you invite, can see them. The developer cannot access your iCloud data. If iCloud is off, everything stays on the device you added it on.</li>
         <li><strong>When you share.</strong> If you invite someone to a trip or share your Eats list, they can see what you shared, and anyone you allow to make changes (for example a partner sharing one Eats list with you) can edit it. You can stop sharing at any time.</li>
       </ul>
 
       <h2>Location (optional)</h2>
       <p>
         If you tap Near me in Eats and allow it, Wooli reads your location once to show the places near you
-        and how far away each one is. This happens on your iPhone. Your location is never saved, synced or sent to the developer or
-        anyone else. You can change this at any time in Settings → Apps → Wooli → Location.
+        and how far away each one is. This happens on your device. Your location is never saved, synced or sent to the developer or
+        anyone else. You can change this at any time in Settings → Apps → Wooli → Location on iPhone, or System Settings → Privacy &amp; Security → Location Services on a Mac.
       </p>
 
       <h2>Apple Health (optional)</h2>
       <p>
-        If you use the Health app in Wooli and allow it, Wooli reads your periods and related symptoms from
+        If you use the Health app in Wooli on iPhone and allow it, Wooli reads your periods and related symptoms from
         Apple Health, and saves the ones you log there. Your cycle lives in Apple Health, not in Wooli&apos;s own
         storage or iCloud database: Wooli reads it each time to show your calendar and work out predictions on
         your iPhone. Health data is never sent to the developer or anyone else, and is never used for
@@ -41,25 +41,25 @@ export default function PrivacyPage() {
       <h2>Bank connections (optional)</h2>
       <p>
         If you choose to connect a bank, Wooli uses <a href="https://beta-bridge.simplefin.org">SimpleFIN Bridge</a>,
-        a separate service you sign up for and pay directly. Your iPhone downloads balances and
+        a separate service you sign up for and pay directly. Your device downloads balances and
         transactions straight from SimpleFIN; nothing passes through the developer. Your SimpleFIN
-        access key is kept in your iPhone&apos;s Keychain. SimpleFIN&apos;s own privacy policy applies to
+        access key is kept in your Keychain (and in iCloud Keychain, if it&apos;s on, so your other devices can sync too). SimpleFIN&apos;s own privacy policy applies to
         what you share with them. You can also use Wooli without a bank connection by entering amounts yourself.
       </p>
 
       <h2>Apple services</h2>
       <p>
-        Place search, maps and place details come from Apple Maps, and Face ID (if you turn it on) is
-        handled by iOS. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID data.
+        Place search, maps and place details come from Apple Maps, and Face ID or Touch ID (if you turn it on) is
+        handled by your device. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID or Touch ID data.
         Suggested categories for transactions, and the meal, cuisine and cooking-time tags on your recipes,
-        are worked out on your iPhone with Apple Intelligence (when it&apos;s on); your transactions and recipes
+        are worked out on your device with Apple Intelligence (when it&apos;s on); your transactions and recipes
         aren&apos;t sent anywhere to do this. If you open a place in Google Maps, Google receives that place&apos;s
         name and address, under Google&apos;s privacy policy.
       </p>
 
       <h2>Google Maps place search</h2>
       <p>
-        When Apple Maps can&apos;t find a place, or you tap &ldquo;Search Google Maps&rdquo;, your iPhone sends
+        When Apple Maps can&apos;t find a place, or you tap &ldquo;Search Google Maps&rdquo;, your device sends
         what you typed to Google Places, along with the area you&apos;re searching in (a trip&apos;s destination,
         never your own location). Nothing is sent to the developer. Google&apos;s privacy policy applies to those
         requests.
@@ -68,19 +68,29 @@ export default function PrivacyPage() {
       <h2>Movie search</h2>
       <p>
         Movie search, posters and film details come from TMDB (The Movie Database). When you search, your
-        iPhone sends the title you type to TMDB, and fetches the details of the film you pick. Nothing is sent
+        device sends the title you type to TMDB, and fetches the details of the film you pick. Nothing is sent
         to the developer. TMDB&apos;s privacy policy applies to those requests. This product uses the TMDB API
         but is not endorsed or certified by TMDB.
       </p>
 
       <h2>Instagram reels</h2>
       <p>
-        If you share an Instagram reel or post to Wooli, your iPhone downloads that post&apos;s public page
+        If you share an Instagram reel or post to Wooli, your device downloads that post&apos;s public page
         from Instagram to read its caption, so Instagram sees that request like any visit to the post. The
-        caption is read on your iPhone (with Apple Intelligence when it&apos;s on) to find place names, which
+        caption is read on your device (with Apple Intelligence when it&apos;s on) to find place names, which
         are then looked up in Apple Maps, or to split a recipe into ingredients and steps. Nothing is sent to
         the developer, and Wooli only keeps the places or recipe you choose to save, with the reel&apos;s link
         (and, for a recipe, its caption).
+      </p>
+
+      <h2>Connecting Wooli to Claude (optional, Mac)</h2>
+      <p>
+        On a Mac you can connect Wooli to Claude, Anthropic&apos;s AI assistant, so you can ask Claude about
+        your budget, trips and lists. Nothing is shared unless you set this up yourself. Once connected,
+        Claude starts Wooli in the background on your Mac and reads, but never changes, your Wooli data
+        there. Whatever Claude reads becomes part of your conversation with Claude and is handled under
+        Anthropic&apos;s privacy policy; it never goes to the developer. To disconnect, remove Wooli from
+        Claude&apos;s list of connected tools.
       </p>
 
       <h2>What Wooli doesn&apos;t do</h2>
@@ -92,9 +102,9 @@ export default function PrivacyPage() {
 
       <h2>Deleting your data</h2>
       <p>
-        Delete items in the app, or delete the app to remove what&apos;s stored on your iPhone. To remove
+        Delete items in the app, or delete the app to remove what&apos;s stored on that device. To remove
         what&apos;s synced to iCloud, delete it in the app, or remove Wooli&apos;s data in Settings →
-        your name → iCloud → Manage Account Storage. Periods you log are kept in Apple Health: delete them
+        your name → iCloud → Manage Account Storage (on a Mac, System Settings → your name → iCloud → Manage). Periods you log are kept in Apple Health: delete them
         in Wooli or the Health app.
       </p>
 

@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { Source_Serif_4, Manrope } from "next/font/google";
+import { Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 
-const sourceSerif = Source_Serif_4({ variable: "--font-source-serif", subsets: ["latin"] });
-const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"] });
+// The app's display face is New York (ui-serif on Apple devices); Source Serif 4
+// stands in everywhere else. Body text is the system face, as in the app.
+const sourceSerif = Source_Serif_4({ variable: "--font-source-serif", subsets: ["latin"], weight: ["600", "800"] });
 
 export const metadata: Metadata = {
-  title: "Wooli — trips, places to eat, movies and recipes in one iPhone app",
+  title: "Wooli: trips, places to eat, movies, recipes and budget in one app for iPhone and Mac",
   description:
-    "Wooli is an iPhone app for planning trips day by day, ranking the places you eat and the movies you watch, and saving recipes, with an optional budget and private health tracker. Your data stays on your phone and in your own iCloud.",
+    "Wooli is an app for iPhone and Mac for planning trips day by day, ranking the places you eat and the movies you watch, and saving recipes, with an optional budget and private health tracker. Your data stays on your devices and in your own iCloud.",
   icons: { icon: "/wooli-icon.png", apple: "/wooli-icon.png" },
 };
 
@@ -18,11 +19,11 @@ export const viewport = { width: "device-width", initialScale: 1, viewportFit: "
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${sourceSerif.variable} ${manrope.variable}`}>
+    <html lang="en" className={sourceSerif.variable}>
       <body>
         <header className="site-header">
           <Link href="/" className="wordmark">
-            <Image src="/wooli-icon.png" alt="" width={32} height={32} priority />
+            <Image src="/wooli-icon.png" alt="" width={36} height={36} priority />
             Wooli
           </Link>
           <nav aria-label="Site">

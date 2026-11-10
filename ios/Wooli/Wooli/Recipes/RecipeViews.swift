@@ -16,6 +16,8 @@ struct RecipesListView: View {
     @State private var main: String?
     @State private var time: String?
     @State private var source: String?
+    /// The recipe open beside the list on the Mac.
+    @State private var open: RecipeEntry?
 
     enum Sort: String, CaseIterable, Identifiable {
         case newest = "Newest", name = "A–Z", quickest = "Quickest", fewest = "Fewest ingredients"
@@ -89,7 +91,13 @@ struct RecipesListView: View {
                 }
                 Section {
                     ForEach(shown) { recipe in
+                        #if os(macOS)
+                        Button { open = recipe } label: { RecipeRow(recipe: recipe).contentShape(Rectangle()) }
+                            .buttonStyle(.plain)
+                            .listRowBackground(open?.id == recipe.id ? Theme.brandSoft : nil)
+                        #else
                         NavigationLink { RecipeDetail(recipe: recipe) } label: { RecipeRow(recipe: recipe) }
+                        #endif
                     }
                 }
             }
@@ -115,6 +123,11 @@ struct RecipesListView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { adding = false } } }
             }
+        }
+        .listDetail($open) { recipe in
+            RecipeDetail(recipe: recipe)
+        } empty: {
+            SideDetailPlaceholder(text: "Choose a recipe to see it here.", systemImage: "frying.pan")
         }
     }
 }
@@ -184,6 +197,7 @@ struct RecipeDetail: View {
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var showCaption = false
+    @Environment(\.closeSideDetail) private var closeSideDetail
 
     var body: some View {
         List {
@@ -258,6 +272,7 @@ struct RecipeDetail: View {
         .confirmationDialog("Remove \(recipe.displayTitle)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
                 dismiss()
+                closeSideDetail()
                 context.delete(recipe)
             }
         }

@@ -96,10 +96,15 @@ struct HamburgerButton: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
+        #if os(iOS)
         Button("Menu", systemImage: "line.3.horizontal") {
             withAnimation(.snappy) { app.isSidebarOpen = true }
         }
         .labelStyle(.iconOnly)
+        #else
+        // The Mac window always shows its sidebar.
+        EmptyView()
+        #endif
     }
 }
 

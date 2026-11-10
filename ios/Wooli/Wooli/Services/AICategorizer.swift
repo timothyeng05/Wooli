@@ -47,9 +47,9 @@ enum AICategorizer {
 
     static var statusDescription: String {
         switch status {
-        case .available: "Runs on this iPhone. Nothing is sent anywhere."
+        case .available: "Runs on this \(ThisDevice.name). Nothing is sent anywhere."
         case .unsupportedOS: "Needs iOS 26 or later."
-        case .deviceNotEligible: "This iPhone doesn't support Apple Intelligence. Wooli will keep using your merchant rules."
+        case .deviceNotEligible: "This \(ThisDevice.name) doesn't support Apple Intelligence. Wooli will keep using your merchant rules."
         case .notEnabled: "Turn on Apple Intelligence in Settings to use this."
         case .notReady: "Apple Intelligence is still downloading. Wooli will try again later."
         }
@@ -83,7 +83,7 @@ enum AICategorizer {
 extension AICategorizer {
 
     nonisolated static func isContentRefusal(_ error: Error) -> Bool {
-        if #available(iOS 27.0, *), let error = error as? LanguageModelError {
+        if #available(iOS 27.0, macOS 27.0, *), let error = error as? LanguageModelError {
             switch error {
             case .guardrailViolation, .refusal: return true
             default: return false

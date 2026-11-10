@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Design tokens from `DesignSystem/` (values: `DesignSystem/tokens.json`).
 enum Theme {
@@ -8,6 +12,13 @@ enum Theme {
     static let brandDark = Color(light: 0x1D4ED8, dark: 0x93C5FD)
     static let brandSoft = Color(light: 0xF0F5FF, dark: 0x1B2F5C)
     static let onBrand = Color(light: 0xFFFFFF, dark: 0x0F1B33)
+
+    /// The platform's plain page colour (white / black on iPhone), for the ☰ drawer.
+    #if os(iOS)
+    static let systemBackground = Color(UIColor.systemBackground)
+    #else
+    static let systemBackground = Color(NSColor.windowBackgroundColor)
+    #endif
 
     // Navy-tinted neutrals.
     static let background = Color(light: 0xEEF3FA, dark: 0x070D1C)
@@ -132,12 +143,21 @@ extension View {
 
 extension Color {
     init(light: UInt32, dark: UInt32, alpha: CGFloat = 1, darkAlpha: CGFloat? = nil) {
+        #if os(iOS)
         self.init(uiColor: UIColor { traits in
             let isDark = traits.userInterfaceStyle == .dark
             let v = isDark ? dark : light
             return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
                            blue: CGFloat(v & 0xff) / 255, alpha: isDark ? (darkAlpha ?? alpha) : alpha)
         })
+        #else
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let v = isDark ? dark : light
+            return NSColor(srgbRed: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
+                           blue: CGFloat(v & 0xff) / 255, alpha: isDark ? (darkAlpha ?? alpha) : alpha)
+        })
+        #endif
     }
 
     init(hex: String) {
@@ -171,6 +191,37 @@ extension View {
         scrollContentBackground(.hidden).background(Theme.background)
     }
 }
+
+/// The widest a page's content gets in a big Mac window. The scroll view
+/// itself stays full width; only its content is centred.
+enum ReadableWidth {
+    static let max: CGFloat = 920
+}
+
+extension View {
+    /// Centres a scroll view's content at `ReadableWidth.max` on the Mac. Does nothing on iPhone.
+    func readableContentWidth() -> some View {
+        #if os(macOS)
+        modifier(ReadableContentWidth())
+        #else
+        self
+        #endif
+    }
+}
+
+#if os(macOS)
+private struct ReadableContentWidth: ViewModifier {
+    @State private var margin: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .contentMargins(.horizontal, margin, for: .scrollContent)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                margin = Swift.max(0, (width - ReadableWidth.max) / 2)
+            }
+    }
+}
+#endif
 
 /// "NET WORTH"-style uppercase label.
 struct SectionLabel: View {

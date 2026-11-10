@@ -60,7 +60,7 @@ final class ModuleLock {
         let context = LAContext()
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            lastError = error?.localizedDescription ?? "This iPhone has no passcode or Face ID set up."
+            lastError = error?.localizedDescription ?? "This \(ThisDevice.name) has no \(ThisDevice.name == "Mac" ? "password" : "passcode") or \(ThisDevice.biometry) set up."
             return
         }
         do {
@@ -88,7 +88,7 @@ struct ModuleGate<Content: View>: View {
                 if let error = lock.lastError {
                     Text(error).font(.footnote).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
                 }
-                Button("Unlock with Face ID", systemImage: "faceid") { Task { await lock.unlock(module) } }
+                Button("Unlock with \(ThisDevice.biometry)", systemImage: ThisDevice.biometryIcon) { Task { await lock.unlock(module) } }
                     .buttonStyle(.borderedProminent)
             }
             .padding(32)
@@ -121,7 +121,7 @@ struct ModulesSettingsView: View {
             AppLineupRows()
             Section {
             } footer: {
-                Text("Drag to rank them within each group — the order sets Today and the ☰ app switcher. Turning an app off hides it; your data stays until you delete it. Everything stays on this iPhone and your own iCloud.")
+                Text("Drag to rank them within each group — the order sets Today and the ☰ app switcher. Turning an app off hides it; your data stays until you delete it. Everything stays on this \(ThisDevice.name) and your own iCloud.")
             }
             ForEach(AppSpace.allCases.filter { $0.module != nil }) { space in
                 ModuleSettingsSection(space: space, module: space.module!, isEnabled: lineup.isEnabled(space))
@@ -164,7 +164,7 @@ private struct ModuleSettingsSection: View {
             if isEnabled {
                 Toggle("Show card on Today", isOn: Binding(get: { lineup.showsCard(space) },
                                                             set: { lineup.setShowsCard(space, $0) }))
-                Toggle("Require Face ID", isOn: $requireFaceID)
+                Toggle("Require \(ThisDevice.biometry)", isOn: $requireFaceID)
             }
             Button("Delete all \(module.title) data", role: .destructive) { confirmDelete = true }
         }

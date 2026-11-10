@@ -61,7 +61,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .today: "Everything at a glance."
         case .budget: "Connect your bank, plan each month, and see where your money goes."
         case .trips: "Plan trips day by day on Apple Maps — together, if you like."
-        case .eats: "Rank every place you've eaten, Beli-style. Trip meals show up to rank."
+        case .eats: "Rank every place you've eaten, from Must try to Do you even love yourself. Trip meals show up to rank."
         case .sights: "Save landmarks, museums and parks you want to see, then add them to a trip."
         case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .recipes: "Share a recipe reel from Instagram; its caption becomes ingredients and steps."
@@ -216,7 +216,7 @@ struct AppLineupRows: View {
             withAnimation { lineup.setEnabled(space, on) }
         })) {
             HStack(spacing: 12) {
-                AppIconTile(space, size: 36)
+                AppIconTile(space, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(space.title).font(.body.weight(.semibold))
                     Text(space.pitch).font(.caption).foregroundStyle(Theme.textSecondary)

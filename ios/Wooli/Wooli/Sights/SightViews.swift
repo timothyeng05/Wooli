@@ -99,8 +99,10 @@ struct SightsListView: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { adding = false } } }
             }
         }
-        .sheet(item: $detail) { sight in
+        .listDetail($detail) { sight in
             SightDetail(sight: sight)
+        } empty: {
+            SideDetailPlaceholder(text: "Choose a sight to see it here.", systemImage: "binoculars")
         }
     }
 
@@ -160,9 +162,10 @@ struct SightDetail: View {
     @State private var addingToTrip = false
     @State private var addedTo: String?
     @State private var confirmDelete = false
+    @Environment(\.closeSideDetail) private var closeSideDetail
 
     var body: some View {
-        NavigationStack {
+        DetailFrame(onDone: { sight.updatedAt = .now; dismiss() }) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     PlaceHeroMap(coordinate: sight.coordinate, name: sight.name, tint: AppSpace.sights.tint) {
@@ -184,14 +187,6 @@ struct SightDetail: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.card)
             .ignoresSafeArea(edges: .top)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        sight.updatedAt = .now
-                        dismiss()
-                    }
-                }
-            }
             .task(id: sight.tripPlace) {
                 guard let spot = sight.tripPlace else { return }
                 mapItem = await PlaceMapCard.listing(for: spot)
@@ -209,6 +204,7 @@ struct SightDetail: View {
             .confirmationDialog("Remove \(sight.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {
                     dismiss()
+                    closeSideDetail()
                     context.delete(sight)
                 }
             }

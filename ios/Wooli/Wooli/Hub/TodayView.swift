@@ -38,8 +38,11 @@ struct TodayView: View {
                     if FutureAppsPreview.isOn { FutureAppsPreview.cards }
                     #endif
 
+                    #if os(iOS)
+                    // On the Mac every app is in the sidebar.
                     SectionLabel("Your apps").padding(.top, 8).padding(.horizontal, 4)
                     AppGrid(apps: lineup.recentFirst(lineup.installed))
+                    #endif
                 }
                 .padding(16)
             }
@@ -75,7 +78,7 @@ struct EditTodayView: View {
                                 Toggle(isOn: Binding(get: { lineup.showsCard(space) },
                                                      set: { on in withAnimation { lineup.setShowsCard(space, on) } })) {
                                     HStack(spacing: 12) {
-                                        AppIconTile(space, size: 32)
+                                        AppIconTile(space, size: 44)
                                         Text(space.title).font(.body.weight(.semibold))
                                     }
                                 }
@@ -151,21 +154,23 @@ struct TodayCardBody<Extra: View>: View {
 private struct AppGrid: View {
     let apps: [AppSpace]
     @Environment(AppModel.self) private var app
+    /// Big enough to read each sheep's prop (sun, coins, map…) at a glance.
+    private let iconSize: CGFloat = 88
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 16) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 20) {
             ForEach(apps) { space in
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { app.open(space) }
                 } label: {
-                    tile(AppIconTile(space, size: 56), title: space.title)
+                    tile(AppIconTile(space, size: iconSize), title: space.title)
                 }
                 .buttonStyle(.plain)
             }
             #if DEBUG
             if FutureAppsPreview.isOn {
                 ForEach(FutureAppsPreview.apps, id: \.title) { future in
-                    tile(AppIconTile(systemImage: future.systemImage, tint: future.tint, size: 56), title: future.title)
+                    tile(AppIconTile(systemImage: future.systemImage, tint: future.tint, size: iconSize), title: future.title)
                 }
             }
             #endif
@@ -173,10 +178,10 @@ private struct AppGrid: View {
                 app.sidebarDestination = .settings
             } label: {
                 tile(Image(systemName: "plus")
-                        .font(.title2.weight(.semibold))
+                        .font(.title.weight(.semibold))
                         .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 56, height: 56)
-                        .background(Theme.track, in: RoundedRectangle(cornerRadius: 56 * 0.26, style: .continuous)),
+                        .frame(width: iconSize, height: iconSize)
+                        .background(Theme.track, in: RoundedRectangle(cornerRadius: iconSize * 0.26, style: .continuous)),
                      title: "Add")
             }
             .buttonStyle(.plain)
@@ -188,7 +193,7 @@ private struct AppGrid: View {
     private func tile(_ icon: some View, title: String) -> some View {
         VStack(spacing: 6) {
             icon
-            Text(title).font(.caption).foregroundStyle(Theme.text).lineLimit(1)
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
     }

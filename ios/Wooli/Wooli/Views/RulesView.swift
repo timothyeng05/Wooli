@@ -98,7 +98,7 @@ struct RulesView: View {
             } header: {
                 Text("Instructions for Apple Intelligence")
             } footer: {
-                Text("For fuzzier cases that exact rules can't catch. Apple Intelligence follows these on this iPhone when it suggests categories.")
+                Text("For fuzzier cases that exact rules can't catch. Apple Intelligence follows these on this \(ThisDevice.name) when it suggests categories.")
             }
         }
         .searchable(text: $search, prompt: "Search rules")

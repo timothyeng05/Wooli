@@ -131,6 +131,10 @@ struct SettingsView: View {
                     Text(AICategorizer.statusDescription + " Suggestions stay in your review queue until you confirm them.")
                 }
 
+                #if os(macOS)
+                ClaudeConnectSection()
+                #endif
+
                 Section("Apps") {
                     NavigationLink {
                         ModulesSettingsView()
@@ -168,9 +172,12 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                #if os(iOS)
+                // The Mac shows Settings in its own window, closed like any other.
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+                #endif
             }
             .sheet(isPresented: $showConnect) {
                 ConnectSheet()

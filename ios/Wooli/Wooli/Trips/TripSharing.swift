@@ -1,5 +1,6 @@
-import UIKit
 import CloudKit
+#if os(iOS)
+import UIKit
 
 /// Apple's share sheet for a trip or an Eats list: invite people through
 /// Messages, Mail or a link, choose permissions, and see or remove
@@ -89,3 +90,82 @@ final class WooliSceneDelegate: NSObject, UIWindowSceneDelegate {
         }
     }
 }
+#else
+import AppKit
+
+/// Mac: the system's iCloud sharing panel, through `NSSharingService`.
+@MainActor
+enum TripSharingPresenter {
+    struct PermissionOptions: OptionSet {
+        let rawValue: Int
+        static let allowReadWrite = PermissionOptions(rawValue: 1 << 0)
+        static let allowReadOnly = PermissionOptions(rawValue: 1 << 1)
+        static let allowPrivate = PermissionOptions(rawValue: 1 << 2)
+        static let allowPublic = PermissionOptions(rawValue: 1 << 3)
+
+        var cloudKit: CKAllowedSharingOptions {
+            var participant: CKSharingParticipantAccessOption = []
+            if contains(.allowPrivate) { participant.insert(.specifiedRecipientsOnly) }
+            if contains(.allowPublic) { participant.insert(.anyoneWithLink) }
+            var permission: CKSharingParticipantPermissionOption = []
+            if contains(.allowReadWrite) { permission.insert(.readWrite) }
+            if contains(.allowReadOnly) { permission.insert(.readOnly) }
+            return CKAllowedSharingOptions(allowedParticipantPermissionOptions: permission,
+                                           allowedParticipantAccessOptions: participant)
+        }
+    }
+
+    private static var delegate: Delegate?
+
+    static func present(share: CKShare, container: CKContainer, trip: Trip) {
+        let tripID = trip.id
+        present(share: share, container: container, title: trip.name,
+                permissions: [.allowReadWrite, .allowReadOnly, .allowPrivate, .allowPublic]) {
+            TripStore.shared.setShared(false, tripID: tripID)
+        }
+    }
+
+    static func present(share: CKShare, container: CKContainer, title: String,
+                        permissions: PermissionOptions,
+                        onStopSharing: @escaping @MainActor () -> Void) {
+        share[CKShare.SystemFieldKey.title] = title
+        let provider = NSItemProvider()
+        provider.registerCKShare(share, container: container, allowedSharingOptions: permissions.cloudKit)
+        guard let service = NSSharingService(named: .cloudSharing) else { return }
+        let delegate = Delegate(onStopSharing: onStopSharing)
+        self.delegate = delegate
+        service.delegate = delegate
+        service.perform(withItems: [provider])
+    }
+
+    final class Delegate: NSObject, NSSharingServiceDelegate, NSCloudSharingServiceDelegate {
+        let onStopSharing: @MainActor () -> Void
+        init(onStopSharing: @escaping @MainActor () -> Void) { self.onStopSharing = onStopSharing }
+
+        func sharingService(_ sharingService: NSSharingService, didFailToShareItems items: [Any], error: Error) {
+            Task { @MainActor in TripStore.shared.lastError = "Couldn't update sharing: \(error.localizedDescription)" }
+        }
+
+        func sharingService(_ sharingService: NSSharingService, didSave share: CKShare) {}
+
+        func sharingService(_ sharingService: NSSharingService, didStopSharing share: CKShare) {
+            let onStopSharing = onStopSharing
+            Task { @MainActor in onStopSharing() }
+        }
+    }
+}
+
+// MARK: - Accepting invites
+
+/// Mac: clicking an iCloud share link opens Wooli and AppKit hands over the invite.
+final class WooliAppDelegate: NSObject, NSApplicationDelegate {
+    func application(_ application: NSApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        Task { @MainActor in
+            TripStore.shared.start()
+            await TripStore.shared.accept(metadata)
+        }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+}
+#endif

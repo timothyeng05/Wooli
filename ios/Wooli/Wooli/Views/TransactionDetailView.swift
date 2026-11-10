@@ -267,6 +267,7 @@ struct TransactionDetailView: View {
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @State private var showSameMerchant = false
     @State private var confirmDelete = false
+    @Environment(\.closeSideDetail) private var closeSideDetail
 
     var body: some View {
         let category = transaction.categoryId.flatMap { id in categories.first { $0.id == id } }
@@ -300,6 +301,7 @@ struct TransactionDetailView: View {
         .confirmationDialog("Delete this transaction?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete Transaction", role: .destructive) {
                 dismiss()
+                closeSideDetail()
                 // Delete after the pop finishes so this screen never draws a deleted record.
                 Task {
                     try? await Task.sleep(for: .milliseconds(400))

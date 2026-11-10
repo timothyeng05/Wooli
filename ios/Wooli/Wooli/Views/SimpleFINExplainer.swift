@@ -36,7 +36,7 @@ struct SimpleFINExplainer: View {
 
                     section("What Wooli can and can't do", symbol: "lock.shield") {
                         can("Reads account names, balances, and transactions from SimpleFIN.")
-                        can("Keeps them only on your iPhone and in your own iCloud.")
+                        can("Keeps them only on your \(ThisDevice.name) and in your own iCloud.")
                         cannot("Can't move money, pay bills, or make transfers.")
                         cannot("Never sees your bank logins — you sign in to banks on SimpleFIN's site, not in Wooli.")
                         cannot("Never sends your bank data anywhere else — Wooli has no server.")
@@ -124,7 +124,7 @@ private struct ComparisonTable: View {
         ("Transactions", "You type each one", "Automatic"),
         ("Balances", "You update them", "Automatic"),
         ("Setup", "1 minute", "About 10 minutes"),
-        ("Leaves your iPhone", "Never", "Via SimpleFIN"),
+        ("Leaves your \(ThisDevice.name)", "Never", "Via SimpleFIN"),
     ]
 
     var body: some View {

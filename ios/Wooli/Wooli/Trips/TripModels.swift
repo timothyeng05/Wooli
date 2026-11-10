@@ -41,6 +41,18 @@ struct TripLeg: Identifiable, Codable, Hashable {
     }
 }
 
+extension Trip {
+    /// The cities the trip is actually in: not home, and not a zero-night
+    /// first or last stop (the city you leave from or fly back to, often
+    /// added without marking it as home).
+    var awayLegs: [TripLeg] {
+        var away = legs.filter { !$0.isHome }.sorted { $0.startDay < $1.startDay }
+        if away.count > 1, away.first?.nights == 0 { away.removeFirst() }
+        if away.count > 1, away.last?.nights == 0 { away.removeLast() }
+        return away
+    }
+}
+
 extension TripLeg {
     enum CodingKeys: String, CodingKey { case id, name, emoji, startDay, endDay, isHome }
 

@@ -262,7 +262,7 @@ struct WelcomeView: View {
                     FeatureRow(symbol: "square.grid.2x2.fill", tint: Color(hex: "#2563eb"), title: "Apps for your life",
                                detail: "Budget, Trips, and more in one place. Pick yours next.")
                     FeatureRow(symbol: "lock.shield.fill", tint: Color(hex: "#16a34a"), title: "Private by design",
-                               detail: "Your data stays on this iPhone and your own iCloud.")
+                               detail: "Your data stays on this \(ThisDevice.name) and your own iCloud.")
                     FeatureRow(symbol: "building.columns.fill", tint: Color(hex: "#f97316"), title: "Your choice of bank access",
                                detail: "Type transactions in yourself, or import them read-only.")
                 }
@@ -282,7 +282,7 @@ struct WelcomeView: View {
 
                 BankOption(isSelected: bankChoice == .manual, symbol: "square.and.pencil", tint: Color(hex: "#16a34a"),
                            title: "Enter them yourself", price: "Free",
-                           detail: "Add accounts and transactions by hand. Nothing leaves your iPhone.") {
+                           detail: "Add accounts and transactions by hand. Nothing leaves your \(ThisDevice.name).") {
                     withAnimation(.snappy) { bankChoice = .manual }
                 }
                 BankOption(isSelected: bankChoice == .simpleFIN, symbol: "building.columns.fill", tint: Color(hex: "#2563eb"),
@@ -504,7 +504,11 @@ struct ConnectSheet: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                     Button("Paste from Clipboard", systemImage: "doc.on.clipboard") {
+                        #if os(iOS)
                         token = UIPasteboard.general.string ?? token
+                        #else
+                        token = NSPasteboard.general.string(forType: .string) ?? token
+                        #endif
                     }
                 } header: {
                     Text("Setup Token")

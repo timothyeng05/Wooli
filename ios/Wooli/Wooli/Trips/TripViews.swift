@@ -23,7 +23,7 @@ struct TripsListView: View {
         List {
             if !store.iCloudAvailable {
                 Section {
-                    Label("Sign in to iCloud in Settings to sync trips and invite people. Your trips are saved on this iPhone for now.",
+                    Label("Sign in to iCloud in Settings to sync trips and invite people. Your trips are saved on this \(ThisDevice.name) for now.",
                           systemImage: "icloud.slash")
                         .font(.footnote).foregroundStyle(Theme.textSecondary)
                 }
@@ -418,6 +418,7 @@ struct TripDetailView: View {
             }
             .padding(16)
         }
+        .readableContentWidth()
         .pageBackground()
         .navigationTitle(trip.name.isEmpty ? "Trip" : trip.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -1147,7 +1148,7 @@ struct TripItemEditor: View {
                         HStack(spacing: 12) {
                             MealScoreBadge(score: status.score, size: 40, rank: status.position)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(status.sentiment.label).font(.subheadline.weight(.semibold))
+                                Text(EatsVerdict.label(for: status.score)).font(.subheadline.weight(.semibold))
                                 Text("#\(status.position) of \(status.count) on your list")
                                     .font(.caption).foregroundStyle(Theme.textSecondary)
                             }

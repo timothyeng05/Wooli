@@ -15,12 +15,27 @@ struct TransactionsView: View {
     @State private var search = ""
     @State private var debouncedSearch = ""
     @State private var showFilters = false
+    /// The transaction open beside the list on the Mac.
+    @State private var open: LocalTransaction?
 
     var body: some View {
         if embedded {
             content
         } else {
+            #if os(macOS)
+            NavigationStack {
+                content
+                    .environment(\.openTransaction) { open = $0 }
+                    .environment(\.openTransactionID, open?.providerTransactionId)
+                    .listDetail($open) { tx in
+                        NavigationStack { TransactionDetailView(transaction: tx) }
+                    } empty: {
+                        SideDetailPlaceholder(text: "Choose a transaction to see its details.", systemImage: "creditcard")
+                    }
+            }
+            #else
             NavigationStack { content }
+            #endif
         }
     }
 
@@ -143,14 +158,40 @@ private struct TransactionListRow: View {
     @Environment(\.modelContext) private var context
     @State private var showCategorize = false
 
+    @Environment(\.openTransaction) private var openOnMac
+    @Environment(\.openTransactionID) private var openID
+
     var body: some View {
-        NavigationLink {
-            TransactionDetailView(transaction: tx)
-        } label: {
-            TransactionRow(transaction: tx, category: ledger.category(for: tx),
-                           accountName: accountId == nil ? ledger.accountNames[tx.accountId] : nil)
+        let row = TransactionRow(transaction: tx, category: ledger.category(for: tx),
+                                 accountName: accountId == nil ? ledger.accountNames[tx.accountId] : nil)
+        Group {
+            if let openOnMac {
+                Button { openOnMac(tx) } label: { row.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+            } else {
+                NavigationLink { TransactionDetailView(transaction: tx) } label: { row }
+            }
         }
+        #if os(macOS)
+        // The Mac's stand-in for the swipe actions.
+        .contextMenu {
+            if tx.needsReview {
+                if tx.categoryId != nil {
+                    Button("Mark Reviewed", systemImage: "checkmark") {
+                        _ = withAnimation { Categorizer.confirm(tx, categories: categories, context: context) }
+                    }
+                } else {
+                    Button("Categorize…", systemImage: "tag") { showCategorize = true }
+                }
+            }
+            Button(tx.isHidden ? "Unhide" : "Hide", systemImage: tx.isHidden ? "eye" : "eye.slash") {
+                withAnimation { tx.isHidden.toggle() }
+            }
+        }
+        .listRowBackground(openID == tx.providerTransactionId ? Theme.brandSoft : Theme.card)
+        #else
         .listRowBackground(Theme.card)
+        #endif
         .listRowSeparatorTint(Theme.border)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if tx.needsReview {
@@ -380,4 +421,11 @@ private struct AmountFilter: View {
         }
         .navigationTitle("Amounts")
     }
+}
+
+private extension EnvironmentValues {
+    /// Set on the Mac: rows open their transaction beside the list instead of pushing it.
+    @Entry var openTransaction: ((LocalTransaction) -> Void)? = nil
+    /// The open transaction's id, so its row can be highlighted.
+    @Entry var openTransactionID: String? = nil
 }

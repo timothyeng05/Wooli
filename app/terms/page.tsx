@@ -9,7 +9,7 @@ export default function TermsPage() {
       <p className="updated">Last updated November 3, 2026</p>
 
       <p>
-        These terms cover your use of the Wooli app for iPhone. Wooli is licensed to you under
+        These terms cover your use of the Wooli app for iPhone and Mac. Wooli is licensed to you under
         Apple&apos;s standard <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">Licensed Application End User License Agreement</a>;
         these terms add a few points specific to Wooli.
       </p>

@@ -154,7 +154,7 @@ struct TodayBoard: View {
                 if index > 0 { ItemRowDivider() }
                 Button(action: item.action) {
                     ItemRow(title: item.title, subtitle: item.subtitle.map { Text($0) }) {
-                        AppIconTile(item.space, size: 32)
+                        AppIconTile(item.space, size: 40)
                     } trailing: {
                         if let amount = item.amount {
                             ItemRowAmount(text: amount.currency(cents: false))
@@ -193,7 +193,7 @@ struct TodayBoard: View {
     @ViewBuilder private var healthTile: some View {
         if lock.isLocked(.period) {
             // Locked: no cycle details on Today either.
-            RingTile(space: .period, value: 0, title: "Locked", detail: "Open to unlock with Face ID.") {
+            RingTile(space: .period, value: 0, title: "Locked", detail: "Open to unlock with \(ThisDevice.biometry).") {
                 Image(systemName: "lock.fill")
             }
         } else if period.access != .connected {

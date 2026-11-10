@@ -12,10 +12,19 @@ export default function SupportPage() {
 
       <h2>Common questions</h2>
 
-      <h3>My data isn&apos;t showing on my other iPhone or iPad.</h3>
+      <h3>My data isn&apos;t showing on my other iPhone or Mac.</h3>
       <p>
         Wooli syncs through iCloud. Make sure both devices are signed in to the same Apple Account and
-        that iCloud Drive is on in Settings → your name → iCloud. Changes can take a minute to appear.
+        that iCloud Drive is on in Settings → your name → iCloud (on a Mac, System Settings → your name → iCloud). Changes can take a minute to appear.
+      </p>
+
+      <h3>Can I ask Claude about my Wooli data?</h3>
+      <p>
+        Yes, on a Mac. Open Wooli, go to Wooli → Settings → Claude and click Add to Claude, then click
+        Install in Claude. If you use Claude Code, click Copy command for Claude Code and paste it into
+        Terminal instead. Then ask things like &ldquo;How much have I spent on restaurants this month?&rdquo; or
+        &ldquo;What&apos;s planned for day 3 of my Spain trip?&rdquo; Claude reads your data on that Mac, and only
+        changes a trip when you ask it to.
       </p>
 
       <h3>How do I plan a trip with someone else?</h3>

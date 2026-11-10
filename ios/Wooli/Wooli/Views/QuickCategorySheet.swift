@@ -148,7 +148,9 @@ struct QuickCategorySheet: View {
             RuleEngine.applyToExisting(rule, transactions: transactions, categories: byId)
         }
         try? context.save()
+        #if os(iOS)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
         dismiss()
     }
 }

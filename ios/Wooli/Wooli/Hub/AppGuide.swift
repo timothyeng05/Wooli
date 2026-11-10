@@ -93,7 +93,7 @@ struct AppGuide {
             Tip(symbol: "calendar", title: "Predictions",
                 detail: "Dashed days on the calendar are the next predicted period. They sharpen after a couple of cycles."),
             Tip(symbol: "faceid", title: "Private by default",
-                detail: "It stays on this iPhone and your iCloud. Turn on Face ID in Settings → Apps."),
+                detail: "It stays on this \(ThisDevice.name) and your iCloud. Turn on \(ThisDevice.biometry) in Settings → Apps."),
         ]
         }
     }
@@ -152,7 +152,7 @@ struct AppGuideSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 14) {
-                AppIconTile(guide.space, size: 52)
+                AppIconTile(guide.space, size: 72)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Welcome to \(guide.space.title)")
                         .font(.title2.weight(.bold))
