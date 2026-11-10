@@ -7,7 +7,7 @@ export default function SupportPage() {
     <main className="doc">
       <h1>Support</h1>
       <p className="updated">
-        Email <a href="mailto:woolitravel@gmail.com">woolitravel@gmail.com</a> and you&apos;ll hear back within a couple of days.
+        Email <a href="mailto:woolitravel@gmail.com">woolitravel@gmail.com</a>{" "}and you&apos;ll hear back within a couple of days.
       </p>
 
       <h2>Common questions</h2>

@@ -106,8 +106,8 @@ export default function PrivacyPage() {
 
       <h2>How long data is kept</h2>
       <p>
-        Wooli keeps bank transactions for five years, so Reports can compare months and years; older ones
-        are deleted automatically. Everything else stays until you delete it.
+        Wooli doesn&apos;t delete anything on its own: your data, including bank transactions, stays on your
+        devices and in your iCloud until you delete it.
       </p>
 
       <h2>Deleting your data</h2>

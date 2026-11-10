@@ -19,7 +19,6 @@ struct RootView: View {
         .task {
             TripStore.shared.start()
             ICloudSyncService.autoPushOnceIfNeeded(context: context)
-            if app.mode == .live { TransactionRetention.pruneOlderTransactions(context: context) }
             if app.mode == .sample { SampleData.rollForward(context: context) }
             DefaultCategories.injectStarterRulesIfMissing(context: context)
             RolloverService.closeMonths(context: context)

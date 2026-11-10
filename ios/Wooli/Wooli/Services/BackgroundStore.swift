@@ -38,7 +38,7 @@ actor BackgroundStore {
         // ~90 days once so those deleted transactions come back.
         let backfilled = UserDefaults.standard.bool(forKey: Self.historyBackfillKey)
         let lastSyncAt = backfilled ? UserDefaults.standard.object(forKey: "lastSimpleFinSyncAt") as? Date : nil
-        let oldestAllowed = max(Calendar.current.date(byAdding: .day, value: -89, to: .now)!, TransactionRetention.start)
+        let oldestAllowed = Calendar.current.date(byAdding: .day, value: -89, to: .now)!
         let startDate = lastSyncAt.map { max(Calendar.current.date(byAdding: .day, value: -7, to: $0)!, oldestAllowed) }
             ?? oldestAllowed
 
