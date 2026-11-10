@@ -235,6 +235,13 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 4. **Per-month planned amounts** — a month can override the default planned amount.
 5. **Home-screen widget** — left to budget, next bills (could show "this week so far" after F2).
 6. **Accessibility pass** — VoiceOver labels, Dynamic Type on budget rows and charts.
+6a. **Pre-launch compliance pass** (user, 2026-11-10, from a generic "AI-built app" launch checklist; not legal advice, have a lawyer look before launch). ✅ Privacy policy: Claude section now says Claude can edit trips (`wooli_edit_trip`) and that Anthropic's training settings apply; new "How long data is kept" (5-year transactions); Reset All Data named under deleting. Left:
+   - **Accessibility** — item 6 above; also check contrast of `Theme` colours (esp. group colours on white and dark) against WCAG AA.
+   - **Reset All Data and iCloud** — `eraseLocalData` uses `context.delete(model:)` (batch delete), which SwiftData may not mirror to CloudKit, so the data can come back from iCloud or stay on other devices. Check on two devices; if it doesn't propagate, delete per object or say so in the confirm text. It also skips Trips, Eats, Movies, Recipes, Sights.
+   - **Licences** — TMDB attribution (credit line + "not endorsed" text exist; check logo rules), Google Places display/caching terms (results must show Google attribution; don't store beyond what's allowed), Apple Maps attribution, any bundled fonts/images and Swift packages listed in Acknowledgements.
+   - **Instagram captions** — `ReelPlaces.caption` reads public embed/post pages without an API; check Instagram's terms and App Review risk, keep the paste-the-caption fallback.
+   - **App Review notes** — explain SimpleFIN (user's own paid account), HealthKit use, and that the Mac Claude connection is opt-in and local.
+   - **Terms page** — check it matches the above (no purchases, no accounts; third-party services' own terms apply).
 7. **Modules Phase 2 — Period predictions in Calendar** (see `MODULES_SPEC.md`).
 8. **Modules Phase 3 — Period widget / quick logging** (see `MODULES_SPEC.md`; mood parts dropped).
 

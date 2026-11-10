@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   return (
     <main className="doc">
       <h1>Privacy policy</h1>
-      <p className="updated">Last updated November 9, 2026</p>
+      <p className="updated">Last updated November 10, 2026</p>
 
       <p>
         Wooli is an app for iPhone and Mac for planning trips, ranking places you&apos;ve eaten and movies you&apos;ve
@@ -87,9 +87,13 @@ export default function PrivacyPage() {
       <p>
         On a Mac you can connect Wooli to Claude, Anthropic&apos;s AI assistant, so you can ask Claude about
         your budget, trips and lists. Nothing is shared unless you set this up yourself. Once connected,
-        Claude starts Wooli in the background on your Mac and reads, but never changes, your Wooli data
-        there. Whatever Claude reads becomes part of your conversation with Claude and is handled under
-        Anthropic&apos;s privacy policy; it never goes to the developer. To disconnect, remove Wooli from
+        Claude starts Wooli in the background on your Mac and reads your Wooli data there. The only thing
+        Claude can change is your trips: it can add or edit plans and move a city&apos;s dates when you ask
+        it to, and those changes sync to your other devices like any edit you make. To find a place for a
+        plan, the place name is looked up in Apple Maps and Google Places as described above. Whatever
+        Claude reads becomes part of your conversation with Claude and is handled under Anthropic&apos;s
+        privacy policy and terms, including Anthropic&apos;s own settings for whether your conversations
+        are used to train its models; it never goes to the developer. To disconnect, remove Wooli from
         Claude&apos;s list of connected tools.
       </p>
 
@@ -100,9 +104,16 @@ export default function PrivacyPage() {
         <li>No selling or sharing of your information with anyone.</li>
       </ul>
 
+      <h2>How long data is kept</h2>
+      <p>
+        Wooli keeps bank transactions for five years, so Reports can compare months and years; older ones
+        are deleted automatically. Everything else stays until you delete it.
+      </p>
+
       <h2>Deleting your data</h2>
       <p>
-        Delete items in the app, or delete the app to remove what&apos;s stored on that device. To remove
+        To remove your bank connection and clear bank accounts, transactions and categories on a device at
+        once, use Settings → Reset All Data in Wooli. Delete other items in the app, or delete the app to remove what&apos;s stored on that device. To remove
         what&apos;s synced to iCloud, delete it in the app, or remove Wooli&apos;s data in Settings →
         your name → iCloud → Manage Account Storage (on a Mac, System Settings → your name → iCloud → Manage). Periods you log are kept in Apple Health: delete them
         in Wooli or the Health app.
