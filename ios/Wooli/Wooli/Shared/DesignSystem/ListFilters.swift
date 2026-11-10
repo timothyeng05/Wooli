@@ -46,7 +46,7 @@ struct FilterPill: View {
                 Image(systemName: "chevron.down").font(.caption.weight(.bold))
             }
             .font(.subheadline.weight(.medium))
-            .foregroundStyle(value == nil ? Theme.text : .white)
+            .foregroundStyle(value == nil ? Theme.text : Theme.onBrand)
             .padding(.horizontal, 14).frame(height: 36)
             .background(Capsule().fill(value == nil ? Color.clear : PlaceActionBar.ink))
             .overlay(Capsule().strokeBorder(value == nil ? Theme.textTertiary : PlaceActionBar.ink, lineWidth: 1.2))

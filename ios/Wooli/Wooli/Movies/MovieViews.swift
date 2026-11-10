@@ -42,7 +42,7 @@ struct MoviesListView: View {
         let wishlist = movies.filter(\.isWishlist).sorted { $0.createdAt > $1.createdAt }
         let ranked = movies.filter { !$0.isWishlist }
         let candidates = ranked.map(\.candidate)
-        let scores = EatsRanking.scores(candidates)
+        let scores = EatsRanking.scores(candidates, scale: .movies)
         let byID = Dictionary(ranked.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let ordered = EatsRanking.ordered(candidates).compactMap { byID[$0.id] }
         // Rank numbers stay each film's place on the whole list, whatever's filtered.
@@ -137,7 +137,7 @@ struct MoviesListView: View {
                          movie.rank = rank
                          context.insert(movie)
                      },
-                     symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel })
+                     symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel }, scale: .movies)
         }
         .sheet(item: $promoting) { movie in
             RankFlow(candidate: movie.candidate, others: candidates.filter { $0.id != movie.id },
@@ -148,10 +148,12 @@ struct MoviesListView: View {
                          movie.watchedDay = DayKey.key(.now)
                          movie.createdAt = .now
                      },
-                     symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel })
+                     symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel }, scale: .movies)
         }
-        .sheet(item: $detail) { movie in
+        .listDetail($detail) { movie in
             MovieDetail(movie: movie)
+        } empty: {
+            SideDetailPlaceholder(text: "Choose a movie to see it here.", systemImage: "popcorn")
         }
     }
 
@@ -250,7 +252,7 @@ struct MovieRow: View {
         ItemRow(title: movie.title, subtitle: subtitle, leading: {
             MoviePoster(url: movie.posterURL, width: 40)
         }, trailing: {
-            if let score { MealScoreBadge(score: score, size: 40, rank: index, usesOwnRank: false) }
+            if let score { MealScoreBadge(score: score, size: 40, rank: index, usesOwnRank: false, scale: .movies) }
         })
         .contentShape(Rectangle())
     }
@@ -385,13 +387,14 @@ struct MovieDetail: View {
     @State private var reranking = false
     @State private var closeAfterRank = false
     @State private var confirmDelete = false
+    @Environment(\.closeSideDetail) private var closeSideDetail
 
     var body: some View {
         let all = movies.map(\.candidate)
         let ordered = EatsRanking.ordered(all)
-        let score = EatsRanking.scores(all)[movie.id] ?? 0
+        let score = EatsRanking.scores(all, scale: .movies)[movie.id] ?? 0
         let position = (ordered.firstIndex { $0.id == movie.id } ?? 0) + 1
-        NavigationStack {
+        DetailFrame(onDone: { movie.updatedAt = .now; dismiss() }) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     HStack(alignment: .bottom, spacing: 16) {
@@ -411,7 +414,7 @@ struct MovieDetail: View {
                         }
                     }
                     HStack(spacing: 10) {
-                        MealScoreBadge(score: score, size: 58, rank: position, usesOwnRank: false)
+                        MealScoreBadge(score: score, size: 58, rank: position, usesOwnRank: false, scale: .movies)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(movie.sentiment.movieLabel).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text)
                             Text("#\(position) of \(ordered.count) on your list").font(.caption).foregroundStyle(Theme.textSecondary)
@@ -444,14 +447,6 @@ struct MovieDetail: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.card)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        movie.updatedAt = .now
-                        dismiss()
-                    }
-                }
-            }
             // Back to the list once it's ranked, like Eats.
             .sheet(isPresented: $reranking, onDismiss: { if closeAfterRank { dismiss() } }) {
                 RankFlow(candidate: movie.candidate, others: movies.filter { $0.id != movie.id }.map(\.candidate),
@@ -461,11 +456,12 @@ struct MovieDetail: View {
                              movie.updatedAt = .now
                              closeAfterRank = true
                          },
-                         symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel })
+                         symbol: "film", symbolColor: AppSpace.movies.tint, label: { $0.movieLabel }, scale: .movies)
             }
             .confirmationDialog("Remove \(movie.title)?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {
                     dismiss()
+                    closeSideDetail()
                     context.delete(movie)
                 }
             }

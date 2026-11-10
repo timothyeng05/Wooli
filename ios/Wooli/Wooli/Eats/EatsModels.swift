@@ -68,7 +68,8 @@ struct EatsPlace: Codable, Identifiable, Hashable {
         RankCandidate(id: id, title: name,
                       subtitle: visitedDay.isEmpty ? "" : DayKey.date(visitedDay).formatted(.dateTime.month(.abbreviated).day().year()),
                       sentiment: sentiment, rank: rank,
-                      detail: [address, notes].filter { !$0.isEmpty }.joined(separator: "\n\n"))
+                      detail: [address, notes].filter { !$0.isEmpty }.joined(separator: "\n\n"),
+                      latitude: latitude, longitude: longitude)
     }
 
     /// The first line of your notes — the cuisine, for places from Beli.
@@ -240,24 +241,84 @@ enum MealSentiment: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// The rank stamp's inks: blue for liked, teal for fine, quiet for the rest.
     var color: Color {
         switch self {
-        case .mustTry: Color(hex: "#7c3aed")
-        case .liked: Color(hex: "#22c55e")
-        case .fine: Color(hex: "#f59e0b")
-        case .disliked: Color(hex: "#ef4444")
+        case .mustTry, .liked: Theme.brand
+        case .fine: Theme.stampFine
+        case .disliked: Theme.textTertiary
+        }
+    }
+}
+
+/// How feelings turn into scores. Eats splits 1 to 10 into thirds and asks
+/// only three feelings; Movies keeps its four feelings and older bands.
+/// Must-try and liked are always one band, must-trys on top, so places
+/// ranked before the thirds keep their order: nothing stored changes.
+enum RankScale {
+    case eats, movies
+
+    /// The feelings the ranking flow offers.
+    var feelings: [MealSentiment] {
+        switch self {
+        case .eats: [.liked, .fine, .disliked]
+        case .movies: MealSentiment.allCases
         }
     }
 
-    /// The scores this feeling can land on. Must-try and liked share the
-    /// green band as one stack rank (must-trys on top), like Beli, so 10 is
-    /// your single best meal and scores step down evenly from there.
-    var band: ClosedRange<Double> {
-        switch self {
-        case .mustTry, .liked: 7.0...10.0
-        case .fine: 4.0...6.9
-        case .disliked: 0.0...3.9
+    /// Feelings that share one band, best first.
+    var bands: [[MealSentiment]] { [[.mustTry, .liked], [.fine], [.disliked]] }
+
+    /// The band a feeling belongs to (liked includes older must-trys).
+    func bucket(_ feeling: MealSentiment) -> [MealSentiment] {
+        bands.first { $0.contains(feeling) } ?? [feeling]
+    }
+
+    /// The scores a feeling can land on, at one decimal. Eats: 6.67 to 10,
+    /// 3.34 to 6.66 and 1 to 3.33 (shown as 6.7, 3.4 to 6.6 and 1.0 to 3.3).
+    func band(_ feeling: MealSentiment) -> ClosedRange<Double> {
+        switch (self, feeling) {
+        case (.eats, .mustTry), (.eats, .liked): 6.7...10.0
+        case (.eats, .fine): 3.4...6.6
+        case (.eats, .disliked): 1.0...3.3
+        case (.movies, .mustTry), (.movies, .liked): 7.0...10.0
+        case (.movies, .fine): 4.0...6.9
+        case (.movies, .disliked): 0.0...3.9
         }
+    }
+
+    /// Lowest score of the liked and fine bands, for the stamp's tier.
+    var lovedFrom: Double { band(.liked).lowerBound }
+    var fineFrom: Double { band(.fine).lowerBound }
+}
+
+/// Eats' words for a score, from the web app's What we ate scale (2026-06).
+/// Each feeling's third holds its own verdicts: liked 7 to 10, fine 4 to 6,
+/// didn't like 1 to 3, and a score takes the verdict for where it sits
+/// inside its third.
+enum EatsVerdict {
+    static let scale: [(score: Int, label: String)] = [
+        (10, "Must try"), (9, "Should try"), (8, "Safe bet"), (7, "Average"),
+        (6, "Plan B"), (5, "Tolerable"), (4, "Skip"),
+        (3, "Avoid"), (2, "Danger"), (1, "Do you even love yourself"),
+    ]
+
+    /// The verdicts a feeling can end on, best first.
+    static func options(for feeling: MealSentiment) -> [(score: Int, label: String)] {
+        let scores: ClosedRange<Int> = switch feeling {
+        case .mustTry, .liked: 7...10
+        case .fine: 4...6
+        case .disliked: 1...3
+        }
+        return scale.filter { scores.contains($0.score) }
+    }
+
+    static func label(for score: Double) -> String {
+        let feeling: MealSentiment = score >= RankScale.eats.lovedFrom ? .liked : score >= RankScale.eats.fineFrom ? .fine : .disliked
+        let band = RankScale.eats.band(feeling)
+        let verdicts = options(for: feeling).reversed() as [(score: Int, label: String)]
+        let t = min(max((score - band.lowerBound) / (band.upperBound - band.lowerBound), 0), 1)
+        return verdicts[min(Int(t * Double(verdicts.count)), verdicts.count - 1)].label
     }
 }
 
@@ -270,6 +331,9 @@ struct RankCandidate: Identifiable, Hashable {
     var rank: Double?
     /// More to jog your memory when you hold the card (address, notes).
     var detail: String = ""
+    /// Where it is, for the map when you hold the card.
+    var latitude: Double?
+    var longitude: Double?
 }
 
 enum EatsRanking {
@@ -284,13 +348,12 @@ enum EatsRanking {
     }
 
     /// Each place's score, spread evenly across its band, so a score moves
-    /// as you rank more places (like Beli). Must-try and liked are one band.
-    static func scores(_ items: [RankCandidate]) -> [String: Double] {
+    /// as you rank more places. Must-try and liked are one band.
+    static func scores(_ items: [RankCandidate], scale: RankScale = .eats) -> [String: Double] {
         var scores: [String: Double] = [:]
-        let bands: [[MealSentiment]] = [[.mustTry, .liked], [.fine], [.disliked]]
-        for feelings in bands {
+        for feelings in scale.bands {
             let places = feelings.flatMap { group(of: $0, in: items) }
-            let band = feelings[0].band
+            let band = scale.band(feelings[0])
             for (i, place) in places.enumerated() {
                 let t = places.count == 1 ? 0 : Double(i) / Double(places.count - 1)
                 // Rounded down, so only your #1 shows 10.0.
@@ -300,8 +363,8 @@ enum EatsRanking {
         return scores
     }
 
-    static func color(_ score: Double) -> Color {
-        score >= 7 ? MealSentiment.liked.color : score >= 4 ? MealSentiment.fine.color : MealSentiment.disliked.color
+    static func color(_ score: Double, scale: RankScale = .eats) -> Color {
+        score >= scale.lovedFrom ? MealSentiment.liked.color : score >= scale.fineFrom ? MealSentiment.fine.color : MealSentiment.disliked.color
     }
 
     /// Trip meals waiting to be ranked: food on days that have started,
@@ -341,6 +404,7 @@ extension TripItem {
         // The restaurant's name, not the itinerary note ("7:00pm Monolith (French…)").
         RankCandidate(id: id, title: place?.name ?? (title.isEmpty ? "Meal" : title),
                       subtitle: [TripStore.shared.trip(tripID)?.name, day.map { DayKey.date($0).formatted(.dateTime.month(.abbreviated).day()) }]
-                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
+                      latitude: place?.latitude, longitude: place?.longitude)
     }
 }

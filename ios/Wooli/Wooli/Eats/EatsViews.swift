@@ -13,10 +13,11 @@ struct MealScoreBadge: View {
     var usesOwnRank = true
     var place: String?
     var total: Int?
+    var scale: RankScale = .eats
 
     var body: some View {
-        RankStamp(rank: rank ?? (usesOwnRank ? Self.ownRank(of: score) : nil), tier: .init(score: score),
-                  place: place, total: total, size: .custom(size))
+        RankStamp(rank: rank ?? (usesOwnRank ? Self.ownRank(of: score) : nil), tier: .init(score: score, scale: scale),
+                  place: place, total: total, size: .custom(size), score: score)
     }
 
     /// Position of `score` on your own list (ties share a position).
@@ -55,6 +56,23 @@ private struct StubChoiceStyle: ButtonStyle {
     }
 }
 
+/// A small map with one pin, far enough out to see the neighbourhood: where a
+/// place you're comparing against is.
+struct PlacePinMap: View {
+    let name: String
+    let coordinate: CLLocationCoordinate2D
+
+    var body: some View {
+        Map(initialPosition: .camera(MapCamera(centerCoordinate: coordinate, distance: 9000)), interactionModes: []) {
+            Marker(name, systemImage: "fork.knife", coordinate: coordinate).tint(Theme.brand)
+        }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        .frame(height: 170)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .accessibilityLabel("Map showing where \(name) is")
+    }
+}
+
 private struct Line: Shape {
     func path(in rect: CGRect) -> Path {
         Path { $0.move(to: CGPoint(x: 0, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
@@ -63,17 +81,19 @@ private struct Line: Shape {
 
 // MARK: - Ranking flow
 
-/// Beli's flow: how it felt, then "which was better?" against places with
-/// the same feeling — a binary search, so a list of 30 takes about five taps.
+/// How it felt, then "which was better?" against places in the same third
+/// of the scale: a binary search, so a list of 30 takes about five taps.
+/// Each place you're asked about shows its score now; hold it to see it on a map.
 struct RankFlow: View {
     let candidate: RankCandidate
     /// Everything else on your list.
     let others: [RankCandidate]
     let onFinish: (MealSentiment, Double) -> Void
-    /// Movies reuse this flow with their own icon and wording.
+    /// Movies reuse this flow with their own icon, wording and scale.
     var symbol = "fork.knife"
     var symbolColor: Color?
     var label: (MealSentiment) -> String = { $0.label }
+    var scale: RankScale = .eats
 
     @Environment(\.dismiss) private var dismiss
     @State private var sentiment: MealSentiment?
@@ -84,8 +104,15 @@ struct RankFlow: View {
     /// The peer being compared against now (index into `peers`).
     @State private var pivot: Int?
     @State private var result: Double?
+    /// The feeling it's saved under: liked, or must-try when it lands among
+    /// older must-trys (they share liked's band).
+    @State private var resultSentiment: MealSentiment?
 
-    private var peers: [RankCandidate] { sentiment.map { EatsRanking.group(of: $0, in: others) } ?? [] }
+    /// Places in the same band, best first.
+    private var peers: [RankCandidate] {
+        sentiment.map { scale.bucket($0).flatMap { EatsRanking.group(of: $0, in: others) } } ?? []
+    }
+    private var scores: [String: Double] { EatsRanking.scores(others, scale: scale) }
 
     var body: some View {
         NavigationStack {
@@ -98,8 +125,8 @@ struct RankFlow: View {
                 }
                 .multilineTextAlignment(.center)
                 .padding(.top, 8)
-                if let sentiment, let result {
-                    finished(sentiment, rank: result)
+                if let result, let saved = resultSentiment ?? sentiment {
+                    finished(saved, rank: result)
                 } else if sentiment != nil, let pivot {
                     compare(against: peers[pivot])
                 } else {
@@ -122,11 +149,11 @@ struct RankFlow: View {
         VStack(spacing: 16) {
             Text("How was it?").font(.headline).foregroundStyle(Theme.textSecondary)
             HStack(spacing: 18) {
-                ForEach(MealSentiment.allCases) { feeling in
+                ForEach(scale.feelings) { feeling in
                     Button { pick(feeling) } label: {
                         VStack(spacing: 8) {
                             Image(systemName: feeling.symbol)
-                                .font(.title2.weight(.bold)).foregroundStyle(.white)
+                                .font(.title2.weight(.bold)).foregroundStyle(Theme.onBrand)
                                 .frame(width: 64, height: 64)
                                 .background(feeling.color.gradient, in: Circle())
                                 .shadow(color: feeling.color.opacity(0.4), radius: 8, y: 4)
@@ -146,9 +173,9 @@ struct RankFlow: View {
             Text("Which was better?").font(.headline).foregroundStyle(Theme.textSecondary)
             Text(stepText).wooliFont(.eyebrow).foregroundStyle(Theme.textTertiary)
             HStack(spacing: 12) {
-                choice(candidate) { answer(newIsBetter: true) }
+                choice(candidate, score: nil) { answer(newIsBetter: true) }
                 Text("or").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textTertiary)
-                choice(other) { answer(newIsBetter: false) }
+                choice(other, score: scores[other.id]) { answer(newIsBetter: false) }
             }
             VStack(spacing: 10) {
                 Button("Don't remember \(other.title) — skip") { forget(other) }
@@ -169,10 +196,20 @@ struct RankFlow: View {
         return "Step \(min(max(total - left + 1, 1), total)) of about \(total)"
     }
 
-    private func choice(_ place: RankCandidate, action: @escaping () -> Void) -> some View {
+    /// One stub to pick. A place already on your list shows its score now,
+    /// so you know what you're measuring against.
+    private func choice(_ place: RankCandidate, score: Double?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: symbol).font(.title3).foregroundStyle(symbolColor ?? Color(hex: TripItem.Kind.meal.colorHex))
+                if let score {
+                    (Text(score, format: .number.precision(.fractionLength(1)))
+                        .font(.title3.weight(.heavy)).foregroundStyle(EatsRanking.color(score, scale: scale))
+                     + Text(" / 10").font(.caption.weight(.semibold)).foregroundStyle(Theme.textTertiary))
+                        .monospacedDigit()
+                        .accessibilityLabel("Scored \(score.formatted(.number.precision(.fractionLength(1)))) out of 10")
+                } else {
+                    Image(systemName: symbol).font(.title3).foregroundStyle(symbolColor ?? Color(hex: TripItem.Kind.meal.colorHex))
+                }
                 Text(place.title).font(.subheadline.weight(.bold)).foregroundStyle(Theme.text)
                     .multilineTextAlignment(.center).lineLimit(3)
                 if !place.subtitle.isEmpty {
@@ -199,7 +236,7 @@ struct RankFlow: View {
     }
 
     private func preview(_ place: RankCandidate) -> some View {
-        let score = EatsRanking.scores(others)[place.id]
+        let score = scores[place.id]
         let position = (EatsRanking.ordered(others).firstIndex { $0.id == place.id } ?? 0) + 1
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
@@ -210,11 +247,17 @@ struct RankFlow: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if let score { MealScoreBadge(score: score, size: 46, rank: position) }
+                if let score { MealScoreBadge(score: score, size: 46, rank: position, scale: scale) }
             }
-            if let sentiment = place.sentiment {
+            if scale == .eats, let score {
+                Text(EatsVerdict.label(for: score))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(EatsRanking.color(score))
+            } else if let sentiment = place.sentiment {
                 Label(label(sentiment), systemImage: sentiment.symbol)
                     .font(.subheadline.weight(.semibold)).foregroundStyle(sentiment.color)
+            }
+            if let latitude = place.latitude, let longitude = place.longitude {
+                PlacePinMap(name: place.title, coordinate: .init(latitude: latitude, longitude: longitude))
             }
             if !place.detail.isEmpty {
                 Text(place.detail).font(.subheadline).foregroundStyle(Theme.text).lineLimit(12)
@@ -230,12 +273,15 @@ struct RankFlow: View {
         ranked.sentiment = sentiment
         ranked.rank = rank
         let all = others + [ranked]
-        let score = EatsRanking.scores(all)[ranked.id] ?? sentiment.band.upperBound
+        let score = EatsRanking.scores(all, scale: scale)[ranked.id] ?? scale.band(sentiment).upperBound
         let ordered = EatsRanking.ordered(all)
         let position = (ordered.firstIndex { $0.id == ranked.id } ?? 0) + 1
         return VStack(spacing: 14) {
-            MealScoreBadge(score: score, size: 88, rank: position, total: ordered.count)
-            Text("#\(position) of \(ordered.count) on your list").font(.headline).foregroundStyle(Theme.text)
+            MealScoreBadge(score: score, size: 88, rank: position, total: ordered.count, scale: scale)
+            if scale == .eats {
+                Text(EatsVerdict.label(for: score)).font(.title3.weight(.bold)).foregroundStyle(Theme.text)
+            }
+            Text("#\(position) of \(ordered.count) on your list").font(.headline).foregroundStyle(scale == .eats ? Theme.textSecondary : Theme.text)
             Button {
                 onFinish(sentiment, rank)
                 dismiss()
@@ -252,7 +298,7 @@ struct RankFlow: View {
     private func pick(_ feeling: MealSentiment) {
         sentiment = feeling
         low = 0
-        high = EatsRanking.group(of: feeling, in: others).count
+        high = peers.count
         if high == 0 { settle(at: 0) } else { choosePivot() }
     }
 
@@ -287,11 +333,18 @@ struct RankFlow: View {
         if pivot == nil { settle(at: (low + high) / 2) }
     }
 
-    /// Slot the place in at `index` among its peers (0 = best).
+    /// Slot the place in at `index` among its peers (0 = best). Ranks only
+    /// order places with the same stored feeling, so it takes the feeling of
+    /// the place just below it (or above, at the bottom) and sits between
+    /// its neighbours with that feeling.
     private func settle(at index: Int) {
         let peers = self.peers
-        let above = index > 0 ? peers[index - 1].rank : nil
-        let below = index < peers.count ? peers[index].rank : nil
+        let abovePeer = index > 0 ? peers[index - 1] : nil
+        let belowPeer = index < peers.count ? peers[index] : nil
+        let saved = belowPeer?.sentiment ?? abovePeer?.sentiment ?? sentiment
+        resultSentiment = saved
+        let above = abovePeer?.sentiment == saved ? abovePeer?.rank : nil
+        let below = belowPeer?.sentiment == saved ? belowPeer?.rank : nil
         switch (above, below) {
         case (let a?, let b?): result = (a + b) / 2
         case (let a?, nil): result = a - 1
@@ -372,9 +425,9 @@ struct EatsListView: View {
         let pool = tab == .been ? ordered : book.wishlist
         let shown = sorted(filtered(pool))
 
-        Group {
+        let browser = Group {
             if showMap {
-                EatsMap(places: sorted(filtered(ordered)), scores: scores) { detail = $0 }
+                EatsMap(places: sorted(filtered(ordered)), scores: scores) { select($0) }
             } else {
                 VStack(spacing: 0) {
                     header(pool)
@@ -382,15 +435,54 @@ struct EatsListView: View {
                 }
             }
         }
+
+        Group {
+        #if os(macOS)
+        // Mac: the list beside the open place, like Mail or Notes.
+        HSplitView {
+            browser.frame(minWidth: 360, idealWidth: 420, maxWidth: 560, maxHeight: .infinity)
+            macDetail.frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .searchable(text: $query, placement: .toolbar, prompt: "Search your list")
+        .onChange(of: tab) {
+            city = nil
+            cuisine = nil
+            detail = nil
+            wishDetail = nil
+        }
+        .toolbar {
+            if tripID == nil {
+                ToolbarItem(placement: .principal) {
+                    Picker("List", selection: $tab) {
+                        ForEach(Tab.allCases) { t in
+                            Text(t == .wantToTry && !book.wishlist.isEmpty ? "\(t.rawValue) · \(book.wishlist.count)" : t.rawValue).tag(t)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+            ToolbarItem {
+                Picker("Show", selection: $showMap) {
+                    Label("List", systemImage: "list.bullet").tag(false)
+                    Label("Map", systemImage: "map").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .help("Show as a list or on a map")
+            }
+        }
+        #else
+        browser
         .overlay(alignment: .bottomTrailing) {
             Button { withAnimation(.snappy) { showMap.toggle() } } label: {
                 Label(showMap ? "View List" : "View Map", systemImage: showMap ? "list.bullet" : "map")
-                    .font(.headline).foregroundStyle(.white)
+                    .font(.headline).foregroundStyle(Theme.onBrand)
                     .padding(.horizontal, 20).padding(.vertical, 14)
                     .background(PlaceActionBar.ink, in: Capsule())
                     .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
             .padding(20)
+        }
+        #endif
         }
         .navigationTitle(tripID != nil ? "What we ate" : book.partner == nil ? "Eats" : "Our Eats")
         .navigationBarTitleDisplayMode(.inline)
@@ -415,11 +507,11 @@ struct EatsListView: View {
                 record(request, sentiment: sentiment, rank: rank)
             }
         }
-        .sheet(item: $detail) { place in
+        .sheet(item: phoneSheet($detail)) { place in
             EatsPlaceDetail(place: place)
         }
         // "I've been" on a wish ranks it once its page has closed.
-        .sheet(item: $wishDetail, onDismiss: {
+        .sheet(item: phoneSheet($wishDetail), onDismiss: {
             if let place = pickedPlace {
                 pickedPlace = nil
                 ranking = .place(place)
@@ -442,6 +534,68 @@ struct EatsListView: View {
             Text(book.lastError ?? "")
         }
     }
+
+    // MARK: Opening a place
+
+    private func select(_ place: EatsPlace) {
+        wishDetail = nil
+        detail = place
+    }
+
+    /// The row whose page is open beside the Mac list.
+    private func isOpen(_ place: EatsPlace) -> Bool {
+        #if os(macOS)
+        detail?.id == place.id || wishDetail?.id == place.id
+        #else
+        false
+        #endif
+    }
+
+    /// iPhone opens a place in a sheet; the Mac shows it beside the list instead.
+    private func phoneSheet(_ item: Binding<EatsPlace?>) -> Binding<EatsPlace?> {
+        #if os(macOS)
+        .constant(nil)
+        #else
+        item
+        #endif
+    }
+
+    #if os(macOS)
+    /// The right side on the Mac: the open place, or your passport and friends.
+    @ViewBuilder
+    private var macDetail: some View {
+        if let place = detail {
+            EatsPlaceDetail(place: place, embedded: true) { detail = nil }
+                .id(place.id)
+        } else if let wish = wishDetail {
+            EatsWishDetail(place: wish, embedded: true, onClose: { wishDetail = nil }) { ranking = .place($0) }
+                .id(wish.id)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.xl) {
+                    if tripID == nil, !book.mine.isEmpty { passport(book.mine).padding(-Space.l) }
+                    if tripID == nil {
+                        VStack(alignment: .leading, spacing: Space.m) {
+                            SectionLabel("Friends")
+                            friendsStrip
+                            if book.friends.isEmpty {
+                                Text("Share your list with friends and ask them to share theirs back — you'll see each other's rankings.")
+                                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+                            }
+                        }
+                        .card(padding: Space.l)
+                    }
+                    Label("Choose a place on the left to see it here.", systemImage: "sidebar.left")
+                        .font(.subheadline).foregroundStyle(Theme.textSecondary)
+                }
+                .padding(Space.xxl)
+                .frame(maxWidth: 720, alignment: .leading)
+                .frame(maxWidth: .infinity)
+            }
+            .background(Theme.background)
+        }
+    }
+    #endif
 
     // MARK: Header
 
@@ -468,6 +622,7 @@ struct EatsListView: View {
         let cities = Set(pool.compactMap(\.city)).sorted()
         let cuisines = Set(pool.compactMap(\.cuisine)).sorted()
         return VStack(alignment: .leading, spacing: 14) {
+            #if os(iOS)
             if tripID == nil {
                 HStack(spacing: 28) {
                     ForEach(Tab.allCases) { t in
@@ -489,6 +644,7 @@ struct EatsListView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { Divider() }
             }
+            #endif
             if !pool.isEmpty || city != nil || cuisine != nil || near != nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
@@ -520,7 +676,9 @@ struct EatsListView: View {
                     Label(sort.rawValue, systemImage: "arrow.up.arrow.down")
                         .font(.subheadline.weight(.semibold)).foregroundStyle(PlaceActionBar.ink)
                 }
+                .chipMenuStyle()
                 Spacer()
+                #if os(iOS)
                 Button(searching ? "Done" : "Search", systemImage: "magnifyingglass") {
                     withAnimation(.snappy) {
                         searching.toggle()
@@ -528,12 +686,15 @@ struct EatsListView: View {
                     }
                 }
                 .labelStyle(.iconOnly).font(.title3).foregroundStyle(PlaceActionBar.ink)
+                #endif
             }
+            #if os(iOS)
             if searching {
                 TextField("Search your list", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
             }
+            #endif
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -551,6 +712,7 @@ struct EatsListView: View {
         } label: {
             chipLabel(value.wrappedValue ?? title, isOn: value.wrappedValue != nil)
         }
+        .chipMenuStyle()
     }
 
     private func chipLabel(_ text: String, isOn: Bool) -> some View {
@@ -559,7 +721,7 @@ struct EatsListView: View {
             Image(systemName: "chevron.down").font(.caption.weight(.bold))
         }
         .font(.subheadline.weight(.medium))
-        .foregroundStyle(isOn ? .white : Theme.text)
+        .foregroundStyle(isOn ? Theme.onBrand : Theme.text)
         .padding(.horizontal, 14).frame(height: 36)
         .background(Capsule().fill(isOn ? PlaceActionBar.ink : Color.clear))
         .overlay(Capsule().strokeBorder(isOn ? PlaceActionBar.ink : Theme.textTertiary, lineWidth: 1.2))
@@ -574,6 +736,7 @@ struct EatsListView: View {
         } label: {
             chipLabel(locating ? "Locating…" : near.map { "\($0.name) · 50 mi" } ?? "Near", isOn: near != nil)
         }
+        .chipMenuStyle()
         .disabled(locating)
     }
 
@@ -638,6 +801,7 @@ struct EatsListView: View {
 
     private func list(_ shown: [EatsPlace], total: Int, waiting: [TripItem], scores: [String: Double]) -> some View {
         List {
+            #if os(iOS)
             if tab == .been, tripID == nil, !book.mine.isEmpty {
                 Section {
                     passport(book.mine)
@@ -645,7 +809,9 @@ struct EatsListView: View {
                         .listRowBackground(Color.clear)
                 }
             }
+            #endif
             if tab == .been {
+                #if os(iOS)
                 if tripID == nil {
                     Section {
                         friendsStrip
@@ -658,6 +824,7 @@ struct EatsListView: View {
                         }
                     }
                 }
+                #endif
                 if !waiting.isEmpty { toRank(waiting) }
             }
 
@@ -679,11 +846,20 @@ struct EatsListView: View {
             Section {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, place in
                     if tab == .been {
-                        Button { detail = place } label: {
+                        Button { select(place) } label: {
                             EatsPlaceRow(place: place, index: sort == .score ? index + 1 : nil, score: scores[place.id],
                                          subtitle: withDistance(place, subtitle(place)), friends: book.friendScores(for: place).map(\.friend))
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(isOpen(place) ? Theme.brandSoft : nil)
+                        .contextMenu {
+                            if let url = place.tripPlace?.mapsURL {
+                                Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+                            }
+                            if let url = place.tripPlace?.googleMapsURL {
+                                Link(destination: url) { Label("Open in Google Maps", systemImage: "globe") }
+                            }
+                        }
                     } else {
                         wishRow(place)
                     }
@@ -692,8 +868,10 @@ struct EatsListView: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             .listSectionSeparator(.hidden, edges: .top)
 
+            #if os(iOS)
             // Room to scroll the last row out from under View Map.
             Color.clear.frame(height: 72).listRowSeparator(.hidden)
+            #endif
         }
         .listStyle(.plain)
         .refreshable {
@@ -737,6 +915,12 @@ struct EatsListView: View {
                         skipped.insert(item.id)
                     }
                 }
+                .contextMenu {
+                    Button("Skip", systemImage: "forward") {
+                        EatsRanking.skip([item.id])
+                        skipped.insert(item.id)
+                    }
+                }
             }
             if waiting.count > 3 {
                 Button(showAllWaiting ? "Show fewer" : "Show all \(waiting.count)") {
@@ -752,7 +936,11 @@ struct EatsListView: View {
                     .font(.footnote.weight(.semibold)).textCase(nil)
             }
         } footer: {
+            #if os(macOS)
+            Text("Restaurants from your trips. Right-click one to skip it.")
+            #else
             Text("Restaurants from your trips. Swipe to skip one.")
+            #endif
         }
         .confirmationDialog("Skip all \(waiting.count)?", isPresented: $confirmSkipAll, titleVisibility: .visible) {
             Button("Skip all", role: .destructive) {
@@ -767,7 +955,7 @@ struct EatsListView: View {
     /// A saved place: same row as the list (tap for its page), with Been to rank it.
     private func wishRow(_ wish: EatsPlace) -> some View {
         HStack(alignment: .center, spacing: 8) {
-            Button { wishDetail = wish } label: {
+            Button { detail = nil; wishDetail = wish } label: {
                 EatsPlaceRow(place: wish, index: nil, score: nil,
                              subtitle: withDistance(wish, "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))"))
             }
@@ -778,6 +966,7 @@ struct EatsListView: View {
                     .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(PlaceActionBar.ink)
             }
         }
+        .listRowBackground(isOpen(wish) ? Theme.brandSoft : nil)
         .contextMenu {
             if let url = wish.tripPlace?.mapsURL {
                 Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
@@ -785,6 +974,8 @@ struct EatsListView: View {
             if let reel = wish.reelURL {
                 Link(destination: reel) { Label("Watch the reel", systemImage: "play.rectangle") }
             }
+            Divider()
+            Button("Remove from Want to Try", systemImage: "trash", role: .destructive) { book.removeFromWishlist(wish) }
         }
         .swipeActions {
             Button("Remove", role: .destructive) { book.removeFromWishlist(wish) }
@@ -1056,7 +1247,7 @@ struct FriendListView: View {
         let date = place.visitedDay.isEmpty ? nil : DayKey.date(place.visitedDay).formatted(.dateTime.month(.abbreviated).year())
         let yours = book.mine.first { $0.isSamePlace(as: place) }
             .flatMap { book.scores[$0.id] }
-            .map { "You: #\(MealScoreBadge.ownRank(of: $0)) · \(RankStamp.Tier(score: $0).word)" }
+            .map { "You: #\(MealScoreBadge.ownRank(of: $0)) · \(EatsVerdict.label(for: $0))" }
         return [yours, date].compactMap { $0 }.joined(separator: " · ")
     }
 }
@@ -1082,82 +1273,112 @@ struct EatsPlaceDetail: View {
     @State private var mapItem: MKMapItem?
     @State private var showingListing = false
     @FocusState private var editingNotes: Bool
+    /// Shown beside the Mac list instead of in its own sheet.
+    var embedded = false
+    /// Clears the Mac list's selection (after removing the place).
+    var onClose: (() -> Void)? = nil
+    @State private var autosave: Task<Void, Never>?
 
-    init(place: EatsPlace, tripItem: TripItem? = nil) {
+    init(place: EatsPlace, tripItem: TripItem? = nil, embedded: Bool = false, onClose: (() -> Void)? = nil) {
         _place = State(initialValue: place)
+        self.embedded = embedded
+        self.onClose = onClose
         self.tripItem = tripItem
     }
 
     var body: some View {
+        if embedded {
+            page
+                .readableContentWidth()
+                // Beside the Mac list there's no Save: keep changes a moment after the last edit.
+                .onChange(of: place) { _, edited in
+                    autosave?.cancel()
+                    autosave = Task {
+                        try? await Task.sleep(for: .milliseconds(700))
+                        guard !Task.isCancelled, !edited.name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                        book.save(edited)
+                    }
+                }
+        } else {
+            NavigationStack {
+                page.toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            book.save(place)
+                            dismiss()
+                        }
+                        .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Closes the sheet on iPhone; beside the Mac list, clears the selection.
+    private func close() {
+        if embedded { onClose?() } else { dismiss() }
+    }
+
+    @ViewBuilder
+    private var page: some View {
         let others = book.mine.filter { $0.id != place.id }.map(\.candidate)
         let all = others + [place.candidate]
         let ordered = EatsRanking.ordered(all)
         let score = EatsRanking.scores(all)[place.id] ?? 0
         let position = (ordered.firstIndex { $0.id == place.id } ?? 0) + 1
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    hero
-                    VStack(alignment: .leading, spacing: 22) {
-                        titleBlock(score: score)
-                        actions
-                        scores(score: score, position: position, count: ordered.count)
-                        notesList
-                        Button("Remove from Eats", role: .destructive) { confirmDelete = true }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 4)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                hero
+                VStack(alignment: .leading, spacing: 22) {
+                    titleBlock(score: score)
+                    actions
+                    scores(score: score, position: position, count: ordered.count)
+                    notesList
+                    Button("Remove from Eats", role: .destructive) { confirmDelete = true }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
             }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Theme.card)
-            .ignoresSafeArea(edges: .top)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        book.save(place)
-                        dismiss()
-                    }
-                    .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Theme.card)
+        .ignoresSafeArea(edges: .top)
+        .task(id: place.tripPlace) {
+            guard let spot = place.tripPlace else { return }
+            mapItem = await PlaceMapCard.listing(for: spot)
+        }
+        .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
+        .sheet(item: $editingPlan) { item in
+            if let trip = TripStore.shared.trip(item.tripID) { TripItemEditor(item: item, trip: trip) }
+        }
+        // A new rank is saved right away and takes you back to the list.
+        .sheet(isPresented: $reranking, onDismiss: { if closeAfterRank { close() } }) {
+            RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
+                place.sentiment = sentiment
+                place.rank = rank
+                book.save(place)
+                closeAfterRank = true
             }
-            .task(id: place.tripPlace) {
-                guard let spot = place.tripPlace else { return }
-                mapItem = await PlaceMapCard.listing(for: spot)
+        }
+        .sheet(item: $editingVisit) { visit in
+            VisitEditor(visit: visit, isNew: !place.visits.contains { $0.id == visit.id },
+                        canDelete: place.visits.count > 1) { edited in
+                if let edited { place.setVisit(edited) } else { place.removeVisit(visit) }
+                book.save(place)
             }
-            .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
-            .sheet(item: $editingPlan) { item in
-                if let trip = TripStore.shared.trip(item.tripID) { TripItemEditor(item: item, trip: trip) }
-            }
-            // A new rank is saved right away and takes you back to the list.
-            .sheet(isPresented: $reranking, onDismiss: { if closeAfterRank { dismiss() } }) {
-                RankFlow(candidate: place.candidate, others: others) { sentiment, rank in
-                    place.sentiment = sentiment
-                    place.rank = rank
-                    book.save(place)
-                    closeAfterRank = true
-                }
-            }
-            .sheet(item: $editingVisit) { visit in
-                VisitEditor(visit: visit, isNew: !place.visits.contains { $0.id == visit.id },
-                            canDelete: place.visits.count > 1) { edited in
-                    if let edited { place.setVisit(edited) } else { place.removeVisit(visit) }
-                    book.save(place)
-                }
-            }
-            .alert("Rename", isPresented: $renaming) {
-                TextField("Name", text: $place.name)
-                Button("Done") {}
-            }
-            .confirmationDialog("Remove \(place.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Remove", role: .destructive) {
-                    book.delete(place)
-                    dismiss()
-                }
+        }
+        .alert("Rename", isPresented: $renaming) {
+            TextField("Name", text: $place.name)
+            Button("Done") {}
+        }
+        .confirmationDialog("Remove \(place.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                book.delete(place)
+                close()
             }
         }
     }
@@ -1181,7 +1402,7 @@ struct EatsPlaceDetail: View {
                 .padding(.top, place.coordinate == nil ? 0 : -PlaceHeroMap.titleOverlap)
             HStack(spacing: 10) {
                 MealScoreBadge(score: score, size: 92, place: place.city)
-                Text(place.sentiment.label).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                Text(EatsVerdict.label(for: score)).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textSecondary)
                 Spacer()
                 Button("Rank again") { reranking = true }
                     .font(.subheadline.weight(.semibold))
@@ -1222,7 +1443,7 @@ struct EatsPlaceDetail: View {
         HStack(spacing: 12) {
             MealScoreBadge(score: score, size: 58, rank: rank, usesOwnRank: rank != nil)
                 .overlay(alignment: .bottomTrailing) {
-                    Text(badge).font(.caption2.weight(.bold)).foregroundStyle(.white)
+                    Text(badge).font(.caption2.weight(.bold)).foregroundStyle(Theme.onBrand)
                         .padding(.horizontal, 6).padding(.vertical, 3)
                         .background(PlaceActionBar.ink, in: Capsule())
                         .offset(x: 6, y: 4)
@@ -1304,59 +1525,89 @@ struct EatsWishDetail: View {
     @State private var showingListing = false
     @State private var confirmRemove = false
     @State private var renaming = false
+    /// Shown beside the Mac list instead of in its own sheet.
+    var embedded = false
+    /// Clears the Mac list's selection (after removing the place).
+    var onClose: (() -> Void)? = nil
+    @State private var autosave: Task<Void, Never>?
 
-    init(place: EatsPlace, onBeen: @escaping (TripPlace) -> Void) {
+    init(place: EatsPlace, embedded: Bool = false, onClose: (() -> Void)? = nil, onBeen: @escaping (TripPlace) -> Void) {
         _place = State(initialValue: place)
+        self.embedded = embedded
+        self.onClose = onClose
         self.onBeen = onBeen
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    PlaceHeroMap(coordinate: place.coordinate, name: place.name, tint: Theme.brand) {
-                        if mapItem != nil { showingListing = true }
+        if embedded {
+            page
+                .readableContentWidth()
+                // Beside the Mac list there's no Save: keep changes a moment after the last edit.
+                .onChange(of: place) { _, edited in
+                    autosave?.cancel()
+                    autosave = Task {
+                        try? await Task.sleep(for: .milliseconds(700))
+                        guard !Task.isCancelled, !edited.name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                        book.updateWish(edited)
                     }
-                    VStack(alignment: .leading, spacing: 22) {
-                        titleBlock
-                        PlaceActionBar(place: place.tripPlace, mapItem: mapItem) { showingListing = true }
-                        notesList
-                        Button("Remove from Want to Try", role: .destructive) { confirmRemove = true }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 4)
+                }
+        } else {
+            NavigationStack {
+                page.toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            book.updateWish(place)
+                            dismiss()
+                        }
+                        .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Theme.card)
-            .ignoresSafeArea(edges: .top)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        book.updateWish(place)
-                        dismiss()
-                    }
-                    .disabled(place.name.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    /// Closes the sheet on iPhone; beside the Mac list, clears the selection.
+    private func close() {
+        if embedded { onClose?() } else { dismiss() }
+    }
+
+    @ViewBuilder
+    private var page: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                PlaceHeroMap(coordinate: place.coordinate, name: place.name, tint: Theme.brand) {
+                    if mapItem != nil { showingListing = true }
                 }
-            }
-            .task(id: place.tripPlace) {
-                guard let spot = place.tripPlace else { return }
-                mapItem = await PlaceMapCard.listing(for: spot)
-            }
-            .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
-            .alert("Rename", isPresented: $renaming) {
-                TextField("Name", text: $place.name)
-                Button("Done") {}
-            }
-            .confirmationDialog("Remove \(place.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
-                Button("Remove", role: .destructive) {
-                    book.removeFromWishlist(place)
-                    dismiss()
+                VStack(alignment: .leading, spacing: 22) {
+                    titleBlock
+                    PlaceActionBar(place: place.tripPlace, mapItem: mapItem) { showingListing = true }
+                    notesList
+                    Button("Remove from Want to Try", role: .destructive) { confirmRemove = true }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Theme.card)
+        .ignoresSafeArea(edges: .top)
+        .task(id: place.tripPlace) {
+            guard let spot = place.tripPlace else { return }
+            mapItem = await PlaceMapCard.listing(for: spot)
+        }
+        .mapItemDetailSheet(isPresented: $showingListing, item: mapItem)
+        .alert("Rename", isPresented: $renaming) {
+            TextField("Name", text: $place.name)
+            Button("Done") {}
+        }
+        .confirmationDialog("Remove \(place.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                book.removeFromWishlist(place)
+                close()
             }
         }
     }
@@ -1376,7 +1627,7 @@ struct EatsWishDetail: View {
                 if let spot = place.tripPlace {
                     Button("I've been") {
                         onBeen(spot)
-                        dismiss()
+                        close()
                     }
                     .font(.subheadline.weight(.semibold))
                     .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(PlaceActionBar.ink)
@@ -1458,5 +1709,17 @@ struct VisitEditor: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+private extension View {
+    /// Filter chips draw their own arrow; on the Mac, drop the menu's second one.
+    @ViewBuilder
+    func chipMenuStyle() -> some View {
+        #if os(macOS)
+        self.menuIndicator(.hidden).menuStyle(.button).buttonStyle(.plain)
+        #else
+        self
+        #endif
     }
 }

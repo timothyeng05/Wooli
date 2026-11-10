@@ -44,7 +44,8 @@ struct PlaceActionBar: View {
     let onPhotos: () -> Void
     @Environment(\.openURL) private var openURL
 
-    static let ink = Color(hex: "#0f5c66")
+    /// Eats' action colour: Wooli blue, like every other button in the app.
+    static let ink = Theme.brand
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {

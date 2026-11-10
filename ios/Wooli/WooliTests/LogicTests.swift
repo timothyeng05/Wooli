@@ -211,3 +211,52 @@ struct CycleMathTests {
         #expect(CycleMath.selfTest() == [])
     }
 }
+
+// MARK: - Eats scale
+
+struct EatsScaleTests {
+    private func place(_ id: String, _ feeling: MealSentiment, _ rank: Double) -> RankCandidate {
+        RankCandidate(id: id, title: id, sentiment: feeling, rank: rank)
+    }
+
+    @Test func feelingsFillTheirThirds() {
+        let items = [place("a", .liked, 3), place("b", .liked, 2), place("c", .liked, 1),
+                     place("d", .fine, 1), place("e", .disliked, 2), place("f", .disliked, 1)]
+        let scores = EatsRanking.scores(items)
+        #expect(scores["a"] == 10.0)
+        #expect(scores["c"] == 6.7)
+        #expect(scores["d"] == 6.6)
+        #expect(scores["e"] == 3.3)
+        #expect(scores["f"] == 1.0)
+    }
+
+    @Test func olderMustTrysSitOnTopOfLiked() {
+        let items = [place("old", .mustTry, 0), place("new", .liked, 5)]
+        let scores = EatsRanking.scores(items)
+        #expect(scores["old"] == 10.0)
+        #expect(scores["new"] == 6.7)
+    }
+
+    @Test func moviesKeepTheirBands() {
+        let items = [place("a", .fine, 2), place("b", .fine, 1)]
+        let scores = EatsRanking.scores(items, scale: .movies)
+        #expect(scores["a"] == 6.9)
+        #expect(scores["b"] == 4.0)
+    }
+
+    @Test func verdictsFollowTheThirds() {
+        #expect(EatsVerdict.label(for: 10) == "Must try")
+        #expect(EatsVerdict.label(for: 8.0) == "Safe bet")
+        #expect(EatsVerdict.label(for: 6.7) == "Average")
+        #expect(EatsVerdict.label(for: 6.6) == "Plan B")
+        #expect(EatsVerdict.label(for: 3.4) == "Skip")
+        #expect(EatsVerdict.label(for: 3.3) == "Avoid")
+        #expect(EatsVerdict.label(for: 1.0) == "Do you even love yourself")
+        #expect(EatsVerdict.options(for: .fine).map(\.score) == [6, 5, 4])
+    }
+
+    @Test func stampTiersUseTheThirds() {
+        #expect(RankStamp.Tier(score: 6.7) == .loved)
+        #expect(RankStamp.Tier(score: 6.7, scale: .movies) == .fine)
+    }
+}

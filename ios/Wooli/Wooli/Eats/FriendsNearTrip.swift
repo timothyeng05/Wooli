@@ -60,7 +60,13 @@ struct FriendsNearTripCard: View {
     /// Friends' places within reach of the trip, best score first; a place
     /// several friends ranked shows once, with the highest score.
     private func nearbyPicks() -> [Pick] {
-        let centers = areas + store.items(in: trip.id).compactMap(\.place).map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+        // Only where the trip goes: not the home city or the city it leaves from.
+        let away = trip.awayLegs
+        let tripItems = store.items(in: trip.id).filter { item in
+            guard let day = item.day else { return true }
+            return away.isEmpty || away.contains { $0.contains(day) }
+        }
+        let centers = areas + tripItems.compactMap(\.place).map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
         guard !centers.isEmpty else { return [] }
         var picks: [Pick] = []
         for friend in book.friends {
@@ -80,7 +86,7 @@ struct FriendsNearTripCard: View {
     }
 
     private var areaQueries: [String] {
-        Array(Set(([trip.destination] + trip.legs.map(\.name)).filter { !$0.isEmpty })).sorted()
+        Array(Set(([trip.destination] + trip.awayLegs.map(\.name)).filter { !$0.isEmpty })).sorted()
     }
 
     private static func locate(_ queries: [String]) async -> [CLLocation] {

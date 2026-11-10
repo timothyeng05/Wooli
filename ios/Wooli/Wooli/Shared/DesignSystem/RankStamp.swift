@@ -14,9 +14,10 @@ struct RankStamp: View {
             }
         }
 
-        /// Eats' bands: 7–10 loved, 4–6.9 fine, below 4 skip.
-        init(score: Double) {
-            self = score >= 7 ? .loved : score >= 4 ? .fine : .skip
+        /// The score's third: Eats loves from 6.7 and finds fine from 3.4;
+        /// Movies keeps 7 and 4.
+        init(score: Double, scale: RankScale = .eats) {
+            self = score >= scale.lovedFrom ? .loved : score >= scale.fineFrom ? .fine : .skip
         }
 
         var ink: Color {
@@ -54,6 +55,15 @@ struct RankStamp: View {
     var place: String?
     var total: Int?
     var size: Size = .detail
+    /// The 1–10 score. When set, the stamp prints it instead of the rank
+    /// (rows already number places, and the score is what people compare).
+    var score: Double?
+
+    /// "9.9", or "10" for a perfect score so it fits the stamp.
+    private var number: String? {
+        if let score { return score >= 9.95 ? "10" : String(format: "%.1f", score) }
+        return rank.map(String.init)
+    }
 
     var body: some View {
         let s = size.points / 92
@@ -64,15 +74,16 @@ struct RankStamp: View {
             if size.isFull {
                 VStack(spacing: 0) {
                     Text(tier.word).font(.system(size: 10, weight: .bold)).tracking(1.1).textCase(.uppercase)
-                    Text(rank.map(String.init) ?? "–").font(.system(size: 32, weight: .black, design: .rounded)).monospacedDigit()
+                    Text(number ?? "–").font(.system(size: 32, weight: .black, design: .rounded)).monospacedDigit()
                     if let place {
                         Text(place).font(.system(size: 8, weight: .semibold)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.7)
                     }
                 }
                 .padding(.horizontal, 14)
             } else {
-                if let rank {
-                    Text("\(rank)").font(.system(size: 16 * max(size.points / 40, 0.6), weight: .black, design: .rounded)).monospacedDigit()
+                if let number {
+                    Text(number).font(.system(size: 16 * max(size.points / 40, 0.6), weight: .black, design: .rounded)).monospacedDigit()
+                        .minimumScaleFactor(0.7).lineLimit(1)
                 } else {
                     Text(tier.word).font(.system(size: 9 * max(size.points / 40, 0.8), weight: .bold)).textCase(.uppercase)
                         .minimumScaleFactor(0.6).lineLimit(1).padding(.horizontal, 4)
@@ -83,7 +94,8 @@ struct RankStamp: View {
         .frame(width: size.points, height: size.points)
         .rotationEffect(.degrees(-8))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(rank.map { "\(tier.word), number \($0)\(total.map { " of \($0)" } ?? "")" } ?? tier.word)
+        .accessibilityLabel(score.map { _ in "\(tier.word), \(number ?? "") out of 10" }
+                            ?? rank.map { "\(tier.word), number \($0)\(total.map { " of \($0)" } ?? "")" } ?? tier.word)
     }
 }
 
