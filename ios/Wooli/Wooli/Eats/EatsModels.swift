@@ -207,7 +207,8 @@ extension EatsPlace {
 struct EatsFriend: Codable, Identifiable, Hashable {
     /// Their iCloud user record name (the owner of the shared zone).
     var id: String
-    var name: String = "Friend"
+    static let placeholderName = "Friend"
+    var name: String = placeholderName
     var places: [EatsPlace] = []
 
     var initials: String {

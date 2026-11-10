@@ -34,6 +34,12 @@ final class EatsBook {
     /// Your own list while you're in your partner's (put back when you leave).
     private var stashed: [EatsPlace] = []
     private var stashedWishes: [EatsPlace] = []
+    /// Friends' names by iCloud owner id. Kept when `resetSync` clears
+    /// `friends`: iCloud often leaves the name off a re-downloaded share, so
+    /// without this a friend comes back as "Friend".
+    private var friendNames: [String: String] = [:]
+    /// Owners whose name you typed: iCloud's name doesn't replace it.
+    private var typedFriendNames: Set<String> = []
     /// A friend whose list to open right away (after accepting their invite).
     var friendToShow: String?
     var lastError: String?
@@ -53,6 +59,8 @@ final class EatsBook {
         var partner: EatsPartner?
         var stashed: [EatsPlace]?
         var stashedWishes: [EatsPlace]?
+        var friendNames: [String: String]?
+        var typedFriendNames: Set<String>?
     }
 
     private static var fileURL: URL {
@@ -72,6 +80,9 @@ final class EatsBook {
             partner = saved.partner
             stashed = saved.stashed ?? []
             stashedWishes = saved.stashedWishes ?? []
+            friendNames = saved.friendNames ?? Dictionary(saved.friends.filter { $0.name != EatsFriend.placeholderName }
+                .map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            typedFriendNames = saved.typedFriendNames ?? []
         }
     }
 
@@ -130,7 +141,8 @@ final class EatsBook {
     private func persist() {
         do {
             try JSONEncoder().encode(Saved(mine: mine, friends: friends, isSharing: isSharing, wishlist: wishlist,
-                                           partner: partner, stashed: stashed, stashedWishes: stashedWishes))
+                                           partner: partner, stashed: stashed, stashedWishes: stashedWishes,
+                                           friendNames: friendNames, typedFriendNames: typedFriendNames))
                 .write(to: Self.fileURL, options: .atomic)
         } catch {
             log.error("Couldn't save Eats: \(error)")
@@ -270,16 +282,13 @@ final class EatsBook {
     /// else is a friend's to follow.
     func didAccept(_ metadata: CKShare.Metadata) {
         let owner = metadata.share.recordID.zoneID.ownerName
-        let name = metadata.ownerIdentity.nameComponents?.formatted() ?? "Friend"
+        let iCloudName = metadata.ownerIdentity.nameComponents?.formatted()
         if metadata.participantPermission == .readWrite {
-            joinPartnersList(owner: owner, name: name)
+            joinPartnersList(owner: owner, name: iCloudName ?? "Friend")
             return
         }
-        if let i = friends.firstIndex(where: { $0.id == owner }) {
-            friends[i].name = name
-        } else {
-            friends.append(EatsFriend(id: owner, name: name))
-        }
+        updateFriend(owner) { _ in }
+        learnName(iCloudName, for: owner)
         persist()
         friendToShow = owner
     }
@@ -360,8 +369,8 @@ final class EatsBook {
             } else if isList(zoneID) {
                 if let name = share.owner.userIdentity.nameComponents?.formatted(), !name.isEmpty { partner?.name = name }
             } else {
-                let name = share.owner.userIdentity.nameComponents?.formatted()
-                updateFriend(zoneID.ownerName) { friend in if let name, !name.isEmpty { friend.name = name } }
+                updateFriend(zoneID.ownerName) { _ in }
+                learnName(share.owner.userIdentity.nameComponents?.formatted(), for: zoneID.ownerName)
             }
         } else if record.recordType == EatsPlace.recordType || record.recordType == EatsPlace.wishRecordType {
             let isWish = record.recordType == EatsPlace.wishRecordType
@@ -399,10 +408,27 @@ final class EatsBook {
         if let i = friends.firstIndex(where: { $0.id == owner }) {
             change(&friends[i])
         } else {
-            var friend = EatsFriend(id: owner)
+            var friend = EatsFriend(id: owner, name: friendNames[owner] ?? EatsFriend.placeholderName)
             change(&friend)
             friends.append(friend)
         }
+    }
+
+    /// A name from iCloud: used unless you typed one for this friend.
+    private func learnName(_ name: String?, for owner: String) {
+        guard let name, !name.isEmpty, !typedFriendNames.contains(owner) else { return }
+        friendNames[owner] = name
+        updateFriend(owner) { $0.name = name }
+    }
+
+    /// Your own name for a friend; kept over whatever iCloud says.
+    func rename(_ friend: EatsFriend, to name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        typedFriendNames.insert(friend.id)
+        friendNames[friend.id] = name
+        updateFriend(friend.id) { $0.name = name }
+        persist()
     }
 
     func removeRecord(_ recordID: CKRecord.ID, isShare: Bool) {

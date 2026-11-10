@@ -1182,6 +1182,8 @@ struct FriendListView: View {
     @State private var book = EatsBook.shared
     @State private var showMap = false
     @State private var confirmUnfollow = false
+    @State private var renaming = false
+    @State private var newName = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1224,9 +1226,18 @@ struct FriendListView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
+                        Button("Rename", systemImage: "pencil") {
+                            newName = friend.name
+                            renaming = true
+                        }
                         Button("Stop following", systemImage: "person.badge.minus", role: .destructive) { confirmUnfollow = true }
                     }
                 }
+            }
+            .alert("Rename", isPresented: $renaming) {
+                TextField("Name", text: $newName)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { book.rename(friend, to: newName) }
             }
             .confirmationDialog("Stop following \(friend.name)?", isPresented: $confirmUnfollow, titleVisibility: .visible) {
                 Button("Stop following", role: .destructive) {
