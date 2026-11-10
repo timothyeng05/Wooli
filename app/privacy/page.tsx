@@ -38,6 +38,15 @@ export default function PrivacyPage() {
         Data Access &amp; Devices.
       </p>
 
+      <h2>Apple Reminders (optional)</h2>
+      <p>
+        If you use the Reminders app in Wooli and allow it, Wooli reads your lists and reminders from Apple
+        Reminders, and saves the ones you add, change, tick off or delete there. Your reminders stay in Apple
+        Reminders, not in Wooli&apos;s own storage or iCloud database, and are never sent to the developer or
+        anyone else. You can change this at any time in Settings → Apps → Wooli → Reminders on iPhone, or System
+        Settings → Privacy &amp; Security → Reminders on a Mac.
+      </p>
+
       <h2>Bank connections (optional)</h2>
       <p>
         If you choose to connect a bank, Wooli uses <a href="https://beta-bridge.simplefin.org">SimpleFIN Bridge</a>,

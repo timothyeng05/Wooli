@@ -11,6 +11,7 @@ struct TodayBoard: View {
     @State private var trips = TripStore.shared
     @State private var book = EatsBook.shared
     @State private var period = PeriodStore.shared
+    @State private var reminderStore = ReminderStore.shared
     @State private var lock = ModuleLock.shared
     @Query private var accounts: [LocalAccount]
     @Query private var transactions: [LocalTransaction]
@@ -41,7 +42,7 @@ struct TodayBoard: View {
                 budgetHero(budget)
             }
 
-            let items = todos(budget: budget, showsEats: cards.contains(.eats))
+            let items = todos(budget: budget, showsEats: cards.contains(.eats), showsReminders: cards.contains(.reminders))
             if !items.isEmpty { todoCard(items) }
 
             let rings = personalTiles(cards: cards, budget: heroTrip == nil ? nil : budget)
@@ -66,6 +67,9 @@ struct TodayBoard: View {
         }
         .task(id: cards.contains(.period)) {
             if cards.contains(.period) { await period.refresh(sample: app.mode == .sample) }
+        }
+        .task(id: cards.contains(.reminders)) {
+            if cards.contains(.reminders) { await reminderStore.refresh(sample: app.mode == .sample) }
         }
     }
 
@@ -111,7 +115,7 @@ struct TodayBoard: View {
     }
 
     /// Only what's waiting on you; the card goes away when there's nothing.
-    private func todos(budget: TodayBudget?, showsEats: Bool) -> [Todo] {
+    private func todos(budget: TodayBudget?, showsEats: Bool, showsReminders: Bool) -> [Todo] {
         var items: [Todo] = []
         if let budget, budget.toReview > 0 {
             items.append(Todo(id: "review", space: .budget,
@@ -133,6 +137,15 @@ struct TodayBoard: View {
             if waiting > 0 {
                 items.append(Todo(id: "rank", space: .eats, title: "Rank \(waiting) meal\(waiting == 1 ? "" : "s")",
                                   subtitle: "From your trips") { open(.eats) })
+            }
+        }
+        if showsReminders, reminderStore.access == .connected {
+            let due = ReminderBuckets.dueNow(reminderStore.reminders)
+            if !due.isEmpty {
+                let overdue = due.filter { ReminderBuckets.bucket($0) == .overdue }.count
+                items.append(Todo(id: "reminders", space: .reminders,
+                                  title: "\(due.count) reminder\(due.count == 1 ? "" : "s") due",
+                                  subtitle: overdue > 0 ? "\(overdue) overdue" : due.first?.title) { open(.reminders) })
             }
         }
         return items
@@ -425,7 +438,7 @@ private struct TintTileArt: View {
     var body: some View {
         ZStack {
             Rectangle().fill(space.tint)
-            Image(space.iconAsset).resizable().scaledToFill()
+            if let asset = space.iconAsset { Image(asset).resizable().scaledToFill() }
         }
         .accessibilityHidden(true)
     }

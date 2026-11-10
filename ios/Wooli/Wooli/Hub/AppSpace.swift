@@ -10,7 +10,7 @@ import SwiftData
 enum AppSpace: String, CaseIterable, Identifiable {
     // `period` is the Health app (Period is its first section); the raw value
     // stays so saved order and on/off settings carry over.
-    case today, budget, trips, eats, sights, movies, recipes, period
+    case today, budget, trips, eats, sights, movies, recipes, period, reminders
     var id: String { rawValue }
 
     var title: String {
@@ -23,6 +23,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .movies: "Movies"
         case .recipes: "Recipes"
         case .period: "Health"
+        case .reminders: "Reminders"
         }
     }
 
@@ -36,11 +37,19 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .movies: "popcorn.fill"
         case .recipes: "frying.pan.fill"
         case .period: "heart.fill"
+        case .reminders: "checklist"
         }
     }
 
-    /// Its illustrated tile in the asset catalog, cut from `DesignSystem/app-icons/sheet.webp`.
-    var iconAsset: String { self == .period ? "icon-health" : "icon-\(rawValue)" }
+    /// Its illustrated tile in the asset catalog, cut from `DesignSystem/app-icons/sheet.webp`;
+    /// nil for an app with no illustration yet, which shows its symbol on its tint.
+    var iconAsset: String? {
+        switch self {
+        case .period: "icon-health"
+        case .reminders: nil
+        default: "icon-\(rawValue)"
+        }
+    }
 
     var tint: Color {
         switch self {
@@ -52,6 +61,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .movies: Color(hex: "#e11d48")
         case .recipes: Color(hex: "#16a34a")
         case .period: WooliModule.period.tint
+        case .reminders: Theme.Group.home.color
         }
     }
 
@@ -66,6 +76,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .recipes: "Share a recipe reel from Instagram; its caption becomes ingredients and steps."
         case .period: "Your health, kept private — starting with your cycle and its predictions."
+        case .reminders: "Your Apple Reminders, sorted into overdue, today and upcoming."
         }
     }
 
@@ -73,7 +84,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
     var theme: AppTheme? {
         switch self {
         case .today: nil
-        case .budget, .period: .personal
+        case .budget, .period, .reminders: .personal
         case .trips, .eats, .sights, .movies, .recipes: .explore
         }
     }
@@ -238,6 +249,8 @@ struct AppIconTile: View {
 
     init(_ space: AppSpace, size: CGFloat = 40) {
         self.asset = space.iconAsset
+        self.systemImage = space.systemImage
+        self.tint = space.tint
         self.size = size
     }
 

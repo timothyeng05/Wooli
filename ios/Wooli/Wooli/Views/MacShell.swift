@@ -153,6 +153,7 @@ struct MacShellView: View {
         case .movies: NavigationStack { MoviesListView() }
         case .recipes: NavigationStack { RecipesListView() }
         case .period: NavigationStack { moduleScreen(.period) }
+        case .reminders: NavigationStack { RemindersView() }
         }
     }
 }

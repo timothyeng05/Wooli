@@ -294,6 +294,11 @@ private struct SpaceRoot: View {
                     moduleScreen(.period)
                         .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
                 }
+            case .reminders:
+                NavigationStack {
+                    RemindersView()
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { HamburgerButton() } }
+                }
             }
         }
         // Optional apps show theirs inside `moduleScreen`, after Face ID.

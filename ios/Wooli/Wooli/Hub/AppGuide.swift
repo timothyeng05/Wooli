@@ -95,6 +95,14 @@ struct AppGuide {
             Tip(symbol: "faceid", title: "Private by default",
                 detail: "It stays on this \(ThisDevice.name) and your iCloud. Turn on \(ThisDevice.biometry) in Settings → Apps."),
         ]
+        case .reminders: [
+            Tip(symbol: "checklist", title: "Your Apple Reminders",
+                detail: "Wooli shows the reminders you already have and saves changes there, so the Reminders app and Siri stay in step."),
+            Tip(symbol: "circle", title: "Tick it off",
+                detail: "Tap the circle to mark a reminder done. Tap again to undo while you're still here."),
+            Tip(symbol: "line.3.horizontal.decrease.circle", title: "One list at a time",
+                detail: "Use the filter button to show a single list. New reminders go into that list."),
+        ]
         }
     }
 
