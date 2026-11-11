@@ -1060,9 +1060,12 @@ struct TripItemEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                #if os(iOS)
+                // A Mac sheet has no title bar to hold this; the ticket shows it instead.
                 if transportForm != nil {
                     ToolbarItem(placement: .principal) { modePicker.frame(width: 230) }
                 }
+                #endif
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(item.title.trimmingCharacters(in: .whitespaces).isEmpty && item.place == nil
@@ -1213,7 +1216,20 @@ struct TripItemEditor: View {
             .padding(.bottom, 30)
         }
         .scrollDismissesKeyboard(.interactively)
+        #if os(macOS)
+        // A Mac sheet has no nav bar for the Flight / Train / Other picker,
+        // so it sits in its own bar above the ticket.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            modePicker
+                .labelsHidden()
+                .frame(maxWidth: 300)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(TransportTicket.night)
+        }
+        #else
         .ignoresSafeArea(edges: .top)
+        #endif
         .background(TransportTicket.night.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
     }
@@ -1312,13 +1328,34 @@ struct TripItemEditor: View {
 
 struct PlaceSearchView: View {
     let near: String
+    /// The map fallback opens showing only stations and stops.
+    var mapShowsStations = false
     let onPick: (TripPlace) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var searcher = PlaceSearcher()
+    @State private var showingMap = false
     @FocusState private var searchFocused: Bool
 
     var body: some View {
+        if showingMap {
+            // Shown in place: a pushed or stacked map crashes or closes itself on the Mac.
+            PlaceMapPicker(near: near, start: searcher.region, stationsOnly: mapShowsStations) { place in
+                onPick(place)
+                dismiss()
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Search", systemImage: "magnifyingglass") { showingMap = false }
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        } else {
+            searchList
+        }
+    }
+
+    private var searchList: some View {
         List {
             if searcher.results.isEmpty {
                 // As you type: Apple's suggestions, several at once.
@@ -1364,6 +1401,19 @@ struct PlaceSearchView: View {
                 ContentUnavailableView("Search Apple Maps", systemImage: "map",
                                        description: Text(near.isEmpty ? "Restaurants, sights, hotels, addresses." : "Searching in and around \(near)."))
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // For when search doesn't list the place: find it by eye.
+            Button { showingMap = true } label: {
+                Label("Not listed? Pick on a map", systemImage: "map")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(Space.m)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.brand)
+            .background(.bar)
         }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search places")
         .searchFocused($searchFocused)
@@ -1413,7 +1463,8 @@ final class PlaceSearcher {
     private(set) var nearDestinationOnly = false
     /// Looking up the suggestion you tapped.
     private(set) var resolving = false
-    @ObservationIgnored private var region: MKCoordinateRegion?
+    /// The trip leg's area, once found; searches stay near it.
+    @ObservationIgnored private(set) var region: MKCoordinateRegion?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let completer = MKLocalSearchCompleter()
     @ObservationIgnored private let listener = CompleterListener()

@@ -114,7 +114,7 @@ struct TransportTicket: View {
                     if end == .from { transport.fromAirport = picked.code } else { transport.toAirport = picked.code }
                 }
             } else {
-                PlaceSearchView(near: end == .from ? stationHints.from : stationHints.to) { place in
+                PlaceSearchView(near: end == .from ? stationHints.from : stationHints.to, mapShowsStations: true) { place in
                     if end == .from { transport.fromStation = place } else { transport.toStation = place }
                 }
             }
