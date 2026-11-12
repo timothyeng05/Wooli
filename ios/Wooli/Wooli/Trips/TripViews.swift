@@ -320,8 +320,6 @@ struct NewTripFlow: View {
             trip.endDay = DayKey.key(max(end, start))
             trip.legs.sort { $0.startDay < $1.startDay }
             TripStore.shared.save(trip)
-            // Breakfast, lunch and dinner on every day, ready to fill in or delete.
-            for meal in TripItem.mealPlaceholders(for: trip) { TripStore.shared.save(meal) }
             dismiss()
             return
         }
@@ -480,6 +478,8 @@ struct TripDetailView: View {
     @State private var mapCity: String?
     /// Collapsed legs; nil until the user changes something (then remembered).
     @State private var collapsedLegs: Set<String>?
+    /// Dashed rows for meals and nights nobody has planned yet.
+    @AppStorage("trip.showOpenSlots") private var showOpenSlots = true
     @Environment(\.dismiss) private var dismiss
 
     private var collapsedKey: String { "trip.collapsedLegs.\(tripID)" }
@@ -503,6 +503,7 @@ struct TripDetailView: View {
         let (blocks, travelIDs) = TripLayout.blocks(trip: trip, items: allItems)
         let planCounts = Self.planCounts(blocks: blocks, items: allItems)
         let collapsed = collapsedLegs ?? defaultCollapsed(trip)
+        let openSlots = showOpenSlots ? TripCoverage.openSlots(trip: trip, items: allItems) : [:]
 
         return ScrollViewReader { proxy in ScrollView {
             // Lazy: long trips have dozens of day cards.
@@ -531,7 +532,7 @@ struct TripDetailView: View {
                     ForEach(TripRow.rows(blocks: blocks, items: allItems, collapsed: collapsed)) { row in
                         switch row {
                         case .day(let block, let leg):
-                            dayCard(trip, block, leg: leg, travelIDs: travelIDs, all: allItems)
+                            dayCard(trip, block, leg: leg, travelIDs: travelIDs, all: allItems, slots: openSlots[block.day] ?? [])
                                 .id(row.id)
                         case .travel(let from, let to, let start, let end, let items, _):
                             travelCard(trip, from: from, to: to, start: start, end: end, items: items, all: allItems)
@@ -810,10 +811,12 @@ struct TripDetailView: View {
     /// What a day card lists, in order: plans and the day's tickets.
     private enum DayEntry: Identifiable {
         case plan(TripItem)
+        case slot(OpenSlot)
         case ticket(home: Bool)
         var id: String {
             switch self {
             case .plan(let item): item.id
+            case .slot(let slot): slot.id
             case .ticket(let home): home ? "ticket-home" : "ticket"
             }
         }
@@ -823,12 +826,15 @@ struct TripDetailView: View {
     /// plans before the departure above the ticket, the rest below. A ticket
     /// with no time yet goes first.
     private func dayCard(_ trip: Trip, _ block: TripDayBlock, leg: TripLeg?,
-                         travelIDs: Set<String>, all: [TripItem]) -> some View {
+                         travelIDs: Set<String>, all: [TripItem], slots: [OpenSlot] = []) -> some View {
         let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) && filter($0) }
         var entries = plans.map(DayEntry.plan)
         func insert(_ entry: DayEntry, at time: Int) {
             let i = entries.firstIndex { if case .plan(let item) = $0 { item.sortKey >= Double(time) } else { false } }
             entries.insert(entry, at: i ?? entries.endIndex)
+        }
+        for slot in slots {
+            if let time = slot.time { insert(.slot(slot), at: time) } else { entries.append(.slot(slot)) }
         }
         if block.showsTicket { insert(.ticket(home: false), at: block.departure ?? Int.min) }
         if !block.homeTravel.isEmpty { insert(.ticket(home: true), at: block.homeTravel.compactMap(\.time).min() ?? Int.max) }
@@ -866,6 +872,9 @@ struct TripDetailView: View {
                         // A stay from an earlier night: it lives on its check-in day.
                         itemRow(item, trip: trip, day: block.day)
                     }
+                case .slot(let slot):
+                    Button { openSlot(slot, trip: trip) } label: { OpenSlotRow(slot: slot) }
+                        .buttonStyle(.plain)
                 case .ticket(let home):
                     if home {
                         travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day,
@@ -984,6 +993,16 @@ struct TripDetailView: View {
                                                        title: to.map { "To \($0.name)" } ?? "Home") })
     }
 
+    /// An open slot: on the Mac it becomes a plan in the inspector; on the
+    /// iPhone it opens the editor, saving only if you do.
+    private func openSlot(_ slot: OpenSlot, trip: Trip) {
+        if embedded {
+            select(store.materialize(slot, tripID: trip.id))
+        } else {
+            editingItem = store.item(for: slot, tripID: trip.id)
+        }
+    }
+
     private func itemRow(_ item: TripItem, trip: Trip, day: String? = nil) -> some View {
         // A meal on your Eats list opens its Eats page; an activity or stay
         // with a place, its place page; anything else, the editor.
@@ -1069,6 +1088,29 @@ struct TripDetailView: View {
                 store.lastError = "Couldn't set up sharing: \(error.localizedDescription)"
             }
         }
+    }
+}
+
+/// A meal or a night nobody has planned yet: a dashed outline, not a plan.
+struct OpenSlotRow: View {
+    let slot: OpenSlot
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: slot.symbol)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 32, height: 32)
+                .overlay(Circle().strokeBorder(Theme.textTertiary.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(slot.title).font(.subheadline.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                Text(slot.prompt).font(.caption).foregroundStyle(Theme.textTertiary)
+            }
+            Spacer(minLength: 8)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Adds a plan here")
     }
 }
 

@@ -159,3 +159,42 @@ struct TripExtrasTests {
         #expect(TripCosts(items: [flight]).totals.isEmpty)
     }
 }
+
+// Open slots: derived from coverage, never records (TripCoverage.openSlots).
+
+struct OpenSlotTests {
+    private func trip() -> Trip {
+        var trip = Trip(id: "t", name: "Test", startDay: "2027-04-01", endDay: "2027-04-03")
+        trip.legs = [TripLeg(name: "A", startDay: "2027-04-01", endDay: "2027-04-03")]
+        return trip
+    }
+
+    @Test func aNewTripShowsEveryMealAndNightOpenWithNoRecords() {
+        let slots = TripCoverage.openSlots(trip: trip(), items: [])
+        #expect(slots["2027-04-01"]?.map(\.title) == ["Breakfast", "Lunch", "Dinner", "No stay tonight"])
+        #expect(slots["2027-04-03"]?.map(\.title) == ["Breakfast", "Lunch", "Dinner"])   // no night after the last day
+    }
+
+    @Test func aPlannedMealOrStayClosesItsSlot() {
+        var dinner = TripItem(tripID: "t", day: "2027-04-01", kind: .meal, title: "Dinner at Sukiyabashi", time: 19 * 60)
+        dinner.place = TripPlace(name: "Sukiyabashi", latitude: 0, longitude: 0)
+        var stay = TripItem(tripID: "t", day: "2027-04-01", kind: .stay, title: "Hotel")
+        stay.checkOutDay = "2027-04-03"
+        let slots = TripCoverage.openSlots(trip: trip(), items: [dinner, stay])
+        #expect(slots["2027-04-01"]?.map(\.title) == ["Breakfast", "Lunch"])
+        #expect(slots["2027-04-02"]?.map(\.title) == ["Breakfast", "Lunch", "Dinner"])
+    }
+
+    @Test func aSlotTheUserStartedOnStandsInForItself() {
+        var started = TripItem(tripID: "t", day: "2027-04-01", kind: .meal, title: "Lunch", time: 750)
+        started.extras = ItemExtras(); started.extras?.source = "slot"
+        let slots = TripCoverage.openSlots(trip: trip(), items: [started])
+        #expect(slots["2027-04-01"]?.contains { $0.title == "Lunch" } == false)
+        #expect(!started.isHiddenPlaceholder)
+    }
+
+    @Test func oldPlaceholderRecordsAreHiddenButStillPlaceholders() {
+        let old = TripItem(tripID: "t", day: "2027-04-01", kind: .meal, title: "Lunch", time: 750)
+        #expect(old.isMealPlaceholder && old.isHiddenPlaceholder)
+    }
+}

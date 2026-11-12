@@ -167,3 +167,42 @@ enum TripCoverage {
         return result
     }
 }
+
+
+/// A meal or a bed nobody has planned yet, drawn as a quiet dashed row on its
+/// day. Never a record: it's worked out from `TripCoverage` each time.
+struct OpenSlot: Identifiable, Hashable {
+    enum Kind { case meal, stay }
+    let day: String
+    let kind: Kind
+    let title: String
+    /// Minutes after midnight, to place it among the day's plans.
+    let time: Int?
+
+    var id: String { "open-\(day)-\(title)" }
+
+    var symbol: String { kind == .meal ? "fork.knife" : "bed.double.fill" }
+    var prompt: String { kind == .meal ? "Open · tap to add a place" : "Open · tap to add a stay" }
+}
+
+extension TripCoverage {
+    /// Each day's open meals and, for a night with no bed, a stay, by day.
+    static func openSlots(trip: Trip, items: [TripItem]) -> [String: [OpenSlot]] {
+        let meals: [(Slot, Int)] = [(.breakfast, 0), (.lunch, 1), (.dinner, 2)]
+        var result: [String: [OpenSlot]] = [:]
+        for day in days(trip: trip, items: items) {
+            var open: [OpenSlot] = []
+            for (slot, index) in meals where day.state(slot) == .open {
+                let meal = TripItem.mealSlots[index]
+                // An empty slot someone already started on stands in for it.
+                let started = items.contains { $0.day == day.day && $0.isMealPlaceholder && $0.title == meal.title }
+                if !started { open.append(OpenSlot(day: day.day, kind: .meal, title: meal.title, time: meal.time)) }
+            }
+            if day.state(.stay) == .open {
+                open.append(OpenSlot(day: day.day, kind: .stay, title: "No stay tonight", time: nil))
+            }
+            if !open.isEmpty { result[day.day] = open }
+        }
+        return result
+    }
+}

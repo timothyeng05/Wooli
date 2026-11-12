@@ -323,6 +323,11 @@ struct TripItem: Identifiable, Codable, Hashable {
         kind == .meal && place == nil && notes.isEmpty && Self.mealSlots.contains { $0.title == title }
     }
 
+    /// A leftover empty slot from before open slots were drawn rather than
+    /// saved. Hidden everywhere (never deleted: it's in shared trips); one the
+    /// user started on from an open slot (`source` "slot") stays visible.
+    var isHiddenPlaceholder: Bool { isMealPlaceholder && extras?.source != "slot" }
+
     /// A multi-night stay's check-out, when it's after check-in.
     var stayEnd: String? {
         guard kind == .stay, let day, let checkOutDay, checkOutDay > day else { return nil }

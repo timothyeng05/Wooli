@@ -216,7 +216,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | ID | Item | Pri | Status |
 |----|------|-----|--------|
 | M0 | Data model: leg coordinates and time zone, `extras` JSON field on Trip and TripItem, booking status, retire meal placeholders; deploy CloudKit schema | P0 | 🟡 model + status + tests done (Claude, 2026-11-12); placeholders retire in M1-5; **CloudKit deploy is the user's step** |
-| M1-5 | Open slots replace meal placeholders | P0 | todo |
+| M1-5 | Open slots replace meal placeholders | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M1-4 | New trip in one sheet, cities from Apple Maps, nights steppers | P0 | todo |
 | M1-3 | Quick add (type a place, Return) | P0 | todo |
 | M1-6 | Undo and redo | P0 | todo |
@@ -308,6 +308,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-12 · Claude** — **M1-5 open slots replace meal placeholders** (`PRD-MAC-TRIPS.md`). New trips no longer get 3 meal records per day. Empty meals and nights are drawn as dashed rows from `TripCoverage.openSlots` (never records): on the itinerary (iPhone and Mac) in time order, and at the end of each Calendar column. Tapping one opens the editor on the iPhone (saves only if you do) or, on the Mac, saves it as a plan marked `extras.source = "slot"` and selects it in the inspector. Old placeholder records are hidden from every list, count and the map (`TripItem.isHiddenPlaceholder`, `TripStore.items(in:)`), never deleted; filling a slot reuses the old record so there's one Lunch, not two. Mac: Open Slots toggle in the toolbar (⇧⌘O, `trip.showOpenSlots`, also read by the iPhone itinerary), and More → Remove Empty Meal Slots… deletes a trip's old records for everyone after a confirmation. The Planning card is blue (`Theme.brand`) instead of money green. 4 new tests; all tests pass on the iOS 26.4 Simulator and the Mac builds. Not checked on screen. Not done: the iPhone has no toggle for open slots (always on), and 'No stay tonight' opens a blank stay for the next night only.
 
 - **2026-11-12 · Claude** — **M0 data model for Mac Trips** (`PRD-MAC-TRIPS.md` §6). `TripLeg` gains optional `latitude`, `longitude`, `timeZoneID`, `countryCode`, `mapItemID` (stored inside the legs JSON, no schema change). `Trip.extras` (`TripExtras`: budget, currency, FX rates, travellers, checklist) and `TripItem.extras` (`ItemExtras`: status, end time, url, source, attachments, ignored warnings) are each one JSON string field `extras` on the CloudKit record, written only once non-empty and merged key by key on receive. New `BookingStatus` (idea / not booked / booked / cancelled) with `TripItem.bookingStatus`, `isUnbooked`, `setStatus`; the old "not booked yet" notes prefix still reads as not booked and is dropped when a status is set. Cancelled plans are left out of coverage and costs. `TripCoverage.isUnbooked` delegates to the item. 6 new tests (`TripExtrasTests`), all tests pass on the iOS 26.4 Simulator; Mac builds. **Needs CloudKit Console → Deploy Schema Changes** for `Trip.extras` and `TripItem.extras` (plus the earlier `order`, `cost`, `currency`, `points`, `pointsProgram`): run a Debug build signed in to iCloud and save a trip and a plan with an extras value so Development has the fields. No UI yet; M1-5 retires the meal placeholders.
 

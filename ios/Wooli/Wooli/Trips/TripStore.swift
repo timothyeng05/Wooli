@@ -228,12 +228,47 @@ final class TripStore: CKSyncEngineDelegate {
 
     func trip(_ id: String) -> Trip? { trips.first { $0.id == id } }
 
-    func items(in tripID: String) -> [TripItem] { items.filter { $0.tripID == tripID } }
+    func items(in tripID: String) -> [TripItem] { items.filter { $0.tripID == tripID && !$0.isHiddenPlaceholder } }
+
+    /// Old empty Breakfast / Lunch / Dinner records, hidden from every list.
+    func hiddenPlaceholders(in tripID: String) -> [TripItem] {
+        items.filter { $0.tripID == tripID && $0.isHiddenPlaceholder }
+    }
 
     /// A day's items: by where they were dragged or their time, then the
     /// rest in the order added.
     func items(in tripID: String, day: String?) -> [TripItem] {
-        items.filter { $0.tripID == tripID && $0.day == day }.sorted(by: TripItem.dayOrder)
+        items.filter { $0.tripID == tripID && $0.day == day && !$0.isHiddenPlaceholder }.sorted(by: TripItem.dayOrder)
+    }
+
+    // MARK: - Open slots
+
+    /// The plan an open slot becomes, not saved yet. An old empty record for
+    /// the same slot is reused, so filling it in never leaves two.
+    func item(for slot: OpenSlot, tripID: String) -> TripItem {
+        if slot.kind == .meal, let old = hiddenPlaceholders(in: tripID).first(where: { $0.day == slot.day && $0.title == slot.title }) {
+            return old
+        }
+        var item = TripItem(tripID: tripID, day: slot.day, kind: slot.kind == .meal ? .meal : .stay,
+                            title: slot.kind == .meal ? slot.title : "", time: slot.time)
+        item.checkOutDay = slot.kind == .stay ? DayKey.key(Calendar.current.date(byAdding: .day, value: 1, to: DayKey.date(slot.day))!) : nil
+        return item
+    }
+
+    /// Saves an open slot as a plan so it can be selected and edited in place.
+    @discardableResult
+    func materialize(_ slot: OpenSlot, tripID: String) -> TripItem {
+        var item = item(for: slot, tripID: tripID)
+        var extras = item.extras ?? ItemExtras()
+        extras.source = "slot"
+        item.extras = extras
+        save(item)
+        return item
+    }
+
+    /// Deletes this trip's old empty meal records for everyone on it.
+    func removeEmptyMealSlots(tripID: String) {
+        for item in hiddenPlaceholders(in: tripID) { delete(item) }
     }
 
     // MARK: - Editing

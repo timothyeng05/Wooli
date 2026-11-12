@@ -49,6 +49,8 @@ struct MacTripWorkspace: View {
     @State private var editingTrip: Trip?
     @State private var confirmDeletePlans: Set<String>?
     @State private var confirmDeleteTrip = false
+    @State private var confirmRemoveSlots = false
+    @AppStorage("trip.showOpenSlots") private var showOpenSlots = true
     @State private var preparingShare = false
     @FocusState private var titleFocused: Bool
     @Environment(\.openWindow) private var openWindow
@@ -110,6 +112,11 @@ struct MacTripWorkspace: View {
         } message: {
             Text("This removes them for everyone on the trip.")
         }
+        .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
+        } message: {
+            Text("Deletes the old empty Breakfast, Lunch and Dinner entries for everyone on this trip. Open meals still show as dashed rows.")
+        }
         .confirmationDialog(trip.isMine ? "Delete \(trip.name)?" : "Leave \(trip.name)?", isPresented: $confirmDeleteTrip,
                             titleVisibility: .visible) {
             Button(trip.isMine ? "Delete trip" : "Leave trip", role: .destructive) {
@@ -142,6 +149,10 @@ struct MacTripWorkspace: View {
             .help("Show the trip as an itinerary or as calendar columns")
         }
         ToolbarItem(placement: .primaryAction) {
+            Toggle("Open Slots", systemImage: "square.dashed", isOn: $showOpenSlots)
+                .help("Show or hide the empty meals and nights (⇧⌘O)")
+        }
+        ToolbarItem(placement: .primaryAction) {
             Button("Add Plan", systemImage: "plus") { addPlan(trip) }
                 .help("Add a plan to the selected day (⌘N)")
         }
@@ -154,6 +165,9 @@ struct MacTripWorkspace: View {
         ToolbarItem(placement: .primaryAction) {
             Menu("More", systemImage: "ellipsis.circle") {
                 Button("Edit Trip…", systemImage: "pencil") { editingTrip = trip }
+                if !store.hiddenPlaceholders(in: trip.id).isEmpty {
+                    Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
+                }
                 if !inOwnWindow {
                     Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
                 }
@@ -168,6 +182,7 @@ struct MacTripWorkspace: View {
     private func shortcuts(_ trip: Trip) -> some View {
         ZStack {
             Button("New Plan") { addPlan(trip) }.keyboardShortcut("n")
+            Button("Toggle Open Slots") { showOpenSlots.toggle() }.keyboardShortcut("o", modifiers: [.command, .shift])
             Button("Move Up") { nudge(-1, trip: trip) }.keyboardShortcut(.upArrow, modifiers: .command)
             Button("Move Down") { nudge(1, trip: trip) }.keyboardShortcut(.downArrow, modifiers: .command)
         }
@@ -286,13 +301,16 @@ struct MacTripWorkspace: View {
 
     private func calendar(_ trip: Trip) -> some View {
         let all = store.items(in: trip.id)
+        let openSlots = showOpenSlots ? TripCoverage.openSlots(trip: trip, items: all) : [:]
         return ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: Space.m) {
                     ForEach(visibleDays(trip), id: \.self) { day in
                         MacDayColumn(trip: trip, day: day, plans: shownPlans(trip, day: day),
                                      staying: all.filter { $0.staysOver(day) && $0.day != day },
+                                     slots: search.isEmpty ? openSlots[day] ?? [] : [],
                                      selection: $selection, score: score,
+                                     onOpenSlot: { selection = [store.materialize($0, tripID: trip.id).id] },
                                      onAdd: { addPlan(trip, day: day) },
                                      onOpen: { openPrimary([$0], trip: trip) },
                                      onDrop: { ids, before in place(ids, on: day, before: before, trip: trip) },
@@ -904,8 +922,10 @@ struct MacDayColumn<MenuContent: View>: View {
     let day: String
     let plans: [TripItem]
     let staying: [TripItem]
+    var slots: [OpenSlot] = []
     @Binding var selection: Set<String>
     let score: (TripItem) -> Double?
+    var onOpenSlot: (OpenSlot) -> Void = { _ in }
     let onAdd: () -> Void
     let onOpen: (String) -> Void
     let onDrop: (_ ids: [String], _ before: String?) -> Void
@@ -947,6 +967,11 @@ struct MacDayColumn<MenuContent: View>: View {
                             } isTargeted: { on in
                                 targeted = on ? item.id : (targeted == item.id ? nil : targeted)
                             }
+                    }
+                    ForEach(slots) { slot in
+                        Button { onOpenSlot(slot) } label: { OpenSlotRow(slot: slot) }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, Space.s).padding(.vertical, Space.xs)
                     }
                     ForEach(staying) { stay in
                         Label(stay.stayEnd == day ? "Check out · \(stay.title)" : "At \(stay.title)",
