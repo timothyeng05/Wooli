@@ -15,6 +15,10 @@ struct TripRoute: Identifiable, Hashable {
 struct TripsListView: View {
     @State private var store = TripStore.shared
     @State private var newTrip: Trip?
+    #if os(macOS)
+    /// A trip just created, opened straight away.
+    @State private var openTrip: TripRoute?
+    #endif
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -27,7 +31,12 @@ struct TripsListView: View {
         .toolbar {
             Button("New trip", systemImage: "plus") { newTrip = Trip() }
         }
+        #if os(macOS)
+        .sheet(item: $newTrip) { _ in NewTripSheet { openTrip = TripRoute(id: $0) } }
+        .navigationDestination(item: $openTrip) { MacTripWorkspace(tripID: $0.id) }
+        #else
         .sheet(item: $newTrip) { NewTripFlow(trip: $0) }
+        #endif
         .refreshable { await store.fetchChanges() }
     }
 

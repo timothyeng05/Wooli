@@ -217,7 +217,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 |----|------|-----|--------|
 | M0 | Data model: leg coordinates and time zone, `extras` JSON field on Trip and TripItem, booking status, retire meal placeholders; deploy CloudKit schema | P0 | 🟡 model + status + tests done (Claude, 2026-11-12); placeholders retire in M1-5; **CloudKit deploy is the user's step** |
 | M1-5 | Open slots replace meal placeholders | P0 | ✅ done 2026-11-12 (Claude); see Done |
-| M1-4 | New trip in one sheet, cities from Apple Maps, nights steppers | P0 | todo |
+| M1-4 | New trip in one sheet, cities from Apple Maps, nights steppers | P0 | 🟡 Mac sheet done 2026-11-12 (Claude); Edit Trip and the iPhone flow still to do |
 | M1-3 | Quick add (type a place, Return) | P0 | todo |
 | M1-6 | Undo and redo | P0 | todo |
 | M1-2 | Workspace layout: plan, big map, system inspector | P0 | todo |
@@ -308,6 +308,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-12 · Claude** — **M1-4 (part): Mac new-trip sheet with real cities** (`PRD-MAC-TRIPS.md`). On the Mac, New trip opens one sheet (`Trips/NewTripSheet.swift`): name (suggested from the cities until you type one), start date, "Leaving from" (remembered per device, `trips.homeCity`), then cities picked from Apple Maps suggestions (`CitySearcher`, address results without street numbers) each with a nights stepper, drag to reorder, and a one-line summary (dates, nights, back in X). Return takes the top suggestion, or the typed text as a city with no pin. Picked cities store coordinates, time zone, country code and map item ID on the leg. `TripSetup` (pure, 4 tests) chains the legs (leaving a city is the next city's arrival day), adds home legs at both ends, names the trip and fills `destination` from the countries. After Create the new trip opens. No meal placeholders are created. All tests pass on the iOS 26.4 Simulator; Mac builds. **Not checked on screen** (screen access was declined): the sheet's look, suggestion taps, drag-to-reorder. **Still to do for M1-4:** Edit Trip on the Mac using the same sheet with plans moving with their city; the iPhone flow keeps its stepped form (city search there is on the harmonization list); backfilling coordinates on legs of existing trips.
 
 - **2026-11-12 · Claude** — **M1-5 open slots replace meal placeholders** (`PRD-MAC-TRIPS.md`). New trips no longer get 3 meal records per day. Empty meals and nights are drawn as dashed rows from `TripCoverage.openSlots` (never records): on the itinerary (iPhone and Mac) in time order, and at the end of each Calendar column. Tapping one opens the editor on the iPhone (saves only if you do) or, on the Mac, saves it as a plan marked `extras.source = "slot"` and selects it in the inspector. Old placeholder records are hidden from every list, count and the map (`TripItem.isHiddenPlaceholder`, `TripStore.items(in:)`), never deleted; filling a slot reuses the old record so there's one Lunch, not two. Mac: Open Slots toggle in the toolbar (⇧⌘O, `trip.showOpenSlots`, also read by the iPhone itinerary), and More → Remove Empty Meal Slots… deletes a trip's old records for everyone after a confirmation. The Planning card is blue (`Theme.brand`) instead of money green. 4 new tests; all tests pass on the iOS 26.4 Simulator and the Mac builds. Not checked on screen. Not done: the iPhone has no toggle for open slots (always on), and 'No stay tonight' opens a blank stay for the next night only.
 

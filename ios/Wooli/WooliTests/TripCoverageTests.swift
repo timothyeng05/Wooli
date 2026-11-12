@@ -198,3 +198,47 @@ struct OpenSlotTests {
         #expect(old.isMealPlaceholder && old.isHiddenPlaceholder)
     }
 }
+
+// New-trip setup: cities and nights to legs (TripSetup).
+
+struct TripSetupTests {
+    private func city(_ name: String, _ nights: Int, _ cc: String = "ES") -> SetupCity {
+        var c = SetupCity(name: name, latitude: 1, longitude: 2, timeZoneID: "Europe/Madrid", countryCode: cc)
+        c.nights = nights
+        return c
+    }
+
+    private func date(_ key: String) -> Date { DayKey.date(key) }
+
+    @Test func nightsChainIntoLegsAndTheEndDay() {
+        let (legs, end) = TripSetup.legs(start: date("2026-12-24"), home: nil, cities: [city("Madrid", 2), city("Seville", 2), city("Barcelona", 5)])
+        #expect(legs.map(\.startDay) == ["2026-12-24", "2026-12-26", "2026-12-28"])
+        #expect(legs.map(\.endDay) == ["2026-12-26", "2026-12-28", "2027-01-02"])
+        #expect(end == "2027-01-02")
+        #expect(legs.allSatisfy { $0.latitude == 1 && $0.timeZoneID == "Europe/Madrid" && $0.countryCode == "ES" })
+    }
+
+    @Test func aHomeCityOpensAndClosesTheTripAndNightsAreAtLeastOne() {
+        let home = city("New York", 0, "US")
+        let (legs, end) = TripSetup.legs(start: date("2027-04-01"), home: home, cities: [city("Lisbon", 0)])
+        #expect(legs.map(\.isHome) == [true, false, true])
+        #expect(legs[1].endDay == "2027-04-02" && end == "2027-04-02")
+        #expect(legs[0].id != legs[2].id)
+        #expect(legs[0].startDay == "2027-04-01" && legs[2].startDay == "2027-04-02")
+    }
+
+    @Test func namesAndDestinations() {
+        #expect(TripSetup.name(for: []) == "")
+        #expect(TripSetup.name(for: [city("Madrid", 1)]) == "Madrid")
+        #expect(TripSetup.name(for: [city("Madrid", 1), city("Seville", 1), city("Barcelona", 1)]) == "Madrid, Seville & Barcelona")
+        #expect(TripSetup.name(for: ["A", "B", "C", "D"].map { city($0, 1) }) == "A, B + 2 more")
+        #expect(TripSetup.destination(for: [city("Madrid", 1), city("Seville", 1), city("Lisbon", 1, "PT")]).contains("Portugal"))
+        #expect(TripSetup.destination(for: [SetupCity(name: "Atlantis")]) == "Atlantis")
+    }
+
+    @Test func theTripGetsItsDatesNameAndLegs() {
+        let trip = TripSetup.trip(name: "  Spain  ", start: date("2026-12-24"), home: nil, cities: [city("Madrid", 3)])
+        #expect(trip.name == "Spain" && trip.startDay == "2026-12-24" && trip.endDay == "2026-12-27" && trip.legs.count == 1)
+        #expect(trip.days.count == 4)
+    }
+}
