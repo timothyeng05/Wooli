@@ -23,6 +23,8 @@ final class TripStore: CKSyncEngineDelegate {
     /// A trip to open right away (e.g. after accepting an invite).
     var tripToOpen: String?
 
+    /// The window's undo stack (set by the Mac trip page); nil on the iPhone.
+    @ObservationIgnored weak var undoManager: UndoManager?
     @ObservationIgnored let container = CKContainer(identifier: containerID)
     @ObservationIgnored private var privateEngine: CKSyncEngine?
     @ObservationIgnored private var sharedEngine: CKSyncEngine?
@@ -274,6 +276,15 @@ final class TripStore: CKSyncEngineDelegate {
     // MARK: - Editing
 
     func save(_ trip: Trip) {
+        let before = self.trip(trip.id)
+        write(trip)
+        // A new trip isn't undoable (undoing would delete it for everyone it's shared with).
+        guard let before, let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { $0.save(before) }
+        undoManager.setActionName("Edit Trip")
+    }
+
+    private func write(_ trip: Trip) {
         var trip = trip
         let isNew = !trips.contains { $0.id == trip.id }
         // A screen's copy can be older than what the last upload stored: keep the newest change tag.
@@ -292,7 +303,24 @@ final class TripStore: CKSyncEngineDelegate {
         engine.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)])
     }
 
+    /// Saves a plan and, on the Mac, lets ⌘Z take it back: an add is undone by
+    /// deleting it, an edit by putting the old copy back. All the saves in one
+    /// click or drag are one undo step (the undo manager groups by event).
     func save(_ item: TripItem) {
+        let before = items.first { $0.id == item.id }
+        write(item)
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { store in
+            if let before {
+                store.save(before)
+            } else if let current = store.items.first(where: { $0.id == item.id }) {
+                store.delete(current)
+            }
+        }
+        undoManager.setActionName(before == nil ? "Add Plan" : "Edit Plan")
+    }
+
+    private func write(_ item: TripItem) {
         var item = item
         if let i = items.firstIndex(where: { $0.id == item.id }) {
             item.systemFields = items[i].systemFields ?? item.systemFields
@@ -307,6 +335,18 @@ final class TripStore: CKSyncEngineDelegate {
     }
 
     func delete(_ item: TripItem) {
+        remove(item)
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { store in
+            // Back as the same plan, but as a new CloudKit record: the old one was deleted.
+            var restored = item
+            restored.systemFields = nil
+            store.save(restored)
+        }
+        undoManager.setActionName("Delete Plan")
+    }
+
+    private func remove(_ item: TripItem) {
         items.removeAll { $0.id == item.id }
         persist()
         guard let trip = trip(item.tripID), let engine = engine(for: trip) else { return }

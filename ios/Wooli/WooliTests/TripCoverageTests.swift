@@ -290,3 +290,56 @@ struct QuickAddParserTests {
         #expect(QuickAddParser.kind(forCategory: nil) == .activity)
     }
 }
+
+// Undo for trip edits (TripStore registers with the window's UndoManager).
+
+@MainActor
+struct TripUndoTests {
+    private func step(_ um: UndoManager, _ work: () -> Void) {
+        um.beginUndoGrouping()
+        work()
+        um.endUndoGrouping()
+    }
+
+    @Test func addEditAndDeleteEachUndoAndRedo() {
+        let store = TripStore.shared
+        let um = UndoManager()
+        um.groupsByEvent = false
+        var trip = Trip(id: "undo-test-trip", name: "Undo", startDay: "2027-04-01", endDay: "2027-04-02")
+        store.undoManager = nil
+        store.save(trip)
+        defer { store.undoManager = nil; store.delete(trip) }
+        store.undoManager = um
+
+        var item = TripItem(id: "undo-test-item", tripID: trip.id, day: "2027-04-01", kind: .activity, title: "Louvre")
+        step(um) { store.save(item) }
+        #expect(store.items.contains { $0.id == item.id })
+        um.undo()
+        #expect(!store.items.contains { $0.id == item.id })
+        um.redo()
+        #expect(store.items.contains { $0.id == item.id })
+
+        item.title = "Orsay"
+        step(um) { store.save(item) }
+        um.undo()
+        #expect(store.items.first { $0.id == item.id }?.title == "Louvre")
+        um.redo()
+        #expect(store.items.first { $0.id == item.id }?.title == "Orsay")
+
+        step(um) { store.delete(item) }
+        #expect(!store.items.contains { $0.id == item.id })
+        um.undo()
+        #expect(store.items.first { $0.id == item.id }?.title == "Orsay")
+
+        // Several plans changed in one step come back in one undo.
+        var b = item; b.id = "undo-test-item-2"; b.title = "Rodin"
+        step(um) { store.save(b); store.delete(item) }
+        um.undo()
+        #expect(store.items.contains { $0.id == item.id } && !store.items.contains { $0.id == b.id })
+
+        trip.name = "Renamed"
+        step(um) { store.save(trip) }
+        um.undo()
+        #expect(store.trip(trip.id)?.name == "Undo")
+    }
+}

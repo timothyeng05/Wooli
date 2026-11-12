@@ -47,7 +47,9 @@ struct MacTripWorkspace: View {
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
     @State private var editingTrip: Trip?
-    @State private var confirmDeletePlans: Set<String>?
+    /// What was just deleted, shown for a few seconds with an Undo button.
+    @State private var deletedNote: String?
+    @Environment(\.undoManager) private var undoManager
     @State private var confirmDeleteTrip = false
     @State private var confirmRemoveSlots = false
     @AppStorage("trip.showOpenSlots") private var showOpenSlots = true
@@ -113,19 +115,6 @@ struct MacTripWorkspace: View {
         .background { shortcuts(trip) }
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
         .sheet(item: $editingTrip) { TripEditor(trip: $0) }
-        .confirmationDialog(deletePlansTitle, isPresented: Binding(get: { confirmDeletePlans != nil },
-                                                                   set: { if !$0 { confirmDeletePlans = nil } }),
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                let ids = confirmDeletePlans ?? []
-                withAnimation(.snappy) {
-                    for item in store.items(in: trip.id) where ids.contains(item.id) { store.delete(item) }
-                }
-                selection.subtract(ids)
-            }
-        } message: {
-            Text("This removes them for everyone on the trip.")
-        }
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
         } message: {
@@ -140,17 +129,30 @@ struct MacTripWorkspace: View {
         } message: {
             Text(trip.isMine ? "This deletes the trip for everyone you've shared it with." : "You'll need a new invite to join again.")
         }
+        .task(id: undoManager) { store.undoManager = undoManager }
+        .overlay(alignment: .bottom) {
+            if let deletedNote {
+                HStack(spacing: Space.m) {
+                    Text(deletedNote).foregroundStyle(Theme.text)
+                    Button("Undo") {
+                        undoManager?.undo()
+                        self.deletedNote = nil
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(Space.m)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                .padding(.bottom, Space.xl)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .overlay {
             if preparingShare {
                 ProgressView().controlSize(.large).padding(Space.xxl)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card))
             }
         }
-    }
-
-    private var deletePlansTitle: String {
-        let count = confirmDeletePlans?.count ?? 0
-        return count == 1 ? "Delete this plan?" : "Delete \(count) plans?"
     }
 
     @ToolbarContentBuilder
@@ -271,7 +273,7 @@ struct MacTripWorkspace: View {
             openPrimary(ids, trip: trip)
         }
         .onKeyPress(.return) { renameSelected() }
-        .onDeleteCommand { if !selection.isEmpty { confirmDeletePlans = selection } }
+        .onDeleteCommand { deletePlans(selection, trip: trip) }
     }
 
     private func cityLine(_ leg: TripLeg, trip: Trip) -> some View {
@@ -371,7 +373,7 @@ struct MacTripWorkspace: View {
             if selected.count == 1, let item = selected.first {
                 MacPlanInspector(trip: trip, item: item, titleFocused: $titleFocused,
                                  score: score(item), onEditTicket: { editingTicket = $0 },
-                                 onDelete: { confirmDeletePlans = [item.id] })
+                                 onDelete: { deletePlans([item.id], trip: trip) })
                     .id(item.id)
             } else if selected.count > 1 {
                 multiSelection(selected, trip: trip)
@@ -515,7 +517,7 @@ struct MacTripWorkspace: View {
             Text("\(selected.count) plans selected").font(.headline).foregroundStyle(Theme.text)
             Menu("Move to") { moveMenu(Set(selected.map(\.id)), trip: trip) }
                 .fixedSize()
-            Button("Delete", role: .destructive) { confirmDeletePlans = Set(selected.map(\.id)) }
+            Button("Delete", role: .destructive) { deletePlans(Set(selected.map(\.id)), trip: trip) }
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -604,7 +606,7 @@ struct MacTripWorkspace: View {
             Menu("Move to", systemImage: "calendar") { moveMenu(ids, trip: trip) }
             Button("Duplicate", systemImage: "plus.square.on.square") { duplicate(ids, trip: trip) }
             Divider()
-            Button("Delete…", systemImage: "trash", role: .destructive) { confirmDeletePlans = ids }
+            Button("Delete", systemImage: "trash", role: .destructive) { deletePlans(ids, trip: trip) }
         }
     }
 
@@ -704,6 +706,21 @@ struct MacTripWorkspace: View {
         if target != nil { scrollTarget = item.id }
         // Wait a beat so the inspector for the new plan exists before focusing it.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocused = true }
+    }
+
+    /// Deletes plans straight away (no confirmation); the bar offers Undo for a few seconds.
+    private func deletePlans(_ ids: Set<String>, trip: Trip) {
+        let doomed = store.items(in: trip.id).filter { ids.contains($0.id) }
+        guard !doomed.isEmpty else { return }
+        withAnimation(.snappy) { doomed.forEach(store.delete) }
+        selection.subtract(ids)
+        let note = doomed.count == 1 ? "Deleted 1 plan" : "Deleted \(doomed.count) plans"
+        undoManager?.setActionName(doomed.count == 1 ? "Delete Plan" : "Delete Plans")
+        withAnimation(.snappy) { deletedNote = note }
+        Task {
+            try? await Task.sleep(for: .seconds(6))
+            if deletedNote == note { withAnimation(.snappy) { deletedNote = nil } }
+        }
     }
 
     private func duplicate(_ ids: Set<String>, trip: Trip) {
