@@ -209,6 +209,38 @@ Tapping a travel booking opens an editor built for that mode instead of the gene
 
 ---
 
+## Phase M — Mac Trips for the App Store (specified and approved 2026-11-12)
+
+Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`**. Read its sections 5 (principles) and 6 (data model) before any item. Build in the order of its section 13. The user accepted the defaults in its section 12 (see Decisions).
+
+| ID | Item | Pri | Status |
+|----|------|-----|--------|
+| M0 | Data model: leg coordinates and time zone, `extras` JSON field on Trip and TripItem, booking status, retire meal placeholders; deploy CloudKit schema | P0 | todo |
+| M1-5 | Open slots replace meal placeholders | P0 | todo |
+| M1-4 | New trip in one sheet, cities from Apple Maps, nights steppers | P0 | todo |
+| M1-3 | Quick add (type a place, Return) | P0 | todo |
+| M1-6 | Undo and redo | P0 | todo |
+| M1-2 | Workspace layout: plan, big map, system inspector | P0 | todo |
+| M1-1 | Trips sidebar (trips → pages), no push navigation | P0 | todo |
+| M1-7 | Menus and shortcuts (P0), ⌘K palette (P1) | P0/P1 | todo |
+| M1-8 | All trips gallery on design-system components | P1 | todo |
+| M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | todo |
+| M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | todo |
+| M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | todo |
+| M2-2 | Bookings page (table) | P0 | todo |
+| M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
+| M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
+| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
+| M3-1 | Time zones per city | P0 | todo |
+| M3-4 | Conflicts and warnings | P0 | todo |
+| M3-2 | Travel time between stops | P0 | todo |
+| M3-5 | Trip Overview with a To do list | P0 | todo |
+| M3-3 | Order a day by shortest route | P1 | todo |
+| M3-6 | Weather (WeatherKit) | P1 | todo |
+| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
+
+---
+
 ## Phase D — Design system (designed 2026-10-28, waiting on the user to schedule)
 
 The design for the whole app lives in `DesignSystem/`. Build plan, exact values and "done when" checks per item: `DesignSystem/IMPLEMENTATION.md`. Visual targets: `DesignSystem/reference/`. Do the items in order; each ships on its own.
@@ -255,6 +287,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Decisions
+
+- **2026-11-12** — Mac Trips PRD (`PRD-MAC-TRIPS.md`) approved with its defaults (user): free at launch with no in-app purchase; Finance stays the primary category with Travel second, but the Mac subtitle and first screenshot lead with Trips; keep the Apps popover and give Trips its own sidebar; existing meal placeholders are hidden, not deleted ("Remove empty meal slots" per trip); exchange rates may come from the ECB's public rates, with manual override; the home city is stored per device.
 
 - **2026-11-03** — Periods live in **Apple Health**, not SwiftData. App Store guideline 5.1.3(ii) reportedly bars personal health information from iCloud, and our SwiftData store syncs to CloudKit. Wooli reads Health, writes what's logged there, and keeps only predictions. Free-text period notes are dropped (Health has no place for them). Garmin comes through Health too (S13), read live and never stored.
 

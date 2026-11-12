@@ -111,7 +111,8 @@
       "Bash(vercel projects *)",
       "Bash(vercel --prod --yes)",
       "Bash(python3 -I -)",
-      "Bash(xcodebuild -project Wooli.xcodeproj -scheme Wooli -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO)"
+      "Bash(xcodebuild -project Wooli.xcodeproj -scheme Wooli -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO)",
+      "mcp__claude-code-remote__send_message"
     ],
     "deny": [
       "Read(//Users/timothyeng/Desktop/Wooli/.env.local)",
