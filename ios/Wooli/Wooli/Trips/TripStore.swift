@@ -230,10 +230,10 @@ final class TripStore: CKSyncEngineDelegate {
 
     func items(in tripID: String) -> [TripItem] { items.filter { $0.tripID == tripID } }
 
-    /// A day's items: timed ones by time, then the rest in the order added.
+    /// A day's items: by where they were dragged or their time, then the
+    /// rest in the order added.
     func items(in tripID: String, day: String?) -> [TripItem] {
-        items.filter { $0.tripID == tripID && $0.day == day }
-            .sorted { ($0.time ?? Int.max, $0.createdAt) < ($1.time ?? Int.max, $1.createdAt) }
+        items.filter { $0.tripID == tripID && $0.day == day }.sorted(by: TripItem.dayOrder)
     }
 
     // MARK: - Editing

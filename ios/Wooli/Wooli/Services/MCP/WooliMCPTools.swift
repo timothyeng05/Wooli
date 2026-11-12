@@ -335,7 +335,7 @@ final class WooliMCPTools {
         let days = Dictionary(grouping: items.filter { $0.day != nil }, by: { $0.day! })
             .sorted { $0.key < $1.key }
             .map { key, items -> [String: Any] in
-                var d: [String: Any] = ["day": key, "plans": items.sorted { ($0.time ?? -1) < ($1.time ?? -1) }.map(describe)]
+                var d: [String: Any] = ["day": key, "plans": items.sorted(by: TripItem.dayOrder).map(describe)]
                 if let title = trip.dayTitles[key], !title.isEmpty { d["title"] = title }
                 return d
             }

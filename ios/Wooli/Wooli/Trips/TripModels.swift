@@ -226,6 +226,10 @@ struct TripItem: Identifiable, Codable, Hashable {
             case .note: "#64748b"
             }
         }
+
+        /// Only travel (departure) and stays (check-in) show a clock time;
+        /// the rest are ordered by dragging.
+        var usesTime: Bool { self == .transit || self == .stay }
     }
 
     var id: String = UUID().uuidString
@@ -244,8 +248,26 @@ struct TripItem: Identifiable, Codable, Hashable {
     /// saved once on its check-in `day` and shown on every day it covers.
     /// nil = just the one day, as before.
     var checkOutDay: String?
+    /// Where it was dragged to in its day, in the same minutes as `time`
+    /// (it can fall between two times, or before or after them all). nil
+    /// = sorted by its time. The time shown doesn't change.
+    var order: Double?
     var createdAt: Date = .now
     var systemFields: Data?
+
+    /// Marks a plan being dragged between rows, so other dropped text is ignored.
+    static let dragPrefix = "wooli-trip-item:"
+
+    /// Untimed plans with no dragged place go last in their day.
+    static let untimedKey = 1_000_000_000.0
+
+    /// Where this sits in its day: its dragged place, else its time.
+    var sortKey: Double { order ?? time.map(Double.init) ?? Self.untimedKey }
+
+    /// A day's order: dragged place or time, then the order added.
+    static func dayOrder(_ a: TripItem, _ b: TripItem) -> Bool {
+        (a.sortKey, a.createdAt) < (b.sortKey, b.createdAt)
+    }
 
     static let recordType = "TripItem"
 
@@ -292,7 +314,7 @@ struct TripItem: Identifiable, Codable, Hashable {
     }
 
     var timeText: String? {
-        guard let time else { return nil }
+        guard kind.usesTime, let time else { return nil }
         let date = Calendar.current.date(bySettingHour: time / 60, minute: time % 60, second: 0, of: .now) ?? .now
         return date.formatted(date: .omitted, time: .shortened)
     }
@@ -422,6 +444,9 @@ extension TripItem {
         r["mapItemID"] = place?.mapItemID
         r["transport"] = transport.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
         r["checkOutDay"] = checkOutDay
+        // Only once dragged: a field Production's schema doesn't have yet fails
+        // the whole save (deploy it from the CloudKit Console first).
+        if let order { r["order"] = order }
         return r
     }
 
@@ -441,6 +466,7 @@ extension TripItem {
             transport = try? JSONDecoder().decode(TripTransport.self, from: Data(json.utf8))
         }
         checkOutDay = r["checkOutDay"] as? String
+        order = r["order"] as? Double
         systemFields = r.encodedSystemFields
     }
 }

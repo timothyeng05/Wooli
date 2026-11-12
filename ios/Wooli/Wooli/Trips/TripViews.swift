@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import MapKit
 import CloudKit
+import UniformTypeIdentifiers
 
 /// Wraps a trip id so trip screens can be pushed or presented without
 /// clashing with other `String` navigation values.
@@ -337,6 +338,9 @@ struct TripDetailView: View {
     @State private var placeItem: TripItem?
     @State private var editingTrip: Trip?
     @State private var dayMap: String?
+    /// Where a dragged plan would land: above or below this row.
+    @State private var dropSpot: PlanDropSpot?
+    @State private var rowHeights: [String: CGFloat] = [:]
     @State private var preparingShare = false
     @State private var confirmDelete = false
     /// The city the map is showing; nil = the whole trip.
@@ -644,7 +648,7 @@ struct TripDetailView: View {
         let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) }
         var entries = plans.map(DayEntry.plan)
         func insert(_ entry: DayEntry, at time: Int) {
-            let i = entries.firstIndex { if case .plan(let item) = $0 { (item.time ?? Int.max) >= time } else { false } }
+            let i = entries.firstIndex { if case .plan(let item) = $0 { item.sortKey >= Double(time) } else { false } }
             entries.insert(entry, at: i ?? entries.endIndex)
         }
         if block.showsTicket { insert(.ticket(home: false), at: block.departure ?? Int.min) }
@@ -677,7 +681,12 @@ struct TripDetailView: View {
             ForEach(entries) { entry in
                 switch entry {
                 case .plan(let item):
-                    itemRow(item, trip: trip, day: block.day)
+                    if item.day == block.day {
+                        draggableRow(item, trip: trip, day: block.day, plans: plans)
+                    } else {
+                        // A stay from an earlier night: it lives on its check-in day.
+                        itemRow(item, trip: trip, day: block.day)
+                    }
                 case .ticket(let home):
                     if home {
                         travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day,
@@ -696,6 +705,69 @@ struct TripDetailView: View {
                 Capsule().fill(Theme.Group.travel.color.gradient).frame(width: 4).padding(.vertical, 22)
             }
         }
+    }
+
+    /// A day's plan you can drag above or below another plan, in this day or
+    /// another, without setting a time; a line shows where it will land.
+    private func draggableRow(_ item: TripItem, trip: Trip, day: String, plans: [TripItem]) -> some View {
+        itemRow(item, trip: trip, day: day)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[item.id] = $0 }
+            .onDrag { NSItemProvider(object: TripItem.dragPrefix + item.id as NSString) }
+            .onDrop(of: [.text], delegate: PlanDropDelegate(
+                targetID: item.id, height: rowHeights[item.id] ?? 44, spot: $dropSpot
+            ) { id, after in
+                drop(id, onto: item, after: after, plans: plans)
+            })
+            .overlay(alignment: dropSpot?.after == true ? .bottom : .top) {
+                if let dropSpot, dropSpot.id == item.id {
+                    Capsule().fill(Theme.brand).frame(height: 3)
+                        .offset(y: dropSpot.after ? 7 : -7)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+
+    /// Puts the dragged plan just above or below `target`, between its new
+    /// neighbours' times (or dragged places). Only it changes, unless the
+    /// neighbours were already out of time order; then the ones after it
+    /// shift just enough to keep the order. Shown times never change.
+    private func drop(_ id: String, onto target: TripItem, after: Bool, plans: [TripItem]) {
+        guard id != target.id, let day = target.day,
+              var moving = store.items.first(where: { $0.id == id }), moving.tripID == target.tripID else { return }
+        if moving.day != day {
+            // From another day: a multi-night stay keeps its number of nights.
+            if let from = moving.day, moving.stayEnd != nil, let end = moving.checkOutDay {
+                let shift = Calendar.current.dateComponents([.day], from: DayKey.date(from), to: DayKey.date(day)).day ?? 0
+                moving.checkOutDay = Calendar.current.date(byAdding: .day, value: shift, to: DayKey.date(end)).map(DayKey.key)
+            }
+            moving.day = day
+        }
+        var list = plans.filter { $0.id != id }
+        guard let at = list.firstIndex(where: { $0.id == target.id }) else { return }
+        let index = after ? at + 1 : at
+        let prev = index > 0 ? list[index - 1].sortKey : nil
+        let next = index < list.count ? list[index].sortKey : nil
+        switch (prev, next) {
+        case (nil, nil): moving.order = moving.sortKey
+        case (nil, let next?): moving.order = next - 15
+        case (let prev?, nil): moving.order = prev + 15
+        case (let prev?, let next?):
+            moving.order = next >= TripItem.untimedKey && prev < TripItem.untimedKey ? prev + 15 : (prev + next) / 2
+        }
+        list.insert(moving, at: index)
+
+        var changed = [moving]
+        var last = -Double.infinity
+        for item in list {
+            var item = item.id == id ? moving : item
+            if item.sortKey <= last {
+                item.order = last + 1
+                changed.removeAll { $0.id == item.id }
+                changed.append(item)
+            }
+            last = item.sortKey
+        }
+        withAnimation(.snappy) { changed.forEach(store.save) }
     }
 
     /// Plans per leg, not counting travel. On a travel day, plans before the
@@ -997,6 +1069,47 @@ struct PlaceMapCard: View {
     }
 }
 
+/// Where a dragged plan would land on a day card.
+struct PlanDropSpot: Equatable {
+    let id: String
+    let after: Bool
+}
+
+/// Tracks a plan dragged over a row: the top half drops it above, the
+/// bottom half below.
+struct PlanDropDelegate: DropDelegate {
+    let targetID: String
+    let height: CGFloat
+    @Binding var spot: PlanDropSpot?
+    let perform: (_ id: String, _ after: Bool) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let next = PlanDropSpot(id: targetID, after: info.location.y > height / 2)
+        if spot != next { withAnimation(.snappy(duration: 0.15)) { spot = next } }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if spot?.id == targetID { spot = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let after = info.location.y > height / 2
+        spot = nil
+        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+        let perform = perform
+        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+            // Only plans dragged from a trip, not any text dropped on the card.
+            guard let text = object as? String, text.hasPrefix(TripItem.dragPrefix) else { return }
+            let id = String(text.dropFirst(TripItem.dragPrefix.count))
+            DispatchQueue.main.async { perform(id, after) }
+        }
+        return true
+    }
+}
+
 // MARK: - Item editor
 
 struct TripItemEditor: View {
@@ -1135,7 +1248,7 @@ struct TripItemEditor: View {
                         }
                     }
                 }
-                if item.day != nil {
+                if item.day != nil && item.kind.usesTime {
                     Toggle(item.kind == .stay ? "Set a check-in time" : "Set a time", isOn: $hasTime.animation())
                     if hasTime {
                         DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
@@ -1305,11 +1418,17 @@ struct TripItemEditor: View {
         if item.title.isEmpty, let place = item.place { item.title = place.name }
         // Only a stay has nights, and only after its check-in.
         if item.stayEnd == nil { item.checkOutDay = nil }
-        if hasTime && item.day != nil {
+        let oldTime = item.time
+        if item.day != nil && !item.kind.usesTime {
+            // No time to set; any old one only keeps its place in the day.
+        } else if hasTime && item.day != nil {
             item.time = TripTransport.minutes(time)
         } else {
             item.time = nil
         }
+        // Setting a time puts it back in time order (kept, not cleared, so
+        // other devices get the change).
+        if item.order != nil, item.time != oldTime, let new = item.time { item.order = Double(new) }
         TripStore.shared.save(item)
         if let pendingRank, item.kind == .meal {
             if var place = eatsBook.place(forTripItem: item.id) {
