@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The trip's "Planning" heatmap: one row per day, a cell per meal, activity
-/// slot, night's stay and (on days you change city) travel. Green is planned,
-/// grey is still open, and a dashed green outline is travel or a stay that's
+/// slot, night's stay and (on days you change city) travel. Blue is planned,
+/// grey is still open, and a dashed blue outline is travel or a stay that's
 /// down but not booked yet. Tapping a row jumps to that day.
 struct TripCoverageCard: View {
     let trip: Trip
@@ -93,10 +93,10 @@ struct TripCoverageCard: View {
     @ViewBuilder
     private func cell(_ state: TripCoverage.State) -> some View {
         switch state {
-        case .planned: Capsule().fill(Theme.income).frame(height: cellHeight)
+        case .planned: Capsule().fill(Theme.brand).frame(height: cellHeight)
         case .unbooked:
-            Capsule().fill(Theme.income.opacity(0.18))
-                .overlay(Capsule().strokeBorder(Theme.income, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])))
+            Capsule().fill(Theme.brand.opacity(0.18))
+                .overlay(Capsule().strokeBorder(Theme.brand, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])))
                 .frame(height: cellHeight)
         case .open: Capsule().fill(Theme.track).frame(height: cellHeight)
         case .none: Color.clear.frame(height: cellHeight)
