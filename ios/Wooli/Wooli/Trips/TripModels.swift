@@ -33,8 +33,21 @@ struct TripLeg: Identifiable, Codable, Hashable {
     /// Where the trip starts from (home): its travel is the trip's way out,
     /// and it isn't numbered among the cities.
     var isHome: Bool = false
+    /// Where the city is, from Apple Maps when it was picked. nil on legs
+    /// typed by hand or saved before these existed (filled in later).
+    var latitude: Double?
+    var longitude: Double?
+    /// e.g. "Europe/Madrid".
+    var timeZoneID: String?
+    /// ISO region code ("ES"), for currency defaults and the places-been globe.
+    var countryCode: String?
+    var mapItemID: String?
 
     func contains(_ day: String) -> Bool { day >= startDay && day <= endDay }
+
+    var hasLocation: Bool { latitude != nil && longitude != nil }
+
+    var timeZone: TimeZone? { timeZoneID.flatMap(TimeZone.init(identifier:)) }
 
     var nights: Int {
         max(Calendar.current.dateComponents([.day], from: DayKey.date(startDay), to: DayKey.date(endDay)).day ?? 0, 0)
@@ -54,7 +67,9 @@ extension Trip {
 }
 
 extension TripLeg {
-    enum CodingKeys: String, CodingKey { case id, name, emoji, startDay, endDay, isHome }
+    enum CodingKeys: String, CodingKey {
+        case id, name, emoji, startDay, endDay, isHome, latitude, longitude, timeZoneID, countryCode, mapItemID
+    }
 
     // Field by field, so legs saved before `isHome` existed still open.
     init(from decoder: Decoder) throws {
@@ -65,6 +80,11 @@ extension TripLeg {
         startDay = try c.decode(String.self, forKey: .startDay)
         endDay = try c.decode(String.self, forKey: .endDay)
         isHome = try c.decodeIfPresent(Bool.self, forKey: .isHome) ?? false
+        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        timeZoneID = try c.decodeIfPresent(String.self, forKey: .timeZoneID)
+        countryCode = try c.decodeIfPresent(String.self, forKey: .countryCode)
+        mapItemID = try c.decodeIfPresent(String.self, forKey: .mapItemID)
     }
 }
 
@@ -84,6 +104,9 @@ struct Trip: Identifiable, Codable, Hashable {
     var zoneOwner: String = ""
     /// You've shared this trip (owner side).
     var isShared: Bool = false
+    /// Newer optional settings (budget, exchange rates, checklist) kept in one
+    /// JSON field so adding one never needs a CloudKit schema change.
+    var extras = TripExtras()
     /// CloudKit change tag etc. from the last save or fetch.
     var systemFields: Data?
 
@@ -110,7 +133,7 @@ struct Trip: Identifiable, Codable, Hashable {
 
     // Older saved files have no `dayTitles`; decode it as optional.
     enum CodingKeys: String, CodingKey {
-        case id, name, destination, startDay, endDay, notes, dayTitles, legs, zoneOwner, isShared, systemFields
+        case id, name, destination, startDay, endDay, notes, dayTitles, legs, zoneOwner, isShared, extras, systemFields
     }
 
     init(id: String = UUID().uuidString, name: String = "", destination: String = "", startDay: String = DayKey.key(.now),
@@ -135,6 +158,7 @@ struct Trip: Identifiable, Codable, Hashable {
         legs = try c.decodeIfPresent([TripLeg].self, forKey: .legs) ?? []
         zoneOwner = try c.decodeIfPresent(String.self, forKey: .zoneOwner) ?? ""
         isShared = try c.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
+        extras = try c.decodeIfPresent(TripExtras.self, forKey: .extras) ?? TripExtras()
         systemFields = try c.decodeIfPresent(Data.self, forKey: .systemFields)
     }
 
@@ -263,6 +287,8 @@ struct TripItem: Identifiable, Codable, Hashable {
     /// The program they came from ("World of Hyatt", "Asia Miles"): one of
     /// `PointsProgram.known` or a name typed in.
     var pointsProgram: String?
+    /// Status, end time, link and other newer optional values in one JSON field.
+    var extras: ItemExtras?
     var createdAt: Date = .now
     var systemFields: Data?
 
@@ -436,6 +462,8 @@ extension Trip {
         r["startDay"] = startDay
         r["endDay"] = endDay
         r["notes"] = notes
+        // Only once something is set: a field Production's schema doesn't have yet fails the save.
+        if !extras.isEmpty { r["extras"] = extras.json }
         r["dayTitles"] = (try? JSONEncoder().encode(dayTitles)).flatMap { String(data: $0, encoding: .utf8) }
         r["legs"] = (try? JSONEncoder().encode(legs)).flatMap { String(data: $0, encoding: .utf8) }
         return r
@@ -452,6 +480,10 @@ extension Trip {
         }
         if let json = r["legs"] as? String, let decoded = try? JSONDecoder().decode([TripLeg].self, from: Data(json.utf8)) {
             legs = decoded
+        }
+        if let json = r["extras"] as? String, let remote = TripExtras(json: json) {
+            // Key by key, so two people setting different keys both keep theirs.
+            extras = extras.merging(remote)
         }
         systemFields = r.encodedSystemFields
     }
@@ -485,6 +517,7 @@ extension TripItem {
             r["points"] = points
             r["pointsProgram"] = pointsProgram
         }
+        if let extras, !extras.isEmpty { r["extras"] = extras.json }
         return r
     }
 
@@ -509,6 +542,7 @@ extension TripItem {
         currency = r["currency"] as? String
         points = r["points"] as? Double
         pointsProgram = r["pointsProgram"] as? String
+        extras = (r["extras"] as? String).flatMap(ItemExtras.init(json:))
         systemFields = r.encodedSystemFields
     }
 }
@@ -533,6 +567,7 @@ struct TripCosts {
     let unpriced: Int
 
     init(items: [TripItem]) {
+        let items = items.filter { !$0.isCancelled }
         let priced = items.filter { $0.cost != nil || $0.points != nil }
         func sum(_ items: [TripItem]) -> [String: Double] {
             items.filter { $0.cost != nil }.reduce(into: [:]) { $0[$1.currencyCode, default: 0] += $1.cost ?? 0 }
@@ -561,5 +596,133 @@ struct TripCosts {
         let home = TripItem.homeCurrency
         return totals.sorted { ($0.key == home ? 0 : 1, $0.key) < ($1.key == home ? 0 : 1, $1.key) }
             .map { TripItem.money($0.value, $0.key) }.joined(separator: " + ")
+    }
+}
+
+
+// MARK: - Extras (one JSON field each, so new settings need no schema change)
+
+/// How sure a plan is. Missing = planned (or "not booked" if its notes still
+/// start with "not booked yet", the old way of saying so).
+enum BookingStatus: String, Codable, CaseIterable, Identifiable {
+    case idea, planned, booked, cancelled
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .idea: "Idea"
+        case .planned: "Not booked"
+        case .booked: "Booked"
+        case .cancelled: "Cancelled"
+        }
+    }
+}
+
+struct ChecklistItem: Codable, Hashable, Identifiable {
+    var id: String = UUID().uuidString
+    var title: String = ""
+    var done: Bool = false
+    var group: String = ""
+}
+
+/// Newer trip-level settings. Every key is optional; older builds ignore the field.
+struct TripExtras: Codable, Hashable {
+    var budget: Double?
+    /// ISO code the budget is in; nil = this device's currency.
+    var budgetCurrency: String?
+    /// Units of `budgetCurrency` per 1 unit of each other currency.
+    var fxRates: [String: Double]?
+    var fxUpdatedAt: Date?
+    var travelers: Int?
+    var checklist: [ChecklistItem]?
+
+    var isEmpty: Bool { self == TripExtras() }
+
+    var json: String? { (try? JSONEncoder().encode(self)).flatMap { String(data: $0, encoding: .utf8) } }
+
+    init() {}
+
+    init?(json: String) {
+        guard let value = try? JSONDecoder().decode(TripExtras.self, from: Data(json.utf8)) else { return nil }
+        self = value
+    }
+
+    /// `other`'s values win where it has them; keys it doesn't have stay.
+    func merging(_ other: TripExtras) -> TripExtras {
+        var m = self
+        m.budget = other.budget ?? budget
+        m.budgetCurrency = other.budgetCurrency ?? budgetCurrency
+        m.fxRates = other.fxRates ?? fxRates
+        m.fxUpdatedAt = other.fxUpdatedAt ?? fxUpdatedAt
+        m.travelers = other.travelers ?? travelers
+        m.checklist = other.checklist ?? checklist
+        return m
+    }
+}
+
+/// Newer plan-level values. Every key is optional.
+struct ItemExtras: Codable, Hashable {
+    var status: BookingStatus?
+    /// Minutes after midnight, for a plan with a fixed slot (a tour, a reservation).
+    var endTime: Int?
+    var url: String?
+    /// Where it came from: quickAdd, import, eats, sights, claude, share.
+    var source: String?
+    var attachmentIDs: [String]?
+    /// Warnings this plan's people chose to ignore (see the trip checks).
+    var ignoredWarnings: [String]?
+    /// Reserved for splitting costs later; nothing reads it yet.
+    var paidBy: String?
+
+    var isEmpty: Bool { self == ItemExtras() }
+
+    var json: String? { (try? JSONEncoder().encode(self)).flatMap { String(data: $0, encoding: .utf8) } }
+
+    init() {}
+
+    init?(json: String) {
+        guard let value = try? JSONDecoder().decode(ItemExtras.self, from: Data(json.utf8)) else { return nil }
+        self = value
+    }
+}
+
+extension TripItem {
+    /// The notes prefix older bookings used to say "not booked".
+    static let notBookedPrefix = "not booked yet"
+
+    var hasNotBookedNote: Bool {
+        notes.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix(Self.notBookedPrefix)
+    }
+
+    /// What the status is, falling back to the notes prefix for older plans.
+    /// nil = nobody said (shown as planned, counts as booked for coverage).
+    var bookingStatus: BookingStatus? {
+        if let status = extras?.status { return status }
+        return hasNotBookedNote ? .planned : nil
+    }
+
+    var isCancelled: Bool { extras?.status == .cancelled }
+
+    /// A travel plan or stay that still has to be booked.
+    var isUnbooked: Bool {
+        switch bookingStatus {
+        case .planned, .idea: true
+        default: false
+        }
+    }
+
+    mutating func setStatus(_ status: BookingStatus?) {
+        var e = extras ?? ItemExtras()
+        e.status = status
+        extras = e.isEmpty ? nil : e
+        // The notes prefix said the same thing; drop it so the two never disagree.
+        if hasNotBookedNote, status != nil { notes = Self.strippingNotBooked(notes) }
+    }
+
+    static func strippingNotBooked(_ notes: String) -> String {
+        var text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.lowercased().hasPrefix(notBookedPrefix) else { return notes }
+        text = String(text.dropFirst(notBookedPrefix.count))
+        return text.trimmingCharacters(in: CharacterSet(charactersIn: " ·-–—.,:;\n"))
     }
 }

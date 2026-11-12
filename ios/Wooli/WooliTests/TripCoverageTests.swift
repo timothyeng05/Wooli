@@ -94,3 +94,68 @@ struct TripPointsTests {
         #expect(PointValues.estimate(points, values: ["World of Hyatt": 1.5]) == 150)
     }
 }
+
+// Leg locations, extras and booking status (TripModels.swift).
+
+struct TripExtrasTests {
+    @Test func oldSavedTripsAndLegsStillDecode() throws {
+        let json = """
+        {"id":"t","name":"Old","destination":"","startDay":"2027-01-01","endDay":"2027-01-02",
+         "legs":[{"id":"l","name":"Madrid","startDay":"2027-01-01","endDay":"2027-01-02"}]}
+        """
+        let trip = try JSONDecoder().decode(Trip.self, from: Data(json.utf8))
+        #expect(trip.extras.isEmpty)
+        #expect(trip.legs[0].latitude == nil && trip.legs[0].timeZoneID == nil)
+        let item = try JSONDecoder().decode(TripItem.self, from: Data(#"{"id":"i","tripID":"t","kind":"meal","title":"x","notes":"","createdAt":0}"#.utf8))
+        #expect(item.extras == nil)
+    }
+
+    @Test func extrasSurviveTheRecordRoundTrip() {
+        var trip = Trip(id: "t", name: "T")
+        trip.extras.budget = 8000
+        trip.legs = [TripLeg(name: "Seville", startDay: trip.startDay, endDay: trip.endDay)]
+        trip.legs[0].timeZoneID = "Europe/Madrid"
+        var back = Trip(id: "t", name: "T")
+        back.apply(trip.record())
+        #expect(back.extras.budget == 8000)
+        #expect(back.legs[0].timeZoneID == "Europe/Madrid")
+
+        var item = TripItem(tripID: "t")
+        item.setStatus(.booked)
+        item.extras?.url = "https://example.com"
+        let again = TripItem(record: item.record(in: trip.zoneID), tripID: "t")
+        #expect(again.bookingStatus == .booked)
+        #expect(again.extras?.url == "https://example.com")
+    }
+
+    @Test func recordsWithoutExtrasDontWriteTheField() {
+        let trip = Trip(id: "t", name: "T")
+        #expect(trip.record()["extras"] == nil)
+        #expect(TripItem(tripID: "t").record(in: trip.zoneID)["extras"] == nil)
+    }
+
+    @Test func extrasMergeKeyByKey() {
+        var mine = TripExtras(); mine.budget = 5000; mine.travelers = 2
+        var theirs = TripExtras(); theirs.budgetCurrency = "EUR"; theirs.travelers = 3
+        let merged = mine.merging(theirs)
+        #expect(merged.budget == 5000 && merged.budgetCurrency == "EUR" && merged.travelers == 3)
+    }
+
+    @Test func statusFallsBackToTheNotesPrefixAndSettingOneDropsIt() {
+        var item = TripItem(tripID: "t", kind: .transit)
+        #expect(item.bookingStatus == nil && !item.isUnbooked)
+        item.notes = "Not booked yet · ~2 h"
+        #expect(item.isUnbooked)
+        item.setStatus(.booked)
+        #expect(!item.isUnbooked)
+        #expect(item.notes == "~2 h")
+    }
+
+    @Test func cancelledPlansDropOutOfCostsAndCoverage() {
+        var flight = TripItem(tripID: "t", day: "2027-04-01", kind: .transit, title: "Flight")
+        flight.cost = 500
+        flight.currency = "USD"
+        flight.setStatus(.cancelled)
+        #expect(TripCosts(items: [flight]).totals.isEmpty)
+    }
+}

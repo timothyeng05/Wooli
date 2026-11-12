@@ -62,6 +62,7 @@ enum TripCoverage {
     }
 
     static func days(trip: Trip, items: [TripItem]) -> [Day] {
+        let items = items.filter { !$0.isCancelled }
         let days = trip.days
         let byDay = Dictionary(grouping: items.filter { $0.day != nil }, by: { $0.day! })
         let stays = items.filter { $0.kind == .stay && $0.day != nil }
@@ -145,9 +146,7 @@ enum TripCoverage {
         return travel.contains(where: isUnbooked) ? .unbooked : .planned
     }
 
-    static func isUnbooked(_ item: TripItem) -> Bool {
-        item.notes.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("not booked yet")
-    }
+    static func isUnbooked(_ item: TripItem) -> Bool { item.isUnbooked }
 
     /// The days you change city, each with the days its travel might be
     /// filed under (leave one city on its last day, arrive at the next on
