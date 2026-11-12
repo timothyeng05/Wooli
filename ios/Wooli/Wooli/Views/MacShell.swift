@@ -7,6 +7,28 @@ enum MacSection: Hashable {
     case space(AppSpace)
     case budget(AppTab)
     case tool(SidebarDestination)
+    /// Trips' gallery, and one page (overview, a city, ideas) of one trip.
+    case allTrips
+    case trip(String, TripPage)
+}
+
+/// Where the Trips sidebar was last left, so quitting and reopening returns there.
+private enum TripSelectionStore {
+    static func encode(_ section: MacSection) -> String {
+        guard case .trip(let id, let page) = section else { return "" }
+        switch page {
+        case .overview: return "\(id)|overview"
+        case .city(let leg): return "\(id)|city:\(leg)"
+        case .ideas: return "\(id)|ideas"
+        }
+    }
+
+    static func decode(_ text: String) -> MacSection {
+        let parts = text.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return .allTrips }
+        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
+        return .trip(parts[0], page)
+    }
 }
 
 /// The Mac window, laid out like iCloud on the web: an app switcher at the
@@ -22,14 +44,27 @@ struct MacShellView: View {
     /// whatever the screen beside it puts in the toolbar.
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var showingApps = false
+    @State private var trips = TripStore.shared
+    /// The Trips sidebar's pick, kept while another app is open.
+    @State private var tripSelection: MacSection = .allTrips
+    /// The trip whose cities are unfolded in the sidebar.
+    @State private var expandedTrip: String?
+    @State private var showNewTrip = false
+    @AppStorage("mac.trips.last") private var lastTrip = ""
 
     private var selection: Binding<MacSection?> {
         Binding {
             if let tool { return .tool(tool) }
             let space = lineup.isEnabled(app.space) ? app.space : .today
+            if space == .trips {
+                // A trip that was deleted or left falls back to the gallery.
+                if case .trip(let id, _) = tripSelection, trips.trip(id) == nil { return .allTrips }
+                return tripSelection
+            }
             return space == .budget ? .budget(app.selectedTab) : .space(space)
         } set: { section in
             switch section {
+            case .allTrips, .trip: tool = nil; app.space = .trips; tripSelection = section ?? .allTrips
             case .space(let space): tool = nil; app.space = space
             case .budget(let tab): tool = nil; app.space = .budget; app.selectedTab = tab
             case .tool(let destination): tool = destination; app.space = .budget
@@ -40,14 +75,17 @@ struct MacShellView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 68, ideal: 68, max: 68)
-                .toolbar(removing: .sidebarToggle)
+            Group {
+                if showsTripsSidebar { tripsSidebar } else { sidebar }
+            }
+            .navigationSplitViewColumnWidth(min: showsTripsSidebar ? 200 : 68, ideal: showsTripsSidebar ? 230 : 68,
+                                            max: showsTripsSidebar ? 300 : 68)
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             // Scroll views stay window-wide (scroll bar at the edge, background
             // to the edges); only their content is centred at a readable width.
             detail
-                .id(selection.wrappedValue)
+                .id(detailID)
                 .readableContentWidth(wideSelection ? ReadableWidth.dashboard : ReadableWidth.max)
         }
         .toolbar {
@@ -73,6 +111,18 @@ struct MacShellView: View {
                     }
             }
         }
+        .sheet(isPresented: $showNewTrip) {
+            NewTripSheet { selection.wrappedValue = .trip($0, .overview) }
+        }
+        // File → New Trip… and the toolbar's + both come through here.
+        .task(id: trips.newTripRequested) {
+            if trips.newTripRequested { trips.newTripRequested = false; showNewTrip = true }
+        }
+        .onAppear { tripSelection = TripSelectionStore.decode(lastTrip) }
+        .onChange(of: tripSelection) { _, new in
+            lastTrip = TripSelectionStore.encode(new)
+            if case .trip(let id, _) = new { expandedTrip = id }
+        }
         // An app with its own pages opens with them beside it; the rest get the whole window.
         .onChange(of: hasSidebar, initial: true) { _, has in
             withAnimation(.snappy) { columns = has ? .all : .detailOnly }
@@ -92,9 +142,23 @@ struct MacShellView: View {
     /// Only Budget has pages of its own to list.
     private var hasSidebar: Bool {
         switch selection.wrappedValue {
-        case .budget, .tool: true
+        case .budget, .tool, .allTrips, .trip: true
         default: false
         }
+    }
+
+    /// Trips lists its trips and their cities by name, so its sidebar is wider than Budget's icon rail.
+    private var showsTripsSidebar: Bool {
+        switch selection.wrappedValue {
+        case .allTrips, .trip: true
+        default: false
+        }
+    }
+
+    /// Changes when the screen does, but not when only a trip's page does (the workspace keeps its state).
+    private var detailID: AnyHashable {
+        if case .trip(let id, _) = selection.wrappedValue { return "trip-\(id)" }
+        return selection.wrappedValue
     }
 
     /// Budget's pages lay out in columns, so they get more room than a list.
@@ -140,6 +204,92 @@ struct MacShellView: View {
         }
     }
 
+    // MARK: Trips sidebar
+
+    private var tripsSidebar: some View {
+        let today = DayKey.key(.now)
+        let upcoming = trips.trips.filter { $0.endDay >= today }.sorted { $0.startDay < $1.startDay }
+        let past = trips.trips.filter { $0.endDay < today }.sorted { $0.startDay > $1.startDay }
+        return List(selection: selection) {
+            Label("All trips", systemImage: "square.grid.2x2").tag(MacSection.allTrips)
+            if !upcoming.isEmpty { Section("Upcoming") { ForEach(upcoming) { tripGroup($0) } } }
+            if !past.isEmpty { Section("Past") { ForEach(past) { tripGroup($0) } } }
+        }
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Button("New Trip", systemImage: "plus") { showNewTrip = true }
+                    .buttonStyle(.borderless)
+                    .help("New trip (⇧⌘N)")
+                Spacer()
+                SyncButton().buttonStyle(.borderless).labelStyle(.iconOnly)
+                Button("Settings", systemImage: "gearshape") { openSettings() }
+                    .buttonStyle(.borderless).labelStyle(.iconOnly).help("Settings (⌘,)")
+            }
+            .padding(Space.m)
+        }
+    }
+
+    private func tripGroup(_ trip: Trip) -> some View {
+        DisclosureGroup(isExpanded: Binding(get: { expandedTrip == trip.id },
+                                            set: { expandedTrip = $0 ? trip.id : nil })) {
+            ForEach(trip.legs.filter { !$0.isHome }.sorted { $0.startDay < $1.startDay }) { leg in
+                cityRow(leg, trip: trip).tag(MacSection.trip(trip.id, .city(leg.id)))
+            }
+            HStack {
+                Label("Ideas", systemImage: "lightbulb")
+                Spacer()
+                let count = ideaCount(trip)
+                if count > 0 { Text("\(count)").font(.caption).foregroundStyle(Theme.textTertiary).monospacedDigit() }
+            }
+            .tag(MacSection.trip(trip.id, .ideas))
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(trip.name.isEmpty ? "Untitled trip" : trip.name).font(.body.weight(.medium)).lineLimit(1)
+                Text(tripCaption(trip)).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            }
+            .tag(MacSection.trip(trip.id, .overview))
+        }
+    }
+
+    private func cityRow(_ leg: TripLeg, trip: Trip) -> some View {
+        HStack(spacing: Space.s) {
+            Group {
+                if leg.emoji.isEmpty || leg.emoji == "📍" {
+                    Text("\(trip.number(of: leg))").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                } else {
+                    Text(leg.emoji).font(.caption)
+                }
+            }
+            .frame(width: 22, height: 22)
+            .background(Theme.Group.travel.color.gradient, in: Circle())
+            Text(leg.name.isEmpty ? "City \(trip.number(of: leg))" : leg.name).lineLimit(1)
+            Spacer(minLength: 4)
+            if leg.contains(DayKey.key(.now)) {
+                Text("NOW").font(.caption2.weight(.heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Theme.brand.gradient, in: Capsule())
+            } else if leg.nights > 0 {
+                Text("\(leg.nights) d").font(.caption).foregroundStyle(Theme.textTertiary).monospacedDigit()
+            }
+        }
+    }
+
+    private func ideaCount(_ trip: Trip) -> Int {
+        let days = Set(trip.days)
+        return trips.items(in: trip.id).filter { $0.day.map { !days.contains($0) } ?? true }.count
+    }
+
+    /// "in 42 days", "now", or the dates once it's over.
+    private func tripCaption(_ trip: Trip) -> String {
+        let today = DayKey.key(.now)
+        if trip.startDay > today {
+            let days = Calendar.current.dateComponents([.day], from: DayKey.date(today), to: DayKey.date(trip.startDay)).day ?? 0
+            return days == 1 ? "tomorrow" : "in \(days) days"
+        }
+        return trip.endDay >= today ? "now" : trip.dateRangeText
+    }
+
     /// Icon only; the name is the tooltip and VoiceOver label. A red dot stands in for the count.
     private func row(_ section: MacSection, _ title: String, _ systemImage: String, badge: Int = 0) -> some View {
         Label(title, systemImage: systemImage)
@@ -171,6 +321,12 @@ struct MacShellView: View {
                 }
             }
             .appGuide(.budget)
+        case .allTrips:
+            NavigationStack { TripsListView { selection.wrappedValue = .trip($0, .overview) } }
+        case .trip(let id, let page):
+            NavigationStack {
+                MacTripWorkspace(tripID: id, page: page, onClose: { tripSelection = .allTrips })
+            }
         case .tool(let destination):
             NavigationStack {
                 switch destination {
@@ -187,7 +343,7 @@ struct MacShellView: View {
         switch space {
         case .today: TodayView()
         case .budget: DashboardView()
-        case .trips: NavigationStack { TripsListView() }
+        case .trips: NavigationStack { TripsListView { selection.wrappedValue = .trip($0, .overview) } }
         case .eats: NavigationStack { EatsListView() }
         case .sights: NavigationStack { SightsListView() }
         case .movies: NavigationStack { MoviesListView() }

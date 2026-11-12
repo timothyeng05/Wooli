@@ -15,11 +15,17 @@ struct TripRoute: Identifiable, Hashable {
 struct TripsListView: View {
     @State private var store = TripStore.shared
     @State private var newTrip: Trip?
-    #if os(macOS)
-    /// A trip just created, opened straight away.
-    @State private var openTrip: TripRoute?
-    #endif
+    /// Opens a trip (the Mac shell picks it in its sidebar).
+    var onOpen: ((String) -> Void)? = nil
     @Environment(\.openWindow) private var openWindow
+
+    private func startNewTrip() {
+        #if os(macOS)
+        store.newTripRequested = true    // the shell shows the sheet
+        #else
+        newTrip = Trip()
+        #endif
+    }
 
     var body: some View {
         let today = DayKey.key(.now)
@@ -29,15 +35,9 @@ struct TripsListView: View {
         listContent(upcoming: upcoming, past: past)
         .navigationTitle("Trips")
         .toolbar {
-            Button("New trip", systemImage: "plus") { newTrip = Trip() }
+            Button("New trip", systemImage: "plus") { startNewTrip() }
         }
-        #if os(macOS)
-        .task(id: store.newTripRequested) {
-            if store.newTripRequested { store.newTripRequested = false; newTrip = Trip() }
-        }
-        .sheet(item: $newTrip) { _ in NewTripSheet { openTrip = TripRoute(id: $0) } }
-        .navigationDestination(item: $openTrip) { MacTripWorkspace(tripID: $0.id) }
-        #else
+        #if !os(macOS)
         .sheet(item: $newTrip) { NewTripFlow(trip: $0) }
         #endif
         .refreshable { await store.fetchChanges() }
@@ -68,7 +68,7 @@ struct TripsListView: View {
                             Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: Space.l)], spacing: Space.l) {
                                 ForEach(trips) { trip in
-                                    NavigationLink { MacTripWorkspace(tripID: trip.id) } label: { TripCard(trip: trip) }
+                                    Button { onOpen?(trip.id) } label: { TripCard(trip: trip) }
                                         .buttonStyle(.plain)
                                         .contextMenu {
                                             Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
@@ -101,7 +101,7 @@ struct TripsListView: View {
                         Text("Plan a trip together").font(.headline)
                         Text("Collect ideas, plan each day on Apple Maps, and invite someone to plan it with you — they join with their own Apple Account.")
                             .font(.subheadline).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
-                        Button("New trip") { newTrip = Trip() }
+                        Button("New trip") { startNewTrip() }
                             .buttonStyle(.borderedProminent)
                     }
                     .frame(maxWidth: .infinity)
@@ -118,13 +118,21 @@ struct TripsListView: View {
     }
 
     private func row(_ trip: Trip) -> some View {
+        #if os(macOS)
+        Button { onOpen?(trip.id) } label: { rowLabel(trip) }
+            .buttonStyle(.plain)
+            .contextMenu {
+                Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
+            }
+        #else
         NavigationLink {
-            #if os(macOS)
-            MacTripWorkspace(tripID: trip.id)
-            #else
             TripDetailView(tripID: trip.id)
-            #endif
-        } label: {
+        } label: { rowLabel(trip) }
+        #endif
+    }
+
+    private func rowLabel(_ trip: Trip) -> some View {
+        Group {
             HStack(spacing: 12) {
                 Image(systemName: "suitcase.fill")
                     .foregroundStyle(.white)
@@ -142,11 +150,6 @@ struct TripsListView: View {
                 }
             }
         }
-        #if os(macOS)
-        .contextMenu {
-            Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
-        }
-        #endif
     }
 }
 

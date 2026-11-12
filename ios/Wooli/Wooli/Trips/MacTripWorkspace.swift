@@ -2,6 +2,17 @@
 import MapKit
 import SwiftUI
 
+/// Which page of a trip the shell's sidebar has picked.
+enum TripPage: Hashable {
+    case overview
+    case city(String)
+    case ideas
+
+    var legID: String? {
+        if case .city(let id) = self { id } else { nil }
+    }
+}
+
 /// What the Mac trip page shows: the days with the map beside them, the
 /// days as calendar columns, or the map across the whole window.
 enum TripWorkspaceMode: String, CaseIterable, Identifiable {
@@ -50,6 +61,11 @@ struct MacTripWorkspace: View {
     let tripID: String
     /// True in a trip's own window (no Back button, no Open in New Window).
     var inOwnWindow = false
+    /// The page picked in the shell's sidebar. nil in a trip's own window,
+    /// which keeps its own cities and ideas list on the left.
+    var page: TripPage? = nil
+    /// Called after the trip is deleted or left, to leave its page.
+    var onClose: (() -> Void)? = nil
 
     @State private var store = TripStore.shared
     @State private var eatsBook = EatsBook.shared
@@ -61,7 +77,8 @@ struct MacTripWorkspace: View {
     /// The selected plan, or the trip summary, in the right pane (⌥⌘I).
     @AppStorage("trip.mac.showInspector") private var showInspector = false
     /// The city picked on the left, for the map when no plan is selected.
-    @State private var focusLeg: String?
+    @State private var ownFocusLeg: String?
+    private var focusLeg: String? { page != nil ? page?.legID : ownFocusLeg }
     /// Day (or plan) the outline should scroll to.
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
@@ -99,8 +116,10 @@ struct MacTripWorkspace: View {
             let all = store.items(in: trip.id)
             let selected = all.filter { selection.contains($0.id) }
             HSplitView {
-                sideColumn(trip)
-                    .frame(minWidth: 190, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
+                if page == nil {
+                    sideColumn(trip)
+                        .frame(minWidth: 190, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
+                }
                 if mode == .map {
                     fullMap(trip)
                         .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
@@ -144,7 +163,7 @@ struct MacTripWorkspace: View {
                             titleVisibility: .visible) {
             Button(trip.isMine ? "Delete trip" : "Leave trip", role: .destructive) {
                 store.delete(trip)
-                dismiss()
+                if let onClose { onClose() } else { dismiss() }
             }
         } message: {
             Text(trip.isMine ? "This deletes the trip for everyone you've shared it with." : "You'll need a new invite to join again.")
@@ -230,7 +249,7 @@ struct MacTripWorkspace: View {
         return List(selection: $selection) {
             Section("Cities") {
                 Button {
-                    focusLeg = nil
+                    ownFocusLeg = nil
                     selection = []
                     scrollTarget = trip.days.first
                 } label: {
@@ -247,7 +266,7 @@ struct MacTripWorkspace: View {
                 .buttonStyle(.plain)
                 ForEach(trip.legs.filter { !$0.isHome }.sorted { $0.startDay < $1.startDay }) { leg in
                     Button {
-                        focusLeg = leg.id
+                        ownFocusLeg = leg.id
                         selection = []
                         scrollTarget = trip.days.first { $0 >= leg.startDay }
                     } label: {
@@ -365,7 +384,7 @@ struct MacTripWorkspace: View {
 
     private func planColumn(_ trip: Trip) -> some View {
         VStack(spacing: 0) {
-            QuickAddBar(trip: trip, day: quickTarget ?? currentDay(trip), focus: $quickAddFocused,
+            QuickAddBar(trip: trip, day: quickAddDay(trip), focus: $quickAddFocused,
                         onFlight: { editingTicket = $0 },
                         onAdded: { id, openInspector in
                             selection = [id]
@@ -377,6 +396,8 @@ struct MacTripWorkspace: View {
                         })
             Group {
                 switch mode {
+                case _ where page == .ideas:
+                    ideasPage(trip)
                 case .calendar:
                     calendar(trip)
                 default:
@@ -388,6 +409,53 @@ struct MacTripWorkspace: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onChange(of: selection) { _, _ in quickTarget = nil }
+        // The sidebar picked another city: bring its first day into view.
+        .onChange(of: page, initial: true) { _, page in
+            quickTarget = nil
+            switch page {
+            case .city(let id)?:
+                if let leg = trip.legs.first(where: { $0.id == id }) { scrollTarget = trip.days.first { $0 >= leg.startDay } }
+            case .overview?: scrollTarget = trip.days.first
+            default: break
+            }
+        }
+    }
+
+    /// Quick add's day: the one a + picked, else Ideas on the Ideas page, else the selection's.
+    private func quickAddDay(_ trip: Trip) -> String? {
+        if let picked = quickTarget { return picked }
+        return page == .ideas ? nil : currentDay(trip)
+    }
+
+    /// The trip's Ideas as a page: a drop target for plans to set aside.
+    private func ideasPage(_ trip: Trip) -> some View {
+        let ideas = ideaItems(trip)
+        return List(selection: $selection) {
+            ForEach(ideas) { item in
+                MacPlanLine(item: item, day: nil, score: score(item))
+                    .tag(item.id)
+                    .itemProvider { NSItemProvider(object: TripItem.dragPrefix + item.id as NSString) }
+            }
+            .onInsert(of: [.text]) { _, providers in
+                Self.ids(from: providers) { place($0, on: nil, before: nil, trip: trip) }
+            }
+            if ideas.isEmpty {
+                ContentUnavailableView("No ideas yet", systemImage: "lightbulb",
+                                       description: Text("Type a place above to keep it for later, or drag plans here to set them aside."))
+            }
+        }
+        .listStyle(.inset)
+        .dropDestination(for: String.self) { texts, _ in
+            place(Self.ids(in: texts), on: nil, before: nil, trip: trip)
+            return true
+        }
+        .contextMenu(forSelectionType: String.self) { ids in
+            planMenu(ids, trip: trip)
+        } primaryAction: { ids in
+            openPrimary(ids, trip: trip)
+        }
+        .onKeyPress(.return) { renameSelected() }
+        .onDeleteCommand { deletePlans(selection, trip: trip) }
     }
 
     // MARK: Right: the selected plan
