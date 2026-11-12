@@ -384,6 +384,7 @@ struct MacTripWorkspace: View {
 
     private func planColumn(_ trip: Trip) -> some View {
         VStack(spacing: 0) {
+            if store.isSample(trip.id) { sampleBanner(trip) }
             QuickAddBar(trip: trip, day: quickAddDay(trip), focus: $quickAddFocused,
                         onFlight: { editingTicket = $0 },
                         onAdded: { id, openInspector in
@@ -419,6 +420,22 @@ struct MacTripWorkspace: View {
             default: break
             }
         }
+    }
+
+    /// Shown on the sample trip: it's only on this Mac and can be deleted in one click.
+    private func sampleBanner(_ trip: Trip) -> some View {
+        HStack(spacing: Space.s) {
+            Image(systemName: "sparkles").foregroundStyle(Theme.brand)
+            Text("Sample trip · only on this \(ThisDevice.name)").font(.callout).foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Button("Delete Sample") {
+                store.delete(trip)
+                if let onClose { onClose() } else { dismiss() }
+            }
+            .buttonStyle(.borderless).foregroundStyle(Theme.brand)
+        }
+        .padding(.horizontal, Space.m).padding(.vertical, Space.s)
+        .background(Theme.brandSoft)
     }
 
     /// Quick add's day: the one a + picked, else Ideas on the Ideas page, else the selection's.
@@ -884,6 +901,10 @@ struct MacTripWorkspace: View {
     }
 
     private func invite(_ trip: Trip) {
+        guard !store.isSample(trip.id) else {
+            store.lastError = "A sample trip only lives on this \(ThisDevice.name). Make your own trip to invite people."
+            return
+        }
         guard store.iCloudAvailable else {
             store.lastError = "Sign in to iCloud in Settings to invite people to this trip."
             return

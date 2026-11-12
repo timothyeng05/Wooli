@@ -39,6 +39,14 @@ enum GooglePlaces {
 
     static var isConfigured: Bool { !key.isEmpty && !key.hasPrefix("$(") }
 
+    /// The person has agreed to their search text going to Google (asked once,
+    /// before the first Google search; off again in Settings).
+    static let consentKey = "search.googleConsent"
+    static var hasConsent: Bool { UserDefaults.standard.bool(forKey: consentKey) }
+
+    /// Configured and agreed: the only time Wooli searches Google by itself.
+    static var isEnabled: Bool { isConfigured && hasConsent }
+
     /// Up to 10 places matching `text`, favouring those within `radius`
     /// metres of `near` when given. Empty on any failure.
     static func search(_ text: String, near: CLLocationCoordinate2D? = nil, radius: Double = 30_000) async -> [Result] {

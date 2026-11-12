@@ -373,7 +373,7 @@ struct MacAppSwitcher: View {
                                 .overlay(alignment: .topTrailing) {
                                     if space == .budget, reviewCount > 0 {
                                         Text("\(reviewCount)").font(.caption2.weight(.bold)).foregroundStyle(.white)
-                                            .padding(.horizontal, 6).padding(.vertical, 2)
+                                            .padding(.horizontal, Space.xs)
                                             .background(Theme.expense, in: Capsule())
                                             .offset(x: 6, y: -6)
                                     }

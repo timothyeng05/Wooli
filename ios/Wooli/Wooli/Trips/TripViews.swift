@@ -46,33 +46,55 @@ struct TripsListView: View {
     @ViewBuilder
     private func listContent(upcoming: [Trip], past: [Trip]) -> some View {
         #if os(macOS)
-        if store.trips.isEmpty { phoneList(upcoming: upcoming, past: past) } else { cardGrid(upcoming: upcoming, past: past) }
+        if store.trips.isEmpty { emptyGallery } else { cardGrid(upcoming: upcoming, past: past) }
         #else
         phoneList(upcoming: upcoming, past: past)
         #endif
     }
 
     #if os(macOS)
-    /// Big cards, two or three across, like a travel site's trip page.
+    private var emptyGallery: some View {
+        VStack(spacing: Space.l) {
+            WooliEmptyState(symbol: "suitcase.rolling.fill", title: "Plan your first trip",
+                            message: "Pick your cities and nights, then add places as you find them. Invite someone to plan it with you.",
+                            actionTitle: "New trip") { startNewTrip() }
+            Button("Explore a sample trip") {
+                if let id = store.addSampleTrip() { onOpen?(id) }
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Theme.brand)
+            Spacer()
+        }
+        .padding(.top, Space.xxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .pageBackground()
+    }
+
+    /// The next trip as one boarding pass, then every other trip as a plain tile.
     private func cardGrid(upcoming: [Trip], past: [Trip]) -> some View {
-        ScrollView {
+        let next = upcoming.first
+        let rest = Array(upcoming.dropFirst())
+        return ScrollView {
             VStack(alignment: .leading, spacing: Space.xl) {
                 if !store.iCloudAvailable {
                     Label("Sign in to iCloud in Settings to sync trips and invite people. Your trips are saved on this \(ThisDevice.name) for now.",
                           systemImage: "icloud.slash")
                         .font(.footnote).foregroundStyle(Theme.textSecondary)
                 }
-                ForEach([("Upcoming", upcoming), ("Past", past)], id: \.0) { title, trips in
+                if let next {
+                    Button { onOpen?(next.id) } label: { nextTripHero(next) }
+                        .buttonStyle(.plain)
+                        .contextMenu { tripMenu(next) }
+                }
+                ForEach([("Upcoming", rest), ("Past", past)], id: \.0) { title, trips in
                     if !trips.isEmpty {
                         VStack(alignment: .leading, spacing: Space.m) {
                             Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: Space.l)], spacing: Space.l) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: Space.l)], spacing: Space.l) {
                                 ForEach(trips) { trip in
-                                    Button { onOpen?(trip.id) } label: { TripCard(trip: trip) }
+                                    Button { onOpen?(trip.id) } label: { TripTile(trip: trip) }
                                         .buttonStyle(.plain)
-                                        .contextMenu {
-                                            Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
-                                        }
+                                        .contextMenu { tripMenu(trip) }
                                 }
                             }
                         }
@@ -82,6 +104,39 @@ struct TripsListView: View {
             .padding(Space.xl)
         }
         .pageBackground()
+    }
+
+    @ViewBuilder
+    private func tripMenu(_ trip: Trip) -> some View {
+        Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
+    }
+
+    private func nextTripHero(_ trip: Trip) -> some View {
+        let cities = trip.awayLegs.map(\.name).filter { !$0.isEmpty }
+        let nights = trip.days.count - 1
+        return TicketCard(eyebrow: heroEyebrow(trip), meta: coverageLine(trip), rows: [
+            TicketRowData(symbol: "calendar", title: trip.dateRangeText, detail: "\(max(nights, 0)) night\(nights == 1 ? "" : "s")"),
+            TicketRowData(symbol: "mappin.and.ellipse", title: cities.isEmpty ? trip.destination : cities.joined(separator: " → ")),
+        ]) {
+            Text(trip.name.isEmpty ? "Untitled trip" : trip.name)
+                .font(.largeTitle.weight(.bold)).lineLimit(2)
+        }
+    }
+
+    private func heroEyebrow(_ trip: Trip) -> String {
+        let today = DayKey.key(.now)
+        if trip.startDay <= today { return "On your trip" }
+        let days = Calendar.current.dateComponents([.day], from: DayKey.date(today), to: DayKey.date(trip.startDay)).day ?? 0
+        return days == 1 ? "Next trip · tomorrow" : "Next trip · in \(days) days"
+    }
+
+    /// "23 of 141 planned · 7 nights without a bed", the Planning card's headline.
+    private func coverageLine(_ trip: Trip) -> String {
+        let days = TripCoverage.days(trip: trip, items: store.items(in: trip.id))
+        let cells = days.flatMap { day in TripCoverage.Slot.allCases.map { day.state($0) } }.filter { $0 != .none }
+        let planned = cells.filter { $0 == .planned }.count
+        let nights = days.filter { $0.state(.stay) == .open }.count
+        return "\(planned) of \(cells.count) planned" + (nights > 0 ? " · \(nights) night\(nights == 1 ? "" : "s") without a bed" : "")
     }
     #endif
 
@@ -154,67 +209,41 @@ struct TripsListView: View {
 }
 
 #if os(macOS)
-/// A flag, landmark or scene for a trip, guessed from its name, destination and stops
-/// (no photos needed). First match wins; cities come before countries.
-private enum TripEmoji {
-    static let table: [(keys: [String], emoji: String)] = [
-        (["tokyo", "kyoto", "osaka", "sapporo", "japan"], "🇯🇵"),
-        (["seoul", "busan", "korea"], "🇰🇷"),
-        (["hong kong"], "🇭🇰"), (["shanghai", "beijing", "chongqing", "yunnan", "hangzhou", "china"], "🇨🇳"),
-        (["taipei", "taiwan"], "🇹🇼"), (["singapore"], "🇸🇬"), (["bangkok", "thailand", "phuket"], "🇹🇭"),
-        (["vietnam", "hanoi"], "🇻🇳"), (["bali", "indonesia"], "🌴"), (["india"], "🇮🇳"),
-        (["paris", "france"], "🥐"), (["london", "england", "uk", "scotland"], "🇬🇧"),
-        (["spain", "barcelona", "madrid"], "🇪🇸"), (["italy", "rome", "venice", "florence"], "🍝"),
-        (["portugal", "lisbon"], "🇵🇹"), (["germany", "berlin", "munich"], "🇩🇪"), (["greece", "santorini"], "🏛️"),
-        (["iceland"], "🌋"), (["switzerland", "alps"], "🏔️"), (["hawaii", "maui", "honolulu"], "🌺"),
-        (["new york", "nyc"], "🗽"), (["california", "los angeles", "san francisco"], "🌉"),
-        (["mexico", "cancun"], "🌮"), (["canada", "vancouver", "toronto"], "🍁"),
-        (["australia", "sydney"], "🦘"), (["new zealand"], "🥝"), (["egypt"], "🐪"), (["morocco"], "🕌"),
-        (["beach", "island", "cruise"], "🏝️"), (["ski", "snow"], "⛷️"), (["camp", "hike"], "🏕️"),
-    ]
-
-    static func pick(for trip: Trip) -> String {
-        // The trip's own name beats its destination, which beats its stops ("China" that starts in Hong Kong is 🇨🇳).
-        for text in [trip.name, trip.destination, trip.legs.map(\.name).joined(separator: " ")].map({ $0.lowercased() }) {
-            if let match = table.first(where: { $0.keys.contains { text.contains($0) } }) { return match.emoji }
-        }
-        return "✈️"
-    }
-}
-
-/// One trip as a big card: a colour picked from its name, the year, title and dates.
-private struct TripCard: View {
+/// One trip as a plain card: name, cities as a route, dates and who it's shared with.
+private struct TripTile: View {
     let trip: Trip
 
-    private var tint: Color {
-        let palette: [Color] = [Theme.brand, Color(hex: "#0891b2"), Color(hex: "#7c3aed"), Color(hex: "#db2777"), Color(hex: "#0d9488"), Color(hex: "#ea580c")]
-        let seed = trip.name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return palette[seed % palette.count]
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let cities = trip.awayLegs.map(\.name).filter { !$0.isEmpty }
+        VStack(alignment: .leading, spacing: Space.s) {
             HStack {
                 Text(DayKey.date(trip.startDay).formatted(.dateTime.year()))
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(.white.opacity(0.22), in: Capsule())
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.brandDark)
+                    .padding(.horizontal, Space.s).padding(.vertical, Space.xs)
+                    .background(Theme.brandSoft, in: Capsule())
                 Spacer()
-                if !trip.isMine || trip.isShared { Image(systemName: "person.2.fill").font(.callout) }
+                if !trip.isMine || trip.isShared {
+                    Image(systemName: "person.2.fill").font(.callout).foregroundStyle(Theme.textTertiary)
+                        .accessibilityLabel("Shared")
+                }
             }
-            Spacer()
-            Text(TripEmoji.pick(for: trip)).font(.system(size: 44))
             Text(trip.name.isEmpty ? "Untitled trip" : trip.name)
-                .font(.system(size: 28, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
-            Text([trip.destination, trip.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.subheadline).opacity(0.9).lineLimit(1)
+                .font(.title3.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(2)
+            if !cities.isEmpty {
+                // The route as dots: one per city, in order.
+                HStack(spacing: Space.xs) {
+                    ForEach(Array(cities.prefix(6).enumerated()), id: \.offset) { i, _ in
+                        if i > 0 { Rectangle().fill(Theme.border).frame(width: 10, height: 2) }
+                        Circle().fill(Theme.Group.travel.color).frame(width: 8, height: 8)
+                    }
+                    if cities.count > 6 { Text("+\(cities.count - 6)").font(.caption).foregroundStyle(Theme.textTertiary) }
+                }
+                Text(cities.joined(separator: " → ")).font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
+            }
+            Text(trip.dateRangeText).font(.caption).foregroundStyle(Theme.textTertiary)
         }
-        .foregroundStyle(.white)
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
-        .background(
-            LinearGradient(colors: [tint, tint.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: Radius.hero, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 130, alignment: .leading)
+        .card()
         .contentShape(Rectangle())
     }
 }
@@ -1799,6 +1828,7 @@ struct PlaceSearchView: View {
     @State private var query = ""
     @State private var searcher = PlaceSearcher()
     @State private var showingMap = false
+    @State private var askGoogle = false
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -1853,7 +1883,9 @@ struct PlaceSearchView: View {
                     HStack { ProgressView(); Text("Searching Google Maps…").foregroundStyle(Theme.textSecondary) }
                         .font(.subheadline)
                 } else if !searcher.searchedGoogle {
-                    Button("Not finding it? Search Google Maps", systemImage: "magnifyingglass") { searcher.searchGoogle(query) }
+                    Button("Not finding it? Search Google Maps", systemImage: "magnifyingglass") {
+                        if GooglePlaces.hasConsent { searcher.searchGoogle(query) } else { askGoogle = true }
+                    }
                         .font(.subheadline)
                 } else if searcher.googleResults.isEmpty && searcher.suggestions.isEmpty && searcher.results.isEmpty {
                     Text("No matches on Apple or Google Maps.").font(.subheadline).foregroundStyle(Theme.textSecondary)
@@ -1885,6 +1917,15 @@ struct PlaceSearchView: View {
         .onChange(of: query) { _, text in searcher.search(text) }
         .onSubmit(of: .search) { searcher.searchAll(query) }
         .task { await searcher.focus(on: near) }
+        .confirmationDialog("Search Google Maps too?", isPresented: $askGoogle, titleVisibility: .visible) {
+            Button("Allow") {
+                UserDefaults.standard.set(true, forKey: GooglePlaces.consentKey)
+                searcher.searchGoogle(query)
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Your search text and the trip's city are sent to Google. Wooli sends nothing else. You can turn this off in Settings.")
+        }
         .navigationTitle("Find a place")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1980,7 +2021,7 @@ final class PlaceSearcher {
         suggestions = found
         // Apple has nothing: once typing pauses, ask Google.
         task?.cancel()
-        guard found.isEmpty, GooglePlaces.isConfigured else { return }
+        guard found.isEmpty, GooglePlaces.isEnabled else { return }
         let text = text
         task = Task {
             try? await Task.sleep(for: .milliseconds(600))
@@ -2007,7 +2048,7 @@ final class PlaceSearcher {
             let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
             guard !Task.isCancelled else { return }
             results = center.map { c in items.sorted { $0.location.distance(from: c) < $1.location.distance(from: c) } } ?? items
-            if items.isEmpty && suggestions.isEmpty && GooglePlaces.isConfigured && !searchedGoogle { await runGoogle(text) }
+            if items.isEmpty && suggestions.isEmpty && GooglePlaces.isEnabled && !searchedGoogle { await runGoogle(text) }
         }
     }
 

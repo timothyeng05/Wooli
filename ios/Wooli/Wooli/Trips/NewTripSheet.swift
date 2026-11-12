@@ -140,7 +140,7 @@ struct CityField: View {
                         Text(result.subtitle).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
                         Spacer()
                     }
-                    .padding(.vertical, 3)
+                    .padding(.vertical, Space.xs)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

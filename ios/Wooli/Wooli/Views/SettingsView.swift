@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("displayName") private var displayName = ""
     @AppStorage(AICategorizer.enabledKey) private var aiEnabled = true
     @AppStorage(ReviewReminder.enabledKey) private var reviewRemindersEnabled = true
+    @AppStorage(GooglePlaces.consentKey) private var googleSearch = false
     private var cloud = ICloudSyncMonitor.shared
 
     var body: some View {
@@ -129,6 +130,18 @@ struct SettingsView: View {
                     Text("Apple Intelligence")
                 } footer: {
                     Text(AICategorizer.statusDescription + " Suggestions stay in your review queue until you confirm them.")
+                }
+
+                if GooglePlaces.isConfigured {
+                    Section {
+                        Toggle(isOn: $googleSearch) {
+                            Label("Search Google Maps too", systemImage: "magnifyingglass")
+                        }
+                    } header: {
+                        Text("Privacy")
+                    } footer: {
+                        Text("When Apple Maps can't find a place, Wooli can ask Google. Your search text and the trip's city are sent to Google; nothing else is.")
+                    }
                 }
 
                 #if os(macOS)

@@ -89,7 +89,7 @@ struct QuickAddBar: View {
                 if resolving { ProgressView().controlSize(.small) }
                 Text(toIdeas ? "Ideas" : targetName)
                     .font(.caption.weight(.semibold)).foregroundStyle(Theme.brand)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .padding(.horizontal, Space.s).padding(.vertical, Space.xs)
                     .background(Theme.brand.opacity(0.12), in: Capsule())
                     .help("Where it goes. Press Tab to switch between this day and Ideas.")
             }
@@ -143,7 +143,7 @@ struct QuickAddBar: View {
             Spacer()
             if selected { Text("↩").font(.caption.weight(.semibold)).foregroundStyle(Theme.textTertiary) }
         }
-        .padding(.horizontal, Space.m).padding(.vertical, 5)
+        .padding(.horizontal, Space.m).padding(.vertical, Space.xs)
         .background(selected ? Theme.brand.opacity(0.1) : .clear)
         .contentShape(Rectangle())
     }

@@ -167,7 +167,7 @@ final class TripStore: CKSyncEngineDelegate {
 
     /// Queue every trip you own (zone, trip and items) for upload.
     private func uploadEverythingMine() {
-        for trip in trips where trip.isMine {
+        for trip in trips where trip.isMine && !isSample(trip.id) {
             privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
             privateEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(trip.recordID)]
                 + items(in: trip.id).map { .saveRecord(CKRecord.ID(recordName: $0.id, zoneID: trip.zoneID)) })
@@ -298,7 +298,7 @@ final class TripStore: CKSyncEngineDelegate {
         }
         editCount[trip.id, default: 0] += 1
         persist()
-        guard let engine = engine(for: trip) else { return }
+        guard !isSample(trip.id), let engine = engine(for: trip) else { return }
         if isNew && trip.isMine {
             engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: trip.zoneID))])
         }
@@ -332,7 +332,7 @@ final class TripStore: CKSyncEngineDelegate {
         }
         editCount[item.id, default: 0] += 1
         persist()
-        guard let trip = trip(item.tripID), let engine = engine(for: trip) else { return }
+        guard let trip = trip(item.tripID), !isSample(trip.id), let engine = engine(for: trip) else { return }
         engine.state.add(pendingRecordZoneChanges: [.saveRecord(CKRecord.ID(recordName: item.id, zoneID: trip.zoneID))])
     }
 
@@ -351,7 +351,7 @@ final class TripStore: CKSyncEngineDelegate {
     private func remove(_ item: TripItem) {
         items.removeAll { $0.id == item.id }
         persist()
-        guard let trip = trip(item.tripID), let engine = engine(for: trip) else { return }
+        guard let trip = trip(item.tripID), !isSample(trip.id), let engine = engine(for: trip) else { return }
         engine.state.add(pendingRecordZoneChanges: [.deleteRecord(CKRecord.ID(recordName: item.id, zoneID: trip.zoneID))])
     }
 
@@ -359,6 +359,7 @@ final class TripStore: CKSyncEngineDelegate {
     /// with you, deleting its zone from your shared database leaves it.
     func delete(_ trip: Trip) {
         removeLocally(tripID: trip.id)
+        if isSample(trip.id) { return }
         engine(for: trip)?.state.add(pendingDatabaseChanges: [.deleteZone(trip.zoneID)])
     }
 
@@ -370,12 +371,29 @@ final class TripStore: CKSyncEngineDelegate {
 
     private func engine(for trip: Trip) -> CKSyncEngine? { trip.isMine ? privateEngine : sharedEngine }
 
-    #if DEBUG
-    /// Demo trip for Simulator checks and screenshots (`-sampleTrip`): a
-    /// week in Japan starting next week — fly into Tokyo, train to Kyoto,
-    /// then Osaka — with stays, sights, meals and ideas. Added once.
-    func addSampleTrip() {
-        guard !trips.contains(where: { $0.name == "Japan in autumn" }) else { return }
+    // MARK: - Sample trip
+
+    private static let sampleKey = "trips.sampleIDs"
+
+    /// Trips made by "Explore a sample trip". They live only on this device:
+    /// never uploaded, never shared.
+    func isSample(_ tripID: String) -> Bool {
+        (UserDefaults.standard.stringArray(forKey: Self.sampleKey) ?? []).contains(tripID)
+    }
+
+    private func markSample(_ tripID: String) {
+        var ids = UserDefaults.standard.stringArray(forKey: Self.sampleKey) ?? []
+        if !ids.contains(tripID) { ids.append(tripID) }
+        UserDefaults.standard.set(ids, forKey: Self.sampleKey)
+    }
+
+    /// Demo trip for first-run exploration (and `-sampleTrip` in Simulator
+    /// checks): a week in Japan starting next week — fly into Tokyo, train
+    /// to Kyoto, then Osaka — with stays, sights, meals and ideas. Added once,
+    /// kept on this device only.
+    @discardableResult
+    func addSampleTrip() -> String? {
+        if let existing = trips.first(where: { $0.name == "Japan in autumn" && isSample($0.id) }) { return existing.id }
         let cal = Calendar.current
         let start = cal.date(byAdding: .day, value: 7, to: .now)!
         func day(_ n: Int) -> String { DayKey.key(cal.date(byAdding: .day, value: n - 1, to: start)!) }
@@ -383,6 +401,8 @@ final class TripStore: CKSyncEngineDelegate {
         trip.legs = [TripLeg(name: "Tokyo", emoji: "🗼", startDay: day(1), endDay: day(3)),
                      TripLeg(name: "Kyoto", emoji: "⛩️", startDay: day(3), endDay: day(5)),
                      TripLeg(name: "Osaka", emoji: "🏯", startDay: day(5), endDay: day(7))]
+        // Marked before the first save, so none of it is ever queued for iCloud.
+        markSample(trip.id)
         save(trip)
 
         let samples: [(String?, TripItem.Kind, String, Int?, Double, Double, String?)] = [
@@ -437,8 +457,8 @@ final class TripStore: CKSyncEngineDelegate {
             save(TripItem(tripID: trip.id, day: day(n), kind: .transit, title: "Shinkansen \(from) → \(to)", time: depart,
                           transport: train, createdAt: Date.now.addingTimeInterval(-2)))
         }
+        return trip.id
     }
-    #endif
 
     // MARK: - Sharing
 
