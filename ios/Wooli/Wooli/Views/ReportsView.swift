@@ -65,10 +65,14 @@ struct ReportsView: View {
                         StatTile(label: "Saved", value: summary.net, tint: summary.net >= 0 ? Theme.brand : Theme.expense)
                     }
 
-                    CashFlowCard(transactions: relevantTransactions, ledger: ledger)
-                    SpendingBreakdownCard(summary: summary, ledger: ledger, interval: period.interval)
-                    TopMerchantsCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
-                    TagsReportCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                    // Wide Mac window: the breakdown beside the cash-flow chart, like Monarch's Reports.
+                    WideColumns(sideWidth: 460) {
+                        CashFlowCard(transactions: relevantTransactions, ledger: ledger)
+                        SpendingBreakdownCard(summary: summary, ledger: ledger, interval: period.interval)
+                    } side: {
+                        TopMerchantsCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                        TagsReportCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                    }
                 }
                 .padding(16)
             }

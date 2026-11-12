@@ -15,12 +15,65 @@ struct TripRoute: Identifiable, Hashable {
 struct TripsListView: View {
     @State private var store = TripStore.shared
     @State private var newTrip: Trip?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let today = DayKey.key(.now)
         let upcoming = store.trips.filter { $0.endDay >= today }.sorted { $0.startDay < $1.startDay }
         let past = store.trips.filter { $0.endDay < today }.sorted { $0.startDay > $1.startDay }
 
+        listContent(upcoming: upcoming, past: past)
+        .navigationTitle("Trips")
+        .toolbar {
+            Button("New trip", systemImage: "plus") { newTrip = Trip() }
+        }
+        .sheet(item: $newTrip) { NewTripFlow(trip: $0) }
+        .refreshable { await store.fetchChanges() }
+    }
+
+    @ViewBuilder
+    private func listContent(upcoming: [Trip], past: [Trip]) -> some View {
+        #if os(macOS)
+        if store.trips.isEmpty { phoneList(upcoming: upcoming, past: past) } else { cardGrid(upcoming: upcoming, past: past) }
+        #else
+        phoneList(upcoming: upcoming, past: past)
+        #endif
+    }
+
+    #if os(macOS)
+    /// Big cards, two or three across, like a travel site's trip page.
+    private func cardGrid(upcoming: [Trip], past: [Trip]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                if !store.iCloudAvailable {
+                    Label("Sign in to iCloud in Settings to sync trips and invite people. Your trips are saved on this \(ThisDevice.name) for now.",
+                          systemImage: "icloud.slash")
+                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                }
+                ForEach([("Upcoming", upcoming), ("Past", past)], id: \.0) { title, trips in
+                    if !trips.isEmpty {
+                        VStack(alignment: .leading, spacing: Space.m) {
+                            Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: Space.l)], spacing: Space.l) {
+                                ForEach(trips) { trip in
+                                    NavigationLink { MacTripWorkspace(tripID: trip.id) } label: { TripCard(trip: trip) }
+                                        .buttonStyle(.plain)
+                                        .contextMenu {
+                                            Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
+                                        }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(Space.xl)
+        }
+        .pageBackground()
+    }
+    #endif
+
+    private func phoneList(upcoming: [Trip], past: [Trip]) -> some View {
         List {
             if !store.iCloudAvailable {
                 Section {
@@ -50,17 +103,15 @@ struct TripsListView: View {
                 Section("Past") { ForEach(past) { row($0) } }
             }
         }
-        .navigationTitle("Trips")
-        .toolbar {
-            Button("New trip", systemImage: "plus") { newTrip = Trip() }
-        }
-        .sheet(item: $newTrip) { NewTripFlow(trip: $0) }
-        .refreshable { await store.fetchChanges() }
     }
 
     private func row(_ trip: Trip) -> some View {
         NavigationLink {
+            #if os(macOS)
+            MacTripWorkspace(tripID: trip.id)
+            #else
             TripDetailView(tripID: trip.id)
+            #endif
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "suitcase.fill")
@@ -79,8 +130,80 @@ struct TripsListView: View {
                 }
             }
         }
+        #if os(macOS)
+        .contextMenu {
+            Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
+        }
+        #endif
     }
 }
+
+#if os(macOS)
+/// A flag, landmark or scene for a trip, guessed from its name, destination and stops
+/// (no photos needed). First match wins; cities come before countries.
+private enum TripEmoji {
+    static let table: [(keys: [String], emoji: String)] = [
+        (["tokyo", "kyoto", "osaka", "sapporo", "japan"], "🇯🇵"),
+        (["seoul", "busan", "korea"], "🇰🇷"),
+        (["hong kong"], "🇭🇰"), (["shanghai", "beijing", "chongqing", "yunnan", "hangzhou", "china"], "🇨🇳"),
+        (["taipei", "taiwan"], "🇹🇼"), (["singapore"], "🇸🇬"), (["bangkok", "thailand", "phuket"], "🇹🇭"),
+        (["vietnam", "hanoi"], "🇻🇳"), (["bali", "indonesia"], "🌴"), (["india"], "🇮🇳"),
+        (["paris", "france"], "🥐"), (["london", "england", "uk", "scotland"], "🇬🇧"),
+        (["spain", "barcelona", "madrid"], "🇪🇸"), (["italy", "rome", "venice", "florence"], "🍝"),
+        (["portugal", "lisbon"], "🇵🇹"), (["germany", "berlin", "munich"], "🇩🇪"), (["greece", "santorini"], "🏛️"),
+        (["iceland"], "🌋"), (["switzerland", "alps"], "🏔️"), (["hawaii", "maui", "honolulu"], "🌺"),
+        (["new york", "nyc"], "🗽"), (["california", "los angeles", "san francisco"], "🌉"),
+        (["mexico", "cancun"], "🌮"), (["canada", "vancouver", "toronto"], "🍁"),
+        (["australia", "sydney"], "🦘"), (["new zealand"], "🥝"), (["egypt"], "🐪"), (["morocco"], "🕌"),
+        (["beach", "island", "cruise"], "🏝️"), (["ski", "snow"], "⛷️"), (["camp", "hike"], "🏕️"),
+    ]
+
+    static func pick(for trip: Trip) -> String {
+        // The trip's own name beats its destination, which beats its stops ("China" that starts in Hong Kong is 🇨🇳).
+        for text in [trip.name, trip.destination, trip.legs.map(\.name).joined(separator: " ")].map({ $0.lowercased() }) {
+            if let match = table.first(where: { $0.keys.contains { text.contains($0) } }) { return match.emoji }
+        }
+        return "✈️"
+    }
+}
+
+/// One trip as a big card: a colour picked from its name, the year, title and dates.
+private struct TripCard: View {
+    let trip: Trip
+
+    private var tint: Color {
+        let palette: [Color] = [Theme.brand, Color(hex: "#0891b2"), Color(hex: "#7c3aed"), Color(hex: "#db2777"), Color(hex: "#0d9488"), Color(hex: "#ea580c")]
+        let seed = trip.name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return palette[seed % palette.count]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(DayKey.date(trip.startDay).formatted(.dateTime.year()))
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(.white.opacity(0.22), in: Capsule())
+                Spacer()
+                if !trip.isMine || trip.isShared { Image(systemName: "person.2.fill").font(.callout) }
+            }
+            Spacer()
+            Text(TripEmoji.pick(for: trip)).font(.system(size: 44))
+            Text(trip.name.isEmpty ? "Untitled trip" : trip.name)
+                .font(.system(size: 28, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+            Text([trip.destination, trip.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.subheadline).opacity(0.9).lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .padding(Space.l)
+        .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
+        .background(
+            LinearGradient(colors: [tint, tint.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: Radius.hero, style: .continuous))
+        .contentShape(Rectangle())
+    }
+}
+#endif
 
 // MARK: - New trip flow
 
@@ -326,6 +449,16 @@ struct TripLegEditor: View {
 
 struct TripDetailView: View {
     let tripID: String
+    /// Set on the Mac, where this is the middle of the trip workspace: rows
+    /// select into the inspector instead of opening sheets, and the trip
+    /// header, map and ideas live in the side panes.
+    var selection: Binding<Set<String>>? = nil
+    /// Which plans to show (the workspace's search).
+    var filter: (TripItem) -> Bool = { _ in true }
+    /// Adds a plan to a day (nil = Ideas) the workspace's way.
+    var onAdd: ((String?) -> Void)? = nil
+    /// A day or plan to bring into view; cleared once scrolled.
+    var scrollTarget: Binding<String?>? = nil
     @State private var store = TripStore.shared
     /// Your Eats rankings, for the "What we ate" card and meal scores.
     @State private var eatsBook = EatsBook.shared
@@ -350,6 +483,7 @@ struct TripDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var collapsedKey: String { "trip.collapsedLegs.\(tripID)" }
+    private var embedded: Bool { selection != nil }
 
     var body: some View {
         if let trip = store.trip(tripID) {
@@ -370,16 +504,20 @@ struct TripDetailView: View {
         let planCounts = Self.planCounts(blocks: blocks, items: allItems)
         let collapsed = collapsedLegs ?? defaultCollapsed(trip)
 
-        return ScrollView {
+        return ScrollViewReader { proxy in ScrollView {
             // Lazy: long trips have dozens of day cards.
             LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
-                header(trip, dayCount: days.count)
+                if !embedded {
+                    header(trip, dayCount: days.count)
 
-                if !placed.isEmpty {
-                    tripMap(trip, placed: placed)
+                    if !placed.isEmpty {
+                        tripMap(trip, placed: placed)
+                    }
+
+                    TripCoverageCard(trip: trip, items: allItems) { reveal($0, trip: trip, proxy: proxy) }
+
+                    ideasCard(trip, ideas: ideas)
                 }
-
-                ideasCard(trip, ideas: ideas)
 
                 if allItems.contains(where: { $0.kind == .meal && !$0.isMealPlaceholder }) {
                     whatWeAteCard(trip)
@@ -394,6 +532,7 @@ struct TripDetailView: View {
                         switch row {
                         case .day(let block, let leg):
                             dayCard(trip, block, leg: leg, travelIDs: travelIDs, all: allItems)
+                                .id(row.id)
                         case .travel(let from, let to, let start, let end, let items, _):
                             travelCard(trip, from: from, to: to, start: start, end: end, items: items, all: allItems)
                         case .legHeader(let leg):
@@ -405,6 +544,7 @@ struct TripDetailView: View {
                                               isCollapsed: collapsed.contains(leg.id), isNow: leg.contains(DayKey.key(.now)))
                             }
                             .buttonStyle(.plain)
+                            .id(row.id)
                             .sensoryFeedback(.selection, trigger: collapsed.contains(leg.id))
                             let toTry = wishCount(in: leg)
                             if toTry > 0 && !collapsed.contains(leg.id) {
@@ -422,12 +562,19 @@ struct TripDetailView: View {
             }
             .padding(16)
         }
+        .onChange(of: scrollTarget?.wrappedValue) { _, target in
+            guard let target else { return }
+            scrollTarget?.wrappedValue = nil
+            reveal(target, trip: trip, proxy: proxy)
+        }
+        }
         .readableContentWidth()
         .pageBackground()
-        .navigationTitle(trip.name.isEmpty ? "Trip" : trip.name)
+        .navigationTitle(embedded ? "" : (trip.name.isEmpty ? "Trip" : trip.name))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.fetchChanges() }
         .toolbar {
+            if !embedded {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(trip.isMine && !trip.isShared ? "Invite" : "People", systemImage: "person.crop.circle.badge.plus") {
                     invite(trip)
@@ -440,6 +587,7 @@ struct TripDetailView: View {
                     Button(trip.isMine ? "Delete trip" : "Leave trip", systemImage: trip.isMine ? "trash" : "rectangle.portrait.and.arrow.right",
                            role: .destructive) { confirmDelete = true }
                 }
+            }
             }
         }
         .sheet(item: $editingItem) { TripItemEditor(item: $0, trip: trip) }
@@ -467,6 +615,37 @@ struct TripDetailView: View {
         .overlay {
             if preparingShare { ProgressView().controlSize(.large).padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card)) }
         }
+    }
+
+    /// Scrolls to a day (opening its city if folded) or to a plan's day.
+    private func reveal(_ target: String, trip: Trip, proxy: ScrollViewProxy) {
+        let day = trip.days.contains(target) ? target : store.items.first { $0.id == target }?.day
+        guard let day else { return }
+        if let leg = trip.leg(for: day), (collapsedLegs ?? defaultCollapsed(trip)).contains(leg.id) {
+            toggle(leg, trip: trip)
+        }
+        let id = trip.leg(for: day).flatMap { $0.startDay == day && trip.days.contains(target) ? "leg-\($0.id)" : nil } ?? "day-\(day)"
+        // Wait for an opened city's days to be laid out.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(.snappy) { proxy.scrollTo(id, anchor: .top) }
+        }
+    }
+
+    /// On the Mac workspace a click selects (⌘-click adds or removes, ⇧-click adds).
+    private func select(_ item: TripItem) {
+        guard let selection else { return }
+        #if os(macOS)
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.command) {
+            if selection.wrappedValue.contains(item.id) { selection.wrappedValue.remove(item.id) } else { selection.wrappedValue.insert(item.id) }
+            return
+        }
+        if flags.contains(.shift) {
+            selection.wrappedValue.insert(item.id)
+            return
+        }
+        #endif
+        selection.wrappedValue = [item.id]
     }
 
     /// The trip's places on a map, with chips to zoom to one city.
@@ -645,7 +824,7 @@ struct TripDetailView: View {
     /// with no time yet goes first.
     private func dayCard(_ trip: Trip, _ block: TripDayBlock, leg: TripLeg?,
                          travelIDs: Set<String>, all: [TripItem]) -> some View {
-        let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) }
+        let plans = store.items(in: trip.id, day: block.day).filter { !travelIDs.contains($0.id) && filter($0) }
         var entries = plans.map(DayEntry.plan)
         func insert(_ entry: DayEntry, at time: Int) {
             let i = entries.firstIndex { if case .plan(let item) = $0 { item.sortKey >= Double(time) } else { false } }
@@ -669,7 +848,7 @@ struct TripDetailView: View {
                         Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
                     }
                     Button("Add", systemImage: "plus") {
-                        editingItem = TripItem(tripID: trip.id, day: block.day)
+                        if let onAdd { onAdd(block.day) } else { editingItem = TripItem(tripID: trip.id, day: block.day) }
                     }
                     .labelStyle(.iconOnly)
                 }
@@ -800,7 +979,7 @@ struct TripDetailView: View {
         TripTravelCard(fromName: from?.name, toName: to?.name,
                        day: start, endDay: end, items: items, meeting: meeting,
                        distanceKm: TripTravelCard.distanceKm(from: from, to: to, items: all),
-                       onSelect: { editingItem = $0 },
+                       onSelect: { item in if embedded { select(item) } else { editingItem = item } },
                        onAdd: { editingItem = TripItem(tripID: trip.id, day: end, kind: .transit,
                                                        title: to.map { "To \($0.name)" } ?? "Home") })
     }
@@ -809,7 +988,9 @@ struct TripDetailView: View {
         // A meal on your Eats list opens its Eats page; an activity or stay
         // with a place, its place page; anything else, the editor.
         Button {
-            if eatsEntry(item) != nil {
+            if embedded {
+                select(item)
+            } else if eatsEntry(item) != nil {
                 eatsMeal = item
             } else if item.place != nil && (item.kind == .activity || item.kind == .stay) {
                 placeItem = item
@@ -818,6 +999,15 @@ struct TripDetailView: View {
             }
         } label: {
             TripItemRow(item: item, score: eatsScore(item), day: day)
+                .background {
+                    if selection?.wrappedValue.contains(item.id) == true {
+                        RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
+                            .fill(Theme.brand.opacity(0.1))
+                            .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
+                                .strokeBorder(Theme.brand, lineWidth: 1.5))
+                            .padding(-Space.s)
+                    }
+                }
         }
             .buttonStyle(.plain)
             .contextMenu {
@@ -971,6 +1161,10 @@ struct TripItemRow: View {
                 if let time = item.timeText, day == nil || day == item.day {
                     Text(time).font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.textSecondary)
                 }
+                // A stay's price shows on its check-in day only.
+                if let price = item.priceText, day == nil || day == item.day {
+                    Text(price).font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.text)
+                }
                 if stayRole == .checkIn {
                     Text(item.stayEnd == nil ? "Check-in" : day.flatMap(item.stayLabel(on:)) ?? "Check-in")
                         .font(.caption2.weight(.bold)).foregroundStyle(item.kind.onColor)
@@ -983,6 +1177,79 @@ struct TripItemRow: View {
             }
         }
         .contentShape(Rectangle())
+    }
+}
+
+/// A price and its currency, for a booking or anything else paid for.
+struct TripCostField: View {
+    @Binding var cost: Double?
+    @Binding var currency: String?
+    var prompt = "Price"
+
+    /// Currencies you're likely to pay in, plus whatever this one already uses.
+    static let common = ["USD", "EUR", "GBP", "JPY", "KRW", "CNY", "HKD", "TWD", "SGD", "THB", "CAD", "AUD", "MXN", "CHF"]
+
+    var body: some View {
+        let code = currency ?? TripItem.homeCurrency
+        HStack(spacing: Space.s) {
+            TextField(prompt, value: $cost, format: .number.precision(.fractionLength(0...2)), prompt: Text(prompt))
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+            Picker("Currency", selection: Binding(get: { code }, set: { currency = $0 == TripItem.homeCurrency ? nil : $0 })) {
+                ForEach(Array(Set(Self.common + [TripItem.homeCurrency, code])).sorted(), id: \.self) { code in
+                    Text(code).tag(code)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+}
+
+/// Points or miles spent on a booking, and the program they came from:
+/// one of `PointsProgram.known`, or Other… to type one in.
+struct TripPointsField: View {
+    @Binding var points: Double?
+    @Binding var program: String?
+    @State private var typing = false
+
+    private static let other = "\u{0}other"
+    private var isCustom: Bool { program.map { name in !PointsProgram.known.contains { $0.name == name } } ?? false }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.s) {
+                TextField("Points or miles", value: $points, format: .number.precision(.fractionLength(0)),
+                          prompt: Text("Points or miles"))
+                    .labelsHidden()
+                    #if os(iOS)
+                    .keyboardType(.numberPad)
+                    #endif
+                Picker("Program", selection: Binding(
+                    get: { typing || isCustom ? Self.other : (program ?? "") },
+                    set: { picked in
+                        typing = picked == Self.other
+                        if picked == Self.other {
+                            if !isCustom { program = nil }
+                        } else {
+                            program = picked.isEmpty ? nil : picked
+                        }
+                    })) {
+                    Text("Program").tag("")
+                    ForEach(PointsProgram.known, id: \.name) { Text($0.name).tag($0.name) }
+                    Text("Other…").tag(Self.other)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            if typing || isCustom {
+                TextField("Program name", text: Binding(get: { program ?? "" }, set: { program = $0.isEmpty ? nil : $0 }),
+                          prompt: Text("Program name"))
+            }
+        }
     }
 }
 
@@ -1281,6 +1548,18 @@ struct TripItemEditor: View {
                 }
             }
 
+            if item.kind != .note {
+                Section {
+                    TripCostField(cost: $item.cost, currency: $item.currency,
+                                  prompt: item.kind == .stay ? "Total for the stay" : "Price")
+                    TripPointsField(points: $item.points, program: $item.pointsProgram)
+                } header: {
+                    Text("Cost")
+                } footer: {
+                    if let perNight = item.perNightText { Text(perNight) }
+                }
+            }
+
             Section("Notes") {
                 TextField("Booking number, what to order…", text: $item.notes, axis: .vertical).lineLimit(2...6)
             }
@@ -1314,6 +1593,15 @@ struct TripItemEditor: View {
                                 days: trip.days, stationHints: (leavingLeg ?? trip.destination, arrivingLeg ?? trip.destination))
                     .padding(.horizontal, 16)
                     .padding(.top, -96)
+                VStack(alignment: .leading, spacing: Space.m) {
+                    TripCostField(cost: $item.cost, currency: $item.currency, prompt: "Price for every seat")
+                    TripPointsField(points: $item.points, program: $item.pointsProgram)
+                }
+                    .padding(14)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: Radius.hero, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.hero, style: .continuous).strokeBorder(.white.opacity(0.1)))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
                 TextField("Notes", text: $item.notes, axis: .vertical)
                     .lineLimit(1...6)
                     .padding(14)
@@ -1842,7 +2130,7 @@ struct DayMapView: View {
         return "\(duration) \(route.transportType == .walking ? "walk" : "drive") to next stop"
     }
 
-    private static func routes(between stops: [TripItem]) async -> [Leg] {
+    static func routes(between stops: [TripItem]) async -> [Leg] {
         var legs: [Leg] = []
         for (from, to) in zip(stops, stops.dropFirst()).prefix(12) {
             guard let a = from.place, let b = to.place else { continue }

@@ -359,7 +359,7 @@ struct TripTravelCard: View {
         .padding(.vertical, Space.xs)
     }
 
-    /// "21:00–22:30 · 1h 30m", from what's known.
+    /// "21:00–22:30 · 1h 30m · $420", from what's known.
     private func legDetail(_ item: TripItem) -> String {
         let minutes = TravelLegs.minutes(of: item)
         let time: String? = item.time.map { depart in
@@ -368,7 +368,7 @@ struct TripTravelCard: View {
             // The arrival as it reads where you land (a flight can cross time zones).
             return "\(start)–\(TripTransport.timeText(item.transport?.arriveTime ?? (depart + minutes) % 1440))"
         }
-        return [time ?? "No time yet", minutes.map(TripTransport.durationText)].compactMap { $0 }.joined(separator: " · ")
+        return [time ?? "No time yet", minutes.map(TripTransport.durationText), item.priceText].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// "Mom / Jojo · HKG → FUK, lands 16:10".

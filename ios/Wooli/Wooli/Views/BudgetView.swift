@@ -20,6 +20,30 @@ struct BudgetView: View {
 
         ScrollView {
             VStack(spacing: 16) {
+                // Wide Mac window: the category rows on the left, the summary pinned beside them.
+                WideColumns(sideWidth: 400, sideFirst: true) {
+                    BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, month: month, editing: $editing)
+                    BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, month: month, editing: $editing)
+
+                    if plan.uncategorizedSpending > 0 {
+                        Button { app.showReview = true } label: {
+                            HStack {
+                                Text("❓")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Uncategorized").font(.body.weight(.medium)).foregroundStyle(Theme.text)
+                                    Text("\(plan.uncategorizedSpending.currency(cents: false)) spent — review to budget it")
+                                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
+                            }
+                            .card(padding: 16)
+                        }
+                        .buttonStyle(.plain)
+                }
+
+                SpendingHistoryCard(transactions: transactions, ledger: ledger, month: month, target: plan.plannedExpenses)
+                } side: {
                 LeftToBudgetBanner(amount: plan.plannedIncome - plan.plannedExpenses)
 
                 VStack(alignment: .leading, spacing: 16) {
@@ -46,28 +70,7 @@ struct BudgetView: View {
                     }
                 }
                 .card()
-
-                BudgetSection(title: "Income", groups: plan.incomeGroups, plan: plan, isIncome: true, month: month, editing: $editing)
-                BudgetSection(title: "Expenses", groups: plan.expenseGroups, plan: plan, isIncome: false, month: month, editing: $editing)
-
-                if plan.uncategorizedSpending > 0 {
-                    Button { app.showReview = true } label: {
-                        HStack {
-                            Text("❓")
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Uncategorized").font(.body.weight(.medium)).foregroundStyle(Theme.text)
-                                Text("\(plan.uncategorizedSpending.currency(cents: false)) spent — review to budget it")
-                                    .font(.footnote).foregroundStyle(Theme.textSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").foregroundStyle(Theme.textTertiary)
-                        }
-                        .card(padding: 16)
-                    }
-                    .buttonStyle(.plain)
                 }
-
-                SpendingHistoryCard(transactions: transactions, ledger: ledger, month: month, target: plan.plannedExpenses)
             }
             .padding(16)
         }

@@ -55,6 +55,7 @@ struct AccountsView: View {
                     }
                     .padding(.horizontal, 4)
 
+                    WideColumns(sideWidth: 360) {
                     ForEach(AccountGroup.allCases) { group in
                         let members = accounts.filter { group.kinds.contains($0.kind) }
                         if !members.isEmpty {
@@ -75,6 +76,14 @@ struct AccountsView: View {
                             }
                         }
                         .card()
+                    }
+
+                    } side: {
+                        #if os(macOS)
+                        if !accounts.isEmpty {
+                            AccountsSummaryCard(visible: visible, assets: totalAssets, debts: totalDebts)
+                        }
+                        #endif
                     }
 
                     if let last = app.lastSyncAt, app.mode == .live {
@@ -326,3 +335,55 @@ private struct InstitutionLogoEditor: View {
         .padding(.vertical, 8)
     }
 }
+
+#if os(macOS)
+/// Assets and liabilities by group, beside the account list on a wide window.
+private struct AccountsSummaryCard: View {
+    let visible: [LocalAccount]
+    let assets: Double
+    let debts: Double
+
+    private func total(_ group: AccountGroup) -> Double {
+        visible.filter { group.kinds.contains($0.kind) }.reduce(0) { $0 + abs($1.balance) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardHeader(title: "Summary")
+            section("Assets", total: assets, groups: AccountGroup.allCases.filter(\.isAsset), tints: [Color(hex: "#0891b2"), Theme.income])
+            Divider().overlay(Theme.border)
+            section("Liabilities", total: debts, groups: AccountGroup.allCases.filter { !$0.isAsset }, tints: [Theme.expense, Theme.textTertiary])
+        }
+        .card()
+    }
+
+    private func section(_ title: String, total: Double, groups: [AccountGroup], tints: [Color]) -> some View {
+        let parts = groups.enumerated().map { ($0.offset, $0.element, self.total($0.element)) }.filter { $0.2 > 0 }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title).font(.headline).foregroundStyle(Theme.text)
+                Spacer()
+                Text(total.currency()).font(.headline).monospacedDigit().foregroundStyle(Theme.text)
+            }
+            GeometryReader { proxy in
+                HStack(spacing: 2) {
+                    ForEach(parts, id: \.1) { index, _, value in
+                        Capsule().fill(tints[index % tints.count])
+                            .frame(width: max(4, proxy.size.width * value / max(total, 1)))
+                    }
+                    if parts.isEmpty { Capsule().fill(Theme.border) }
+                }
+            }
+            .frame(height: 8)
+            ForEach(parts, id: \.1) { index, group, value in
+                HStack(spacing: 8) {
+                    Circle().fill(tints[index % tints.count]).frame(width: 8, height: 8)
+                    Text(group.rawValue).font(.subheadline).foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    Text(value.currency()).font(.subheadline).monospacedDigit().foregroundStyle(Theme.text)
+                }
+            }
+        }
+    }
+}
+#endif

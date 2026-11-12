@@ -252,6 +252,17 @@ struct TripItem: Identifiable, Codable, Hashable {
     /// (it can fall between two times, or before or after them all). nil
     /// = sorted by its time. The time shown doesn't change.
     var order: Double?
+    /// What it cost, in `currency` (a booking's total: every night of a
+    /// stay, every seat on a flight). nil = no price entered.
+    var cost: Double?
+    /// ISO code such as "USD" or "JPY"; nil = this device's currency.
+    var currency: String?
+    /// Points or miles spent on it (an award flight, a free night), on top
+    /// of any cash `cost`. nil = none.
+    var points: Double?
+    /// The program they came from ("World of Hyatt", "Asia Miles"): one of
+    /// `PointsProgram.known` or a name typed in.
+    var pointsProgram: String?
     var createdAt: Date = .now
     var systemFields: Data?
 
@@ -311,6 +322,24 @@ struct TripItem: Identifiable, Codable, Hashable {
         guard let day else { return nil }
         let night = (Calendar.current.dateComponents([.day], from: DayKey.date(day), to: DayKey.date(other)).day ?? 0) + 1
         return "Night \(night) of \(nights)"
+    }
+
+    /// The currency `cost` is in.
+    var currencyCode: String { currency ?? TripItem.homeCurrency }
+
+    static var homeCurrency: String { Locale.current.currency?.identifier ?? "USD" }
+
+    /// "$420" or "¥38,000".
+    var costText: String? { cost.map { TripItem.money($0, currencyCode) } }
+
+    /// A stay's price for one night, when it has several.
+    var perNightText: String? {
+        guard kind == .stay, let cost, nights > 1 else { return nil }
+        return TripItem.money(cost / Double(nights), currencyCode) + " a night"
+    }
+
+    static func money(_ amount: Double, _ code: String) -> String {
+        amount.formatted(.currency(code: code).precision(.fractionLength(amount.rounded() == amount ? 0 : 2)))
     }
 
     var timeText: String? {
@@ -447,6 +476,15 @@ extension TripItem {
         // Only once dragged: a field Production's schema doesn't have yet fails
         // the whole save (deploy it from the CloudKit Console first).
         if let order { r["order"] = order }
+        // Likewise only once a price is entered.
+        if let cost {
+            r["cost"] = cost
+            r["currency"] = currency
+        }
+        if let points {
+            r["points"] = points
+            r["pointsProgram"] = pointsProgram
+        }
         return r
     }
 
@@ -467,6 +505,61 @@ extension TripItem {
         }
         checkOutDay = r["checkOutDay"] as? String
         order = r["order"] as? Double
+        cost = r["cost"] as? Double
+        currency = r["currency"] as? String
+        points = r["points"] as? Double
+        pointsProgram = r["pointsProgram"] as? String
         systemFields = r.encodedSystemFields
+    }
+}
+
+/// What a trip's bookings add up to, per currency.
+struct TripCosts {
+    struct Line: Identifiable {
+        let id: String
+        let title: String
+        let symbol: String
+        /// Amounts by currency code.
+        let totals: [String: Double]
+        /// Points by program.
+        let points: [String: Double]
+        let count: Int
+    }
+
+    let lines: [Line]
+    let totals: [String: Double]
+    let points: [String: Double]
+    /// Travel and stays on the trip with no price yet.
+    let unpriced: Int
+
+    init(items: [TripItem]) {
+        let priced = items.filter { $0.cost != nil || $0.points != nil }
+        func sum(_ items: [TripItem]) -> [String: Double] {
+            items.filter { $0.cost != nil }.reduce(into: [:]) { $0[$1.currencyCode, default: 0] += $1.cost ?? 0 }
+        }
+        func sumPoints(_ items: [TripItem]) -> [String: Double] {
+            items.filter { $0.points != nil }.reduce(into: [:]) { $0[$1.programName, default: 0] += $1.points ?? 0 }
+        }
+        let groups: [(String, String, String, (TripItem) -> Bool)] = [
+            ("travel", "Flights & trains", "airplane", { $0.kind == .transit }),
+            ("stays", "Stays", "bed.double.fill", { $0.kind == .stay }),
+            ("food", "Food", "fork.knife", { $0.kind == .meal }),
+            ("other", "Activities & other", "ticket.fill", { $0.kind == .activity || $0.kind == .note }),
+        ]
+        lines = groups.compactMap { id, title, symbol, test in
+            let these = priced.filter(test)
+            return these.isEmpty ? nil : Line(id: id, title: title, symbol: symbol, totals: sum(these),
+                                              points: sumPoints(these), count: these.count)
+        }
+        totals = sum(priced)
+        points = sumPoints(priced)
+        unpriced = items.filter { ($0.kind == .transit || $0.kind == .stay) && $0.cost == nil && $0.points == nil && $0.day != nil }.count
+    }
+
+    /// "$1,240 + ¥86,000": your own currency first.
+    static func text(_ totals: [String: Double]) -> String {
+        let home = TripItem.homeCurrency
+        return totals.sorted { ($0.key == home ? 0 : 1, $0.key) < ($1.key == home ? 0 : 1, $1.key) }
+            .map { TripItem.money($0.value, $0.key) }.joined(separator: " + ")
     }
 }

@@ -38,11 +38,8 @@ struct TodayView: View {
                     if FutureAppsPreview.isOn { FutureAppsPreview.cards }
                     #endif
 
-                    #if os(iOS)
-                    // On the Mac every app is in the sidebar.
                     SectionLabel("Your apps").padding(.top, 8).padding(.horizontal, 4)
                     AppGrid(apps: lineup.recentFirst(lineup.installed))
-                    #endif
                 }
                 .padding(16)
             }

@@ -71,6 +71,21 @@ struct WooliApp: App {
         #endif
 
         #if os(macOS)
+        // A trip in its own window, to keep beside Mail or a booking site.
+        WindowGroup("Trip", id: "trip", for: String.self) { $tripID in
+            if let tripID {
+                NavigationStack {
+                    MacTripWorkspace(tripID: tripID, inOwnWindow: true)
+                }
+                .environment(app)
+                .tint(Theme.brand)
+                .formStyle(.grouped)
+                .frame(minWidth: 960, minHeight: 600)
+            }
+        }
+        .modelContainer(container)
+        .defaultSize(width: 1280, height: 820)
+
         Settings {
             SettingsView()
                 .environment(app)

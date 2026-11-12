@@ -51,7 +51,7 @@ final class WooliMCPTools {
              ["trip": ["type": "string", "description": "Text in the trip's name or destination."]]),
         [
             "name": "wooli_edit_trip",
-            "description": "Change a trip: add plans (activities, meals, travel, hotel stays, notes), edit existing plans by id, or move a city stop's dates. Get ids from wooli_trips first. Places are looked up in Apple Maps. Changes are applied when the Wooli Mac app next opens (quit and reopen it if it's running), then sync to the user's other devices. Only make changes the user asked for.",
+            "description": "Change a trip: add plans (activities, meals, travel, hotel stays, notes), edit existing plans by id (including their cash and points price), or move a city stop's dates. Get ids from wooli_trips first. Places are looked up in Apple Maps. Changes are applied when the Wooli Mac app next opens (quit and reopen it if it's running), then sync to the user's other devices. Only make changes the user asked for.",
             "inputSchema": [
                 "type": "object",
                 "additionalProperties": false,
@@ -69,6 +69,10 @@ final class WooliMCPTools {
                             "place": ["type": "string", "description": "Place name and address to find (Google, then Apple Maps)."],
                             "near": ["type": "string", "description": "City the place is in, e.g. \"Lijiang, Yunnan, China\". Strongly recommended: results farther than 80 km are rejected."],
                             "notes": ["type": "string"],
+                            "cost": ["type": "number", "description": "Cash paid for the whole booking (every night, every seat); 0 clears it."],
+                            "currency": ["type": "string", "description": "ISO code of `cost`, e.g. USD, HKD, CNY."],
+                            "points": ["type": "number", "description": "Points or miles spent on it; 0 clears them."],
+                            "points_program": ["type": "string", "description": "Program of `points`, e.g. World of Hyatt, Asia Miles, AAdvantage, Chase Ultimate Rewards, Amex Membership Rewards."],
                         ],
                     ]],
                     "update_items": ["type": "array", "items": [
@@ -85,6 +89,10 @@ final class WooliMCPTools {
                             "to_near": ["type": "string", "description": "City of the arrival station. Strongly recommended."],
                             "place": ["type": "string", "description": "New place for the plan (e.g. a hotel)."],
                             "near": ["type": "string", "description": "City of `place`."],
+                            "cost": ["type": "number", "description": "Cash paid for the whole booking (every night, every seat); 0 clears it."],
+                            "currency": ["type": "string", "description": "ISO code of `cost`, e.g. USD, HKD, CNY."],
+                            "points": ["type": "number", "description": "Points or miles spent on it; 0 clears them."],
+                            "points_program": ["type": "string", "description": "Program of `points`, e.g. World of Hyatt, Asia Miles, AAdvantage, Chase Ultimate Rewards, Amex Membership Rewards."],
                         ],
                     ]],
                     "update_stops": ["type": "array", "items": [
@@ -330,6 +338,14 @@ final class WooliMCPTools {
             if let place = item.place { r["place"] = place.address.isEmpty ? place.name : "\(place.name), \(place.address)" }
             if !item.notes.isEmpty { r["notes"] = item.notes }
             if let out = item.checkOutDay { r["check_out"] = out }
+            if let cost = item.cost {
+                r["cost"] = cost
+                r["currency"] = item.currencyCode
+            }
+            if let points = item.points {
+                r["points"] = points
+                if let program = item.pointsProgram { r["points_program"] = program }
+            }
             return r
         }
         let days = Dictionary(grouping: items.filter { $0.day != nil }, by: { $0.day! })
@@ -394,6 +410,14 @@ final class WooliMCPTools {
 
     /// Edits go through `TripStore`'s import file (Documents/trip-import.json),
     /// which the app picks up on launch and saves through its normal sync path.
+    /// A plan's cash and points price from an edit; 0 clears either.
+    private func applyPrice(_ args: [String: Any], to item: inout TripItem) {
+        if let cost = (args["cost"] as? NSNumber)?.doubleValue { item.cost = cost == 0 ? nil : cost }
+        if let currency = args["currency"] as? String, !currency.isEmpty { item.currency = currency.uppercased() }
+        if let points = (args["points"] as? NSNumber)?.doubleValue { item.points = points == 0 ? nil : points }
+        if let program = args["points_program"] as? String { item.pointsProgram = program.isEmpty ? nil : program }
+    }
+
     private func editTrip(_ args: [String: Any]) throws -> Any {
         guard let file = readJSON(TripsFile.self, "Trips/trips.json") else {
             throw ToolError(message: "No trips on this Mac yet. Open Wooli once so it can download them from iCloud.")
@@ -425,6 +449,7 @@ final class WooliMCPTools {
                 t.toStation = to.isEmpty ? nil : try findPlace(to, near: edit["to_near"] as? String)
                 item.transport = t
             }
+            applyPrice(edit, to: &item)
             changed.append(item)
             summary.append("Changed \(item.title) (\(item.day ?? "ideas"))")
         }
@@ -444,6 +469,7 @@ final class WooliMCPTools {
             if let time = add["time"] as? String, !time.isEmpty { item.time = try minutes(time) }
             if let notes = add["notes"] as? String { item.notes = notes }
             if let place = add["place"] as? String, !place.isEmpty { item.place = try findPlace(place, near: add["near"] as? String) }
+            applyPrice(add, to: &item)
             changed.append(item)
             summary.append("Added \(item.kind.label.lowercased()) \(item.title) (\(item.day ?? "ideas")\(item.checkOutDay.map { "–\($0)" } ?? ""))")
         }

@@ -69,18 +69,34 @@ struct DashboardView: View {
 
                     SyncStatusLine()
 
+                    let spending = SpendingCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
+                                                recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
+                    let cards = orderedCards.filter { $0 != .review }
+
+                    #if os(macOS)
+                    // Wide window: Budget and Transactions down the left, Spending and Recurring beside them.
+                    WideColumns(sideWidth: 440) {
+                        if !reviewItems.isEmpty { ReviewPreviewCard(items: reviewItems, ledger: ledger) }
+                        ForEach(cards.filter { $0 != .recurring }) { card in
+                            cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
+                                    plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
+                                    reviewItems: reviewItems, relevantTransactions: relevantTransactions)
+                        }
+                    } side: {
+                        spending
+                        if cards.contains(.recurring) { RecurringCard() }
+                    }
+                    #else
                     if !reviewItems.isEmpty {
                         ReviewPreviewCard(items: reviewItems, ledger: ledger)
                     }
-
-                    SpendingCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
-                                 recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
-
-                    ForEach(orderedCards.filter { $0 != .review }) { card in
+                    spending
+                    ForEach(cards) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
                                 plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
                                 reviewItems: reviewItems, relevantTransactions: relevantTransactions)
                     }
+                    #endif
                 }
                 .padding(16)
             }

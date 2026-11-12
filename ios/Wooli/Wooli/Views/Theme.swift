@@ -196,13 +196,15 @@ extension View {
 /// itself stays full width; only its content is centred.
 enum ReadableWidth {
     static let max: CGFloat = 920
+    /// Budget's dashboard-style pages, which lay cards out in two columns.
+    static let dashboard: CGFloat = 1320
 }
 
 extension View {
     /// Centres a scroll view's content at `ReadableWidth.max` on the Mac. Does nothing on iPhone.
-    func readableContentWidth() -> some View {
+    func readableContentWidth(_ maxWidth: CGFloat = ReadableWidth.max) -> some View {
         #if os(macOS)
-        modifier(ReadableContentWidth())
+        modifier(ReadableContentWidth(maxWidth: maxWidth))
         #else
         self
         #endif
@@ -211,13 +213,14 @@ extension View {
 
 #if os(macOS)
 private struct ReadableContentWidth: ViewModifier {
+    let maxWidth: CGFloat
     @State private var margin: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
             .contentMargins(.horizontal, margin, for: .scrollContent)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                margin = Swift.max(0, (width - ReadableWidth.max) / 2)
+                margin = Swift.max(0, (width - maxWidth) / 2)
             }
     }
 }
@@ -453,5 +456,36 @@ struct WooliLogo: View {
         }
         .frame(width: size, height: size * 1.08)
         .accessibilityLabel("Wooli")
+    }
+}
+
+/// A main column with a narrower column beside it on a wide Mac window (like
+/// Monarch's dashboard), stacked main-then-side everywhere else.
+struct WideColumns<Main: View, Side: View>: View {
+    var sideWidth: CGFloat = 380
+    /// Stacked (phone or narrow window), show the side column first.
+    var sideFirst = false
+    @ViewBuilder var main: Main
+    @ViewBuilder var side: Side
+    #if os(macOS)
+    @State private var isWide = false
+    #endif
+
+    var body: some View {
+        #if os(macOS)
+        Group {
+            if isWide {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(spacing: 16) { main }.frame(maxWidth: .infinity)
+                    VStack(spacing: 16) { side }.frame(width: sideWidth)
+                }
+            } else {
+                VStack(spacing: 16) { if sideFirst { side; main } else { main; side } }
+            }
+        }
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 860 } action: { isWide = $0 }
+        #else
+        VStack(spacing: 16) { if sideFirst { side; main } else { main; side } }
+        #endif
     }
 }
