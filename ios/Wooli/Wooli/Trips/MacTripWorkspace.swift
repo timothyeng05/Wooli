@@ -2,26 +2,44 @@
 import MapKit
 import SwiftUI
 
-/// How the Mac trip page lays out the days.
-/// How much of the trip page the map takes.
-enum MapPaneSize: String {
-    case hidden, half, full
-}
-
+/// What the Mac trip page shows: the days with the map beside them, the
+/// days as calendar columns, or the map across the whole window.
 enum TripWorkspaceMode: String, CaseIterable, Identifiable {
-    case itinerary, calendar
+    case itinerary, calendar, map
     var id: String { rawValue }
     var label: String {
         switch self {
         case .itinerary: "Itinerary"
         case .calendar: "Calendar"
+        case .map: "Map"
         }
     }
     var symbol: String {
         switch self {
         case .itinerary: "suitcase.rolling"
         case .calendar: "calendar"
+        case .map: "map"
         }
+    }
+}
+
+/// What the menu bar can do to the open trip. The workspace publishes it as a
+/// focused value, so the Plan menu is only enabled while a trip is in front.
+struct TripActions {
+    var newPlan: () -> Void
+    var moveUp: () -> Void
+    var moveDown: () -> Void
+    var duplicate: () -> Void
+    var markBooked: () -> Void
+    var hasSelection: Bool
+}
+
+private struct TripActionsKey: FocusedValueKey { typealias Value = TripActions }
+
+extension FocusedValues {
+    var tripActions: TripActions? {
+        get { self[TripActionsKey.self] }
+        set { self[TripActionsKey.self] = newValue }
     }
 }
 
@@ -38,9 +56,10 @@ struct MacTripWorkspace: View {
     @State private var selection = Set<String>()
     @AppStorage("trip.mac.view") private var mode: TripWorkspaceMode = .itinerary
     @State private var search = ""
-    @AppStorage("trip.mac.mapSize") private var mapSize: MapPaneSize = .half
-    /// How far the map's handle is being dragged, before it snaps.
-    @State private var mapDrag: CGFloat = 0
+    /// The map beside the itinerary (⇧⌘M).
+    @AppStorage("trip.mac.showMap") private var showMap = true
+    /// The selected plan, or the trip summary, in the right pane (⌥⌘I).
+    @AppStorage("trip.mac.showInspector") private var showInspector = false
     /// The city picked on the left, for the map when no plan is selected.
     @State private var focusLeg: String?
     /// Day (or plan) the outline should scroll to.
@@ -73,37 +92,32 @@ struct MacTripWorkspace: View {
     // MARK: Layout
 
     private func workspace(_ trip: Trip) -> some View {
-        HSplitView {
-            sideColumn(trip)
-                .frame(minWidth: 190, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
-            if mapSize == .full {
-                fullMap(trip)
-                    .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-            VStack(spacing: 0) {
-                QuickAddBar(trip: trip, day: quickTarget ?? currentDay(trip), focus: $quickAddFocused,
-                            onFlight: { editingTicket = $0 },
-                            onAdded: { id, openInspector in
-                                selection = [id]
-                                scrollTarget = id
-                                if openInspector { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocused = true } }
-                            })
-                Group {
-                    switch mode {
-                    case .itinerary:
-                        // The iPhone's itinerary: city banners, day cards, tickets.
-                        TripDetailView(tripID: trip.id, selection: $selection, filter: matches,
-                                       onAdd: { focusQuickAdd(day: .some($0)) }, scrollTarget: $scrollTarget)
-                    case .calendar: calendar(trip)
+        GeometryReader { geo in
+            // Narrow windows give the map's place to the inspector while it's open.
+            let narrow = geo.size.width < 1180
+            let mapShown = mode == .itinerary && showMap && !(narrow && showInspector)
+            let all = store.items(in: trip.id)
+            let selected = all.filter { selection.contains($0.id) }
+            HSplitView {
+                sideColumn(trip)
+                    .frame(minWidth: 190, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
+                if mode == .map {
+                    fullMap(trip)
+                        .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    planColumn(trip)
+                        .frame(minWidth: 400, idealWidth: 520, maxWidth: mapShown ? 560 : .infinity, maxHeight: .infinity)
+                    if mapShown {
+                        MacTripMap(stops: mapStops(trip, selected: selected, all: all), numbered: mapIsOneDay(selected),
+                                   selection: $selection)
+                            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
-            .onChange(of: selection) { _, _ in quickTarget = nil }
-            inspector(trip)
-                .frame(minWidth: 300, idealWidth: 380, maxWidth: 560, maxHeight: .infinity)
-                .background(Theme.card)
+                if showInspector {
+                    details(trip, selected: selected, all: all)
+                        .frame(minWidth: 300, idealWidth: 340, maxWidth: 420, maxHeight: .infinity)
+                        .background(Theme.card)
+                }
             }
         }
         // The window centres other pages at a readable width; this one uses it all.
@@ -112,7 +126,13 @@ struct MacTripWorkspace: View {
         .navigationSubtitle(trip.dateRangeText)
         .toolbar { toolbar(trip) }
         .searchable(text: $search, placement: .toolbar, prompt: "Search plans")
-        .background { shortcuts(trip) }
+        .focusedSceneValue(\.tripActions, TripActions(
+            newPlan: { focusQuickAdd(day: nil) },
+            moveUp: { nudge(-1, trip: trip) },
+            moveDown: { nudge(1, trip: trip) },
+            duplicate: { duplicate(selection, trip: trip) },
+            markBooked: { markBooked(trip) },
+            hasSelection: !selection.isEmpty))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
         .sheet(item: $editingTrip) { TripEditor(trip: $0) }
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
@@ -162,7 +182,16 @@ struct MacTripWorkspace: View {
                 ForEach(TripWorkspaceMode.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
             }
             .pickerStyle(.segmented)
-            .help("Show the trip as an itinerary or as calendar columns")
+            .help("Itinerary (⌘1), Calendar (⌘2) or Map (⌘3)")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Toggle("Map", systemImage: "map", isOn: $showMap)
+                .help("Show or hide the map beside the itinerary (⇧⌘M)")
+                .disabled(mode != .itinerary)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Toggle("Inspector", systemImage: "sidebar.right", isOn: $showInspector)
+                .help("Show or hide the selected plan, or the trip summary (⌥⌘I)")
         }
         ToolbarItem(placement: .primaryAction) {
             Toggle("Open Slots", systemImage: "square.dashed", isOn: $showOpenSlots)
@@ -192,19 +221,6 @@ struct MacTripWorkspace: View {
                        role: .destructive) { confirmDeleteTrip = true }
             }
         }
-    }
-
-    /// Keyboard shortcuts with no button of their own on screen.
-    private func shortcuts(_ trip: Trip) -> some View {
-        ZStack {
-            Button("New Plan") { focusQuickAdd(day: nil) }.keyboardShortcut("n")
-            Button("Toggle Open Slots") { showOpenSlots.toggle() }.keyboardShortcut("o", modifiers: [.command, .shift])
-            Button("Move Up") { nudge(-1, trip: trip) }.keyboardShortcut(.upArrow, modifiers: .command)
-            Button("Move Down") { nudge(1, trip: trip) }.keyboardShortcut(.downArrow, modifiers: .command)
-        }
-        .opacity(0)
-        .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
     }
 
     // MARK: Left: cities and ideas
@@ -345,28 +361,36 @@ struct MacTripWorkspace: View {
         }
     }
 
-    // MARK: Right: map and the selected plan
+    // MARK: Middle: quick add and the days
 
-    @ViewBuilder
-    private func inspector(_ trip: Trip) -> some View {
-        let all = store.items(in: trip.id)
-        let selected = all.filter { selection.contains($0.id) }
-        GeometryReader { geo in
-            let full = geo.size.height
-            let base: CGFloat = mapSize == .half ? full * 0.5 : 0
-            let height = min(max(base + mapDrag, 0), full - 28)
-            VStack(spacing: 0) {
-                if height > 1 {
-                    MacTripMap(stops: mapStops(trip, selected: selected, all: all), numbered: mapIsOneDay(selected),
-                               selection: $selection)
-                        .frame(height: height)
+    private func planColumn(_ trip: Trip) -> some View {
+        VStack(spacing: 0) {
+            QuickAddBar(trip: trip, day: quickTarget ?? currentDay(trip), focus: $quickAddFocused,
+                        onFlight: { editingTicket = $0 },
+                        onAdded: { id, openInspector in
+                            selection = [id]
+                            scrollTarget = id
+                            if openInspector {
+                                showInspector = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocused = true }
+                            }
+                        })
+            Group {
+                switch mode {
+                case .calendar:
+                    calendar(trip)
+                default:
+                    // The iPhone's itinerary: city banners, day cards, tickets.
+                    TripDetailView(tripID: trip.id, selection: $selection, filter: matches,
+                                   onAdd: { focusQuickAdd(day: .some($0)) }, scrollTarget: $scrollTarget)
                 }
-                mapHandle(paneHeight: full, start: base)
-                details(trip, selected: selected, all: all)
-                    .frame(maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onChange(of: selection) { _, _ in quickTarget = nil }
     }
+
+    // MARK: Right: the selected plan
 
     @ViewBuilder
     private func details(_ trip: Trip, selected: [TripItem], all: [TripItem]) -> some View {
@@ -382,97 +406,16 @@ struct MacTripWorkspace: View {
             }
     }
 
-    // MARK: Map sizes
-
-    /// The bar under the map: drag it down for a bigger map (past three
-    /// quarters it fills the window), up to hide it; or use its arrows.
-    /// Double-click toggles between half and hidden.
-    private func mapHandle(paneHeight: CGFloat, start: CGFloat) -> some View {
-        HStack(spacing: Space.s) {
-            Image(systemName: "map.fill").font(.caption).foregroundStyle(Theme.brand)
-            Text(mapSize == .hidden ? "Map hidden" : "Map").font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary)
-            Spacer()
-            Capsule().fill(Theme.textTertiary.opacity(0.6)).frame(width: 36, height: 5)
-            Spacer()
-            Button("Smaller Map", systemImage: "chevron.up") { resizeMap(-1) }
-                .disabled(mapSize == .hidden)
-                .help(mapSize == .half ? "Hide the map" : "Smaller map")
-            Button("Bigger Map", systemImage: "chevron.down") { resizeMap(1) }
-                .help(mapSize == .hidden ? "Show the map" : "Map fills the window")
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .padding(.horizontal, Space.m)
-        .frame(height: 28)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
-        .overlay(alignment: .bottom) { Divider() }
-        .contentShape(Rectangle())
-        .onHover { inside in
-            if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                .onChanged { mapDrag = $0.translation.height }
-                .onEnded { value in
-                    let end = start + value.translation.height
-                    let next: MapPaneSize = end > paneHeight * 0.75 ? .full : end > paneHeight * 0.2 ? .half : .hidden
-                    withAnimation(.snappy) {
-                        mapSize = next
-                        mapDrag = 0
-                    }
-                }
-        )
-        .onTapGesture(count: 2) {
-            withAnimation(.snappy) { mapSize = mapSize == .hidden ? .half : .hidden }
-        }
-    }
-
-    private func resizeMap(_ step: Int) {
-        let order: [MapPaneSize] = [.hidden, .half, .full]
-        let i = (order.firstIndex(of: mapSize) ?? 1) + step
-        withAnimation(.snappy) { mapSize = order[min(max(i, 0), order.count - 1)] }
-    }
-
-    /// The map across the window, with the selected plan in a card and a
-    /// handle at the bottom to bring the itinerary back.
+    /// The map across the window, with the selected plan in a card.
     private func fullMap(_ trip: Trip) -> some View {
         let all = store.items(in: trip.id)
         let selected = all.filter { selection.contains($0.id) }
-        return VStack(spacing: 0) {
-            MacTripMap(stops: mapStops(trip, selected: selected, all: all), numbered: mapIsOneDay(selected),
-                       selection: $selection)
-                .overlay(alignment: .bottomLeading) {
-                    mapCard(trip, selected: selected)
-                        .padding(Space.l)
-                }
-            HStack(spacing: Space.s) {
-                Image(systemName: "map.fill").font(.caption).foregroundStyle(Theme.brand)
-                Text("Map").font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Capsule().fill(Theme.textTertiary.opacity(0.6)).frame(width: 36, height: 5)
-                Spacer()
-                Button("Back to Itinerary", systemImage: "chevron.up") { resizeMap(-1) }
-                    .labelStyle(.titleAndIcon)
-                    .buttonStyle(.borderless)
-                    .font(.caption.weight(.semibold))
+        return MacTripMap(stops: mapStops(trip, selected: selected, all: all), numbered: mapIsOneDay(selected),
+                          selection: $selection)
+            .overlay(alignment: .bottomLeading) {
+                mapCard(trip, selected: selected)
+                    .padding(Space.l)
             }
-            .padding(.horizontal, Space.m)
-            .frame(height: 28)
-            .background(.bar)
-            .overlay(alignment: .top) { Divider() }
-            .contentShape(Rectangle())
-            .onHover { inside in
-                if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 2)
-                    .onEnded { value in
-                        if value.translation.height < -40 { resizeMap(-1) }
-                    }
-            )
-            .onTapGesture(count: 2) { resizeMap(-1) }
-        }
     }
 
     /// The selected plan (or the city or trip) floating over the full map.
@@ -494,7 +437,7 @@ struct MacTripWorkspace: View {
                         .font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
                 }
                 if let score = score(item) { MealScoreBadge(score: score, size: 32) }
-                Button("Details") { withAnimation(.snappy) { mapSize = .half } }
+                Button("Details") { withAnimation(.snappy) { showInspector = true } }
                     .buttonStyle(.borderedProminent)
             }
             .padding(Space.m)
@@ -625,7 +568,8 @@ struct MacTripWorkspace: View {
     /// Return: type a new title for the selected plan.
     private func renameSelected() -> KeyPress.Result {
         guard selection.count == 1 else { return .ignored }
-        titleFocused = true
+        showInspector = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { titleFocused = true }
         return .handled
     }
 
@@ -636,7 +580,8 @@ struct MacTripWorkspace: View {
         if item.kind == .transit {
             editingTicket = item
         } else {
-            titleFocused = true
+            showInspector = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { titleFocused = true }
         }
     }
 
@@ -720,6 +665,14 @@ struct MacTripWorkspace: View {
         Task {
             try? await Task.sleep(for: .seconds(6))
             if deletedNote == note { withAnimation(.snappy) { deletedNote = nil } }
+        }
+    }
+
+    /// ⌘B: the selected plans are booked.
+    private func markBooked(_ trip: Trip) {
+        for var item in store.items(in: trip.id) where selection.contains(item.id) {
+            item.setStatus(.booked)
+            store.save(item)
         }
     }
 

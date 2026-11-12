@@ -32,6 +32,9 @@ struct TripsListView: View {
             Button("New trip", systemImage: "plus") { newTrip = Trip() }
         }
         #if os(macOS)
+        .task(id: store.newTripRequested) {
+            if store.newTripRequested { store.newTripRequested = false; newTrip = Trip() }
+        }
         .sheet(item: $newTrip) { _ in NewTripSheet { openTrip = TripRoute(id: $0) } }
         .navigationDestination(item: $openTrip) { MacTripWorkspace(tripID: $0.id) }
         #else

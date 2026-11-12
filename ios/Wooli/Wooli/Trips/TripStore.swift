@@ -22,6 +22,8 @@ final class TripStore: CKSyncEngineDelegate {
     var lastError: String?
     /// A trip to open right away (e.g. after accepting an invite).
     var tripToOpen: String?
+    /// File → New Trip… on the Mac asks the trips list to open its sheet.
+    var newTripRequested = false
 
     /// The window's undo stack (set by the Mac trip page); nil on the iPhone.
     @ObservationIgnored weak var undoManager: UndoManager?

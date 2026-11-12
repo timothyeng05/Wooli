@@ -258,21 +258,75 @@ struct MacAppSwitcher: View {
 struct WooliCommands: Commands {
     let app: AppModel
     let container: ModelContainer
+    @FocusedValue(\.tripActions) private var trip
+    @AppStorage("trip.mac.view") private var tripView: TripWorkspaceMode = .itinerary
+    @AppStorage("trip.mac.showMap") private var showMap = true
+    @AppStorage("trip.mac.showInspector") private var showInspector = false
+    @AppStorage("trip.showOpenSlots") private var showOpenSlots = true
 
     var body: some Commands {
         SidebarCommands()
-        CommandGroup(after: .newItem) {
+        CommandGroup(replacing: .newItem) {
+            Button("New Trip…") {
+                app.space = .trips
+                TripStore.shared.newTripRequested = true
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("New Plan") { trip?.newPlan() }
+                .keyboardShortcut("n")
+                .disabled(trip == nil)
+            Divider()
             Button("Sync Bank") { Task { await app.sync(context: container.mainContext) } }
                 .keyboardShortcut("r")
                 .disabled(app.mode != .live || app.isSyncing)
         }
+        CommandGroup(after: .pasteboard) {
+            Button("Duplicate") { trip?.duplicate() }
+                .keyboardShortcut("d")
+                .disabled(trip?.hasSelection != true)
+        }
+        CommandMenu("Plan") {
+            Button("Move Up") { trip?.moveUp() }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+                .disabled(trip?.hasSelection != true)
+            Button("Move Down") { trip?.moveDown() }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+                .disabled(trip?.hasSelection != true)
+            Divider()
+            Button("Mark as Booked") { trip?.markBooked() }
+                .keyboardShortcut("b")
+                .disabled(trip?.hasSelection != true)
+        }
+        CommandGroup(before: .sidebar) {
+            if app.space == .trips {
+                ForEach(Array(TripWorkspaceMode.allCases.enumerated()), id: \.element) { i, mode in
+                    Button(mode.label) { tripView = mode }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
+                        .disabled(trip == nil)
+                }
+                Divider()
+                Button(showMap ? "Hide Map" : "Show Map") { showMap.toggle() }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
+                    .disabled(trip == nil)
+                Button(showInspector ? "Hide Inspector" : "Show Inspector") { showInspector.toggle() }
+                    .keyboardShortcut("i", modifiers: [.command, .option])
+                    .disabled(trip == nil)
+                Button(showOpenSlots ? "Hide Open Slots" : "Show Open Slots") { showOpenSlots.toggle() }
+                    .keyboardShortcut("o", modifiers: [.command, .shift])
+                    .disabled(trip == nil)
+                Divider()
+            }
+        }
         CommandMenu("Go") {
             Button("Today") { app.space = .today }.keyboardShortcut("0")
-            Button("Dashboard") { app.space = .budget; app.selectedTab = .dashboard }.keyboardShortcut("1")
-            Button("Accounts") { app.space = .budget; app.selectedTab = .accounts }.keyboardShortcut("2")
-            Button("Transactions") { app.space = .budget; app.selectedTab = .transactions }.keyboardShortcut("3")
-            Button("Reports") { app.space = .budget; app.selectedTab = .reports }.keyboardShortcut("4")
-            Button("Plan") { app.space = .budget; app.selectedTab = .budget }.keyboardShortcut("5")
+            if app.space != .trips {
+                Button("Dashboard") { app.space = .budget; app.selectedTab = .dashboard }.keyboardShortcut("1")
+                Button("Accounts") { app.space = .budget; app.selectedTab = .accounts }.keyboardShortcut("2")
+                Button("Transactions") { app.space = .budget; app.selectedTab = .transactions }.keyboardShortcut("3")
+                Button("Reports") { app.space = .budget; app.selectedTab = .reports }.keyboardShortcut("4")
+                Button("Plan") { app.space = .budget; app.selectedTab = .budget }.keyboardShortcut("5")
+            }
+            Button("Trips") { app.space = .trips }.keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
             Button("Review Transactions") { app.showReview = true }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
