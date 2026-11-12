@@ -242,3 +242,51 @@ struct TripSetupTests {
         #expect(trip.days.count == 4)
     }
 }
+
+// Quick add: what typed text means (QuickAddParser).
+
+struct QuickAddParserTests {
+    @Test func plainTextIsJustTheQuery() {
+        let r = QuickAddParser.parse("  El Rinconcillo ")
+        #expect(r == QuickAddRequest(query: "El Rinconcillo"))
+    }
+
+    @Test func prefixesPickTheKind() {
+        #expect(QuickAddParser.parse("hotel Alfonso XIII").kind == .stay)
+        #expect(QuickAddParser.parse("hotel Alfonso XIII").query == "Alfonso XIII")
+        #expect(QuickAddParser.parse("train Madrid Atocha").kind == .transit)
+        #expect(QuickAddParser.parse("coffee").kind == .meal)
+        #expect(QuickAddParser.parse("hotelier").kind == nil)   // not a prefix word
+    }
+
+    @Test func mealWordsSetTheSlotTime() {
+        let r = QuickAddParser.parse("dinner Casa Lola")
+        #expect(r.kind == .meal && r.mealTitle == "Dinner" && r.time == 19 * 60 && r.query == "Casa Lola")
+    }
+
+    @Test func aTrailingTimeIsTakenOut() {
+        #expect(QuickAddParser.parse("Flamenco show 7pm").time == 19 * 60)
+        #expect(QuickAddParser.parse("Flamenco show 7:30 pm").time == 19 * 60 + 30)
+        #expect(QuickAddParser.parse("Flamenco show 19:30").time == 19 * 60 + 30)
+        #expect(QuickAddParser.parse("Tapas 12am").time == 0)
+        #expect(QuickAddParser.parse("Flamenco show 7pm").query == "Flamenco show")
+        #expect(QuickAddParser.parse("Plaza 25").time == nil)   // a number, not a time
+    }
+
+    @Test func flightNumbers() {
+        #expect(QuickAddParser.parse("cx831").flightNumber == "CX831")
+        #expect(QuickAddParser.parse("IB 6250").flightNumber == "IB6250")
+        #expect(QuickAddParser.parse("fly BA 117 9am").flightNumber == "BA117")
+        #expect(QuickAddParser.parse("fly BA 117 9am").time == 9 * 60)
+        #expect(QuickAddParser.parse("Madrid").flightNumber == nil)
+        #expect(QuickAddParser.parse("Cx831").kind == .transit)
+    }
+
+    @Test func mapCategoriesSuggestAKind() {
+        #expect(QuickAddParser.kind(forCategory: .restaurant) == .meal)
+        #expect(QuickAddParser.kind(forCategory: .hotel) == .stay)
+        #expect(QuickAddParser.kind(forCategory: .airport) == .transit)
+        #expect(QuickAddParser.kind(forCategory: .museum) == .activity)
+        #expect(QuickAddParser.kind(forCategory: nil) == .activity)
+    }
+}

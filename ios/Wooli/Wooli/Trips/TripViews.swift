@@ -1946,6 +1946,14 @@ final class PlaceSearcher {
         }
     }
 
+    /// Searches stay inside `region` (a leg's area).
+    func setRegion(_ region: MKCoordinateRegion) {
+        self.region = region
+        nearDestinationOnly = true
+        applyRegion()
+        if !text.isEmpty { completer.queryFragment = text }
+    }
+
     func search(_ text: String) {
         self.text = text.trimmingCharacters(in: .whitespaces)
         task?.cancel()

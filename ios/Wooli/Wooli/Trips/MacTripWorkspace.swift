@@ -53,6 +53,9 @@ struct MacTripWorkspace: View {
     @AppStorage("trip.showOpenSlots") private var showOpenSlots = true
     @State private var preparingShare = false
     @FocusState private var titleFocused: Bool
+    @FocusState private var quickAddFocused: Bool
+    /// Set by a day's + or Add Idea: where quick add puts the next plan. nil = follow the selection.
+    @State private var quickTarget: String??
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
@@ -75,16 +78,27 @@ struct MacTripWorkspace: View {
                 fullMap(trip)
                     .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
             } else {
-            Group {
-                switch mode {
-                case .itinerary:
-                    // The iPhone's itinerary: city banners, day cards, tickets.
-                    TripDetailView(tripID: trip.id, selection: $selection, filter: matches,
-                                   onAdd: { addPlan(trip, day: .some($0)) }, scrollTarget: $scrollTarget)
-                case .calendar: calendar(trip)
+            VStack(spacing: 0) {
+                QuickAddBar(trip: trip, day: quickTarget ?? currentDay(trip), focus: $quickAddFocused,
+                            onFlight: { editingTicket = $0 },
+                            onAdded: { id, openInspector in
+                                selection = [id]
+                                scrollTarget = id
+                                if openInspector { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocused = true } }
+                            })
+                Group {
+                    switch mode {
+                    case .itinerary:
+                        // The iPhone's itinerary: city banners, day cards, tickets.
+                        TripDetailView(tripID: trip.id, selection: $selection, filter: matches,
+                                       onAdd: { focusQuickAdd(day: .some($0)) }, scrollTarget: $scrollTarget)
+                    case .calendar: calendar(trip)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
+            .onChange(of: selection) { _, _ in quickTarget = nil }
             inspector(trip)
                 .frame(minWidth: 300, idealWidth: 380, maxWidth: 560, maxHeight: .infinity)
                 .background(Theme.card)
@@ -153,8 +167,8 @@ struct MacTripWorkspace: View {
                 .help("Show or hide the empty meals and nights (⇧⌘O)")
         }
         ToolbarItem(placement: .primaryAction) {
-            Button("Add Plan", systemImage: "plus") { addPlan(trip) }
-                .help("Add a plan to the selected day (⌘N)")
+            Button("Add Plan", systemImage: "plus") { focusQuickAdd(day: nil) }
+                .help("Type a place to add it to the selected day (⌘N)")
         }
         ToolbarItem(placement: .primaryAction) {
             Button(trip.isMine && !trip.isShared ? "Invite" : "People", systemImage: "person.crop.circle.badge.plus") {
@@ -181,7 +195,7 @@ struct MacTripWorkspace: View {
     /// Keyboard shortcuts with no button of their own on screen.
     private func shortcuts(_ trip: Trip) -> some View {
         ZStack {
-            Button("New Plan") { addPlan(trip) }.keyboardShortcut("n")
+            Button("New Plan") { focusQuickAdd(day: nil) }.keyboardShortcut("n")
             Button("Toggle Open Slots") { showOpenSlots.toggle() }.keyboardShortcut("o", modifiers: [.command, .shift])
             Button("Move Up") { nudge(-1, trip: trip) }.keyboardShortcut(.upArrow, modifiers: .command)
             Button("Move Down") { nudge(1, trip: trip) }.keyboardShortcut(.downArrow, modifiers: .command)
@@ -241,7 +255,7 @@ struct MacTripWorkspace: View {
                 HStack {
                     Text("Ideas")
                     Spacer()
-                    Button("Add Idea", systemImage: "plus") { addPlan(trip, day: .some(nil)) }
+                    Button("Add Idea", systemImage: "plus") { focusQuickAdd(day: .some(.none)) }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
                 }
                 .dropDestination(for: String.self) { texts, _ in
@@ -311,7 +325,7 @@ struct MacTripWorkspace: View {
                                      slots: search.isEmpty ? openSlots[day] ?? [] : [],
                                      selection: $selection, score: score,
                                      onOpenSlot: { selection = [store.materialize($0, tripID: trip.id).id] },
-                                     onAdd: { addPlan(trip, day: day) },
+                                     onAdd: { focusQuickAdd(day: .some(day)) },
                                      onOpen: { openPrimary([$0], trip: trip) },
                                      onDrop: { ids, before in place(ids, on: day, before: before, trip: trip) },
                                      menu: { planMenu($0, trip: trip) })
@@ -672,6 +686,12 @@ struct MacTripWorkspace: View {
     }
 
     // MARK: Changes
+
+    /// Puts the cursor in quick add. `day` nil = wherever the selection is; `.some(nil)` = Ideas.
+    private func focusQuickAdd(day: String??) {
+        if let day { quickTarget = day }
+        quickAddFocused = true
+    }
 
     private func addPlan(_ trip: Trip, day: String?? = .none) {
         let target: String? = day ?? currentDay(trip)
