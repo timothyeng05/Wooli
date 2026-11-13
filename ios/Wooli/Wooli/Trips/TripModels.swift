@@ -250,10 +250,6 @@ struct TripItem: Identifiable, Codable, Hashable {
             case .note: "#64748b"
             }
         }
-
-        /// Only travel (departure) and stays (check-in) show a clock time;
-        /// the rest are ordered by dragging.
-        var usesTime: Bool { self == .transit || self == .stay }
     }
 
     var id: String = UUID().uuidString
@@ -374,7 +370,7 @@ struct TripItem: Identifiable, Codable, Hashable {
     }
 
     var timeText: String? {
-        guard kind.usesTime, let time else { return nil }
+        guard let time else { return nil }
         let date = Calendar.current.date(bySettingHour: time / 60, minute: time % 60, second: 0, of: .now) ?? .now
         return date.formatted(date: .omitted, time: .shortened)
     }

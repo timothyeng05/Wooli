@@ -1527,8 +1527,8 @@ struct MacPlanInspector: View {
                         }
                     }
                 }
-                if item.wrappedValue.day != nil && item.wrappedValue.kind.usesTime {
-                    Toggle(item.wrappedValue.kind == .stay ? "Check-in time" : "Departure time", isOn: Binding(
+                if item.wrappedValue.day != nil {
+                    Toggle(item.wrappedValue.kind == .stay ? "Check-in time" : item.wrappedValue.kind == .transit ? "Departure time" : "Time", isOn: Binding(
                         get: { item.wrappedValue.time != nil },
                         set: { item.wrappedValue.time = $0 ? (item.wrappedValue.time ?? 12 * 60) : nil }
                     ))
