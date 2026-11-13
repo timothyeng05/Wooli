@@ -224,8 +224,8 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-1 | Trips sidebar (trips → pages), no push navigation | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-7 | Menus and shortcuts (P0), ⌘K palette (P1) | P0/P1 | 🟡 menus done 2026-11-12 (Claude): Plan (move day/Ideas, Set Type, Open in Maps, Edit Ticket), Edit (Copy/Paste plans), Go (next/previous city); Find is the toolbar search (⌘F); still to do: Space preview, ⌘K palette, removing the old hidden shortcut buttons; not tried by hand |
 | M1-8 | All trips gallery on design-system components | P1 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
-| M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip + empty state + banner done 2026-11-12 (Claude); coach marks, Keyboard Shortcuts sheet, signed-out run-through still to do |
-| M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in done 2026-11-12 (Claude); dark mode, VoiceOver, performance, window-size and listing work still to do |
+| M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip + empty state + banner done 2026-11-12; Help menu (Wooli Help, Keyboard Shortcuts window) done 2026-11-12 (Claude); coach marks and the signed-out run-through still to do |
+| M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in done; VoiceOver plan rows + 900 × 600 minimum window done 2026-11-12 (Claude); dark mode / contrast pass, performance profile, state restoration, full screen / Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | todo |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
@@ -263,6 +263,7 @@ The design for the whole app lives in `DesignSystem/`. Build plan, exact values 
 
 As of 2026-11-11 work happens on the Mac app first. Code is shared, so these changes are already in the iPhone build, but nobody has checked them on an iPhone yet. In a harmonization session, build for iOS (Simulator and a real iPhone), check each one, then move it from here to Done. Add an entry whenever a Mac change touches shared code or behaves differently on the iPhone.
 
+- [ ] **VoiceOver plan rows** (2026-11-12). `TripItemRow` now ignores its children and speaks one label. Check on an iPhone with VoiceOver that rows still read well and that the row's buttons and drag still work.
 - [ ] **Booking status** (2026-11-12, M2-1). Shared: `TripItemRow` badge, dashed ring and strikethrough, and the Status picker in `TripItemEditor`. Check on an iPhone that the badge fits beside long times and prices, and that cancelled stays still read as a stay.
 - [ ] **Mac two-column Budget pages** (2026-11-12, Monarch-style). New `WideColumns` (Theme.swift) puts a side column beside the main one at ≥860 pt and stacks otherwise; `readableContentWidth(_:)` takes a width (Budget pages use 1320). Dashboard (Spending + Recurring beside Budget + Transactions, `#if os(macOS)`), Accounts (Summary card, Mac only), Reports (breakdown beside cash flow) and Plan (summary beside categories, `sideFirst` so the iPhone keeps summary on top). Checked on the Mac. Not checked: iPhone Dashboard, Reports and Plan card order (meant to be unchanged). Not done yet: Transactions summary panel, Cash Flow KPI tiles.
 - [ ] **Trip costs** (2026-11-12). Shared code: the price field in `TripItemEditor` (plain form and the dark flight/train ticket) and prices on `TripItemRow` and the blue ticket's detail line. Check the iPhone editor's Cost section (decimal keypad, currency picker) and the dark ticket's price row; the iPhone has no trip totals yet (the Costs card is Mac-only), so decide where they go on the iPhone. Deploy `cost` / `currency` to CloudKit Production first.
@@ -309,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-12 · Claude** — **M1-9 / M1-10 pieces.** Help menu: Wooli Help (opens `https://wooliapp.com/support`, the domain the Send Feedback address uses; check it's the live site), Keyboard Shortcuts (⌘/, a small window listing the menus), Send Feedback. VoiceOver: each `TripItemRow` is one element reading type, title, place, time, status and price. Main window minimum 900 × 600. Mac and iOS builds succeed; nothing checked by eye or with VoiceOver on. Left in M1: coach marks, signed-out run-through, dark mode and Increase Contrast pass, performance profile, state restoration, Edit Trip and the iPhone new-trip flow (M1-4), CloudKit schema deploy (M0, yours to do in the console).
 
 - **2026-11-12 · Claude** — **M1-7 menus, second half.** Plan menu: Move to Previous/Next Day (⌥⌘↑/↓), Move to Ideas (⇧⌘U), Set Type, Open in Maps (⌘⏎), Edit Ticket…; Go menu: Next/Previous City (⌘]/⌘[, scrolls to that city's first day). Edit menu: ⌘C copies selected plans as Wooli plans plus readable text (one line each: name, place, address); ⌘V pastes copies onto the selected day, or turns plain text into one plan per line through quick add's parser. In a text field Cut/Copy/Paste still act on the text. Mac build succeeds. Not tried by hand: the new Edit menu replaces the system pasteboard group, so check ⌘C/⌘V in the title field and the search box. Not done: Space preview, ⌘K palette.
 

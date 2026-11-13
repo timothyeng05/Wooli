@@ -1176,7 +1176,20 @@ struct TripItemRow: View {
         return item.staysOver(day) ? .night : nil
     }
 
+    /// One VoiceOver element per plan: type, title, place, time, status.
+    private var spokenLabel: String {
+        [item.kind.label, name, item.place.map { $0.name == name ? "" : $0.name } ?? "", item.timeText ?? "",
+         item.showsStatus ? (item.bookingStatus ?? .booked).label : "", item.priceText ?? ""]
+            .filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
     var body: some View {
+        content
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenLabel)
+    }
+
+    @ViewBuilder private var content: some View {
         switch stayRole {
         case .night, .checkOut: continuation
         case .checkIn: full.padding(10).background(Color(hex: item.kind.colorHex).opacity(0.1), in: RoundedRectangle(cornerRadius: Radius.small))

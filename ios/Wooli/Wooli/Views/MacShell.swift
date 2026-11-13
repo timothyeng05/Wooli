@@ -415,6 +415,7 @@ struct WooliCommands: Commands {
     let app: AppModel
     let container: ModelContainer
     @FocusedValue(\.tripActions) private var trip
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("trip.mac.view") private var tripView: TripWorkspaceMode = .itinerary
     @AppStorage("trip.mac.showMap") private var showMap = true
     @AppStorage("trip.mac.showInspector") private var showInspector = false
@@ -527,6 +528,12 @@ struct WooliCommands: Commands {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .help) {
+            Button("Wooli Help") {
+                if let url = URL(string: "https://wooliapp.com/support") { NSWorkspace.shared.open(url) }
+            }
+            Button("Keyboard Shortcuts") { openWindow(id: "shortcuts") }
+                .keyboardShortcut("/", modifiers: .command)
+            Divider()
             Button("Send Feedback…") {
                 if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
                     NSWorkspace.shared.open(url)
