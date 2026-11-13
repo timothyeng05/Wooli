@@ -52,6 +52,35 @@ struct MacShellView: View {
     @State private var showNewTrip = false
     @AppStorage("mac.trips.last") private var lastTrip = ""
 
+    /// What ⌘K can reach: trips and their cities, apps, Budget pages, and a few commands.
+    private var paletteEntries: [CommandPalette.Entry] {
+        var list: [CommandPalette.Entry] = []
+        for trip in trips.trips {
+            list.append(.init(id: "trip-\(trip.id)", title: trip.name.isEmpty ? "Trip" : trip.name, subtitle: "Trip · \(trip.dateRangeText)",
+                              symbol: "suitcase.rolling") { selection.wrappedValue = .trip(trip.id, .overview) })
+            for leg in trip.legs where !leg.isHome && !leg.name.isEmpty {
+                list.append(.init(id: "leg-\(leg.id)", title: leg.name, subtitle: "City in \(trip.name)", symbol: "mappin.and.ellipse") {
+                    selection.wrappedValue = .trip(trip.id, .city(leg.id))
+                })
+            }
+        }
+        list.append(.init(id: "cmd-newtrip", title: "New Trip…", subtitle: "Command", symbol: "plus") { showNewTrip = true })
+        for space in AppSpace.allCases where space != .budget {
+            list.append(.init(id: "space-\(space.rawValue)", title: space.title, subtitle: "App", symbol: space.systemImage) {
+                selection.wrappedValue = .space(space)
+            })
+        }
+        let pages: [(String, AppTab)] = [("Dashboard", .dashboard), ("Accounts", .accounts), ("Transactions", .transactions),
+                                         ("Reports", .reports), ("Plan", .budget)]
+        for (name, tab) in pages {
+            list.append(.init(id: "tab-\(name)", title: name, subtitle: "Budget", symbol: "chart.pie") {
+                app.selectedTab = tab
+                selection.wrappedValue = .budget(tab)
+            })
+        }
+        return list
+    }
+
     private var selection: Binding<MacSection?> {
         Binding {
             if let tool { return .tool(tool) }
@@ -113,6 +142,9 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $showNewTrip) {
             NewTripSheet { selection.wrappedValue = .trip($0, .overview) }
+        }
+        .sheet(isPresented: Binding(get: { app.showPalette }, set: { app.showPalette = $0 })) {
+            CommandPalette(entries: paletteEntries, onClose: { app.showPalette = false })
         }
         // File → New Trip… and the toolbar's + both come through here.
         .task(id: trips.newTripRequested) {
@@ -517,6 +549,7 @@ struct WooliCommands: Commands {
                 Button("Reports") { app.space = .budget; app.selectedTab = .reports }.keyboardShortcut("4")
                 Button("Plan") { app.space = .budget; app.selectedTab = .budget }.keyboardShortcut("5")
             }
+            Button("Go to…") { app.showPalette = true }.keyboardShortcut("k")
             Button("Trips") { app.space = .trips }.keyboardShortcut("t", modifiers: [.command, .shift])
             if app.space == .trips {
                 Divider()

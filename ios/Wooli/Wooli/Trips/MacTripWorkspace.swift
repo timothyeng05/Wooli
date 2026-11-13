@@ -151,6 +151,7 @@ struct MacTripWorkspace: View {
         }
         // The window centres other pages at a readable width; this one uses it all.
         .contentMargins(.horizontal, 0, for: .scrollContent)
+        .tripWorkspaceGuide()
         .navigationTitle(trip.name.isEmpty ? "Trip" : trip.name)
         .navigationSubtitle(trip.dateRangeText)
         .toolbar { toolbar(trip) }

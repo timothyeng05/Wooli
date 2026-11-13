@@ -217,15 +217,15 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 |----|------|-----|--------|
 | M0 | Data model: leg coordinates and time zone, `extras` JSON field on Trip and TripItem, booking status, retire meal placeholders; deploy CloudKit schema | P0 | 🟡 model + status + tests done (Claude, 2026-11-12); placeholders retire in M1-5; **CloudKit deploy is the user's step** |
 | M1-5 | Open slots replace meal placeholders | P0 | ✅ done 2026-11-12 (Claude); see Done |
-| M1-4 | New trip in one sheet, cities from Apple Maps, nights steppers | P0 | 🟡 Mac sheet done 2026-11-12 (Claude); Edit Trip and the iPhone flow still to do |
+| M1-4 | New trip in one sheet, cities from Apple Maps, nights steppers | P0 | ✅ Mac sheet + Edit Trip done 2026-11-12 (Claude); the iPhone's stepped flow still lacks city search and nights steppers |
 | M1-3 | Quick add (type a place, Return) | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-6 | Undo and redo | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-2 | Workspace layout: plan, big map, system inspector | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-1 | Trips sidebar (trips → pages), no push navigation | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
-| M1-7 | Menus and shortcuts (P0), ⌘K palette (P1) | P0/P1 | 🟡 menus done 2026-11-12 (Claude): Plan (move day/Ideas, Set Type, Open in Maps, Edit Ticket), Edit (Copy/Paste plans), Go (next/previous city); Find is the toolbar search (⌘F); still to do: Space preview, ⌘K palette, removing the old hidden shortcut buttons; not tried by hand |
+| M1-7 | Menus and shortcuts (P0), ⌘K palette (P1) | P0/P1 | ✅ menus + ⌘K palette done 2026-11-12 (Claude); Space preview and removing the old hidden shortcut buttons left; not tried by hand |
 | M1-8 | All trips gallery on design-system components | P1 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
-| M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip + empty state + banner done 2026-11-12; Help menu (Wooli Help, Keyboard Shortcuts window) done 2026-11-12 (Claude); coach marks and the signed-out run-through still to do |
-| M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in done; VoiceOver plan rows + 900 × 600 minimum window done 2026-11-12 (Claude); dark mode / contrast pass, performance profile, state restoration, full screen / Split View and listing work still to do |
+| M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip, banner, Help menu, first-trip pointers done 2026-11-12 (Claude); signed-out run-through still to do |
+| M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | todo |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-12 · Claude** — **M1 sweep.** **M1-4:** the new-trip sheet doubles as Edit Trip… for trips with cities (`NewTripSheet(editing:)`); saving moves each plan with its city (`TripSetup.remap`: Seville's day 2 stays Seville's day 2), and plans whose day disappears go to Ideas after a "N plans will move to Ideas" confirmation; city ids now carry from `SetupCity` to `TripLeg`. Unit tests for remap. **M1-9:** first time any trip opens, a three-pointer sheet (quick add, map, Invite) using `AppGuideSheet` (`AppGuide.tripWorkspace`, reset with the other guides). **M1-7:** ⌘K "Go to…" palette (`Views/CommandPalette.swift`): trips, cities, apps, Budget pages, New Trip. **M1-10:** `TripStore.items(in:)` reads a per-trip index rebuilt after any change. Mac, iOS builds and the suite pass. Not run by hand: palette, Edit Trip, the pointer sheet. Not done: Space preview, iPhone city search, signed-out run-through, dark mode pass, real profiling.
 
 - **2026-11-12 · Claude** — **M1-9 / M1-10 pieces.** Help menu: Wooli Help (opens `https://wooliapp.com/support`, the domain the Send Feedback address uses; check it's the live site), Keyboard Shortcuts (⌘/, a small window listing the menus), Send Feedback. VoiceOver: each `TripItemRow` is one element reading type, title, place, time, status and price. Main window minimum 900 × 600. Mac and iOS builds succeed; nothing checked by eye or with VoiceOver on. Left in M1: coach marks, signed-out run-through, dark mode and Increase Contrast pass, performance profile, state restoration, Edit Trip and the iPhone new-trip flow (M1-4), CloudKit schema deploy (M0, yours to do in the console).
 
