@@ -1601,7 +1601,7 @@ struct TripItemEditor: View {
                         }
                     }
                 }
-                if item.day != nil && item.kind.usesTime {
+                if item.day != nil {
                     Toggle(item.kind == .stay ? "Set a check-in time" : "Set a time", isOn: $hasTime.animation())
                     if hasTime {
                         DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
@@ -1793,9 +1793,7 @@ struct TripItemEditor: View {
         // Only a stay has nights, and only after its check-in.
         if item.stayEnd == nil { item.checkOutDay = nil }
         let oldTime = item.time
-        if item.day != nil && !item.kind.usesTime {
-            // No time to set; any old one only keeps its place in the day.
-        } else if hasTime && item.day != nil {
+        if hasTime && item.day != nil {
             item.time = TripTransport.minutes(time)
         } else {
             item.time = nil
