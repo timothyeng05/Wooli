@@ -449,7 +449,7 @@ struct WooliCommands: Commands {
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(trip?.hasSelection != true)
             Divider()
-            Button("Mark as Booked") { trip?.markBooked() }
+            Button("Toggle Booked") { trip?.markBooked() }
                 .keyboardShortcut("b")
                 .disabled(trip?.hasSelection != true)
         }

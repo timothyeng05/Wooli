@@ -591,6 +591,10 @@ struct MacTripWorkspace: View {
     /// What the map shows: the selected plan's day in order, the selected
     /// plans, the ideas, the picked city, or the whole trip.
     private func mapStops(_ trip: Trip, selected: [TripItem], all: [TripItem]) -> [TripItem] {
+        mapStopsIncludingCancelled(trip, selected: selected, all: all).filter { !$0.isCancelled }
+    }
+
+    private func mapStopsIncludingCancelled(_ trip: Trip, selected: [TripItem], all: [TripItem]) -> [TripItem] {
         if selected.count == 1, let item = selected.first {
             if let day = item.day, trip.days.contains(day) {
                 return store.items(in: trip.id, day: day).filter { $0.place != nil }
@@ -753,10 +757,12 @@ struct MacTripWorkspace: View {
         }
     }
 
-    /// ⌘B: the selected plans are booked.
+    /// ⌘B: the selected plans are booked; if they all already are, they go back to not booked.
     private func markBooked(_ trip: Trip) {
-        for var item in store.items(in: trip.id) where selection.contains(item.id) {
-            item.setStatus(.booked)
+        let chosen = store.items(in: trip.id).filter { selection.contains($0.id) }
+        let allBooked = !chosen.isEmpty && chosen.allSatisfy { $0.bookingStatus == .booked }
+        for var item in chosen {
+            item.setStatus(allBooked ? (item.needsBooking ? .planned : nil) : .booked)
             store.save(item)
         }
     }
@@ -1340,6 +1346,7 @@ struct MacPlanInspector: View {
                         Label(kind.label, systemImage: kind.symbol).tag(kind)
                     }
                 }
+                BookingStatusPicker(item: item)
                 if item.wrappedValue.kind == .transit {
                     LabeledContent("Ticket") {
                         Button(item.wrappedValue.transport == nil ? "Add Flight or Train…" : "Edit Ticket…") {

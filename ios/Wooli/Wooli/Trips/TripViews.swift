@@ -698,7 +698,7 @@ struct TripDetailView: View {
         let city = trip.legs.first { $0.id == mapCity }
         let shown = city.map { city in placed.filter { $0.day.flatMap { trip.leg(for: $0)?.id } == city.id } } ?? placed
         return VStack(spacing: 10) {
-            TripMap(stops: shown.map { TripMap.Stop(item: $0, label: nil) })
+            TripMap(stops: shown.filter { !$0.isCancelled }.map { TripMap.Stop(item: $0, label: nil) })
                 // Re-frame on the chosen city; `initialPosition` only applies once.
                 .id(city?.id ?? "all")
                 .frame(height: 200)
@@ -1217,13 +1217,18 @@ struct TripItemRow: View {
                 .overlay {
                     if item.isMealPlaceholder {
                         Circle().strokeBorder(tint.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                    } else if item.drawsAsUnbooked {
+                        // Travel or a stay that still has to be booked: a dashed ring around the solid icon.
+                        Circle().inset(by: -3).strokeBorder(tint.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
                     }
                 }
-                .shadow(color: tint.opacity(item.isMealPlaceholder ? 0 : 0.35), radius: 4, y: 2)
+                .shadow(color: tint.opacity(item.isMealPlaceholder || item.isCancelled ? 0 : 0.35), radius: 4, y: 2)
+                .opacity(item.isCancelled ? 0.45 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(stayRole == .checkIn ? .subheadline.weight(.semibold) : .subheadline.weight(.medium))
-                    .foregroundStyle(item.isMealPlaceholder ? Theme.textSecondary : Theme.text)
+                    .foregroundStyle(item.isMealPlaceholder || item.isCancelled ? Theme.textSecondary : Theme.text)
+                    .strikethrough(item.isCancelled)
                 if item.isMealPlaceholder {
                     Text("Tap to pick a place").font(.caption).foregroundStyle(Theme.textTertiary)
                 }
@@ -1250,7 +1255,9 @@ struct TripItemRow: View {
                 // A stay's price shows on its check-in day only.
                 if let price = item.priceText, day == nil || day == item.day {
                     Text(price).font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.text)
+                        .strikethrough(item.isCancelled)
                 }
+                if day == nil || day == item.day { BookingStatusBadge(item: item) }
                 if stayRole == .checkIn {
                     Text(item.stayEnd == nil ? "Check-in" : day.flatMap(item.stayLabel(on:)) ?? "Check-in")
                         .font(.caption2.weight(.bold)).foregroundStyle(item.kind.onColor)
@@ -1566,6 +1573,7 @@ struct TripItemEditor: View {
                 }
                 .pickerStyle(.segmented)
                 if item.kind == .transit { modePicker }
+                if item.needsBooking { BookingStatusPicker(item: $item) }
                 TextField("Title", text: $item.title, prompt: Text(item.place?.name ?? "e.g. Dinner, Museum, Train to Kyoto"))
             }
 

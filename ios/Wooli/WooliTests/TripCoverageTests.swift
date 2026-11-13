@@ -151,6 +151,21 @@ struct TripExtrasTests {
         #expect(item.notes == "~2 h")
     }
 
+    @Test func onlyTravelAndStaysDrawAsUnbookedAndShowAStatus() {
+        var flight = TripItem(tripID: "t", kind: .transit)
+        flight.notes = "Not booked yet"
+        #expect(flight.drawsAsUnbooked && flight.showsStatus)
+        flight.setStatus(.booked)
+        #expect(!flight.drawsAsUnbooked)
+
+        var dinner = TripItem(tripID: "t", kind: .activity)
+        #expect(!dinner.showsStatus && !dinner.drawsAsUnbooked)
+        dinner.setStatus(.booked)   // a reservation
+        #expect(dinner.showsStatus && !dinner.drawsAsUnbooked)
+        dinner.setStatus(nil)
+        #expect(!dinner.showsStatus && dinner.extras == nil)
+    }
+
     @Test func cancelledPlansDropOutOfCostsAndCoverage() {
         var flight = TripItem(tripID: "t", day: "2027-04-01", kind: .transit, title: "Flight")
         flight.cost = 500
