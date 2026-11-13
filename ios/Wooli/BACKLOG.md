@@ -222,7 +222,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-6 | Undo and redo | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-2 | Workspace layout: plan, big map, system inspector | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-1 | Trips sidebar (trips → pages), no push navigation | P0 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
-| M1-7 | Menus and shortcuts (P0), ⌘K palette (P1) | P0/P1 | 🟡 menus for plans, views and New Trip done 2026-11-12 (Claude); Copy/Paste plans, Find, Space preview, ⌘K palette, next/previous city still to do |
+| M1-7 | Menus and shortcuts (P0), ⌘K palette (P1) | P0/P1 | 🟡 menus done 2026-11-12 (Claude): Plan (move day/Ideas, Set Type, Open in Maps, Edit Ticket), Edit (Copy/Paste plans), Go (next/previous city); Find is the toolbar search (⌘F); still to do: Space preview, ⌘K palette, removing the old hidden shortcut buttons; not tried by hand |
 | M1-8 | All trips gallery on design-system components | P1 | ✅ done on the Mac 2026-11-12 (Claude); see Done |
 | M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip + empty state + banner done 2026-11-12 (Claude); coach marks, Keyboard Shortcuts sheet, signed-out run-through still to do |
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in done 2026-11-12 (Claude); dark mode, VoiceOver, performance, window-size and listing work still to do |
@@ -309,6 +309,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-12 · Claude** — **M1-7 menus, second half.** Plan menu: Move to Previous/Next Day (⌥⌘↑/↓), Move to Ideas (⇧⌘U), Set Type, Open in Maps (⌘⏎), Edit Ticket…; Go menu: Next/Previous City (⌘]/⌘[, scrolls to that city's first day). Edit menu: ⌘C copies selected plans as Wooli plans plus readable text (one line each: name, place, address); ⌘V pastes copies onto the selected day, or turns plain text into one plan per line through quick add's parser. In a text field Cut/Copy/Paste still act on the text. Mac build succeeds. Not tried by hand: the new Edit menu replaces the system pasteboard group, so check ⌘C/⌘V in the title field and the search box. Not done: Space preview, ⌘K palette.
 
 - **2026-11-12 · Claude** — **M2-1 booking status.** New `Trips/BookingStatusViews.swift`: `BookingStatusBadge` (Not booked dashed, Booked, Cancelled) and `BookingStatusPicker`. `TripItemRow` shows the badge, a dashed ring on unbooked travel and stays, and strikethrough + faded for Cancelled; Cancelled plans also drop off both trip maps (costs and coverage already skipped them). The Mac inspector and the shared editor have a Status picker (travel and stays always; other plans can be set to Booked, e.g. a reservation, or back to None). ⌘B now toggles: Booked, or back to Not booked when all selected already are (menu item renamed "Toggle Booked"). Setting a status strips the old "not booked yet" notes prefix (already in `setStatus`). New unit test; suite passes on the iPhone 17 Pro simulator, Mac and iOS builds succeed. Not done: a status control on the dark ticket itself (it binds only the transport, so the picker sits beside it in the editor); not checked by eye.
 

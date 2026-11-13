@@ -436,7 +436,21 @@ struct WooliCommands: Commands {
                 .keyboardShortcut("r")
                 .disabled(app.mode != .live || app.isSyncing)
         }
-        CommandGroup(after: .pasteboard) {
+        CommandGroup(replacing: .pasteboard) {
+            // In a text field the standard Cut/Copy/Paste keep working; plans only take ⌘C/⌘V
+            // when the outline (not a field) has focus, which `trip` being set reflects.
+            Button("Cut") { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }.keyboardShortcut("x")
+            Button("Copy") {
+                if NSApp.keyWindow?.firstResponder is NSText { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+                else if trip?.hasSelection == true { trip?.copy() }
+                else { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+            }.keyboardShortcut("c")
+            Button("Paste") {
+                if NSApp.keyWindow?.firstResponder is NSText || trip == nil { NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil) }
+                else { trip?.paste() }
+            }.keyboardShortcut("v")
+            Button("Select All") { NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil) }.keyboardShortcut("a")
+            Divider()
             Button("Duplicate") { trip?.duplicate() }
                 .keyboardShortcut("d")
                 .disabled(trip?.hasSelection != true)
@@ -448,10 +462,30 @@ struct WooliCommands: Commands {
             Button("Move Down") { trip?.moveDown() }
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(trip?.hasSelection != true)
+            Button("Move to Previous Day") { trip?.moveDay(-1) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(trip?.hasSelection != true)
+            Button("Move to Next Day") { trip?.moveDay(1) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(trip?.hasSelection != true)
+            Button("Move to Ideas") { trip?.moveToIdeas() }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                .disabled(trip?.hasSelection != true)
             Divider()
             Button("Toggle Booked") { trip?.markBooked() }
                 .keyboardShortcut("b")
                 .disabled(trip?.hasSelection != true)
+            Menu("Set Type") {
+                ForEach(TripItem.Kind.picker(for: .activity)) { kind in
+                    Button(kind.label, systemImage: kind.symbol) { trip?.setKind(kind) }
+                }
+            }
+            .disabled(trip?.hasSelection != true)
+            Button("Open in Maps") { trip?.openInMaps() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(trip?.hasPlace != true)
+            Button("Edit Ticket…") { trip?.editTicket() }
+                .disabled(trip?.hasTicket != true)
         }
         CommandGroup(before: .sidebar) {
             if app.space == .trips {
@@ -483,6 +517,11 @@ struct WooliCommands: Commands {
                 Button("Plan") { app.space = .budget; app.selectedTab = .budget }.keyboardShortcut("5")
             }
             Button("Trips") { app.space = .trips }.keyboardShortcut("t", modifiers: [.command, .shift])
+            if app.space == .trips {
+                Divider()
+                Button("Next City") { trip?.stepCity(1) }.keyboardShortcut("]").disabled(trip == nil)
+                Button("Previous City") { trip?.stepCity(-1) }.keyboardShortcut("[").disabled(trip == nil)
+            }
             Divider()
             Button("Review Transactions") { app.showReview = true }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
