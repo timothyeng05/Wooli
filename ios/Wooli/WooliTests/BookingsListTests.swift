@@ -96,4 +96,12 @@ struct BookingsListTests {
         #expect(text.contains("Confirmation ABC123"))
         #expect(!text.contains("\n"))
     }
+
+    @Test func codesMenuListsOnlyLiveBookingsWithCodes() {
+        let items = [flight("2027-04-01", number: "CX1", from: "JFK", to: "HKG", code: "ABC123"),
+                     flight("2027-04-02", number: "CX2", from: "HKG", to: "HGH", code: "ZZZ999", status: .cancelled),
+                     flight("2027-04-03", number: "CA3", from: "HGH", to: "PEK")]
+        let rows = BookingsList.withCodes(BookingsList.rows(trip: trip(), items: items))
+        #expect(rows.map(\.confirmation) == ["ABC123"])
+    }
 }

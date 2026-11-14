@@ -227,7 +227,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip, banner, Help menu, first-trip pointers done 2026-11-12 (Claude); signed-out run-through still to do |
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
-| M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); right-click menu (Edit, Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text) on one or several rows, and the inspector shows the selected row, done; "nights without a bed" is text only (no row to filter to) |
+| M2-2 | Bookings page (table) | P0 | 🟡 toolbar Codes menu (any code in two clicks, one to copy), table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); right-click menu (Edit, Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text) on one or several rows, and the inspector shows the selected row, done; "nights without a bed" is text only (no row to filter to) |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-2 story 4: codes in two clicks.** A Codes menu in the trip toolbar lists every live booking with a confirmation code ("CX831 JFK → HKG · ABC123"); choosing one copies it, from any trip page. `BookingsList.withCodes` + a test. The table is a native `Table`, so keyboard navigation comes with it (not tried by hand). M2-2 stays 🟡: nothing has been run by hand, the unit tests have not run, and "nights without a bed" is text rather than a filter. Built for Mac: yes.
 
 - **2026-11-14 · Claude** — **M2-2 story 3: row actions.** Right-click on one or several Bookings rows: Edit… (same as double-click), Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text (one line per booking). Selecting a row and opening the inspector (⌥⌘I) shows it, since the page shares the trip's selection; ⌘B (Plan menu) marks the selection booked. Built for Mac: yes; tests not run. Not tried by hand.
 

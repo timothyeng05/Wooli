@@ -238,6 +238,9 @@ struct MacTripWorkspace: View {
                 .help("Show or hide the selected plan, or the trip summary (⌥⌘I)")
         }
         ToolbarItem(placement: .primaryAction) {
+            codesMenu(trip)
+        }
+        ToolbarItem(placement: .primaryAction) {
             Toggle("Open Slots", systemImage: "square.dashed", isOn: $showOpenSlots)
                 .help("Show or hide the empty meals and nights (⇧⌘O)")
         }
@@ -265,6 +268,25 @@ struct MacTripWorkspace: View {
                        role: .destructive) { confirmDeleteTrip = true }
             }
         }
+    }
+
+    /// Two clicks to any confirmation code: this menu, then the booking.
+    private func codesMenu(_ trip: Trip) -> some View {
+        let rows = BookingsList.withCodes(BookingsList.rows(trip: trip, items: store.items(in: trip.id)))
+        return Menu("Codes", systemImage: "number.square") {
+            if rows.isEmpty {
+                Text("No confirmation codes yet")
+            } else {
+                ForEach(rows) { row in
+                    Button("\(row.what) · \(row.confirmation)") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(row.confirmation, forType: .string)
+                    }
+                }
+            }
+        }
+        .help("Copy a confirmation code")
+        .disabled(rows.isEmpty)
     }
 
     // MARK: Left: cities and ideas

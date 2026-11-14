@@ -208,6 +208,11 @@ enum BookingsList {
         rows.map(\.plainText).joined(separator: "\n")
     }
 
+    /// Bookings that have a confirmation code, in When order (the toolbar's Codes menu).
+    static func withCodes(_ rows: [BookingRow]) -> [BookingRow] {
+        rows.filter { !$0.confirmation.isEmpty && $0.status != .cancelled }
+    }
+
     /// Count the sidebar badge shows.
     static func notBookedCount(trip: Trip, items: [TripItem]) -> Int {
         items.filter { isBooking($0) && $0.needsBooking && $0.isUnbooked }.count
