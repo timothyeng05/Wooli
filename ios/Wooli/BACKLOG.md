@@ -235,7 +235,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | 🟡 logic, lookup, connector line and day total written 2026-11-14 (Claude, not built); fast-scroll request check and on-screen pass still to do |
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
-| M3-3 | Order a day by shortest route | P1 | todo |
+| M3-3 | Order a day by shortest route | P1 | 🟡 pure ordering + tests written 2026-11-14 (Claude, not built); day-header menu, confirmation, undo still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
 | M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
 
@@ -312,6 +312,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-3 (part): route ordering.** `Services/RouteOrder.swift` (pure, 6 tests in `RouteOrderTests`): `reorder(stops, start:)` takes a day's plans (each with its current sort position, whether it may move, and coordinates), starts from the day's stay (or, with none, keeps the first plan first), orders the movable ones by nearest neighbour, then 2-opt to untangle crossings, and puts the new sequence into the slots the movable plans already held, so timed plans, travel and stays never move (equal slots, e.g. all untimed, get strictly increasing orders). Returns the new `order` for every movable plan plus the kilometres saved ("about N min" at 15 km/h, to the nearest 5), or nil when it saves under 0.2 km or there are too few plans. **Not built, tests not run.** Still to do: the day-header menu item **Order by Shortest Route**, the "Saves about 40 min. Reorder?" confirmation, applying it as one undo step, and the stay as the starting point.
 
 - **2026-11-14 · Claude** — **M3-2 (part): day total.** Each day card's subtitle adds "· 4 stops · 1 h 10 min getting around" once the connectors have estimates (`TravelEstimator.known` reads only the cache, so the header never causes requests; the estimator is now `@Observable`, so the header updates as estimates arrive). Uses the mode you picked for a hop, else any cached mode; hops without directions add nothing to the minutes. Nothing shows for a day with fewer than two placed plans. **Not built, not checked on screen.** With this M3-2 has its logic, lookup, connectors and total; left is the real-device check that a 30-day trip makes one request per visible connector and none on reopen.
 
