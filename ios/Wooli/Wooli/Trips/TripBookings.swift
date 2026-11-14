@@ -73,14 +73,21 @@ enum TripBookings {
             symbol: item.transport.map { $0.mode.symbol } ?? item.kind.symbol,
             what: what(item),
             whenKey: start ?? .distantFuture,
-            whenText: start.map { text($0, timed: item.time != nil) } ?? "No day yet",
+            whenText: start.map { text($0, timed: item.time != nil) + zoneSuffix(item.day, in: trip, arriving: false, timed: item.time != nil) } ?? "No day yet",
             untilKey: end ?? .distantFuture,
-            untilText: end.map { text($0, timed: item.kind == .transit) } ?? "",
+            untilText: end.map { text($0, timed: item.kind == .transit) + zoneSuffix(end.map(DayKey.key), in: trip, arriving: true, timed: item.kind == .transit) } ?? "",
             confirmation: item.transport?.confirmation ?? "",
             cost: item.cost ?? 0,
             costText: item.priceText ?? "",
             city: item.day.flatMap { day in trip.legs.first { !$0.isHome && $0.contains(day) }?.name } ?? "",
             isTravelOrStay: item.kind == .transit || item.kind == .stay)
+    }
+
+    /// " JST" after a time, when the city's zone is known (M3-1); nothing for dates alone.
+    static func zoneSuffix(_ day: String?, in trip: Trip, arriving: Bool, timed: Bool) -> String {
+        guard timed, let day, let zone = TripTimeZones.zone(on: day, in: trip, arriving: arriving) else { return "" }
+        let date = TripTimeZones.instant(day: day, minutes: 12 * 60, zone: zone) ?? .now
+        return " " + (zone.abbreviation(for: date) ?? zone.identifier)
     }
 
     private static func moment(_ day: String?, minutes: Int?) -> Date? {

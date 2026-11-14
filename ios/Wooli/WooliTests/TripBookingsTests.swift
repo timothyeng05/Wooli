@@ -71,4 +71,17 @@ struct TripBookingsTests {
         #expect(TripBookings.grouped(rows(), by: .none).count == 1)
         #expect(TripBookings.grouped(rows(), by: .status).map(\.label) == ["Booked", "Not booked", "Cancelled"])
     }
+
+    @Test func timesCarryTheCityZoneWhenKnown() {
+        var t = trip()
+        t.legs[1].timeZoneID = "Asia/Tokyo"      // Hangzhou's leg, for the test
+        var timed = TripItem(tripID: "t", day: "2027-04-03", kind: .stay, title: "Hyatt", time: 15 * 60)
+        timed.checkOutDay = "2027-04-04"
+        let row = TripBookings.row(timed, trip: t)
+        #expect(row.whenText.hasSuffix("JST") || row.whenText.hasSuffix("GMT+9"))
+        // A date with no time says no zone, and neither does a city with no zone.
+        let dateOnly = TripItem(tripID: "t", day: "2027-04-03", kind: .stay, title: "Inn")
+        #expect(!TripBookings.row(dateOnly, trip: t).whenText.contains("JST"))
+        #expect(!TripBookings.row(timed, trip: trip()).whenText.contains("JST"))
+    }
 }
