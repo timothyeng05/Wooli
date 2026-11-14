@@ -653,7 +653,10 @@ struct MacTripWorkspace: View {
                 }
                 let leg = trip.legs.first { $0.id == focusLeg }
                 TripCostsCard(costs: TripCosts(items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }),
-                              scope: leg.map { $0.name } ?? "this trip")
+                              scope: leg.map { $0.name } ?? "this trip",
+                              trip: trip,
+                              days: leg.map { l in trip.days.filter(l.contains).count } ?? trip.days.count,
+                              wholeTrip: leg == nil)
                 Divider().padding(.vertical, Space.xs)
                 Text("Select a plan to see and edit it here. Drag plans to reorder a day or move them to another; ⌘↑ and ⌘↓ move the selected plan, ⌘N adds one.")
                     .font(.callout).foregroundStyle(Theme.textTertiary)
@@ -1727,6 +1730,12 @@ struct MacPlanInspector: View {
 struct TripCostsCard: View {
     let costs: TripCosts
     let scope: String
+    /// The trip, for its budget and rates (M2-4); nil = amounts shown as entered.
+    var trip: Trip? = nil
+    /// Days this card covers, for "a day".
+    var days = 0
+    var wholeTrip = true
+    @State private var editingBudget = false
     /// Cents per point you've set, by program (`PointValues`).
     @AppStorage(PointValues.key + ".changed") private var valuesChanged = 0
     @State private var valuingPoints = false
@@ -1742,6 +1751,17 @@ struct TripCostsCard: View {
                     Text(TripCosts.text(costs.totals, points: costs.points))
                         .font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(Theme.text)
                         .multilineTextAlignment(.trailing)
+                }
+            }
+            if let trip {
+                TripBudgetLine(trip: trip, totals: costs.totals, days: days, wholeTrip: wholeTrip)
+                HStack {
+                    Spacer()
+                    Button(trip.extras.budget == nil ? "Set budget & rates…" : "Budget & rates…") { editingBudget = true }
+                        .buttonStyle(.link).font(.caption)
+                        .popover(isPresented: $editingBudget) {
+                            TripBudgetEditor(tripID: trip.id, currencies: Array(costs.totals.keys).sorted())
+                        }
                 }
             }
             if costs.lines.isEmpty {

@@ -230,7 +230,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar badge and tests written 2026-11-14 (Claude, not built); see Done |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader + paste-and-review sheet written 2026-11-14 (Claude, not built); drop, .eml/.pdf, Apple Intelligence path, stays still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
-| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion + ECB parsing written 2026-11-14 (Claude, not built); Costs page, Rates popover, fetch, Budget link still to do |
+| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | todo |
 | M3-4 | Conflicts and warnings | P0 | todo |
 | M3-2 | Travel time between stops | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-4 (part): budget line and Budget & rates popover.** The Mac Costs card (inspector summary) gets a one-currency line (`Trips/MacTripBudget.swift`): "Planned ≈ $6,420 of $8,000" with a progress bar (amber when over, "$X over budget"), "Not counted: THB (no rate yet)" for currencies without a rate, and "≈ $321 a day for 2" when travellers are set. "Budget & rates…" opens a popover: budget, its currency, travellers stepper, an editable rate per other currency in the trip, and **Update rates** (one anonymous GET of the European Central Bank's daily XML; currencies it lacks and hand-typed rates are kept; offline falls back to stored rates). A city's card converts but isn't compared with the trip budget. Stored in `Trip.extras` (`budget`, `budgetCurrency`, `travelers`, `fxRates`, `fxUpdatedAt`), so companions on a shared trip see it. **Not built, not checked on screen.** Not done: per-type and per-city bar lists, "N bookings without a price" link to Bookings, a per-person figure, the privacy page line about the ECB request, and the whole actual-spend side (Budget tag link, suggestions).
 
 - **2026-11-14 · Claude** — **M2-4 (part): one-currency maths** (`PRD-MAC-TRIPS.md`). `Services/ExchangeRates.swift`, pure: `convert` puts a trip's totals by currency into the budget currency with the trip's rates and returns which currencies had no rate (left out, so the UI can say "plus THB 900") and whether anything was converted (to show "≈"); `parseECB` reads the European Central Bank's daily XML; `rates(for:into:perEuro:)` turns euro-based rates into the units of the budget currency per 1 unit of each trip currency (a currency the ECB lacks stays manual); `merging` keeps hand-typed rates. 4 tests in `ExchangeRatesTests`. **Not built, tests not run.** Not done: Costs page with the hero line, budget and traveller stepper, per-type and per-city bars, the Rates popover and "Update rates" fetch (one anonymous GET), "N bookings without a price" link, and the whole actual-spend side (Budget tag link, suggestions).
 
