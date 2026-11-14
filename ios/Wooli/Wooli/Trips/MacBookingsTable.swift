@@ -14,9 +14,10 @@ struct MacBookingsTable: View {
     @State private var selection = Set<String>()
     @State private var sortOrder = [KeyPathComparator(\BookingRow.whenKey)]
     @State private var filter = Filter.all
+    @State private var grouping = TripBookings.Grouping.none
 
     private enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", notBooked = "Not booked", booked = "Booked", cancelled = "Cancelled"
+        case all = "All", notBooked = "Not booked", booked = "Booked", cancelled = "Cancelled", withoutPrice = "No price"
         var id: String { rawValue }
         func matches(_ row: BookingRow) -> Bool {
             switch self {
@@ -24,6 +25,7 @@ struct MacBookingsTable: View {
             case .notBooked: row.status == .planned
             case .booked: row.status == .booked
             case .cancelled: row.status == .cancelled
+            case .withoutPrice: row.isTravelOrStay && row.status != .cancelled && row.cost == 0 && row.costText.isEmpty
             }
         }
     }
@@ -31,7 +33,9 @@ struct MacBookingsTable: View {
     var body: some View {
         if let trip = store.trip(tripID) {
             let all = TripBookings.rows(trip: trip, items: store.items(in: tripID))
-            let shown = all.filter(filter.matches).filter(matchesSearch).sorted(using: sortOrder)
+            let sorted = all.filter(filter.matches).filter(matchesSearch).sorted(using: sortOrder)
+            // Group by sorts the groups together (a Table has no section headers).
+            let shown = TripBookings.grouped(sorted, by: grouping).flatMap(\.rows)
             VStack(spacing: 0) {
                 header(all)
                 Divider()
@@ -52,16 +56,42 @@ struct MacBookingsTable: View {
         return [row.what, row.kindLabel, row.confirmation, row.city].contains { $0.localizedCaseInsensitiveContains(q) }
     }
 
+    /// "9 of 14 booked · 3 not booked · 2 without a price": each part filters the table.
     private func header(_ rows: [BookingRow]) -> some View {
-        HStack {
-            Text(TripBookings.summary(rows)).font(.headline).foregroundStyle(Theme.text)
+        let c = TripBookings.headerCounts(rows)
+        return HStack(spacing: Space.s) {
+            part("\(c.booked) of \(c.needBooking) booked", show: .booked, always: true)
+            part("\(c.notBooked) not booked", show: .notBooked, count: c.notBooked)
+            part("\(c.withoutPrice) without a price", show: .withoutPrice, count: c.withoutPrice)
+            part("\(c.cancelled) cancelled", show: .cancelled, count: c.cancelled)
             Spacer()
+            Menu("Group: \(grouping.rawValue)", systemImage: "rectangle.3.group") {
+                Picker("Group by", selection: $grouping) {
+                    ForEach(TripBookings.Grouping.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
+            .menuStyle(.borderlessButton).fixedSize()
             Picker("Show", selection: $filter) {
                 ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
             }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .labelsHidden().fixedSize()
         }
         .padding(Space.m)
+    }
+
+    /// One part of the header line; clicking it filters to it (again to clear).
+    @ViewBuilder
+    private func part(_ text: String, show: Filter, count: Int = 1, always: Bool = false) -> some View {
+        if always || count > 0 {
+            Button { filter = filter == show ? .all : show } label: {
+                Text(text)
+                    .font(always ? .headline : .callout)
+                    .foregroundStyle(filter == show ? Theme.brand : (always ? Theme.text : Theme.textSecondary))
+            }
+            .buttonStyle(.plain)
+            .help(filter == show ? "Show everything" : "Show only these")
+        }
     }
 
     private func table(_ rows: [BookingRow]) -> some View {
