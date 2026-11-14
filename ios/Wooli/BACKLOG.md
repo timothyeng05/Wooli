@@ -237,7 +237,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | 🟡 ordering, tests, day menu, confirmation and undo written 2026-11-14 (Claude, not built); Mac check of the undo step and the stay as start still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
-| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist logic written 2026-11-14 (Claude, not built); rest todo |
+| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist (logic + Mac card) written 2026-11-14 (Claude, not built); rest todo |
 
 ---
 
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M4-2 (part): Checklist card on the Mac.** `Trips/MacTripChecklist.swift`: in the whole-trip inspector summary, a **Checklist** card with "3 of 12", items grouped (Packing, Documents, To book, or your own; ungrouped first), click to tick (struck through), right-click Remove, an add field with a group menu (Return adds), "Clear ticked items", and, when the list is empty and an earlier trip has one, **Start from <trip>'s list (N)** (copies titles and groups, nothing ticked). Saved in `Trip.extras.checklist` on the latest copy of the trip, so a companion's other changes survive. **Not built, not checked on screen.** Not done: reordering and renaming items, an iPhone checklist, adding the unticked count to the To do list, and a per-key merge when two people tick different items at once (the whole list is replaced, so the last save wins).
 
 - **2026-11-14 · Claude** — **M4-2 (part): checklist logic.** `Services/TripChecklist.swift` (pure, 5 tests in `TripChecklistTests`) over `TripExtras.checklist`: add (trimmed, no empty titles, no same title twice in a group), toggle, remove, clear done, progress, groups (first-seen order, ungrouped first), `startingFrom` (copies titles and groups with new ids, nothing ticked) and `lastTripsList` (the checklist of the trip that started most recently before this one, else the latest other trip with one). **Not built, tests not run.** Next in this epic: the Checklist card.
 

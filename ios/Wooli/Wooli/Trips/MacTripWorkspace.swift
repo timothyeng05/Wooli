@@ -670,6 +670,7 @@ struct MacTripWorkspace: View {
                 if focusLeg == nil {
                     TripRouteCard(trip: trip, items: all) { scrollTarget = $0 }
                 }
+                if focusLeg == nil { TripChecklistCard(tripID: trip.id) }
                 if focusLeg == nil { TripNotesField(tripID: trip.id) }
                 TripWarningsCard(trip: trip, items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }) {
                     selection = [$0]
