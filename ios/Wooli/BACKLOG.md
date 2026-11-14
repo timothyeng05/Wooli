@@ -232,7 +232,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | todo |
-| M3-4 | Conflicts and warnings | P0 | todo |
+| M3-4 | Conflicts and warnings | P0 | 🟡 checks + tests written 2026-11-14 (Claude, not built); no UI yet (plan marks, Overview count, fixes, Ignore) |
 | M3-2 | Travel time between stops | P0 | todo |
 | M3-5 | Trip Overview with a To do list | P0 | todo |
 | M3-3 | Order a day by shortest route | P1 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-4 (part): the trip checks.** `Services/TripChecks.swift`, pure: `TripChecks.warnings(trip:items:)` returns a `TripWarning` (kind, plan, optional other plan, one-line message, stable id) for: a plan dated outside the trip; two plans with start and end times that overlap; an activity or meal more than 80 km from its day's city (needs the leg's coordinates; travel plans exempt); a flight or train that lands after the next one leaves, or with under 90 minutes to spare (counted across midnight); a stay that checks out after its city's last day; and overlapping stays. Cancelled plans and empty slots are skipped; a warning whose id is in the plan's `extras.ignoredWarnings` is dropped. 9 tests in `TripChecksTests`. **Not built, tests not run.** **Not done:** any UI (amber mark on the plan, the Overview and Planning card count, "Move to Madrid's day" / "Extend Seville by a night" fixes, an Ignore button that writes `ignoredWarnings`), the "no way there" check (already in the coverage card), a gap-between-stays check (nights without a bed already show in coverage), and the China-trip acceptance check.
 
 - **2026-11-14 · Claude** — **M2-4 (part): budget line and Budget & rates popover.** The Mac Costs card (inspector summary) gets a one-currency line (`Trips/MacTripBudget.swift`): "Planned ≈ $6,420 of $8,000" with a progress bar (amber when over, "$X over budget"), "Not counted: THB (no rate yet)" for currencies without a rate, and "≈ $321 a day for 2" when travellers are set. "Budget & rates…" opens a popover: budget, its currency, travellers stepper, an editable rate per other currency in the trip, and **Update rates** (one anonymous GET of the European Central Bank's daily XML; currencies it lacks and hand-typed rates are kept; offline falls back to stored rates). A city's card converts but isn't compared with the trip budget. Stored in `Trip.extras` (`budget`, `budgetCurrency`, `travelers`, `fxRates`, `fxUpdatedAt`), so companions on a shared trip see it. **Not built, not checked on screen.** Not done: per-type and per-city bar lists, "N bookings without a price" link to Bookings, a per-person figure, the privacy page line about the ECB request, and the whole actual-spend side (Budget tag link, suggestions).
 
