@@ -228,7 +228,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 toolbar Codes menu (any code in two clicks, one to copy), table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); right-click menu (Edit, Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text) on one or several rows, and the inspector shows the selected row, done; "nights without a bed" is text only (no row to filter to) |
-| M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
+| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 File > Import Confirmation… (⇧⌘I) with the deterministic reader and review sheet done 2026-11-14 (Claude); ⌘V and drop (.eml, .pdf, .txt), duplicate check, Apple Intelligence reading, the 12-confirmation test set left |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
 | M3-1 | Time zones per city | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-3 story 1: import a pasted confirmation.** File > Import Confirmation… (⇧⌘I) opens a sheet: paste text, it lists the bookings found (round trips give two flights; hotels read check-in and check-out), each editable (title, day) with a warning when the date is outside the trip, then Add to Trip saves them as Booked with source `import`. Reader is `Trips/BookingImport.swift` (pure: airline codes from `Airlines`, airports from `airports.tsv`, dates with or without a year, times with +1, confirmation code, total price, hotel name) with tests in `BookingImportTests`. Footer says the text stays on this Mac. Built for Mac: yes; **tests not run**; not tried on real emails. Not done: ⌘V/drop, files, duplicates, Apple Intelligence, the 12-email fixture set, trains.
 
 - **2026-11-14 · Claude** — **M2-2 story 4: codes in two clicks.** A Codes menu in the trip toolbar lists every live booking with a confirmation code ("CX831 JFK → HKG · ABC123"); choosing one copies it, from any trip page. `BookingsList.withCodes` + a test. The table is a native `Table`, so keyboard navigation comes with it (not tried by hand). M2-2 stays 🟡: nothing has been run by hand, the unit tests have not run, and "nights without a bed" is text rather than a filter. Built for Mac: yes.
 

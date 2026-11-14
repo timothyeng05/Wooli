@@ -477,6 +477,9 @@ struct WooliCommands: Commands {
             Button("New Plan") { trip?.newPlan() }
                 .keyboardShortcut("n")
                 .disabled(trip == nil)
+            Button("Import Confirmation…") { trip?.importBooking() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(trip == nil)
             Divider()
             Button("Sync Bank") { Task { await app.sync(context: container.mainContext) } }
                 .keyboardShortcut("r")

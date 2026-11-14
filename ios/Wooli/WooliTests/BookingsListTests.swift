@@ -105,3 +105,89 @@ struct BookingsListTests {
         #expect(rows.map(\.confirmation) == ["ABC123"])
     }
 }
+
+// The confirmation reader (M2-3).
+
+struct BookingImportTests {
+    private let flightEmail = """
+    Your trip is confirmed
+    Booking reference: X7K2PQ
+    Monday, 12 April 2027
+    CX831  Depart 09:30  JFK  New York
+    Arrive 14:05 +1  HKG  Hong Kong
+    Economy
+    Total price: USD 1,284.50
+    """
+
+    @Test func readsAFlightEmail() {
+        let found = BookingImport.read(flightEmail, defaultYear: 2027)
+        #expect(found.count == 1)
+        let f = found[0]
+        #expect(f.flightNumber == "CX831")
+        #expect(f.from == "JFK" && f.to == "HKG")
+        #expect(f.day == "2027-04-12")
+        #expect(f.time == 9 * 60 + 30)
+        #expect(f.arriveTime == 14 * 60 + 5 && f.arriveDayOffset == 1)
+        #expect(f.confirmation == "X7K2PQ")
+        #expect(f.price == 1284.5 && f.currency == "USD")
+    }
+
+    @Test func aRoundTripGivesTwoFlightsOnTheRightDays() {
+        let text = """
+        Confirmation code: ABC123
+        Outbound  Apr 12, 2027
+        CX831 JFK to HKG 09:30 - 14:05
+        Return  Apr 20, 2027
+        CX830 HKG to JFK 23:55 - 06:10
+        """
+        let found = BookingImport.read(text, defaultYear: 2027)
+        #expect(found.map(\.flightNumber) == ["CX831", "CX830"])
+        #expect(found.map(\.day) == ["2027-04-12", "2027-04-20"])
+        #expect(found.allSatisfy { $0.confirmation == "ABC123" })
+    }
+
+    @Test func readsAHotel() {
+        let text = """
+        Reservation number 8841205
+        Hyatt Regency Hangzhou
+        Check-in: 3 Apr 2027 from 15:00
+        Check-out: 5 Apr 2027
+        Total CNY 2,400
+        """
+        let found = BookingImport.read(text, defaultYear: 2027)
+        #expect(found.count == 1)
+        #expect(found[0].kind == .stay)
+        #expect(found[0].title == "Hyatt Regency Hangzhou")
+        #expect(found[0].day == "2027-04-03" && found[0].checkOutDay == "2027-04-05")
+        #expect(found[0].confirmation == "8841205")
+        #expect(found[0].currency == "CNY")
+    }
+
+    @Test func aDateWithoutAYearUsesTheTripsYear() {
+        let dates = BookingImport.findDates(in: "Depart 5 May", year: 2028)
+        #expect(dates.first?.day == "2028-05-05")
+    }
+
+    @Test func importedPlansAreBookedAndMarkedAsImports() {
+        var b = ImportedBooking()
+        b.flightNumber = "CX831"; b.from = "JFK"; b.to = "HKG"; b.day = "2027-04-12"; b.confirmation = "X7K2PQ"
+        let item = b.tripItem(tripID: "t")
+        #expect(item.bookingStatus == .booked)
+        #expect(item.extras?.source == "import")
+        #expect(item.transport?.confirmation == "X7K2PQ")
+        #expect(item.title == "CX831 JFK → HKG")
+    }
+
+    @Test func warnsWhenTheDateIsOutsideTheTrip() {
+        let trip = Trip(id: "t", startDay: "2027-04-01", endDay: "2027-04-05")
+        var b = ImportedBooking()
+        b.day = "2027-06-01"
+        #expect(b.warning(trip: trip) != nil)
+        b.day = "2027-04-02"
+        #expect(b.warning(trip: trip) == nil)
+    }
+
+    @Test func nothingFoundInPlainText() {
+        #expect(BookingImport.read("Hello, see you soon", defaultYear: 2027).isEmpty)
+    }
+}

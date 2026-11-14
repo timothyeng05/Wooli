@@ -51,6 +51,7 @@ struct TripActions {
     var stepCity: (Int) -> Void
     var copy: () -> Void
     var paste: () -> Void
+    var importBooking: () -> Void
     var hasSelection: Bool
     var hasPlace: Bool
     var hasTicket: Bool
@@ -94,6 +95,8 @@ struct MacTripWorkspace: View {
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
     @State private var editingTrip: Trip?
+    @State private var importing = false
+    @State private var importText = ""
     /// What was just deleted, shown for a few seconds with an Undo button.
     @State private var deletedNote: String?
     @Environment(\.undoManager) private var undoManager
@@ -171,10 +174,17 @@ struct MacTripWorkspace: View {
             stepCity: { stepCity($0, trip: trip) },
             copy: { copyPlans(trip: trip) },
             paste: { pastePlans(trip: trip) },
+            importBooking: { importText = ""; importing = true },
             hasSelection: !selection.isEmpty,
             hasPlace: selectedItems(trip).contains { $0.place?.mapsURL != nil },
             hasTicket: selectedItems(trip).count == 1 && selectedItems(trip).first?.kind == .transit))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
+        .sheet(isPresented: $importing) {
+            MacBookingImportSheet(trip: trip, initialText: importText) { ids in
+                selection = Set(ids)
+                if let first = ids.first { scrollTarget = first }
+            }
+        }
         .sheet(item: $editingTrip) { editing in
             // Trips with cities get the same sheet as New Trip; older city-less ones keep the form.
             if editing.legs.contains(where: { !$0.isHome }) { NewTripSheet(editing: editing) } else { TripEditor(trip: editing) }
