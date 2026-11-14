@@ -96,6 +96,7 @@ struct MacTripWorkspace: View {
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
     @State private var importing = false
+    @State private var duplicating = false
     /// Text from a file dropped on the window, handed to the import sheet.
     @State private var droppedText = ""
     @State private var editingTrip: Trip?
@@ -198,6 +199,9 @@ struct MacTripWorkspace: View {
             // Trips with cities get the same sheet as New Trip; older city-less ones keep the form.
             if editing.legs.contains(where: { !$0.isHome }) { NewTripSheet(editing: editing) } else { TripEditor(trip: editing) }
         }
+        .sheet(isPresented: $duplicating) {
+            DuplicateTripSheet(trip: trip) { TripStore.shared.openTripRequest = $0 }
+        }
         .sheet(isPresented: $importing, onDismiss: { droppedText = "" }) { ImportBookingsSheet(trip: trip, initialText: droppedText) }
         // A confirmation dragged from Mail or Finder: .eml, .pdf or .txt. (Plans use text drags, so they don't clash.)
         .dropDestination(for: URL.self) { urls, _ in
@@ -281,6 +285,7 @@ struct MacTripWorkspace: View {
         ToolbarItem(placement: .primaryAction) {
             Menu("More", systemImage: "ellipsis.circle") {
                 Button("Edit Trip…", systemImage: "pencil") { editingTrip = trip }
+                Button("Duplicate Trip…", systemImage: "plus.square.on.square") { duplicating = true }
                 Button("Import Confirmation…", systemImage: "square.and.arrow.down") { importing = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                 Menu("Export", systemImage: "square.and.arrow.up") {

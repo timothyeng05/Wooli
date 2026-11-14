@@ -158,6 +158,11 @@ struct MacShellView: View {
             guard let request else { return }
             selection.wrappedValue = .trip(request.tripID, .bookings)
         }
+        .onChange(of: trips.openTripRequest) { _, id in
+            guard let id else { return }
+            selection.wrappedValue = .trip(id, .overview)
+            trips.openTripRequest = nil
+        }
         .onAppear { tripSelection = TripSelectionStore.decode(lastTrip) }
         .onChange(of: tripSelection) { _, new in
             lastTrip = TripSelectionStore.encode(new)
