@@ -57,3 +57,18 @@ struct RouteOrderTests {
         #expect(result.orders.sorted { $0.value < $1.value }.map(\.key) == ["one", "two", "four", "five"])
     }
 }
+
+struct RouteMovableTests {
+    @Test func onlyUntimedPlacedPlansMove() {
+        let place = TripPlace(name: "P", latitude: 1, longitude: 1)
+        var walk = TripItem(tripID: "t", day: "d", kind: .activity, title: "Walk"); walk.place = place
+        #expect(walk.isRouteMovable)
+        var timed = walk; timed.time = 600
+        #expect(!timed.isRouteMovable)
+        var hotel = walk; hotel.kind = .stay
+        #expect(!hotel.isRouteMovable)
+        var train = walk; train.kind = .transit
+        #expect(!train.isRouteMovable)
+        #expect(!TripItem(tripID: "t", day: "d", kind: .activity, title: "No place").isRouteMovable)
+    }
+}

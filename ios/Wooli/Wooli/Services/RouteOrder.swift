@@ -110,3 +110,11 @@ enum RouteOrder {
         }
     }
 }
+
+extension TripItem {
+    /// May "Order by Shortest Route" move it? Untimed and placed; travel, stays and
+    /// empty slots stay put, and so does anything with a time.
+    var isRouteMovable: Bool {
+        place != nil && time == nil && kind != .transit && kind != .stay && !isMealPlaceholder
+    }
+}

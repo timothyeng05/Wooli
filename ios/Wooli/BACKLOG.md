@@ -235,7 +235,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | 🟡 logic, lookup, connector line and day total written 2026-11-14 (Claude, not built); fast-scroll request check and on-screen pass still to do |
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
-| M3-3 | Order a day by shortest route | P1 | 🟡 pure ordering + tests written 2026-11-14 (Claude, not built); day-header menu, confirmation, undo still to do |
+| M3-3 | Order a day by shortest route | P1 | 🟡 ordering, tests, day menu, confirmation and undo written 2026-11-14 (Claude, not built); Mac check of the undo step and the stay as start still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
 | M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
 
@@ -277,6 +277,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 
 - [ ] **Travel-time connectors** (2026-11-14, M3-2). New `TravelConnectorRow` sits between plans in `TripDetailView`'s day cards on both platforms (menu to change mode, indented 44 pt under the icon column). Check on an iPhone: the line's look and indent at large Dynamic Type, the mode menu, that scrolling a long trip doesn't fire a burst of directions requests, and that a trip with no places shows nothing. Not built.
 
+- [ ] **Order by Shortest Route** (2026-11-14, M3-3). New ⋯ "Day options" menu in each itinerary day card's header (`TripDetailView.dayCard`), shared with the iPhone. Check on an iPhone: the header still fits Map, Add and the menu at large Dynamic Type, the confirmation reads well, and the reorder lands (untimed places only). Not built.
+
 ## Phase 2 — Existing backlog (carried over)
 
 1. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).
@@ -312,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-3 (part): Order by Shortest Route in the day header.** Day cards with at least two movable plans (untimed, with a place, not travel or a stay: `TripItem.isRouteMovable`) get a "Day options" ⋯ menu with **Order by Shortest Route** (iPhone and Mac itinerary). It starts from the day's stay when that has a place, asks "Saves about 40 min" with a Reorder button (the message says what stays put), or "Already a good order" when nothing would be shorter. Reorder saves every moved plan's new `order` in one pass, so it is one undo step named "Order by Shortest Route" on the Mac. **Not built, not checked on screen.** Not done: the Calendar view, a per-plan preview of the new order before accepting, and an iPhone check of the ⋯ menu beside Map and Add. Added a harmonization-log line.
 
 - **2026-11-14 · Claude** — **M3-3 (part): route ordering.** `Services/RouteOrder.swift` (pure, 6 tests in `RouteOrderTests`): `reorder(stops, start:)` takes a day's plans (each with its current sort position, whether it may move, and coordinates), starts from the day's stay (or, with none, keeps the first plan first), orders the movable ones by nearest neighbour, then 2-opt to untangle crossings, and puts the new sequence into the slots the movable plans already held, so timed plans, travel and stays never move (equal slots, e.g. all untimed, get strictly increasing orders). Returns the new `order` for every movable plan plus the kilometres saved ("about N min" at 15 km/h, to the nearest 5), or nil when it saves under 0.2 km or there are too few plans. **Not built, tests not run.** Still to do: the day-header menu item **Order by Shortest Route**, the "Saves about 40 min. Reorder?" confirmation, applying it as one undo step, and the stay as the starting point.
 

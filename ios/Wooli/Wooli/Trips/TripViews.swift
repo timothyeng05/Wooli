@@ -513,6 +513,9 @@ struct TripDetailView: View {
     @State private var placeItem: TripItem?
     @State private var editingTrip: Trip?
     @State private var dayMap: String?
+    /// "Order by Shortest Route" waiting for a yes: the day and what it would change.
+    @State private var routeProposal: RouteProposal?
+    @State private var routeAlreadyGood = false
     /// Where a dragged plan would land: above or below this row.
     @State private var dropSpot: PlanDropSpot?
     @State private var rowHeights: [String: CGFloat] = [:]
@@ -636,6 +639,17 @@ struct TripDetailView: View {
             }
         }
         .sheet(item: $editingItem) { TripItemEditor(item: $0, trip: trip) }
+        .confirmationDialog("Saves about \(routeProposal?.result.savedMinutes ?? 0) min", isPresented: Binding(
+            get: { routeProposal != nil }, set: { if !$0 { routeProposal = nil } }), titleVisibility: .visible) {
+            Button("Reorder") { applyRoute() }
+        } message: {
+            Text("Puts the day's untimed places in a shorter order. Plans with a time, travel and stays stay where they are.")
+        }
+        .alert("Already a good order", isPresented: $routeAlreadyGood) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Reordering wouldn't shorten this day.")
+        }
         .sheet(item: $placeItem) { TripPlaceDetail(item: $0, trip: trip) }
         .sheet(item: $eatsMeal) { meal in
             if let place = eatsEntry(meal) { EatsPlaceDetail(place: place, tripItem: meal) }
@@ -899,6 +913,14 @@ struct TripDetailView: View {
                     if plans.contains(where: { $0.place != nil }) {
                         Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
                     }
+                    if plans.filter(\.isRouteMovable).count >= 2 {
+                        Menu("Day options", systemImage: "ellipsis.circle") {
+                            Button("Order by Shortest Route", systemImage: "arrow.triangle.swap") {
+                                proposeRoute(day: block.day, plans: plans, all: all)
+                            }
+                        }
+                        .labelStyle(.iconOnly)
+                    }
                     Button("Add", systemImage: "plus") {
                         if let onAdd { onAdd(block.day) } else { editingItem = TripItem(tripID: trip.id, day: block.day) }
                     }
@@ -944,6 +966,43 @@ struct TripDetailView: View {
                 Capsule().fill(Theme.Group.travel.color.gradient).frame(width: 4).padding(.vertical, 22)
             }
         }
+    }
+
+    /// What "Order by Shortest Route" would do to a day, held while the user decides.
+    struct RouteProposal: Identifiable {
+        let day: String
+        let result: RouteOrder.Result
+        var id: String { day }
+    }
+
+    /// Works out the new order (starting from the day's stay when it has a place) and asks first.
+    private func proposeRoute(day: String, plans: [TripItem], all: [TripItem]) {
+        let stops = plans.compactMap { item -> RouteOrder.Stop? in
+            guard let place = item.place else { return nil }
+            return RouteOrder.Stop(id: item.id, sortKey: item.sortKey, movable: item.isRouteMovable,
+                                   latitude: place.latitude, longitude: place.longitude)
+        }
+        let stay = all.first { $0.kind == .stay && $0.place != nil && ($0.day == day || $0.staysOver(day)) }?.place
+        let start = stay.map { (latitude: $0.latitude, longitude: $0.longitude) }
+        if let result = RouteOrder.reorder(stops, start: start) {
+            routeProposal = RouteProposal(day: day, result: result)
+        } else {
+            routeAlreadyGood = true
+        }
+    }
+
+    /// One undo step: every moved plan is saved in the same pass.
+    private func applyRoute() {
+        guard let proposal = routeProposal else { return }
+        store.undoManager?.setActionName("Order by Shortest Route")
+        withAnimation(.snappy) {
+            for (id, order) in proposal.result.orders {
+                guard var item = store.items.first(where: { $0.id == id }) else { continue }
+                item.order = order
+                store.save(item)
+            }
+        }
+        routeProposal = nil
     }
 
     /// "4 stops · 1 h 10 min getting around", from what's already been looked up (never asks).
