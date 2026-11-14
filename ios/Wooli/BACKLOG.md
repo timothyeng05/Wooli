@@ -237,7 +237,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | 🟡 ordering, tests, day menu, confirmation and undo written 2026-11-14 (Claude, not built); Mac check of the undo step and the stay as start still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
-| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist (logic + Mac card) written 2026-11-14 (Claude, not built); rest todo |
+| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist and M4-1 stats logic written 2026-11-14 (Claude, not built); rest todo |
 
 ---
 
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M4-1 (part): places-been numbers.** `Services/TravelStats.swift` (pure, 4 tests in `TravelStatsTests`): across trips that ended before today, the countries (from the legs' `countryCode`), distinct cities (same city on two trips counts once), nights away (days minus one per trip) and flights (non-cancelled flight tickets); a recap line per finished trip ("Spain 2026 · 9 nights · 2 cities · 1 flight"); `flag("ES")` → 🇪🇸 and a localized country name. **Not built, tests not run.** Next in this epic: the card on All trips. Not planned here: the globe with every past trip's route.
 
 - **2026-11-14 · Claude** — **M4-2 (part): checklist in the To do list.** `TripTodo` gets a `checklist` row, "2 checklist items left", between "days with nothing planned" and "ideas waiting"; nothing shows once everything is ticked. In the Mac To do card it has a checklist icon (a click doesn't navigate anywhere yet; the card is just below). 1 new test. **Not built, tests not run.**
 
