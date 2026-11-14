@@ -237,7 +237,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | 🟡 ordering, tests, day menu, confirmation and undo written 2026-11-14 (Claude, not built); Mac check of the undo step and the stay as start still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
-| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist and M4-1 stats logic written 2026-11-14 (Claude, not built); rest todo |
+| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist, M4-1 places-been card and M4-4 template logic written 2026-11-14 (Claude, not built); rest todo |
 
 ---
 
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M4-4 (part): template logic.** `Services/TripTemplate.swift` (pure, 4 tests in `TripTemplateTests`): `make(from:items:newStart:name:)` copies a trip to a new start day. Kept: cities with their places, coordinates and zones, day titles, budget, currency and travellers, ideas and untimed activities, food and notes, a checklist with nothing ticked. Dropped: flights, trains and stays, timed plans (reservations), every price and points, booking status, import history, ignored warnings, the "not booked yet" note prefix. New ids; the copy is always yours and unshared. **Not built, tests not run.** Next: the menu item and sheet.
 
 - **2026-11-14 · Claude** — **M4-1 (part): Places you've been card.** All trips (cardGrid, Mac gallery) shows a card under the next-trip ticket once a trip has ended: countries, cities, nights away and flights as four numbers, and a flag for each country (name on hover and for VoiceOver). New `Trips/PlacesBeenCard.swift`, fed by `TravelStatsMaker`. Countries come from the legs' `countryCode`, so older trips without it add cities but no country. **Not built, not checked on screen.** Not done: the globe with every past trip's route (`TripGlobe` exists but isn't used here), a postcard-style recap per finished trip (the recap line is written but not shown), backfilling country codes on old legs.
 
