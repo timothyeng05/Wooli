@@ -93,6 +93,7 @@ struct MacTripWorkspace: View {
     /// Day (or plan) the outline should scroll to.
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
+    @State private var importing = false
     @State private var editingTrip: Trip?
     /// What was just deleted, shown for a few seconds with an Undo button.
     @State private var deletedNote: String?
@@ -189,10 +190,15 @@ struct MacTripWorkspace: View {
             hasPlace: selectedItems(trip).contains { $0.place?.mapsURL != nil },
             hasTicket: selectedItems(trip).count == 1 && selectedItems(trip).first?.kind == .transit))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
+<<<<<<< HEAD
         .sheet(item: $editingTrip) { editing in
             // Trips with cities get the same sheet as New Trip; older city-less ones keep the form.
             if editing.legs.contains(where: { !$0.isHome }) { NewTripSheet(editing: editing) } else { TripEditor(trip: editing) }
         }
+=======
+        .sheet(item: $editingTrip) { TripEditor(trip: $0) }
+        .sheet(isPresented: $importing) { ImportBookingsSheet(trip: trip) }
+>>>>>>> ff25edd (iOS: M2-3 paste-and-review import sheet on the Mac)
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
         } message: {
@@ -268,6 +274,8 @@ struct MacTripWorkspace: View {
         ToolbarItem(placement: .primaryAction) {
             Menu("More", systemImage: "ellipsis.circle") {
                 Button("Edit Trip…", systemImage: "pencil") { editingTrip = trip }
+                Button("Import Confirmation…", systemImage: "square.and.arrow.down") { importing = true }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }

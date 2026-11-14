@@ -228,7 +228,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar badge and tests written 2026-11-14 (Claude, not built); see Done |
-| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 deterministic reader written 2026-11-14 (Claude, not built); review sheet, Import menu, drop/paste, Apple Intelligence path still to do |
+| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader + paste-and-review sheet written 2026-11-14 (Claude, not built); drop, .eml/.pdf, Apple Intelligence path, stays still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
 | M3-1 | Time zones per city | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-3 (part): paste-and-review sheet on the Mac.** More → **Import Confirmation…** (⇧⌘I) opens `Trips/ImportBookingsSheet.swift`: paste text (Paste button), Read, then one editable row per flight found (include switch, flight number, from, to, day picker, shows code, total and time). Warns when the date is outside the trip (it then goes to Ideas unless you pick a day) and when the same flight number is already on that day ("adding updates it": fills only blank fields). **Add to Trip** saves each as a travel plan with `source = import`, Booked when a code was found; a shared total goes on the first flight only. Nothing is saved before that. **Not built, not checked on screen.** Still to do: drop and ⌘V anywhere, `.eml`/`.pdf`/`.txt` files (PDFKit, MIME), the Apple Intelligence path, stays and other bookings, arrival time and place lookup, the share extension.
 
 - **2026-11-14 · Claude** — **M2-3 (part): confirmation reader without Apple Intelligence** (`PRD-MAC-TRIPS.md`). `Trips/ConfirmationParser.swift` is pure: from pasted text it finds each flight number, the airport codes after it (checked against `airports.tsv`), a date (ISO, "Apr 9, 2027", "9 April"; year from the trip when missing), the first time (AM/PM or 24 h), a booking code ("Confirmation number: ABC123") and a total with its currency. Flights are split by flight number; the code and total are shared by every flight in the text. 7 tests in `ConfirmationParserTests`. **Not built, tests not run.** **Still to do for M2-3:** the review sheet (editable rows, day it lands on, outside-trip warning, duplicate check, nothing saved until Add to Trip), File → Import… ⇧⌘I, paste and drop (.eml, .pdf, .txt), the `@Generable` Apple Intelligence path, stays and other bookings (this reader only finds flights), and the share extension.
 
