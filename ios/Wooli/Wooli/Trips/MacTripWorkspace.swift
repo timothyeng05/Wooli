@@ -641,6 +641,8 @@ struct MacTripWorkspace: View {
                             .font(.subheadline.weight(.medium)).foregroundStyle(Theme.brand)
                     }
                     Text(trip.dateRangeText).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                    Text(TripOverview.status(trip: trip, today: DayKey.key(.now)))
+                        .font(.callout.weight(.medium)).foregroundStyle(Theme.brand)
                     Text("\(trip.days.count) days · \(cities) cit\(cities == 1 ? "y" : "ies") · \(plans) plans")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
                     if !trip.notes.isEmpty {

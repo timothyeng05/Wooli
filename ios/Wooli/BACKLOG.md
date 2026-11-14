@@ -234,7 +234,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | todo |
-| M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list + card written 2026-11-14 (Claude, not built); hero countdown, Route card, notes in place still to do |
+| M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list + card and status line written 2026-11-14 (Claude, not built); Route card, notes in place, full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | todo |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
 | M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-5 (part): status line.** `Services/TripOverview.swift` (pure, 3 tests): "In 12 days" / "Tomorrow" before the trip, "Day 3 of 5 · Madrid" during it (on a change day, the city you've arrived in), "Ended" after. It shows under the dates at the top of the Mac inspector summary. `today` is passed in as a day key, not read from the zone. **Not built, tests not run.** Still to do for M3-5: use the current leg's zone for "today" (needs the M3-1 zone in the UI), the Route card, notes in place, and making Overview its own page.
 
 - **2026-11-14 · Claude** — **M3-5 (part): To do list.** `Services/TripTodo.swift` (pure, 6 tests in `TripTodoTests`) builds the list, most urgent first: nights without a bed (one row per run: "No bed Apr 4 to Apr 6 in Dali"), travel not booked ("Book CX831 JFK → HKG"), "N things to check" (the M3-4 warnings), "N bookings without a price", "N days with nothing planned", "N ideas waiting". Cancelled plans and empty slots are ignored. `Trips/MacTripTodo.swift` shows it as the **To do** card at the top of the inspector summary (whole trip only): each row selects the plan and scrolls to its day; an empty list says "Nothing left to plan". **Not built, tests not run, not checked on screen.** Not done: the Overview hero ("Day 4 of 11 · Seville"), the Route card, notes editable in place, "Add a day with nothing planned" actions, and opening the Bookings page filtered from the unpriced row.
 
