@@ -1208,22 +1208,28 @@ struct TripItemRow: View {
     private var full: some View {
         HStack(alignment: .top, spacing: 12) {
             let tint = Color(hex: item.kind.colorHex)
+            // An empty meal slot or a plan not booked yet is an outline; a real plan is solid.
+            let outlined = item.isMealPlaceholder || item.isUnbooked
             Image(systemName: item.kind.symbol)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(item.isMealPlaceholder ? tint : item.kind.onColor)
+                .foregroundStyle(outlined ? tint : item.kind.onColor)
                 .frame(width: 32, height: 32)
-                // An empty meal slot is an outline; a real plan is solid.
-                .background(item.isMealPlaceholder ? AnyShapeStyle(tint.opacity(0.1)) : AnyShapeStyle(tint.gradient), in: Circle())
+                .background(outlined ? AnyShapeStyle(tint.opacity(0.1)) : AnyShapeStyle(tint.gradient), in: Circle())
                 .overlay {
-                    if item.isMealPlaceholder {
+                    if outlined {
                         Circle().strokeBorder(tint.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
                     }
                 }
-                .shadow(color: tint.opacity(item.isMealPlaceholder ? 0 : 0.35), radius: 4, y: 2)
+                .shadow(color: tint.opacity(outlined ? 0 : 0.35), radius: 4, y: 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(stayRole == .checkIn ? .subheadline.weight(.semibold) : .subheadline.weight(.medium))
                     .foregroundStyle(item.isMealPlaceholder ? Theme.textSecondary : Theme.text)
+                    .strikethrough(item.isCancelled)
+                if let status = item.bookingStatus {
+                    Text(status.label).font(.caption.weight(.medium))
+                        .foregroundStyle(status == .booked ? Theme.brand : Theme.textSecondary)
+                }
                 if item.isMealPlaceholder {
                     Text("Tap to pick a place").font(.caption).foregroundStyle(Theme.textTertiary)
                 }
@@ -1262,7 +1268,29 @@ struct TripItemRow: View {
                 }
             }
         }
+        .opacity(item.isCancelled ? 0.5 : 1)
         .contentShape(Rectangle())
+    }
+}
+
+/// Not booked · Booked · Cancelled for a plan (M2-1). "Not set" clears it, and
+/// also drops an old "not booked yet" notes prefix so the two never disagree.
+struct BookingStatusPicker: View {
+    @Binding var item: TripItem
+
+    var body: some View {
+        Picker("Status", selection: Binding<BookingStatus?>(
+            get: { item.bookingStatus == .idea ? .planned : item.bookingStatus },
+            set: { status in
+                item.setStatus(status)
+                if status == nil { item.notes = TripItem.strippingNotBooked(item.notes) }
+            }
+        )) {
+            Text("Not set").tag(BookingStatus?.none)
+            ForEach([BookingStatus.planned, .booked, .cancelled]) { status in
+                Text(status.label).tag(BookingStatus?.some(status))
+            }
+        }
     }
 }
 
@@ -1635,6 +1663,9 @@ struct TripItemEditor: View {
             }
 
             if item.kind != .note {
+                Section("Booking") {
+                    BookingStatusPicker(item: $item)
+                }
                 Section {
                     TripCostField(cost: $item.cost, currency: $item.currency,
                                   prompt: item.kind == .stay ? "Total for the stay" : "Price")
@@ -1680,6 +1711,7 @@ struct TripItemEditor: View {
                     .padding(.horizontal, 16)
                     .padding(.top, -96)
                 VStack(alignment: .leading, spacing: Space.m) {
+                    BookingStatusPicker(item: $item)
                     TripCostField(cost: $item.cost, currency: $item.currency, prompt: "Price for every seat")
                     TripPointsField(points: $item.points, program: $item.pointsProgram)
                 }

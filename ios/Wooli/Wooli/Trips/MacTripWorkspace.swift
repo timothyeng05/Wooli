@@ -1420,6 +1420,9 @@ struct MacPlanInspector: View {
             }
 
             if item.wrappedValue.kind != .note {
+                Section("Booking") {
+                    BookingStatusPicker(item: item)
+                }
                 Section {
                     TripCostField(cost: item.cost, currency: item.currency,
                                   prompt: item.wrappedValue.kind == .stay ? "Total for the stay" : "Price")
