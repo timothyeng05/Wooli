@@ -12,6 +12,8 @@ struct MacBookingImportSheet: View {
     @State private var store = TripStore.shared
     @State private var text = ""
     @State private var found: [ImportedBooking] = []
+    @State private var reading = false
+    @State private var readTask: Task<Void, Never>?
     /// Booking id → true when it should update the plan already in the trip.
     @State private var updating: [String: Bool] = [:]
     @Environment(\.dismiss) private var dismiss
@@ -26,10 +28,14 @@ struct MacBookingImportSheet: View {
                 .frame(minHeight: 110, maxHeight: 160)
                 .overlay(RoundedRectangle(cornerRadius: Radius.small).stroke(Theme.textTertiary.opacity(0.4)))
                 .onChange(of: text) { _, new in read(new) }
-            if found.isEmpty {
+            if reading {
+                HStack { ProgressView().controlSize(.small); Text("Reading with Apple Intelligence…").font(.callout).foregroundStyle(Theme.textSecondary) }
+            } else if found.isEmpty {
                 Text(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                      ? "Nothing pasted yet."
-                     : "No flights or stays found in that text. You can still add the plan by hand.")
+                     : BookingReader.modelAvailable
+                        ? "No flights or stays found in that text. You can still add the plan by hand."
+                        : "No flights or stays found in that text. Apple Intelligence isn't available on this Mac, so only the simple patterns ran. You can still add the plan by hand.")
                     .font(.callout).foregroundStyle(Theme.textTertiary)
             } else {
                 ScrollView {
@@ -111,7 +117,20 @@ struct MacBookingImportSheet: View {
 
     private func read(_ text: String) {
         let year = Int(trip.startDay.prefix(4))
+        readTask?.cancel()
         found = BookingImport.read(text, defaultYear: year)
+        guard found.isEmpty, BookingReader.modelAvailable,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { reading = false; return }
+        // The patterns found nothing: let the model try, after a pause so typing doesn't restart it each key.
+        reading = true
+        readTask = Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            let result = await BookingReader.read(text, defaultYear: year)
+            guard !Task.isCancelled else { return }
+            found = result
+            reading = false
+        }
     }
 
     private func add() {
