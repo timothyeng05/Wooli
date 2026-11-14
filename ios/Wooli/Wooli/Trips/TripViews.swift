@@ -86,6 +86,7 @@ struct TripsListView: View {
                         .buttonStyle(.plain)
                         .contextMenu { tripMenu(next) }
                 }
+                PlacesBeenCard(stats: TravelStatsMaker.stats(trips: store.trips, items: store.items, today: DayKey.key(.now)))
                 ForEach([("Upcoming", rest), ("Past", past)], id: \.0) { title, trips in
                     if !trips.isEmpty {
                         VStack(alignment: .leading, spacing: Space.m) {
