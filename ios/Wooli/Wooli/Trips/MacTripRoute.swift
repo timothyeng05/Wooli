@@ -9,7 +9,7 @@ struct TripRouteCard: View {
     var onGoToDay: (String) -> Void
 
     var body: some View {
-        let stops = TripRoute.stops(trip: trip, items: items)
+        let stops = TripCityRoute.stops(trip: trip, items: items)
         if stops.count > 1 {
             VStack(alignment: .leading, spacing: Space.s) {
                 Text("Route").font(.headline).foregroundStyle(Theme.text)

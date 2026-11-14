@@ -14,7 +14,7 @@ struct TripRouteStop: Identifiable, Hashable {
     var id: String { legID }
 }
 
-enum TripRoute {
+enum TripCityRoute {
     static func stops(trip: Trip, items: [TripItem]) -> [TripRouteStop] {
         let items = TripExport.exportable(items)
         let cities = trip.legs.filter { !$0.isHome }.sorted { $0.startDay < $1.startDay }
