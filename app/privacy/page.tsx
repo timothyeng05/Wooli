@@ -49,7 +49,7 @@ export default function PrivacyPage() {
 
       <h2>Apple services</h2>
       <p>
-        Place search, maps and place details come from Apple Maps, and Face ID or Touch ID (if you turn it on) is
+        Place search, maps, place details and travel times between places come from Apple Maps, and Face ID or Touch ID (if you turn it on) is
         handled by your device. Apple&apos;s privacy policy applies to these services. Wooli never sees your Face ID or Touch ID data.
         Suggested categories for transactions, and the meal, cuisine and cooking-time tags on your recipes,
         are worked out on your device with Apple Intelligence (when it&apos;s on); your transactions and recipes
@@ -72,6 +72,15 @@ export default function PrivacyPage() {
         device sends the title you type to TMDB, and fetches the details of the film you pick. Nothing is sent
         to the developer. TMDB&apos;s privacy policy applies to those requests. This product uses the TMDB API
         but is not endorsed or certified by TMDB.
+      </p>
+
+      <h2>Exchange rates</h2>
+      <p>
+        If a trip has bookings in more than one currency, you can tap &ldquo;Update rates&rdquo; to fetch the
+        European Central Bank&apos;s public daily reference rates. Your device makes one anonymous request to the
+        ECB&apos;s website; nothing about you, your trip or your bookings is sent, and nothing is sent to the
+        developer. Without it, rates you type in yourself are used. The ECB&apos;s privacy policy applies to that
+        request.
       </p>
 
       <h2>Instagram reels</h2>

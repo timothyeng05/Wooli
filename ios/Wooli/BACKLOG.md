@@ -230,7 +230,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-2 | Bookings page (table) | P0 | 🟡 table, badge, grouping, clickable header and zones written 2026-11-14 (Claude, not built); nights-without-a-bed part and an iPhone page still to do |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader (flights and stays), review sheet, .eml/.txt/.pdf drop written 2026-11-14 (Claude, not built); ⌘V paste anywhere, Apple Intelligence path, place lookup, share extension still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
-| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, rates popover and by-type/by-city bars written 2026-11-14 (Claude, not built); "without a price" link, privacy line, Budget-tag actuals still to do |
+| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, rates popover, bars and privacy line written 2026-11-14 (Claude, not built); "without a price" link and Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | 🟡 logic, lookup, connector line and day total written 2026-11-14 (Claude, not built); fast-scroll request check and on-screen pass still to do |
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-4 (part): privacy page.** `/privacy` now has an **Exchange rates** section (the optional "Update rates" request to the European Central Bank: one anonymous request, nothing about the user or trip sent, none to the developer, manual rates otherwise) and says travel times between places come from Apple Maps. Website text only; `npm run check` passes (typecheck, no web tests). **Still to confirm:** the App Store Connect privacy answers, and that the site is redeployed with this page before a build that has the rates button ships.
 
 - **2026-11-14 · Claude** — **M2-4 (part): costs by type and by city.** `Services/TripCostBreakdown.swift` (pure, 3 tests): bars by kind (flights and trains, stays, food, activities) and by city (a plan counts for the city its day falls in, on a change day the one you arrive in; the rest is "Other"), in the budget currency at the trip's rates, largest first, cancelled plans and amounts with no rate left out. `TripCostBars` (in `Trips/MacTripBudget.swift`) draws them as two small bar lists in the Costs card (by city only for the whole trip; each list only when it has more than one bar). **Not built, tests not run, not checked on screen.** Bars use the travel colour for all rows (group colours per kind are not wired).
 
