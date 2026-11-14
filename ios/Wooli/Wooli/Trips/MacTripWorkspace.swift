@@ -652,6 +652,10 @@ struct MacTripWorkspace: View {
                     scrollTarget = $0
                 }
                 let leg = trip.legs.first { $0.id == focusLeg }
+                TripWarningsCard(trip: trip, items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }) {
+                    selection = [$0]
+                    scrollTarget = $0
+                }
                 TripCostsCard(costs: TripCosts(items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }),
                               scope: leg.map { $0.name } ?? "this trip",
                               trip: trip,
