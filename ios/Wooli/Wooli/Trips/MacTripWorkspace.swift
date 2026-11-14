@@ -83,6 +83,7 @@ struct MacTripWorkspace: View {
     /// Day (or plan) the outline should scroll to.
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
+    @State private var importing = false
     @State private var editingTrip: Trip?
     /// What was just deleted, shown for a few seconds with an Undo button.
     @State private var deletedNote: String?
@@ -169,6 +170,7 @@ struct MacTripWorkspace: View {
             hasSelection: !selection.isEmpty))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
         .sheet(item: $editingTrip) { TripEditor(trip: $0) }
+        .sheet(isPresented: $importing) { ImportBookingsSheet(trip: trip) }
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
         } message: {
@@ -244,6 +246,8 @@ struct MacTripWorkspace: View {
         ToolbarItem(placement: .primaryAction) {
             Menu("More", systemImage: "ellipsis.circle") {
                 Button("Edit Trip…", systemImage: "pencil") { editingTrip = trip }
+                Button("Import Confirmation…", systemImage: "square.and.arrow.down") { importing = true }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
