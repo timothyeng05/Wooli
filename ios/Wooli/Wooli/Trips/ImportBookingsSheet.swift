@@ -1,11 +1,14 @@
 #if os(macOS)
 import AppKit
+import PDFKit
 import SwiftUI
 
 /// Paste a confirmation, see what was found, fix it, then add it (M2-3).
 /// Nothing is saved until "Add to Trip".
 struct ImportBookingsSheet: View {
     let trip: Trip
+    /// Text already read from a dropped file; it's read straight away.
+    var initialText = ""
     @Environment(\.dismiss) private var dismiss
     @State private var store = TripStore.shared
     @State private var text = ""
@@ -23,6 +26,22 @@ struct ImportBookingsSheet: View {
             if reviewing { review } else { entry }
         }
         .frame(minWidth: 560, minHeight: 440)
+        .onAppear {
+            guard text.isEmpty, !initialText.isEmpty else { return }
+            text = initialText
+            read()
+        }
+    }
+
+    /// The text of a dropped `.eml`, `.txt` or `.pdf` (PDFs are read on this Mac with PDFKit); nil if unreadable.
+    static func text(from url: URL) -> String? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        if url.pathExtension.lowercased() == "pdf" {
+            return PDFDocument(url: url)?.string
+        }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return ConfirmationText.text(fromFile: url.lastPathComponent, data: data)
     }
 
     // MARK: Step 1: the text

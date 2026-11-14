@@ -96,6 +96,8 @@ struct MacTripWorkspace: View {
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
     @State private var importing = false
+    /// Text from a file dropped on the window, handed to the import sheet.
+    @State private var droppedText = ""
     @State private var editingTrip: Trip?
     /// What was just deleted, shown for a few seconds with an Undo button.
     @State private var deletedNote: String?
@@ -196,7 +198,14 @@ struct MacTripWorkspace: View {
             // Trips with cities get the same sheet as New Trip; older city-less ones keep the form.
             if editing.legs.contains(where: { !$0.isHome }) { NewTripSheet(editing: editing) } else { TripEditor(trip: editing) }
         }
-        .sheet(isPresented: $importing) { ImportBookingsSheet(trip: trip) }
+        .sheet(isPresented: $importing, onDismiss: { droppedText = "" }) { ImportBookingsSheet(trip: trip, initialText: droppedText) }
+        // A confirmation dragged from Mail or Finder: .eml, .pdf or .txt. (Plans use text drags, so they don't clash.)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let text = urls.lazy.compactMap(ImportBookingsSheet.text(from:)).first, !text.isEmpty else { return false }
+            droppedText = text
+            importing = true
+            return true
+        }
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
         } message: {

@@ -228,7 +228,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar badge and tests written 2026-11-14 (Claude, not built); see Done |
-| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader + paste-and-review sheet written 2026-11-14 (Claude, not built); drop, .eml/.pdf, Apple Intelligence path, stays still to do |
+| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader (flights and stays), review sheet, .eml/.txt/.pdf drop written 2026-11-14 (Claude, not built); ⌘V paste anywhere, Apple Intelligence path, place lookup, share extension still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-3 (part): drop a confirmation on the trip window.** Dragging an `.eml` (from Mail or Finder), `.txt` or `.pdf` onto a Mac trip page opens Import Confirmation… with the file's text already read and the found bookings listed for review (`ImportBookingsSheet(initialText:)`; `.pdf` text via PDFKit on this Mac, `.eml`/`.txt` via `ConfirmationText`). Plans are dragged as text, so a URL-only drop target doesn't clash with reordering. Nothing is saved until Add to Trip. **Not built, not tried with real files.** M2-3 still lacks: ⌘V of text anywhere that isn't a text field (the Edit menu's ⌘V pastes plans, so this needs a decision), the Apple Intelligence `@Generable` path, place lookup through the existing search with the 80 km check, arrival times, and the share extension.
 
 - **2026-11-14 · Claude** — **M2-3 (part): `.eml` and `.txt` text.** `Trips/ConfirmationText.swift` (pure, 6 tests in `ConfirmationTextTests`): the subject line plus the readable body of an email: multipart messages prefer the plain-text part (HTML only as a fallback), quoted-printable and base64 are decoded (UTF-8 sequences like "é" kept together), folded headers joined, HTML stripped to lines with the few entities that matter. A `.txt` passes through. **Not built, tests not run.** Not wired to anything yet (next story: drop onto the trip window, with PDFKit for `.pdf`).
 
