@@ -233,7 +233,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
-| M3-2 | Travel time between stops | P0 | 🟡 logic, tests and directions lookup with disk cache written 2026-11-14 (Claude, not built); connector line and day total still to do |
+| M3-2 | Travel time between stops | P0 | 🟡 logic, lookup with disk cache and connector line written 2026-11-14 (Claude, not built); day-header total, visible-days-only check, Mac Table not needed still to do |
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | todo |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
@@ -275,6 +275,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 - [ ] **Points and miles on bookings** (2026-11-12). Shared code: `TripPointsField` (amount + program picker, Other… to type one) sits under the price in `TripItemEditor`'s Cost section and on the dark flight/train ticket; rows and the blue ticket show `priceText` ("HKD 3,564 + 238,000 Asia Miles"). Check the iPhone editor's number pad, the program menu and the Other… field, and the ticket's price box. The iPhone still has no trip totals (the Costs card is Mac-only). Deploy `points` / `pointsProgram` to CloudKit Production first.
 - [ ] **Trip planning coverage heatmap** (2026-11-11, `TripCoverageCard`). Shared view: on the iPhone it sits under the trip map, above Ideas, and tapping a row scrolls to (and unfolds) that day. Check on an iPhone: the 9 columns fit at 375 pt with large Dynamic Type, the fold chevron, the tap-to-day scroll, VoiceOver reading each row as one button.
 
+- [ ] **Travel-time connectors** (2026-11-14, M3-2). New `TravelConnectorRow` sits between plans in `TripDetailView`'s day cards on both platforms (menu to change mode, indented 44 pt under the icon column). Check on an iPhone: the line's look and indent at large Dynamic Type, the mode menu, that scrolling a long trip doesn't fire a burst of directions requests, and that a trip with no places shows nothing. Not built.
+
 ## Phase 2 — Existing backlog (carried over)
 
 1. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).
@@ -310,6 +312,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-2 (part): connector line in the itinerary.** New `Trips/TravelConnectorRow.swift` (iPhone and Mac): between two consecutive placed plans in a day card (travel tickets and stays excluded) a small line shows the estimate ("14 min walk", "22 min by transit", the distance when there's no directions). Tap it for walk / by transit / drive, or "Pick Automatically"; the choice is remembered on this device for that pair. It asks `TravelEstimator` when the row first appears, so each hop is looked up once and then comes from the cache. The Calendar view has no connectors. **Not built, not checked on screen.** Added a harmonization-log line. Not done: the day-header total ("4 stops · 1 h 10 min getting around"), confirming no request fires while scrolling fast on a 30-day trip (relies on the day cards being lazy; unverified), and the iPhone check of the line's indent under the row icon.
 
 - **2026-11-14 · Claude** — **M3-2 (part): directions lookup.** `Trips/TravelEstimator.swift` (main-actor singleton, iPhone and Mac): `estimate(from:to:mode:)` returns a `TravelEstimate` for a hop using `MKDirections.calculateETA`. Answers are cached in `Application Support/travel-times.json` by place pair and mode, so reopening a trip asks for nothing; requests run one at a time with a 250 ms gap; duplicate asks share one request; transit that Apple can't route is retried as driving; a failure falls back to the straight-line distance and isn't retried until the next launch. `cached(...)` reads the cache without asking. **Not built, not exercised against Apple's service.** Not unit-tested (it needs the network): the pure parts are in `TravelTime`. Still to do: the connector line in the itinerary (visible days only, click to change mode) and the day-header total.
 

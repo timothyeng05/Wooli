@@ -890,6 +890,8 @@ struct TripDetailView: View {
         let date = DayKey.date(block.day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         let base = "Day \(block.number)"
         let title = trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base
+        // The line between two placed plans in a row: how long it takes to get from one to the next.
+        let connectors = Dictionary(TravelTime.pairs(plans).map { ($0.from.id, $0.to) }, uniquingKeysWith: { a, _ in a })
 
         return VStack(alignment: .leading, spacing: 12) {
             CardHeader(title: title, subtitle: date) {
@@ -911,7 +913,12 @@ struct TripDetailView: View {
                 switch entry {
                 case .plan(let item):
                     if item.day == block.day {
-                        draggableRow(item, trip: trip, day: block.day, plans: plans)
+                        VStack(alignment: .leading, spacing: 4) {
+                            draggableRow(item, trip: trip, day: block.day, plans: plans)
+                            if let next = connectors[item.id], let here = item.place, let there = next.place {
+                                TravelConnectorRow(from: here, to: there)
+                            }
+                        }
                     } else {
                         // A stay from an earlier night: it lives on its check-in day.
                         itemRow(item, trip: trip, day: block.day)
