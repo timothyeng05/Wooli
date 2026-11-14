@@ -227,7 +227,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip, banner, Help menu, first-trip pointers done 2026-11-12 (Claude); signed-out run-through still to do |
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
-| M2-2 | Bookings page (table) | P0 | todo |
+| M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes done 2026-11-14 (Claude); search, group by, header line filters, inspector, multi-select actions left |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-2 story 1: Bookings page.** New sidebar row "Bookings" under each trip (red count of travel and stays not booked) opens a native `Table` (Mac only, `MacBookingsTable`): Status (menu: Not booked / Booked / Cancelled), Type, What ("CX831 JFK → HKG"), When, Until, Confirmation (monospaced, click copies), Cost (cash + points), City; sortable by any column, default by When. Rows, header-line counts and filters live in `BookingsList` (pure, shared). Unit tests in `WooliTests/BookingsListTests.swift`. Built for Mac: yes. **Tests not run** (the test target only supports iOS and this machine has no iOS 26 simulator). Not done: search, group by, header line, inspector, multi-select actions, double-click not tried by hand.
 
 - **2026-11-12 · Claude** — **M1 sweep.** **M1-4:** the new-trip sheet doubles as Edit Trip… for trips with cities (`NewTripSheet(editing:)`); saving moves each plan with its city (`TripSetup.remap`: Seville's day 2 stays Seville's day 2), and plans whose day disappears go to Ideas after a "N plans will move to Ideas" confirmation; city ids now carry from `SetupCity` to `TripLeg`. Unit tests for remap. **M1-9:** first time any trip opens, a three-pointer sheet (quick add, map, Invite) using `AppGuideSheet` (`AppGuide.tripWorkspace`, reset with the other guides). **M1-7:** ⌘K "Go to…" palette (`Views/CommandPalette.swift`): trips, cities, apps, Budget pages, New Trip. **M1-10:** `TripStore.items(in:)` reads a per-trip index rebuilt after any change. Mac, iOS builds and the suite pass. Not run by hand: palette, Edit Trip, the pointer sheet. Not done: Space preview, iPhone city search, signed-out run-through, dark mode pass, real profiling.
 

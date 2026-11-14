@@ -7,6 +7,7 @@ enum TripPage: Hashable {
     case overview
     case city(String)
     case ideas
+    case bookings
 
     var legID: String? {
         if case .city(let id) = self { id } else { nil }
@@ -122,7 +123,7 @@ struct MacTripWorkspace: View {
         GeometryReader { geo in
             // Narrow windows give the map's place to the inspector while it's open.
             let narrow = geo.size.width < 1180
-            let mapShown = mode == .itinerary && showMap && !(narrow && showInspector)
+            let mapShown = mode == .itinerary && showMap && !(narrow && showInspector) && page != .bookings
             let all = store.items(in: trip.id)
             let selected = all.filter { selection.contains($0.id) }
             HSplitView {
@@ -130,7 +131,7 @@ struct MacTripWorkspace: View {
                     sideColumn(trip)
                         .frame(minWidth: 190, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
                 }
-                if mode == .map {
+                if mode == .map && page != .bookings {
                     fullMap(trip)
                         .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -409,7 +410,7 @@ struct MacTripWorkspace: View {
     private func planColumn(_ trip: Trip) -> some View {
         VStack(spacing: 0) {
             if store.isSample(trip.id) { sampleBanner(trip) }
-            QuickAddBar(trip: trip, day: quickAddDay(trip), focus: $quickAddFocused,
+            if page != .bookings { QuickAddBar(trip: trip, day: quickAddDay(trip), focus: $quickAddFocused,
                         onFlight: { editingTicket = $0 },
                         onAdded: { id, openInspector in
                             selection = [id]
@@ -418,9 +419,11 @@ struct MacTripWorkspace: View {
                                 showInspector = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocused = true }
                             }
-                        })
+                        }) }
             Group {
                 switch mode {
+                case _ where page == .bookings:
+                    MacBookingsTable(trip: trip, selection: $selection, onOpen: { editingTicket = $0 })
                 case _ where page == .ideas:
                     ideasPage(trip)
                 case .calendar:

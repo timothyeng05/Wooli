@@ -20,13 +20,14 @@ private enum TripSelectionStore {
         case .overview: return "\(id)|overview"
         case .city(let leg): return "\(id)|city:\(leg)"
         case .ideas: return "\(id)|ideas"
+        case .bookings: return "\(id)|bookings"
         }
     }
 
     static func decode(_ text: String) -> MacSection {
         let parts = text.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .allTrips }
-        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
+        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1] == "bookings" ? .bookings : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
         return .trip(parts[0], page)
     }
 }
@@ -268,6 +269,18 @@ struct MacShellView: View {
             ForEach(trip.legs.filter { !$0.isHome }.sorted { $0.startDay < $1.startDay }) { leg in
                 cityRow(leg, trip: trip).tag(MacSection.trip(trip.id, .city(leg.id)))
             }
+            HStack {
+                Label("Bookings", systemImage: "ticket")
+                Spacer()
+                let count = BookingsList.notBookedCount(trip: trip, items: trips.items(in: trip.id))
+                if count > 0 {
+                    Text("\(count)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Theme.expense, in: Capsule())
+                        .help("\(count) not booked yet")
+                }
+            }
+            .tag(MacSection.trip(trip.id, .bookings))
             HStack {
                 Label("Ideas", systemImage: "lightbulb")
                 Spacer()
