@@ -30,7 +30,7 @@ struct ImportBookingsSheet: View {
     private var entry: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("Import a confirmation").font(.title3.weight(.semibold))
-            Text("Paste the text of a flight confirmation. It's read on this Mac, and nothing is saved until you add it.")
+            Text("Paste the text of a flight or hotel confirmation. It's read on this Mac, and nothing is saved until you add it.")
                 .font(.callout).foregroundStyle(Theme.textSecondary)
             TextEditor(text: $text)
                 .font(.system(.body, design: .monospaced))
@@ -59,8 +59,8 @@ struct ImportBookingsSheet: View {
     private var review: some View {
         if rows.isEmpty {
             VStack(spacing: Space.m) {
-                ContentUnavailableView("No flights found", systemImage: "airplane",
-                                       description: Text("The reader looks for a flight number like CX831. Hotels and other bookings aren't read yet; add them from the plan."))
+                ContentUnavailableView("Nothing found", systemImage: "airplane",
+                                       description: Text("The reader looks for a flight number like CX831, or a hotel with a check-in date. Anything else, add from the plan."))
                 Button("Back") { reviewing = false }
             }
             .padding(Space.m)
@@ -87,19 +87,33 @@ struct ImportBookingsSheet: View {
         let b = row.wrappedValue.booking
         return VStack(alignment: .leading, spacing: Space.xs) {
             Toggle(isOn: row.include) {
-                Text(b.flightNumber ?? "Flight").font(.headline)
+                Text(b.kind == .stay ? (b.name ?? "Stay") : (b.flightNumber ?? "Flight")).font(.headline)
             }
-            HStack {
-                field("Flight", row, \.flightNumber)
-                field("From", row, \.from)
-                field("To", row, \.to)
+            if b.kind == .stay {
+                field("Hotel", row, \.name, uppercase: false)
+            } else {
+                HStack {
+                    field("Flight", row, \.flightNumber)
+                    field("From", row, \.from)
+                    field("To", row, \.to)
+                }
             }
-            Picker("Day", selection: Binding<String?>(
+            Picker(b.kind == .stay ? "Check-in" : "Day", selection: Binding<String?>(
                 get: { b.day.flatMap { trip.days.contains($0) ? $0 : nil } },
                 set: { row.wrappedValue.booking.day = $0 })) {
                 Text("Ideas · no day yet").tag(String?.none)
                 ForEach(trip.days, id: \.self) { day in
                     Text(DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())).tag(String?.some(day))
+                }
+            }
+            if b.kind == .stay {
+                Picker("Check-out", selection: Binding<String?>(
+                    get: { b.checkOutDay.flatMap { trip.days.contains($0) ? $0 : nil } },
+                    set: { row.wrappedValue.booking.checkOutDay = $0 })) {
+                    Text("Not set").tag(String?.none)
+                    ForEach(trip.days, id: \.self) { day in
+                        Text(DayKey.date(day).formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())).tag(String?.some(day))
+                    }
                 }
             }
             if let day = b.day, !trip.days.contains(day) {
@@ -119,10 +133,11 @@ struct ImportBookingsSheet: View {
         .padding(.vertical, Space.xs)
     }
 
-    private func field(_ title: String, _ row: Binding<Row>, _ keyPath: WritableKeyPath<ParsedBooking, String?>) -> some View {
+    private func field(_ title: String, _ row: Binding<Row>, _ keyPath: WritableKeyPath<ParsedBooking, String?>,
+                       uppercase: Bool = true) -> some View {
         TextField(title, text: Binding(
             get: { row.wrappedValue.booking[keyPath: keyPath] ?? "" },
-            set: { row.wrappedValue.booking[keyPath: keyPath] = $0.isEmpty ? nil : $0.uppercased() }))
+            set: { row.wrappedValue.booking[keyPath: keyPath] = $0.isEmpty ? nil : (uppercase ? $0.uppercased() : $0) }))
             .textFieldStyle(.roundedBorder)
     }
 
@@ -130,6 +145,11 @@ struct ImportBookingsSheet: View {
 
     /// The same flight on the same day already in the trip.
     private func duplicate(of b: ParsedBooking) -> TripItem? {
+        if b.kind == .stay {
+            // Same hotel name on the same check-in day.
+            guard let name = b.name?.lowercased(), let day = b.day else { return nil }
+            return store.items(in: trip.id).first { $0.kind == .stay && $0.day == day && $0.title.lowercased() == name }
+        }
         guard let number = b.flightNumber, let day = b.day else { return nil }
         return store.items(in: trip.id).first {
             $0.day == day && $0.transport?.flightNumber.uppercased() == number.uppercased()
@@ -141,6 +161,15 @@ struct ImportBookingsSheet: View {
         for row in rows where row.include {
             let b = row.booking
             let day = b.day.flatMap { trip.days.contains($0) ? $0 : nil }
+            if var existing = duplicate(of: b), b.kind == .stay {
+                if existing.checkOutDay == nil { existing.checkOutDay = b.checkOutDay.flatMap { trip.days.contains($0) ? $0 : nil } }
+                if existing.time == nil { existing.time = b.departMinutes }
+                if let code = b.confirmation, !existing.notes.contains(code) {
+                    existing.notes = existing.notes.isEmpty ? "Confirmation \(code)" : existing.notes + "\nConfirmation \(code)"
+                }
+                store.save(existing)
+                continue
+            }
             if var existing = duplicate(of: b) {
                 var t = existing.transport ?? TripTransport(mode: .flight)
                 if t.confirmation.isEmpty { t.confirmation = b.confirmation ?? "" }
@@ -149,6 +178,22 @@ struct ImportBookingsSheet: View {
                 existing.transport = t
                 if existing.time == nil { existing.time = b.departMinutes }
                 store.save(existing)
+                continue
+            }
+            if b.kind == .stay {
+                var stay = TripItem(tripID: trip.id, day: day, kind: .stay, title: b.name ?? "Stay", time: b.departMinutes)
+                stay.checkOutDay = b.checkOutDay.flatMap { trip.days.contains($0) ? $0 : nil }
+                if !pricedOnce, let amount = b.amount {
+                    stay.cost = amount
+                    stay.currency = b.currency == TripItem.homeCurrency ? nil : b.currency
+                    pricedOnce = true
+                }
+                var extras = stay.extras ?? ItemExtras()
+                extras.source = "import"
+                stay.extras = extras
+                if b.confirmation != nil { stay.setStatus(.booked) }
+                if let code = b.confirmation, !code.isEmpty { stay.notes = "Confirmation \(code)" }
+                store.save(stay)
                 continue
             }
             var item = TripItem(tripID: trip.id, day: day, kind: .transit, title: "", time: b.departMinutes)
