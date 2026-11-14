@@ -237,7 +237,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | 🟡 ordering, tests, day menu, confirmation and undo written 2026-11-14 (Claude, not built); Mac check of the undo step and the stay as start still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
-| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
+| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist logic written 2026-11-14 (Claude, not built); rest todo |
 
 ---
 
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M4-2 (part): checklist logic.** `Services/TripChecklist.swift` (pure, 5 tests in `TripChecklistTests`) over `TripExtras.checklist`: add (trimmed, no empty titles, no same title twice in a group), toggle, remove, clear done, progress, groups (first-seen order, ungrouped first), `startingFrom` (copies titles and groups with new ids, nothing ticked) and `lastTripsList` (the checklist of the trip that started most recently before this one, else the latest other trip with one). **Not built, tests not run.** Next in this epic: the Checklist card.
 
 - **2026-11-14 · Claude** — **M2-4 (part): "N bookings without a price" is a link.** In the Mac Costs card it opens that trip's Bookings page already filtered to No price (`TripStore.bookingsRequest`, a `BookingsRequest`, picked up by `MacShell` to switch page and by `MacBookingsTable` to set its filter; works from another page or while already on Bookings). **Not built, not checked on screen.** The planned side of M2-4 is now complete in code (one currency, rates, budget, per-day and traveller figures, by-type and by-city bars, the link, the privacy line); acceptance checks (a USD + EUR + JPY trip, offline totals) need running. The whole actual-spend side (P1: Budget tag link, suggestions, planned vs actual, unplanned) is not started.
 
