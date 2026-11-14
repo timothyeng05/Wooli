@@ -229,7 +229,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 toolbar Codes menu (any code in two clicks, one to copy), table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); right-click menu (Edit, Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text) on one or several rows, and the inspector shows the selected row, done; "nights without a bed" is text only (no row to filter to) |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 File > Import Confirmation… (⇧⌘I) with the deterministic reader and review sheet, ⌘V of a confirmation, and dropping .eml / .pdf / .txt / text files on the trip window, and the duplicate check ("Update existing") and an Apple Intelligence fallback reader done 2026-11-14 (Claude); the 12-confirmation test set, train confirmations, place lookup against the city (80 km check), and trying it on real emails left |
-| M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 Copy Itinerary as Text / Markdown and Export Calendar File (.ics) done 2026-11-14 (Claude); print/PDF, trip file and the Share menu left |
+| M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 Copy Itinerary as Text / Markdown Export Calendar File (.ics) and Print Itinerary… (⌘P, PDF from the print panel) done 2026-11-14 (Claude); options sheet (costs, notes, map, paper), trip file and the Share menu left |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
 | M3-1 | Time zones per city | P0 | todo |
 | M3-4 | Conflicts and warnings | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-5 story 3: print and PDF.** File > Print Itinerary… (⌘P) and More (…) > Print Itinerary… open the system print panel on a plain black-on-white day-by-day document (`Trips/TripPrintView.swift`, `TripPrinter`: an `NSTextView` with a bold cover title, city lines, day headings, plans and detail lines from `TripExport.itinerary`; no chrome, no open slots, confirmation codes included). The panel's PDF menu is Export as PDF. Built for Mac: yes; **never printed or looked at**, so page breaks between days and grayscale readability are unchecked. No options sheet yet (costs off, notes on; no map per city, no paper size beyond the panel's).
 
 - **2026-11-14 · Claude** — **M2-5 story 2: calendar file.** More (…) menu > Export Calendar File… saves an `.ics` (`TripExport.calendar`): flights with DTSTART in the departure airport's zone and DTEND in the arrival airport's (so Calendar shows both local times), stays as all-day spans to check-out, trains and any plan with a time as floating local times; cancelled, untimed and empty-slot plans are skipped; confirmation codes and seats go in the description. No calendar permission needed. Tests in `TripCalendarFileTests`. Built for Mac: yes; tests not run; **not imported into Apple Calendar yet** (the AC needs that check). Trains have no time zone until M3-1.
 

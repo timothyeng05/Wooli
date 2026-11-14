@@ -485,6 +485,11 @@ struct WooliCommands: Commands {
                 .keyboardShortcut("r")
                 .disabled(app.mode != .live || app.isSyncing)
         }
+        CommandGroup(replacing: .printItem) {
+            Button("Print Itinerary…") { trip?.printTrip() }
+                .keyboardShortcut("p")
+                .disabled(trip == nil)
+        }
         CommandGroup(replacing: .pasteboard) {
             // In a text field the standard Cut/Copy/Paste keep working; plans only take ⌘C/⌘V
             // when the outline (not a field) has focus, which `trip` being set reflects.

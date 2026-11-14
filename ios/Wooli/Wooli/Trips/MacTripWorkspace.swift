@@ -52,6 +52,7 @@ struct TripActions {
     var copy: () -> Void
     var paste: () -> Void
     var importBooking: () -> Void
+    var printTrip: () -> Void
     var hasSelection: Bool
     var hasPlace: Bool
     var hasTicket: Bool
@@ -175,6 +176,7 @@ struct MacTripWorkspace: View {
             copy: { copyPlans(trip: trip) },
             paste: { pastePlans(trip: trip) },
             importBooking: { importText = ""; importing = true },
+            printTrip: { printItinerary(trip) },
             hasSelection: !selection.isEmpty,
             hasPlace: selectedItems(trip).contains { $0.place?.mapsURL != nil },
             hasTicket: selectedItems(trip).count == 1 && selectedItems(trip).first?.kind == .transit))
@@ -277,6 +279,7 @@ struct MacTripWorkspace: View {
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
+                Button("Print Itinerary…", systemImage: "printer") { printItinerary(trip) }
                 Button("Export Calendar File…", systemImage: "calendar.badge.plus") { exportCalendar(trip) }
                 Menu("Copy Itinerary", systemImage: "doc.on.clipboard") {
                     Button("As Text") { copyItinerary(trip, markdown: false) }
@@ -1085,6 +1088,11 @@ struct MacTripWorkspace: View {
             let ids = ids(in: texts)
             if !ids.isEmpty { perform(ids) }
         }
+    }
+
+    /// The system print panel (its PDF menu is Export as PDF), costs off, notes on.
+    private func printItinerary(_ trip: Trip) {
+        TripPrinter.printItinerary(trip: trip, items: store.items(in: trip.id), options: ExportOptions())
     }
 
     /// Saves the trip's bookings and timed plans as an .ics file any calendar app opens.
