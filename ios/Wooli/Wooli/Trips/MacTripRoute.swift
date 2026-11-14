@@ -42,4 +42,34 @@ struct TripRouteCard: View {
         }
     }
 }
+
+/// The trip's free-text notes, edited where they're read (M3-5). Saves when you leave the field.
+struct TripNotesField: View {
+    let tripID: String
+    @State private var store = TripStore.shared
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text("Notes").font(.headline).foregroundStyle(Theme.text)
+            TextField("Visa, packing, who's bringing what…", text: $text, axis: .vertical)
+                .lineLimit(2...10)
+                .textFieldStyle(.plain)
+                .focused($focused)
+                .onSubmit { commit() }
+                .onChange(of: focused) { _, now in if !now { commit() } }
+        }
+        .padding(Space.l)
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Theme.border))
+        .onAppear { text = store.trip(tripID)?.notes ?? "" }
+    }
+
+    private func commit() {
+        guard var trip = store.trip(tripID), trip.notes != text else { return }
+        trip.notes = text
+        store.save(trip)
+    }
+}
 #endif

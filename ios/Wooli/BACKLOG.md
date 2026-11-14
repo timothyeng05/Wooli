@@ -234,7 +234,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | todo |
-| M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line and Route card written 2026-11-14 (Claude, not built); notes in place, route reordering, full Overview page still to do |
+| M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | todo |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
 | M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-5 (part): notes in place.** The trip's notes are a **Notes** field in the whole-trip inspector summary (`TripNotesField`, in `Trips/MacTripRoute.swift`): type where it's shown, saved when you leave the field or press Return. Replaces the read-only notes text under the dates. A trip with no notes now shows an empty field with a hint. **Not built, not checked on screen** (a shared trip's notes are edited by everyone). With this M3-5 has its hero status, To do, Route and Notes; what's left is the Overview as its own page and dragging cities to reorder.
 
 - **2026-11-14 · Claude** — **M3-5 (part): Route card.** `Services/TripRoute.swift` (pure, 3 tests): cities in order with nights, and the travel plans on each city's arrival day as "the way in" (cancelled ones don't count). `Trips/MacTripRoute.swift` shows it as the **Route** card in the whole-trip inspector summary: city, nights, a line between cities with what gets you there or an amber "No travel plan yet"; a click scrolls to that city. **Not built, tests not run.** Not done: dragging cities to reorder (same rules as Edit Trip), small ticket graphics for the travel, notes editable in place, the Overview as its own page (today these cards live in the inspector summary).
 

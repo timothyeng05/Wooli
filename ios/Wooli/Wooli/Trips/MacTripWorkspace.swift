@@ -645,9 +645,6 @@ struct MacTripWorkspace: View {
                         .font(.callout.weight(.medium)).foregroundStyle(Theme.brand)
                     Text("\(trip.days.count) days · \(cities) cit\(cities == 1 ? "y" : "ies") · \(plans) plans")
                         .font(.subheadline).foregroundStyle(Theme.textSecondary)
-                    if !trip.notes.isEmpty {
-                        Text(trip.notes).font(.callout).foregroundStyle(Theme.textSecondary)
-                    }
                 }
                 TripCoverageCard(trip: trip, items: all,
                                  days: trip.legs.first { $0.id == focusLeg }.map { leg in trip.days.filter { leg.contains($0) } }) {
@@ -664,6 +661,7 @@ struct MacTripWorkspace: View {
                 if focusLeg == nil {
                     TripRouteCard(trip: trip, items: all) { scrollTarget = $0 }
                 }
+                if focusLeg == nil { TripNotesField(tripID: trip.id) }
                 TripWarningsCard(trip: trip, items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }) {
                     selection = [$0]
                     scrollTarget = $0
