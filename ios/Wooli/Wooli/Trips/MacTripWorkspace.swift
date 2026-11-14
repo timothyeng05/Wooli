@@ -277,6 +277,7 @@ struct MacTripWorkspace: View {
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
+                Button("Export Calendar File…", systemImage: "calendar.badge.plus") { exportCalendar(trip) }
                 Menu("Copy Itinerary", systemImage: "doc.on.clipboard") {
                     Button("As Text") { copyItinerary(trip, markdown: false) }
                     Button("As Markdown") { copyItinerary(trip, markdown: true) }
@@ -1083,6 +1084,19 @@ struct MacTripWorkspace: View {
         group.notify(queue: .main) {
             let ids = ids(in: texts)
             if !ids.isEmpty { perform(ids) }
+        }
+    }
+
+    /// Saves the trip's bookings and timed plans as an .ics file any calendar app opens.
+    private func exportCalendar(_ trip: Trip) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.init(filenameExtension: "ics") ?? .data]
+        panel.nameFieldStringValue = TripExport.title(trip) + ".ics"
+        panel.message = "Flights, trains, stays and timed plans, ready for Calendar."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let text = TripExport.calendar(trip: trip, items: store.items(in: trip.id))
+        do { try text.write(to: url, atomically: true, encoding: .utf8) } catch {
+            store.lastError = "Couldn't save the calendar file: \(error.localizedDescription)"
         }
     }
 

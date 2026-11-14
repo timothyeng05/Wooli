@@ -326,3 +326,32 @@ struct TripExportTests {
         #expect(!TripExport.itinerary(trip: trip, items: items, options: ExportOptions(notes: false)).contains("Late check-in"))
     }
 }
+
+struct TripCalendarFileTests {
+    @Test func flightsCarryEachEndsTimeZone() {
+        var t = TripTransport(mode: .flight)
+        t.flightNumber = "CX831"; t.fromAirport = "JFK"; t.toAirport = "HKG"; t.arriveTime = 14 * 60 + 5; t.arriveDayOffset = 1
+        var flight = TripItem(tripID: "t", day: "2027-04-12", kind: .transit, title: "CX831 JFK → HKG", time: 9 * 60 + 30)
+        flight.transport = t
+        let trip = Trip(id: "t", name: "Trip", startDay: "2027-04-12", endDay: "2027-04-15")
+        let ics = TripExport.calendar(trip: trip, items: [flight])
+        #expect(ics.contains("BEGIN:VCALENDAR") && ics.contains("END:VCALENDAR"))
+        #expect(ics.contains("DTSTART;TZID=America/New_York:20270412T093000"))
+        #expect(ics.contains("DTEND;TZID=Asia/Hong_Kong:20270413T140500"))
+        #expect(ics.contains("\r\n"))
+    }
+
+    @Test func staysAreAllDaySpansAndCancelledOrUntimedPlansAreSkipped() {
+        var hotel = TripItem(tripID: "t", day: "2027-04-12", kind: .stay, title: "Hyatt, Hangzhou")
+        hotel.checkOutDay = "2027-04-14"
+        let untimed = TripItem(tripID: "t", day: "2027-04-12", kind: .activity, title: "Wander")
+        var cancelled = TripItem(tripID: "t", day: "2027-04-12", kind: .stay, title: "Gone")
+        cancelled.setStatus(.cancelled)
+        let trip = Trip(id: "t", name: "Trip", startDay: "2027-04-12", endDay: "2027-04-15")
+        let ics = TripExport.calendar(trip: trip, items: [hotel, untimed, cancelled])
+        #expect(ics.contains("DTSTART;VALUE=DATE:20270412"))
+        #expect(ics.contains("DTEND;VALUE=DATE:20270414"))
+        #expect(ics.contains("SUMMARY:Stay: Hyatt\\, Hangzhou"))
+        #expect(!ics.contains("Wander") && !ics.contains("Gone"))
+    }
+}
