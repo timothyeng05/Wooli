@@ -71,8 +71,12 @@ enum TripExport {
             lines += ["BEGIN:VEVENT", "UID:\(item.id)@wooli", "DTSTAMP:\(dtstamp)",
                       "SUMMARY:\(escape(TripBookings.what(item)))"]
             if let time = item.time, item.kind != .stay {
-                lines.append("DTSTART:\(local(day, minutes: time))")
-                lines.append("DTEND:\(local(endDay(item, day: day), minutes: endMinutes(item, start: time)))")
+                // Real zones when the cities have them (as UTC, so no VTIMEZONE is needed); floating otherwise.
+                let startZone = TripTimeZones.zone(on: day, in: trip)
+                let finish = endDay(item, day: day)
+                let endZone = item.kind == .transit ? (TripTimeZones.zone(on: finish, in: trip, arriving: true) ?? startZone) : startZone
+                lines.append("DTSTART:\(stamp(day, time, startZone))")
+                lines.append("DTEND:\(stamp(finish, endMinutes(item, start: time), endZone))")
             } else {
                 lines.append("DTSTART;VALUE=DATE:\(compact(day))")
                 let end = item.stayEnd ?? shifted(day, by: 1)
@@ -107,6 +111,13 @@ enum TripExport {
 
     private static func shifted(_ day: String, by days: Int) -> String {
         DayKey.key(Calendar.current.date(byAdding: .day, value: days, to: DayKey.date(day)) ?? DayKey.date(day))
+    }
+
+    private static func stamp(_ day: String, _ minutes: Int, _ zone: TimeZone?) -> String {
+        guard let zone, let moment = TripTimeZones.instant(day: day, minutes: minutes, zone: zone) else {
+            return local(day, minutes: minutes)
+        }
+        return utc(moment)
     }
 
     private static func compact(_ day: String) -> String { day.replacingOccurrences(of: "-", with: "") }

@@ -231,7 +231,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader + paste-and-review sheet written 2026-11-14 (Claude, not built); drop, .eml/.pdf, Apple Intelligence path, stays still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
-| M3-1 | Time zones per city | P0 | todo |
+| M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | todo |
 | M3-5 | Trip Overview with a To do list | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-1 (part): time zones.** `Services/TripTimeZones.swift`, pure: the zone for a trip day from its leg (on a change day the first city is where you leave, the last where you arrive), `instant(day:minutes:zone:)`, the offset between a city and home (passed in, never read from the device, so a trip looks the same from anywhere) and a day-header note "CET (+6 h from home)" shown only on the first day of a city whose zone differs from the city before (or from home). The `.ics` export now writes timed plans as UTC instants when the legs have zones, so a flight ends in the arrival city's zone and no VTIMEZONE block is needed; legs without a zone stay floating as before. 5 tests in `TripTimeZonesTests`: a westbound date-line flight (8 h in the air), an overnight flight in the calendar file, travel-day zones, header note and offsets from a different home. **Not built, tests not run.** **Not done:** showing the note in the day headers (iPhone and Mac), making ticket arrival day/time consistent with the arrival leg's zone and flagging a mismatch, "today" and the NOW pill using the current leg's zone, zone abbreviation in the Bookings table, filling zones on legs of existing trips (M1-4's backfill).
 
 - **2026-11-14 · Claude** — **M3-4 (part): Warnings card on the Mac.** `Trips/MacTripWarnings.swift`: when `TripChecks` finds anything, an amber card ("2 things to check") sits in the inspector summary above Costs, one row per warning (plan name and the reason). A click selects the plan and scrolls to it; **Ignore** adds the warning's id to the plan's `extras.ignoredWarnings`, so it's hidden for everyone on the trip. With a city picked in the sidebar only that city's plans are checked. Uses `Theme.pending` (amber). **Not built, not checked on screen.** Not done: an amber mark on the plan rows and cards, the count on the Planning card and Overview, one-click fixes ("Move to Madrid's day", "Extend Seville by a night"), and the iPhone.
 
