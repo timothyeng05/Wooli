@@ -135,9 +135,36 @@ struct MacBookingsTable: View {
             }
             .width(min: 80, ideal: 110)
         }
-        .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
+        .contextMenu(forSelectionType: String.self) { ids in
+            menu(for: ids, rows: rows)
+        } primaryAction: { ids in
             if let id = ids.first, let item = store.items(in: trip.id).first(where: { $0.id == id }) { onOpen(item) }
         }
+    }
+
+    /// Right-click on one or several rows.
+    @ViewBuilder
+    private func menu(for ids: Set<String>, rows: [BookingRow]) -> some View {
+        let chosen = rows.filter { ids.contains($0.id) }
+        if !chosen.isEmpty {
+            if chosen.count == 1, let one = chosen.first {
+                Button("Edit…", systemImage: "pencil") { onOpen(one.item) }
+                if !one.confirmation.isEmpty {
+                    Button("Copy Confirmation Code", systemImage: "doc.on.doc") { copy(one.confirmation) }
+                }
+                Divider()
+            }
+            Button("Mark as Booked", systemImage: BookingStatus.booked.symbol) { setStatus(.booked, for: chosen.map(\.item)) }
+            Button("Mark as Not Booked", systemImage: BookingStatus.planned.symbol) { setStatus(.planned, for: chosen.map(\.item)) }
+            Button("Mark as Cancelled", systemImage: BookingStatus.cancelled.symbol) { setStatus(.cancelled, for: chosen.map(\.item)) }
+            Divider()
+            Button("Copy as Text", systemImage: "text.alignleft") { copy(BookingsList.text(chosen)) }
+        }
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     /// A badge that opens a menu: Not booked · Booked · Cancelled.
@@ -163,8 +190,7 @@ struct MacBookingsTable: View {
             Text("")
         } else {
             Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(row.confirmation, forType: .string)
+                copy(row.confirmation)
                 copied = row.id
             } label: {
                 Label(copied == row.id ? "Copied" : row.confirmation,
@@ -178,10 +204,13 @@ struct MacBookingsTable: View {
         }
     }
 
-    private func setStatus(_ status: BookingStatus, for item: TripItem) {
-        var changed = item
-        changed.setStatus(status)
-        store.save(changed)
+    private func setStatus(_ status: BookingStatus, for item: TripItem) { setStatus(status, for: [item]) }
+
+    private func setStatus(_ status: BookingStatus, for items: [TripItem]) {
+        for var item in items {
+            item.setStatus(status)
+            store.save(item)
+        }
     }
 }
 #endif
