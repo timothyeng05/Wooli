@@ -228,7 +228,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar badge and tests written 2026-11-14 (Claude, not built); see Done |
-| M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
+| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 deterministic reader written 2026-11-14 (Claude, not built); review sheet, Import menu, drop/paste, Apple Intelligence path still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
 | M3-1 | Time zones per city | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-3 (part): confirmation reader without Apple Intelligence** (`PRD-MAC-TRIPS.md`). `Trips/ConfirmationParser.swift` is pure: from pasted text it finds each flight number, the airport codes after it (checked against `airports.tsv`), a date (ISO, "Apr 9, 2027", "9 April"; year from the trip when missing), the first time (AM/PM or 24 h), a booking code ("Confirmation number: ABC123") and a total with its currency. Flights are split by flight number; the code and total are shared by every flight in the text. 7 tests in `ConfirmationParserTests`. **Not built, tests not run.** **Still to do for M2-3:** the review sheet (editable rows, day it lands on, outside-trip warning, duplicate check, nothing saved until Add to Trip), File → Import… ⇧⌘I, paste and drop (.eml, .pdf, .txt), the `@Generable` Apple Intelligence path, stays and other bookings (this reader only finds flights), and the share extension.
 
 - **2026-11-12 · Claude** — **M1 sweep.** **M1-4:** the new-trip sheet doubles as Edit Trip… for trips with cities (`NewTripSheet(editing:)`); saving moves each plan with its city (`TripSetup.remap`: Seville's day 2 stays Seville's day 2), and plans whose day disappears go to Ideas after a "N plans will move to Ideas" confirmation; city ids now carry from `SetupCity` to `TripLeg`. Unit tests for remap. **M1-9:** first time any trip opens, a three-pointer sheet (quick add, map, Invite) using `AppGuideSheet` (`AppGuide.tripWorkspace`, reset with the other guides). **M1-7:** ⌘K "Go to…" palette (`Views/CommandPalette.swift`): trips, cities, apps, Budget pages, New Trip. **M1-10:** `TripStore.items(in:)` reads a per-trip index rebuilt after any change. Mac, iOS builds and the suite pass. Not run by hand: palette, Edit Trip, the pointer sheet. Not done: Space preview, iPhone city search, signed-out run-through, dark mode pass, real profiling.
 
