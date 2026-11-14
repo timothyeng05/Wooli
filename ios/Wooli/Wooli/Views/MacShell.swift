@@ -144,6 +144,9 @@ struct MacShellView: View {
         .sheet(isPresented: $showNewTrip) {
             NewTripSheet { selection.wrappedValue = .trip($0, .overview) }
         }
+        .sheet(item: Binding(get: { trips.tripFilePreview }, set: { trips.tripFilePreview = $0 })) { preview in
+            TripFilePreviewSheet(preview: preview) { selection.wrappedValue = .trip($0, .overview) }
+        }
         .sheet(isPresented: Binding(get: { app.showPalette }, set: { app.showPalette = $0 })) {
             CommandPalette(entries: paletteEntries, onClose: { app.showPalette = false })
         }
@@ -477,6 +480,12 @@ struct WooliCommands: Commands {
             Button("New Plan") { trip?.newPlan() }
                 .keyboardShortcut("n")
                 .disabled(trip == nil)
+            Button("Open Trip File…") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [.init(filenameExtension: TripExport.fileExtension) ?? .json]
+                panel.message = "Choose a Wooli trip file (.woolitrip)."
+                if panel.runModal() == .OK, let url = panel.url { app.space = .trips; TripStore.shared.previewTripFile(at: url) }
+            }
             Button("Import Confirmation…") { trip?.importBooking() }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(trip == nil)

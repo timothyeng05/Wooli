@@ -167,7 +167,14 @@ struct MainTabView: View {
         }
         // A place shared from Apple Maps (the share extension opens wooli://).
         .onAppear { inbox.check() }
-        .onOpenURL { _ in inbox.check() }
+        .onOpenURL { url in
+            // Double-clicking a .woolitrip file opens its preview; anything else is the share inbox.
+            if url.isFileURL, url.pathExtension.lowercased() == TripExport.fileExtension {
+                TripStore.shared.previewTripFile(at: url)
+            } else {
+                inbox.check()
+            }
+        }
         .onChange(of: inbox.wishesAdded) { app.space = .eats }
         .sheet(item: $inbox.current, onDismiss: inbox.dismissed) { place in
             SharedPlaceSheet(place: place)

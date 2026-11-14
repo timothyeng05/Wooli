@@ -279,6 +279,7 @@ struct MacTripWorkspace: View {
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
+                Button("Export Trip File…", systemImage: "square.and.arrow.up") { exportTripFile(trip) }
                 Button("Print Itinerary…", systemImage: "printer") { printItinerary(trip) }
                 Button("Export Calendar File…", systemImage: "calendar.badge.plus") { exportCalendar(trip) }
                 Menu("Copy Itinerary", systemImage: "doc.on.clipboard") {
@@ -1087,6 +1088,21 @@ struct MacTripWorkspace: View {
         group.notify(queue: .main) {
             let ids = ids(in: texts)
             if !ids.isEmpty { perform(ids) }
+        }
+    }
+
+    /// A `.woolitrip` file: the whole trip, to back up or hand to someone outside iCloud sharing.
+    private func exportTripFile(_ trip: Trip) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.init(filenameExtension: TripExport.fileExtension) ?? .json]
+        panel.nameFieldStringValue = TripExport.title(trip) + "." + TripExport.fileExtension
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = TripExport.tripFile(trip: trip, items: store.items(in: trip.id)) else {
+            store.lastError = "Couldn't write the trip file."
+            return
+        }
+        do { try data.write(to: url, options: .atomic) } catch {
+            store.lastError = "Couldn't save the trip file: \(error.localizedDescription)"
         }
     }
 

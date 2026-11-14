@@ -355,3 +355,28 @@ struct TripCalendarFileTests {
         #expect(!ics.contains("Wander") && !ics.contains("Gone"))
     }
 }
+
+struct TripFileTests {
+    @Test func exportThenImportGivesTheSameTripWithNewIds() throws {
+        var trip = Trip(id: "old", name: "Japan", startDay: "2027-04-01", endDay: "2027-04-05")
+        trip.legs = [TripLeg(name: "Tokyo", startDay: "2027-04-01", endDay: "2027-04-05")]
+        trip.isShared = true
+        trip.zoneOwner = "someone"
+        var flight = TripItem(tripID: "old", day: "2027-04-01", kind: .transit, title: "NH 12", time: 600)
+        flight.transport = { var t = TripTransport(mode: .flight); t.confirmation = "ABC123"; return t }()
+        flight.cost = 900; flight.currency = "USD"
+        flight.setStatus(.booked)
+        let data = try #require(TripExport.tripFile(trip: trip, items: [flight]))
+        let (copy, items) = try #require(TripExport.newTrip(fromFile: data))
+        #expect(copy.id != "old" && copy.name == "Japan" && copy.legs.count == 1)
+        #expect(!copy.isShared && copy.zoneOwner.isEmpty)
+        #expect(items.count == 1)
+        #expect(items[0].id != flight.id && items[0].tripID == copy.id)
+        #expect(items[0].transport?.confirmation == "ABC123")
+        #expect(items[0].cost == 900 && items[0].bookingStatus == .booked && items[0].time == 600)
+    }
+
+    @Test func garbageIsNotATripFile() {
+        #expect(TripExport.newTrip(fromFile: Data("hello".utf8)) == nil)
+    }
+}

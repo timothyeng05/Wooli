@@ -36,6 +36,30 @@ final class TripStore: CKSyncEngineDelegate {
     /// File → New Trip… on the Mac asks the trips list to open its sheet.
     var newTripRequested = false
 
+    /// A trip file waiting for the user to confirm importing it (see `TripFilePreviewSheet`).
+    var tripFilePreview: TripFilePreview?
+
+    /// Reads a `.woolitrip` file and queues its preview; nothing is saved until the user confirms.
+    @discardableResult
+    func previewTripFile(at url: URL) -> Bool {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), let parsed = TripExport.newTrip(fromFile: data) else {
+            lastError = "That file isn't a Wooli trip."
+            return false
+        }
+        tripFilePreview = TripFilePreview(trip: parsed.trip, items: parsed.items)
+        return true
+    }
+
+    /// Saves a previewed trip file as a new trip and returns its id.
+    func importPreview(_ preview: TripFilePreview) -> String {
+        save(preview.trip)
+        for item in preview.items { save(item) }
+        tripFilePreview = nil
+        return preview.trip.id
+    }
+
     /// The window's undo stack (set by the Mac trip page); nil on the iPhone.
     @ObservationIgnored weak var undoManager: UndoManager?
     @ObservationIgnored let container = CKContainer(identifier: containerID)
@@ -847,4 +871,12 @@ final class TripStore: CKSyncEngineDelegate {
             break
         }
     }
+}
+
+
+/// A trip read from a file, shown for a yes or no before it's added.
+struct TripFilePreview: Identifiable {
+    let id = UUID()
+    let trip: Trip
+    let items: [TripItem]
 }

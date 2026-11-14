@@ -208,4 +208,40 @@ enum TripExport {
         }
         return out
     }
+
+    // MARK: Trip file (.woolitrip)
+
+    static let fileExtension = "woolitrip"
+
+    /// The trip and its plans as JSON: the same `ImportBundle` the importer already reads.
+    static func tripFile(trip: Trip, items: [TripItem]) -> Data? {
+        var copy = trip
+        copy.systemFields = nil
+        let plans = items.map { item -> TripItem in var i = item; i.systemFields = nil; return i }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try? encoder.encode(TripStore.ImportBundle(trip: copy, items: plans, itemsOnly: nil))
+    }
+
+    /// Reads a trip file as a **new** trip: fresh ids for the trip and every plan, nothing shared,
+    /// owned by this person. Importing never overwrites a trip you already have.
+    static func newTrip(fromFile data: Data) -> (trip: Trip, items: [TripItem])? {
+        let decoder = JSONDecoder()
+        guard let bundle = (try? decoder.decode(TripStore.ImportBundle.self, from: data))
+                ?? (try? decoder.decode([TripStore.ImportBundle].self, from: data))?.first else { return nil }
+        var trip = bundle.trip
+        let newID = UUID().uuidString
+        trip.id = newID
+        trip.systemFields = nil
+        trip.zoneOwner = ""
+        trip.isShared = false
+        let items = bundle.items.map { old -> TripItem in
+            var item = old
+            item.id = UUID().uuidString
+            item.tripID = newID
+            item.systemFields = nil
+            return item
+        }
+        return (trip, items)
+    }
 }
