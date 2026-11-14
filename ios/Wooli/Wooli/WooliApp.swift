@@ -69,6 +69,10 @@ struct WooliApp: App {
         .defaultSize(width: 1240, height: 820)
         .commands { WooliCommands(app: app, container: container) }
         #endif
+        #if os(macOS)
+        Window("Keyboard Shortcuts", id: "shortcuts") { KeyboardShortcutsView() }
+            .windowResizability(.contentSize)
+        #endif
 
         #if os(macOS)
         // A trip in its own window, to keep beside Mail or a booking site.
@@ -103,6 +107,7 @@ struct WooliApp: App {
             #if os(macOS)
             // Grouped forms look like the iPhone's and like macOS's own Settings.
             .formStyle(.grouped)
+            .frame(minWidth: 900, minHeight: 600)
             #endif
     }
 }

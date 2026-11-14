@@ -16,7 +16,18 @@ final class TripStore: CKSyncEngineDelegate {
     static let containerID = "iCloud.com.timothyeng.wooli"
 
     private(set) var trips: [Trip] = []
-    private(set) var items: [TripItem] = []
+    private(set) var items: [TripItem] = [] { didSet { itemIndex = nil } }
+    /// Items grouped by trip, built on first use after any change, so a trip's
+    /// lists don't each scan every plan of every trip (M1-10).
+    @ObservationIgnored private var itemIndex: [String: [TripItem]]?
+    private var itemsByTrip: [String: [TripItem]] {
+        // Read `items` first either way, so a view using the cache still observes changes.
+        let current = items
+        if let itemIndex { return itemIndex }
+        let built = Dictionary(grouping: current.filter { !$0.isHiddenPlaceholder }, by: \.tripID)
+        itemIndex = built
+        return built
+    }
     /// False when no iCloud account is signed in: trips stay on this iPhone.
     private(set) var iCloudAvailable = true
     var lastError: String?
@@ -232,7 +243,7 @@ final class TripStore: CKSyncEngineDelegate {
 
     func trip(_ id: String) -> Trip? { trips.first { $0.id == id } }
 
-    func items(in tripID: String) -> [TripItem] { items.filter { $0.tripID == tripID && !$0.isHiddenPlaceholder } }
+    func items(in tripID: String) -> [TripItem] { itemsByTrip[tripID] ?? [] }
 
     /// Old empty Breakfast / Lunch / Dinner records, hidden from every list.
     func hiddenPlaceholders(in tripID: String) -> [TripItem] {
@@ -242,7 +253,7 @@ final class TripStore: CKSyncEngineDelegate {
     /// A day's items: by where they were dragged or their time, then the
     /// rest in the order added.
     func items(in tripID: String, day: String?) -> [TripItem] {
-        items.filter { $0.tripID == tripID && $0.day == day && !$0.isHiddenPlaceholder }.sorted(by: TripItem.dayOrder)
+        items(in: tripID).filter { $0.day == day }.sorted(by: TripItem.dayOrder)
     }
 
     // MARK: - Open slots

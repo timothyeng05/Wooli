@@ -52,6 +52,8 @@ final class AppModel {
 
     var isCategorizing = false
     var showReview = false
+    /// ⌘K on the Mac.
+    var showPalette = false
     /// The guided first-run review, shown once right after connecting a bank.
     var showCalibration = false
 

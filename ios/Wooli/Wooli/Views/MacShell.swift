@@ -55,6 +55,35 @@ struct MacShellView: View {
     @State private var showNewTrip = false
     @AppStorage("mac.trips.last") private var lastTrip = ""
 
+    /// What ⌘K can reach: trips and their cities, apps, Budget pages, and a few commands.
+    private var paletteEntries: [CommandPalette.Entry] {
+        var list: [CommandPalette.Entry] = []
+        for trip in trips.trips {
+            list.append(.init(id: "trip-\(trip.id)", title: trip.name.isEmpty ? "Trip" : trip.name, subtitle: "Trip · \(trip.dateRangeText)",
+                              symbol: "suitcase.rolling") { selection.wrappedValue = .trip(trip.id, .overview) })
+            for leg in trip.legs where !leg.isHome && !leg.name.isEmpty {
+                list.append(.init(id: "leg-\(leg.id)", title: leg.name, subtitle: "City in \(trip.name)", symbol: "mappin.and.ellipse") {
+                    selection.wrappedValue = .trip(trip.id, .city(leg.id))
+                })
+            }
+        }
+        list.append(.init(id: "cmd-newtrip", title: "New Trip…", subtitle: "Command", symbol: "plus") { showNewTrip = true })
+        for space in AppSpace.allCases where space != .budget {
+            list.append(.init(id: "space-\(space.rawValue)", title: space.title, subtitle: "App", symbol: space.systemImage) {
+                selection.wrappedValue = .space(space)
+            })
+        }
+        let pages: [(String, AppTab)] = [("Dashboard", .dashboard), ("Accounts", .accounts), ("Transactions", .transactions),
+                                         ("Reports", .reports), ("Plan", .budget)]
+        for (name, tab) in pages {
+            list.append(.init(id: "tab-\(name)", title: name, subtitle: "Budget", symbol: "chart.pie") {
+                app.selectedTab = tab
+                selection.wrappedValue = .budget(tab)
+            })
+        }
+        return list
+    }
+
     private var selection: Binding<MacSection?> {
         Binding {
             if let tool { return .tool(tool) }
@@ -116,6 +145,9 @@ struct MacShellView: View {
         }
         .sheet(isPresented: $showNewTrip) {
             NewTripSheet { selection.wrappedValue = .trip($0, .overview) }
+        }
+        .sheet(isPresented: Binding(get: { app.showPalette }, set: { app.showPalette = $0 })) {
+            CommandPalette(entries: paletteEntries, onClose: { app.showPalette = false })
         }
         // File → New Trip… and the toolbar's + both come through here.
         .task(id: trips.newTripRequested) {
@@ -441,6 +473,7 @@ struct WooliCommands: Commands {
     let app: AppModel
     let container: ModelContainer
     @FocusedValue(\.tripActions) private var trip
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("trip.mac.view") private var tripView: TripWorkspaceMode = .itinerary
     @AppStorage("trip.mac.showMap") private var showMap = true
     @AppStorage("trip.mac.showInspector") private var showInspector = false
@@ -462,7 +495,21 @@ struct WooliCommands: Commands {
                 .keyboardShortcut("r")
                 .disabled(app.mode != .live || app.isSyncing)
         }
-        CommandGroup(after: .pasteboard) {
+        CommandGroup(replacing: .pasteboard) {
+            // In a text field the standard Cut/Copy/Paste keep working; plans only take ⌘C/⌘V
+            // when the outline (not a field) has focus, which `trip` being set reflects.
+            Button("Cut") { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }.keyboardShortcut("x")
+            Button("Copy") {
+                if NSApp.keyWindow?.firstResponder is NSText { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+                else if trip?.hasSelection == true { trip?.copy() }
+                else { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+            }.keyboardShortcut("c")
+            Button("Paste") {
+                if NSApp.keyWindow?.firstResponder is NSText || trip == nil { NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil) }
+                else { trip?.paste() }
+            }.keyboardShortcut("v")
+            Button("Select All") { NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil) }.keyboardShortcut("a")
+            Divider()
             Button("Duplicate") { trip?.duplicate() }
                 .keyboardShortcut("d")
                 .disabled(trip?.hasSelection != true)
@@ -474,10 +521,30 @@ struct WooliCommands: Commands {
             Button("Move Down") { trip?.moveDown() }
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(trip?.hasSelection != true)
+            Button("Move to Previous Day") { trip?.moveDay(-1) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(trip?.hasSelection != true)
+            Button("Move to Next Day") { trip?.moveDay(1) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(trip?.hasSelection != true)
+            Button("Move to Ideas") { trip?.moveToIdeas() }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                .disabled(trip?.hasSelection != true)
             Divider()
-            Button("Mark as Booked") { trip?.markBooked() }
+            Button("Toggle Booked") { trip?.markBooked() }
                 .keyboardShortcut("b")
                 .disabled(trip?.hasSelection != true)
+            Menu("Set Type") {
+                ForEach(TripItem.Kind.picker(for: .activity)) { kind in
+                    Button(kind.label, systemImage: kind.symbol) { trip?.setKind(kind) }
+                }
+            }
+            .disabled(trip?.hasSelection != true)
+            Button("Open in Maps") { trip?.openInMaps() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(trip?.hasPlace != true)
+            Button("Edit Ticket…") { trip?.editTicket() }
+                .disabled(trip?.hasTicket != true)
         }
         CommandGroup(before: .sidebar) {
             if app.space == .trips {
@@ -508,12 +575,24 @@ struct WooliCommands: Commands {
                 Button("Reports") { app.space = .budget; app.selectedTab = .reports }.keyboardShortcut("4")
                 Button("Plan") { app.space = .budget; app.selectedTab = .budget }.keyboardShortcut("5")
             }
+            Button("Go to…") { app.showPalette = true }.keyboardShortcut("k")
             Button("Trips") { app.space = .trips }.keyboardShortcut("t", modifiers: [.command, .shift])
+            if app.space == .trips {
+                Divider()
+                Button("Next City") { trip?.stepCity(1) }.keyboardShortcut("]").disabled(trip == nil)
+                Button("Previous City") { trip?.stepCity(-1) }.keyboardShortcut("[").disabled(trip == nil)
+            }
             Divider()
             Button("Review Transactions") { app.showReview = true }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .help) {
+            Button("Wooli Help") {
+                if let url = URL(string: "https://wooliapp.com/support") { NSWorkspace.shared.open(url) }
+            }
+            Button("Keyboard Shortcuts") { openWindow(id: "shortcuts") }
+                .keyboardShortcut("/", modifiers: .command)
+            Divider()
             Button("Send Feedback…") {
                 if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
                     NSWorkspace.shared.open(url)
