@@ -254,6 +254,7 @@ struct MacTripWorkspace: View {
                     Button("Copy Itinerary as Text") { copyItinerary(trip, markdown: false) }
                     Button("Copy Itinerary as Markdown") { copyItinerary(trip, markdown: true) }
                     Button("Calendar File (.ics)…") { saveCalendar(trip) }
+                    Button("Trip File (.woolitrip)…") { saveTripFile(trip) }
                 }
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
@@ -280,6 +281,16 @@ struct MacTripWorkspace: View {
         panel.allowedContentTypes = [UTType(filenameExtension: "ics") ?? .data]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? TripExport.ics(trip: trip, items: store.items(in: trip.id)).write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Backup, or a way to hand the trip to someone outside iCloud sharing.
+    private func saveTripFile(_ trip: Trip) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = (trip.name.isEmpty ? "Trip" : trip.name) + "." + TripFile.fileExtension
+        panel.allowedContentTypes = [UTType(filenameExtension: TripFile.fileExtension) ?? .json]
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? TripFile.data(trip: trip, items: store.items(in: trip.id)) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     // MARK: Left: cities and ideas
