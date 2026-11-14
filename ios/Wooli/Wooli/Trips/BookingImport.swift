@@ -209,7 +209,7 @@ enum BookingImport {
 
     static func findPrice(in text: String) -> (amount: Double, currency: String?)? {
         let codes = "USD|EUR|GBP|JPY|HKD|CNY|CAD|AUD|SGD|KRW|THB|NZD|CHF|MXN"
-        let pattern = #"(?i)\b(?:grand total|total price|total amount|total|amount paid|amount|price|paid)\b[^\n\d$€£¥]{0,24}(\#(codes)|[$€£¥])?\s?(\d[\d,]*(?:\.\d{1,2})?)\s?(\#(codes))?"#
+        let pattern = #"(?i)\b(?:grand total|total price|total amount|total|amount paid|amount|price|paid)\b[:\s.\-–]{0,24}(\#(codes)|[$€£¥])?\s?(\d[\d,]*(?:\.\d{1,2})?)\s?(\#(codes))?"#
         guard let h = matches(pattern, in: text).first(where: { Double($0.groups[2].replacingOccurrences(of: ",", with: "")) != nil }) else { return nil }
         let amount = Double(h.groups[2].replacingOccurrences(of: ",", with: "")) ?? 0
         let raw = [h.groups[1], h.groups[3]].first { !$0.isEmpty }

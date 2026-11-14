@@ -179,6 +179,13 @@ struct MacTripWorkspace: View {
             hasPlace: selectedItems(trip).contains { $0.place?.mapsURL != nil },
             hasTicket: selectedItems(trip).count == 1 && selectedItems(trip).first?.kind == .transit))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
+        .dropDestination(for: URL.self) { urls, _ in
+            let texts = urls.filter { BookingFiles.types.contains($0.pathExtension.lowercased()) }.compactMap(BookingFiles.text(from:))
+            guard !texts.isEmpty else { return false }
+            importText = texts.joined(separator: "\n\n")
+            importing = true
+            return true
+        }
         .sheet(isPresented: $importing) {
             MacBookingImportSheet(trip: trip, initialText: importText) { ids in
                 selection = Set(ids)
@@ -914,6 +921,10 @@ struct MacTripWorkspace: View {
                 store.save(copy)
                 added.append(copy.id)
             }
+        } else if let text = pb.string(forType: .string), text.count > 80, !BookingImport.read(text, defaultYear: Int(trip.startDay.prefix(4))).isEmpty {
+            // A confirmation email, not a list of places: read it and let the user check it.
+            importText = text
+            importing = true
         } else if let text = pb.string(forType: .string) {
             for line in text.split(whereSeparator: \.isNewline).map({ $0.trimmingCharacters(in: .whitespaces) }) where !line.isEmpty {
                 let request = QuickAddParser.parse(line)

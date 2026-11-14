@@ -191,3 +191,46 @@ struct BookingImportTests {
         #expect(BookingImport.read("Hello, see you soon", defaultYear: 2027).isEmpty)
     }
 }
+
+// Reading dropped files (M2-3).
+
+struct BookingFilesTests {
+    @Test func readsAPlainEmail() {
+        let raw = "Subject: Your flight\r\nContent-Type: text/plain\r\n\r\nCX831 JFK to HKG\r\nBooking reference: X7K2PQ"
+        let text = BookingFiles.emlText(raw)
+        #expect(text.contains("Your flight"))
+        #expect(text.contains("X7K2PQ"))
+    }
+
+    @Test func prefersThePlainPartOfAMultipartEmail() {
+        let raw = """
+        Subject: Hotel
+        Content-Type: multipart/alternative; boundary="BB"
+
+        --BB
+        Content-Type: text/plain
+
+        Check-in: 3 Apr 2027
+        --BB
+        Content-Type: text/html
+
+        <p>Check-in: 3 Apr 2027</p><p>Extra</p>
+        --BB--
+        """
+        let text = BookingFiles.emlText(raw)
+        #expect(text.contains("Check-in: 3 Apr 2027"))
+        #expect(!text.contains("<p>"))
+        #expect(!text.contains("Extra"))
+    }
+
+    @Test func decodesQuotedPrintableAndHTML() {
+        #expect(BookingFiles.decodeQuotedPrintable("Caf=C3=A9 booking=\nref") == "Café bookingref")
+        #expect(BookingFiles.stripHTML("<div>Total&nbsp;<b>$40</b></div>").contains("Total"))
+    }
+
+    @Test func decodesBase64Bodies() {
+        let body = Data("Booking reference: ZZ99AA".utf8).base64EncodedString()
+        let raw = "Subject: x\nContent-Type: text/plain\nContent-Transfer-Encoding: base64\n\n\(body)"
+        #expect(BookingFiles.emlText(raw).contains("ZZ99AA"))
+    }
+}
