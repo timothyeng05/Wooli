@@ -20,13 +20,14 @@ private enum TripSelectionStore {
         case .overview: return "\(id)|overview"
         case .city(let leg): return "\(id)|city:\(leg)"
         case .ideas: return "\(id)|ideas"
+        case .bookings: return "\(id)|bookings"
         }
     }
 
     static func decode(_ text: String) -> MacSection {
         let parts = text.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .allTrips }
-        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
+        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1] == "bookings" ? .bookings : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
         return .trip(parts[0], page)
     }
 }
@@ -275,6 +276,14 @@ struct MacShellView: View {
                 if count > 0 { Text("\(count)").font(.caption).foregroundStyle(Theme.textTertiary).monospacedDigit() }
             }
             .tag(MacSection.trip(trip.id, .ideas))
+            HStack {
+                Label("Bookings", systemImage: "ticket")
+                Spacer()
+                // Travel and stays still to book.
+                let count = TripBookings.notBookedCount(trips.items(in: trip.id))
+                if count > 0 { Text("\(count)").font(.caption).foregroundStyle(Theme.textTertiary).monospacedDigit() }
+            }
+            .tag(MacSection.trip(trip.id, .bookings))
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 Text(trip.name.isEmpty ? "Untitled trip" : trip.name).font(.body.weight(.medium)).lineLimit(1)
