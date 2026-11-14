@@ -1111,6 +1111,14 @@ struct MacDayColumn<MenuContent: View>: View {
         return Group {
             if item.kind == .transit { ticket(item) } else { plainCard(item, tint: tint, timed: timed) }
         }
+        // Not booked: dashed outline. Cancelled: dimmed (the title is struck through).
+        .overlay {
+            if item.isUnbooked {
+                RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
+                    .strokeBorder(Theme.textSecondary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+            }
+        }
+        .opacity(item.isCancelled ? 0.5 : 1)
         .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
             .strokeBorder(selected ? Theme.brand : .clear, lineWidth: 2))
         .contentShape(RoundedRectangle(cornerRadius: Radius.small))
@@ -1193,6 +1201,7 @@ struct MacDayColumn<MenuContent: View>: View {
             Text(item.title.isEmpty ? (item.place?.name ?? item.kind.label) : item.title)
                 .font(.callout.weight(timed ? .semibold : .regular))
                 .foregroundStyle(timed ? item.kind.onColor : Theme.text)
+                .strikethrough(item.isCancelled)
                 .lineLimit(2)
             if let place = item.place, place.name != item.title, !timed {
                 Text(place.name).font(.caption).foregroundStyle(Theme.textSecondary).lineLimit(1)
