@@ -234,7 +234,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | todo |
-| M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list + card and status line written 2026-11-14 (Claude, not built); Route card, notes in place, full Overview page still to do |
+| M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line and Route card written 2026-11-14 (Claude, not built); notes in place, route reordering, full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | todo |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
 | M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-5 (part): Route card.** `Services/TripRoute.swift` (pure, 3 tests): cities in order with nights, and the travel plans on each city's arrival day as "the way in" (cancelled ones don't count). `Trips/MacTripRoute.swift` shows it as the **Route** card in the whole-trip inspector summary: city, nights, a line between cities with what gets you there or an amber "No travel plan yet"; a click scrolls to that city. **Not built, tests not run.** Not done: dragging cities to reorder (same rules as Edit Trip), small ticket graphics for the travel, notes editable in place, the Overview as its own page (today these cards live in the inspector summary).
 
 - **2026-11-14 · Claude** — **M3-5 (part): status line.** `Services/TripOverview.swift` (pure, 3 tests): "In 12 days" / "Tomorrow" before the trip, "Day 3 of 5 · Madrid" during it (on a change day, the city you've arrived in), "Ended" after. It shows under the dates at the top of the Mac inspector summary. `today` is passed in as a day key, not read from the zone. **Not built, tests not run.** Still to do for M3-5: use the current leg's zone for "today" (needs the M3-1 zone in the UI), the Route card, notes in place, and making Overview its own page.
 

@@ -661,6 +661,9 @@ struct MacTripWorkspace: View {
                         scrollTarget = itemID ?? day
                     }
                 }
+                if focusLeg == nil {
+                    TripRouteCard(trip: trip, items: all) { scrollTarget = $0 }
+                }
                 TripWarningsCard(trip: trip, items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }) {
                     selection = [$0]
                     scrollTarget = $0
