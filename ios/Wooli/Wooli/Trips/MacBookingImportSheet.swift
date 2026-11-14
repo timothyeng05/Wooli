@@ -12,6 +12,8 @@ struct MacBookingImportSheet: View {
     @State private var store = TripStore.shared
     @State private var text = ""
     @State private var found: [ImportedBooking] = []
+    /// Booking id → true when it should update the plan already in the trip.
+    @State private var updating: [String: Bool] = [:]
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -42,7 +44,7 @@ struct MacBookingImportSheet: View {
                     .font(.caption).foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Add to Trip") { add() }
+                Button(addLabel) { add() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(found.filter(\.include).isEmpty)
             }
@@ -73,6 +75,14 @@ struct MacBookingImportSheet: View {
                         Text(TripItem.money(price, b.currency ?? TripItem.homeCurrency)).foregroundStyle(Theme.textSecondary)
                     }
                 }
+                if let existing = BookingImport.duplicate(of: b, in: store.items(in: trip.id)) {
+                    Picker("Already in this trip", selection: Binding(get: { updating[b.id] ?? true },
+                                                                     set: { updating[b.id] = $0 })) {
+                        Text("Update “\(existing.title)”").tag(true)
+                        Text("Add as a new plan").tag(false)
+                    }
+                    .pickerStyle(.menu).font(.caption)
+                }
                 if let warning = b.warning(trip: trip) {
                     Label(warning, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(.orange)
@@ -92,6 +102,13 @@ struct MacBookingImportSheet: View {
                 set: { booking.wrappedValue.day = DayKey.key($0) })
     }
 
+    private var addLabel: String {
+        let chosen = found.filter(\.include)
+        let existing = store.items(in: trip.id)
+        let updates = chosen.filter { BookingImport.duplicate(of: $0, in: existing) != nil && (updating[$0.id] ?? true) }.count
+        return updates > 0 && updates == chosen.count ? "Update Trip" : "Add to Trip"
+    }
+
     private func read(_ text: String) {
         let year = Int(trip.startDay.prefix(4))
         found = BookingImport.read(text, defaultYear: year)
@@ -100,9 +117,14 @@ struct MacBookingImportSheet: View {
     private func add() {
         var ids: [String] = []
         for booking in found where booking.include {
-            let item = booking.tripItem(tripID: trip.id)
-            store.save(item)
-            ids.append(item.id)
+            if let existing = BookingImport.duplicate(of: booking, in: store.items(in: trip.id)), updating[booking.id] ?? true {
+                store.save(booking.updating(existing))
+                ids.append(existing.id)
+            } else {
+                let item = booking.tripItem(tripID: trip.id)
+                store.save(item)
+                ids.append(item.id)
+            }
         }
         onAdded(ids)
         dismiss()

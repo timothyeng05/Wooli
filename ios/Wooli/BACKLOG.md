@@ -228,7 +228,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 toolbar Codes menu (any code in two clicks, one to copy), table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); right-click menu (Edit, Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text) on one or several rows, and the inspector shows the selected row, done; "nights without a bed" is text only (no row to filter to) |
-| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 File > Import Confirmation… (⇧⌘I) with the deterministic reader and review sheet, ⌘V of a confirmation, and dropping .eml / .pdf / .txt / text files on the trip window done 2026-11-14 (Claude); duplicate check, Apple Intelligence reading, the 12-confirmation test set left |
+| M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 File > Import Confirmation… (⇧⌘I) with the deterministic reader and review sheet, ⌘V of a confirmation, and dropping .eml / .pdf / .txt / text files on the trip window, and the duplicate check ("Update existing") done 2026-11-14 (Claude); Apple Intelligence reading, the 12-confirmation test set left |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
 | M3-1 | Time zones per city | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-3 story 3: duplicates.** The review sheet checks each found booking against the trip: the same flight number on the same day, or a stay with the same name and check-in. A match gets a menu "Update <plan>" (default) or "Add as a new plan"; updating keeps the plan's id, notes, place and order and lays on status Booked, confirmation code, airports, arrival, seat, cabin, price. The button reads "Update Trip" when everything is an update. So importing the same email twice adds nothing. `BookingImport.duplicate(of:in:)` / `ImportedBooking.updating(_:)` with `BookingImportDuplicateTests`. Built for Mac: yes; tests not run (xcodebuild can't run them here). Not tried by hand.
 
 - **2026-11-14 · Claude** — **M2-3 story 2: paste and drop.** ⌘V on a trip page with a confirmation on the clipboard (over 80 characters and the reader finds a booking) opens the import sheet instead of adding one plan per line; dropping `.eml`, `.pdf`, `.txt` or `.md` files on the trip window does the same. `Trips/BookingFiles.swift` reads PDFs with PDFKit and `.eml` with a small MIME reader (multipart, quoted-printable, base64, HTML tags stripped, encoded subjects). Built for Mac: yes. The xcodebuild tests can't run here, so I ran the `.eml` reader and the booking reader as standalone scripts (stubbing the airline and airport lists): all checks passed, and this caught a bug where the currency after "Total price:" was missed (fixed). Not tried: a real PDF, dropping a Mail message, text dropped (not a file).
 

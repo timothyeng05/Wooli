@@ -56,6 +56,30 @@ struct ImportedBooking: Identifiable, Equatable {
         return item
     }
 
+    /// `existing` with what the confirmation says laid over it: status, code, times and price.
+    /// Keeps the plan's id, notes, place and order.
+    func updating(_ existing: TripItem) -> TripItem {
+        var item = existing
+        let fresh = tripItem(tripID: existing.tripID)
+        if kind == .transit {
+            var t = existing.transport ?? TripTransport(mode: mode)
+            let new = fresh.transport
+            if !confirmation.isEmpty { t.confirmation = confirmation }
+            if let new, !new.fromAirport.isEmpty { t.fromAirport = new.fromAirport }
+            if let new, !new.toAirport.isEmpty { t.toAirport = new.toAirport }
+            if arriveTime != nil { t.arriveTime = arriveTime; t.arriveDayOffset = arriveDayOffset }
+            if !seats.isEmpty { t.seats = seats }
+            if !cabin.isEmpty { t.cabin = cabin }
+            item.transport = t
+        } else if kind == .stay {
+            if let checkOutDay { item.checkOutDay = checkOutDay }
+        }
+        if time != nil { item.time = time }
+        if let price { item.cost = price; item.currency = currency ?? item.currency }
+        item.setStatus(.booked)
+        return item
+    }
+
     /// Something to tell the user before adding: a date outside the trip, or none at all.
     func warning(trip: Trip) -> String? {
         guard let day else { return "No date found" }
@@ -65,6 +89,22 @@ struct ImportedBooking: Identifiable, Equatable {
 }
 
 enum BookingImport {
+    /// The plan already in the trip that this booking would repeat: the same
+    /// flight number on the same day, or a stay with the same name and check-in.
+    static func duplicate(of booking: ImportedBooking, in items: [TripItem]) -> TripItem? {
+        items.first { item in
+            guard item.day == booking.day, item.kind == booking.kind else { return false }
+            switch booking.kind {
+            case .transit:
+                let number = item.transport?.flightNumber.uppercased().filter { !$0.isWhitespace } ?? ""
+                return !booking.flightNumber.isEmpty && number == booking.flightNumber.uppercased()
+            case .stay:
+                return !booking.title.isEmpty && item.title.lowercased() == booking.title.lowercased()
+            default: return false
+            }
+        }
+    }
+
     static func read(_ text: String, defaultYear: Int? = nil) -> [ImportedBooking] {
         let year = defaultYear ?? Calendar.current.component(.year, from: .now)
         let dates = findDates(in: text, year: year)

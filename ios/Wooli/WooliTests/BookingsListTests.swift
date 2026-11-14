@@ -234,3 +234,41 @@ struct BookingFilesTests {
         #expect(BookingFiles.emlText(raw).contains("ZZ99AA"))
     }
 }
+
+// Importing the same confirmation twice (M2-3).
+
+struct BookingImportDuplicateTests {
+    private func booking() -> ImportedBooking {
+        var b = ImportedBooking()
+        b.flightNumber = "CX831"; b.from = "JFK"; b.to = "HKG"; b.day = "2027-04-12"; b.confirmation = "X7K2PQ"; b.time = 570
+        return b
+    }
+
+    @Test func theSameFlightOnTheSameDayIsADuplicate() {
+        let saved = booking().tripItem(tripID: "t")
+        #expect(BookingImport.duplicate(of: booking(), in: [saved])?.id == saved.id)
+        var other = booking(); other.day = "2027-04-13"
+        #expect(BookingImport.duplicate(of: other, in: [saved]) == nil)
+    }
+
+    @Test func updatingKeepsTheIdAndNotes() {
+        var saved = TripItem(tripID: "t", day: "2027-04-12", kind: .transit, title: "Flight to HK")
+        saved.transport = { var t = TripTransport(mode: .flight); t.flightNumber = "CX831"; return t }()
+        saved.notes = "Not booked yet · aisle seat"
+        saved.setStatus(.planned)
+        saved.notes = "aisle seat"
+        let updated = booking().updating(saved)
+        #expect(updated.id == saved.id)
+        #expect(updated.notes == "aisle seat")
+        #expect(updated.transport?.confirmation == "X7K2PQ")
+        #expect(updated.bookingStatus == .booked)
+    }
+
+    @Test func aStaysDuplicateNeedsTheSameNameAndCheckIn() {
+        var b = ImportedBooking(); b.kind = .stay; b.title = "Hyatt Regency Hangzhou"; b.day = "2027-04-03"
+        let saved = b.tripItem(tripID: "t")
+        #expect(BookingImport.duplicate(of: b, in: [saved]) != nil)
+        b.title = "Another Hotel"
+        #expect(BookingImport.duplicate(of: b, in: [saved]) == nil)
+    }
+}
