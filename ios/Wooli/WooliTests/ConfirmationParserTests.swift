@@ -61,4 +61,29 @@ struct ConfirmationParserTests {
     @Test func nothingFoundWithoutAFlightNumber() {
         #expect(parse("Hotel Hyatt, 3 nights, Apr 2 2027").isEmpty)
     }
+
+    @Test func hotelStayWithCheckInAndOut() {
+        let text = """
+        Booking confirmation
+        Hyatt Regency Hangzhou
+        Confirmation number: HZ4821
+        Check-in: Apr 2, 2027  3:00 PM
+        Check-out: Apr 5, 2027
+        Total: USD 640
+        """
+        let b = parse(text)
+        #expect(b.count == 1)
+        #expect(b[0].kind == .stay)
+        #expect(b[0].name == "Hyatt Regency Hangzhou")
+        #expect(b[0].day == "2027-04-02" && b[0].checkOutDay == "2027-04-05")
+        #expect(b[0].departMinutes == 15 * 60)
+        #expect(b[0].confirmation == "HZ4821" && b[0].amount == 640)
+    }
+
+    @Test func flightsComeBeforeAStayInTheSameText() {
+        let text = "CX831 JFK HKG 2027-04-01 10:00\nHotel Peninsula\nCheck-in 2027-04-02\nCheck-out 2027-04-04"
+        let b = parse(text)
+        #expect(b.map(\.kind) == [.flight, .stay])
+        #expect(b[1].checkOutDay == "2027-04-04")
+    }
 }

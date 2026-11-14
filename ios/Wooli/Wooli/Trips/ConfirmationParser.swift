@@ -3,6 +3,12 @@ import Foundation
 /// A booking found in pasted confirmation text (M2-3). Every field is optional:
 /// the review sheet shows what was found and the user fills in the rest.
 struct ParsedBooking: Equatable {
+    enum Kind: Equatable { case flight, stay }
+    var kind: Kind = .flight
+    /// A stay's hotel name.
+    var name: String?
+    /// A stay's check-out day, "yyyy-MM-dd"; `day` is check-in.
+    var checkOutDay: String?
     var flightNumber: String?
     /// IATA codes.
     var from: String?
@@ -25,11 +31,18 @@ enum ConfirmationParser {
                       isAirport: (String) -> Bool = { Airports.airport($0) != nil }) -> [ParsedBooking] {
         let code = confirmationCode(in: text)
         let total = total(in: text)
+        // A booking code like "HZ4821" looks like a flight number; it isn't one.
         let flights = matches(#"\b([A-Z][A-Z0-9]|[A-Z0-9][A-Z])\s?(\d{2,4})\b"#, in: text)
-            .filter { airlineLooksReal($0.groups[0]) }
-        guard !flights.isEmpty else { return [] }
-
+            .filter { airlineLooksReal($0.groups[0]) && $0.groups[0] + $0.groups[1] != code }
+        var stay = stay(in: text, referenceYear: referenceYear)
+        stay?.confirmation = code
         var found: [ParsedBooking] = []
+        if flights.isEmpty {
+            // A hotel on its own carries the total itself.
+            stay?.amount = total?.amount
+            stay?.currency = total?.currency
+            return stay.map { [$0] } ?? []
+        }
         let ns = text as NSString
         for (i, flight) in flights.enumerated() {
             let end = i + 1 < flights.count ? flights[i + 1].range.location : ns.length
@@ -46,7 +59,41 @@ enum ConfirmationParser {
             booking.currency = total?.currency
             found.append(booking)
         }
+        // One total for the whole confirmation: it already went on the flights.
+        if let stay { found.append(stay) }
         return found
+    }
+
+    // MARK: Stays
+
+    private static let hotelWords = #"(?i)\b(hotel|inn|resort|hyatt|marriott|hilton|suites?|lodge|hostel|ryokan|guesthouse|b&b)\b"#
+
+    /// A hotel booking: "Check-in: Apr 2, 2027" and "Check-out: Apr 5, 2027". Needs a check-in date.
+    static func stay(in text: String, referenceYear: Int) -> ParsedBooking? {
+        guard let checkIn = day(after: #"(?i)check[- ]?in"#, in: text, referenceYear: referenceYear) else { return nil }
+        var stay = ParsedBooking()
+        stay.kind = .stay
+        stay.day = checkIn
+        stay.checkOutDay = day(after: #"(?i)check[- ]?out"#, in: text, referenceYear: referenceYear)
+        stay.departMinutes = matches(#"(?i)check[- ]?in[^\n]{0,60}"#, in: text).first.flatMap { minutes(in: String(text[Range($0.range, in: text)!])) }
+        stay.name = hotelName(in: text)
+        return stay
+    }
+
+    /// The date within a short stretch after a label.
+    private static func day(after label: String, in text: String, referenceYear: Int) -> String? {
+        guard let m = matches(label + #"[^\n]{0,60}"#, in: text).first, let range = Range(m.range, in: text) else { return nil }
+        return day(in: String(text[range]), referenceYear: referenceYear)
+    }
+
+    /// The first short line that names a hotel.
+    static func hotelName(in text: String) -> String? {
+        for line in text.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.count <= 60, !trimmed.lowercased().contains("check") else { continue }
+            if !matches(hotelWords, in: trimmed).isEmpty { return trimmed }
+        }
+        return nil
     }
 
     // MARK: Pieces
