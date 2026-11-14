@@ -230,7 +230,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar badge and tests written 2026-11-14 (Claude, not built); see Done |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader + paste-and-review sheet written 2026-11-14 (Claude, not built); drop, .eml/.pdf, Apple Intelligence path, stays still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
-| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
+| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion + ECB parsing written 2026-11-14 (Claude, not built); Costs page, Rates popover, fetch, Budget link still to do |
 | M3-1 | Time zones per city | P0 | todo |
 | M3-4 | Conflicts and warnings | P0 | todo |
 | M3-2 | Travel time between stops | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-4 (part): one-currency maths** (`PRD-MAC-TRIPS.md`). `Services/ExchangeRates.swift`, pure: `convert` puts a trip's totals by currency into the budget currency with the trip's rates and returns which currencies had no rate (left out, so the UI can say "plus THB 900") and whether anything was converted (to show "≈"); `parseECB` reads the European Central Bank's daily XML; `rates(for:into:perEuro:)` turns euro-based rates into the units of the budget currency per 1 unit of each trip currency (a currency the ECB lacks stays manual); `merging` keeps hand-typed rates. 4 tests in `ExchangeRatesTests`. **Not built, tests not run.** Not done: Costs page with the hero line, budget and traveller stepper, per-type and per-city bars, the Rates popover and "Update rates" fetch (one anonymous GET), "N bookings without a price" link, and the whole actual-spend side (Budget tag link, suggestions).
 
 - **2026-11-14 · Claude** — **M2-5 (part): `.woolitrip` trip file.** `Trips/TripFile.swift`: the file is the existing `TripStore.ImportBundle` JSON (pretty, sorted keys; old hidden meal slots left out). Opening one (`TripFile.newTrip`) gives a **new** trip: new trip and plan ids, iCloud bookkeeping cleared, and a shared trip comes back as yours. Mac: More → Export → **Trip File (.woolitrip)…** (save panel); the trips sidebar's bottom bar has **Open Trip File** (open panel, then selects the new trip). 3 tests in `TripFileTests` (round trip keeps content and makes new ids; shared becomes mine; non-trip data throws). **Not built, tests not run, not checked on screen.** Not done: the exported type declaration in `Info.plist` and a document icon (so Finder doesn't yet know `.woolitrip`; the open panel falls back to JSON), double-click and drop on All trips, `onOpenURL`, the preview sheet before importing, the toolbar Share menu.
 
