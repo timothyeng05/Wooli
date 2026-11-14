@@ -227,7 +227,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip + empty state + banner done 2026-11-12 (Claude); coach marks, Keyboard Shortcuts sheet, signed-out run-through still to do |
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in done 2026-11-12 (Claude); dark mode, VoiceOver, performance, window-size and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | 🟡 status picker + dashed/struck-through rows done 2026-11-14 (Claude, not built); see Done |
-| M2-2 | Bookings page (table) | P0 | todo |
+| M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar badge and tests written 2026-11-14 (Claude, not built); see Done |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-2 Bookings page (part)** (`PRD-MAC-TRIPS.md`). New sidebar page **Bookings** under each trip (ticket icon, badge = travel and stays still not booked; restored on relaunch). `Trips/MacBookingsTable.swift` is a native `Table`: Status (click to change in place), Type, What ("CX831 JFK → HKG"), When, Until, Confirmation (monospaced, click copies), Cost (cash and points), City; every column sorts, default by When. Toolbar search filters; a segmented All / Not booked / Booked / Cancelled filter; header "9 of 14 booked". Select rows → right-click Mark as Booked / Not Booked / Cancelled, Copy as Text; double-click or Return opens the plan's editor. The row logic is pure (`Trips/TripBookings.swift`) with 4 tests (`TripBookingsTests`). **Written without a Swift toolchain: not built, tests not run, not checked on screen.** **Not done:** group by type or city, clickable parts of the header line ("3 nights without a bed", "2 travel days not booked"), time zone abbreviations (M3-1), Mac-only so the iPhone has no Bookings page.
 
 - **2026-11-14 · Claude** — **M2-1 booking status UI (part)** (`PRD-MAC-TRIPS.md`). New `BookingStatusPicker` (Not set · Not booked · Booked · Cancelled) in the plan editor's new Booking section, on the flight/train ticket, and in the Mac inspector. "Not set" also drops an old "not booked yet" notes prefix. `TripItemRow` (iPhone list) draws a plan that's not booked with a dashed outline icon, shows a status caption whenever one is set (Booked in `Theme.brand`), and strikes through and dims a cancelled plan. Cancelled already left coverage and costs (M0). **Written without a Swift toolchain, so not built, not tested, not checked on screen.** **Not done:** status chips on the Mac itinerary/calendar cards, the ticket's own status badge, a clickable status control in the row, Booked toggle for activities beyond the picker, and the AC check on the China trip's "Not booked yet" items.
 

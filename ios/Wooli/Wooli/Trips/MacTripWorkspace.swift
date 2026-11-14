@@ -7,6 +7,7 @@ enum TripPage: Hashable {
     case overview
     case city(String)
     case ideas
+    case bookings
 
     var legID: String? {
         if case .city(let id) = self { id } else { nil }
@@ -99,7 +100,11 @@ struct MacTripWorkspace: View {
 
     var body: some View {
         if let trip = store.trip(tripID) {
-            workspace(trip)
+            if page == .bookings {
+                bookingsPage(trip)
+            } else {
+                workspace(trip)
+            }
         } else {
             ContentUnavailableView("Trip not available", systemImage: "suitcase",
                                    description: Text("It may have been deleted, or you're no longer part of it."))
@@ -107,6 +112,16 @@ struct MacTripWorkspace: View {
     }
 
     // MARK: Layout
+
+    /// The Bookings page: a table instead of the plan, map and inspector.
+    private func bookingsPage(_ trip: Trip) -> some View {
+        MacBookingsTable(tripID: trip.id, search: search, onOpen: { editingTicket = $0 })
+            .contentMargins(.horizontal, 0, for: .scrollContent)
+            .navigationTitle(trip.name.isEmpty ? "Trip" : trip.name)
+            .navigationSubtitle("Bookings")
+            .searchable(text: $search, placement: .toolbar, prompt: "Search bookings")
+            .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
+    }
 
     private func workspace(_ trip: Trip) -> some View {
         GeometryReader { geo in
