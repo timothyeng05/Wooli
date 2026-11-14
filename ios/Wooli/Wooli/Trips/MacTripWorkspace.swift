@@ -192,15 +192,11 @@ struct MacTripWorkspace: View {
             hasPlace: selectedItems(trip).contains { $0.place?.mapsURL != nil },
             hasTicket: selectedItems(trip).count == 1 && selectedItems(trip).first?.kind == .transit))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
-<<<<<<< HEAD
         .sheet(item: $editingTrip) { editing in
             // Trips with cities get the same sheet as New Trip; older city-less ones keep the form.
             if editing.legs.contains(where: { !$0.isHome }) { NewTripSheet(editing: editing) } else { TripEditor(trip: editing) }
         }
-=======
-        .sheet(item: $editingTrip) { TripEditor(trip: $0) }
         .sheet(isPresented: $importing) { ImportBookingsSheet(trip: trip) }
->>>>>>> ff25edd (iOS: M2-3 paste-and-review import sheet on the Mac)
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
         } message: {
