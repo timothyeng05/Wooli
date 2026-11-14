@@ -4,7 +4,7 @@ import Foundation
 struct TripTodoItem: Identifiable, Hashable {
     /// In urgency order: a night with no bed matters before an empty afternoon.
     enum Kind: Int {
-        case noBed, unbookedTravel, warnings, unpriced, emptyDays, ideas
+        case noBed, unbookedTravel, warnings, unpriced, emptyDays, checklist, ideas
     }
     let kind: Kind
     let title: String
@@ -60,6 +60,12 @@ enum TripTodo {
         if let first = empty.first {
             rows.append(TripTodoItem(kind: .emptyDays,
                                      title: "\(empty.count) day\(empty.count == 1 ? "" : "s") with nothing planned", day: first))
+        }
+
+        // Checklist items still to tick.
+        let open = (trip.extras.checklist ?? []).filter { !$0.done }
+        if !open.isEmpty {
+            rows.append(TripTodoItem(kind: .checklist, title: "\(open.count) checklist item\(open.count == 1 ? "" : "s") left"))
         }
 
         // Ideas not on a day yet.

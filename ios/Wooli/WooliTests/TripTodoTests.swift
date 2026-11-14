@@ -61,4 +61,16 @@ struct TripTodoTests {
         let days = ["a", "b", "c", "d", "e"]
         #expect(TripTodo.runs(["a", "b", "d"], in: days) == [["a", "b"], ["d"]])
     }
+
+    @Test func uncheckedChecklistItemsAppearBeforeIdeas() {
+        var t = trip()
+        t.extras.checklist = [ChecklistItem(title: "Passport"), ChecklistItem(title: "Visa", done: true), ChecklistItem(title: "Adapter")]
+        let idea = TripItem(tripID: "t", day: nil, kind: .activity, title: "Gorge")
+        let rows = TripTodo.list(trip: t, items: [idea])
+        let checklist = rows.first { $0.kind == .checklist }
+        #expect(checklist?.title == "2 checklist items left")
+        #expect(rows.last?.kind == .ideas)
+        t.extras.checklist = [ChecklistItem(title: "Done", done: true)]
+        #expect(!TripTodo.list(trip: t, items: []).contains { $0.kind == .checklist })
+    }
 }

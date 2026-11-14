@@ -44,6 +44,7 @@ struct TripTodoCard: View {
         case .warnings: "exclamationmark.triangle"
         case .unpriced: "dollarsign.circle"
         case .emptyDays: "calendar.badge.exclamationmark"
+        case .checklist: "checklist"
         case .ideas: "lightbulb"
         }
     }
