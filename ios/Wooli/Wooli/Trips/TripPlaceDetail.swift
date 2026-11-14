@@ -124,7 +124,7 @@ struct TripPlaceDetail: View {
     private var rows: some View {
         VStack(alignment: .leading, spacing: 0) {
             PlaceDetailRow(systemImage: "calendar") {
-                PlaceDetailLink(title: "Edit plan", detail: item.kind.usesTime ? "Day, time, place" : "Day, place") {
+                PlaceDetailLink(title: "Edit plan", detail: "Day, time, place") {
                     editingPlan = TripStore.shared.items.first { $0.id == item.id } ?? item
                 }
             }
