@@ -233,7 +233,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
-| M3-2 | Travel time between stops | P0 | 🟡 pure logic + tests written 2026-11-14 (Claude, not built); directions lookup, cache, connector line, day total still to do |
+| M3-2 | Travel time between stops | P0 | 🟡 logic, tests and directions lookup with disk cache written 2026-11-14 (Claude, not built); connector line and day total still to do |
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | todo |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-2 (part): directions lookup.** `Trips/TravelEstimator.swift` (main-actor singleton, iPhone and Mac): `estimate(from:to:mode:)` returns a `TravelEstimate` for a hop using `MKDirections.calculateETA`. Answers are cached in `Application Support/travel-times.json` by place pair and mode, so reopening a trip asks for nothing; requests run one at a time with a 250 ms gap; duplicate asks share one request; transit that Apple can't route is retried as driving; a failure falls back to the straight-line distance and isn't retried until the next launch. `cached(...)` reads the cache without asking. **Not built, not exercised against Apple's service.** Not unit-tested (it needs the network): the pure parts are in `TravelTime`. Still to do: the connector line in the itinerary (visible days only, click to change mode) and the day-header total.
 
 - **2026-11-14 · Claude** — **M3-2 (part): travel-time logic.** `Services/TravelTime.swift` (pure, 6 tests in `TravelTimeTests`): `TravelMode` (walk, transit, drive), default by distance (under 1.5 km walk; otherwise transit where available, else drive), wording ("14 min walk", "1 h 5 min by transit", "2.1 km", "450 m" when there's no estimate), the day line "4 stops · 1 h 10 min getting around", a stable cache key per place pair and mode, a straight-line fallback, and which plans get a connector (consecutive placed plans in a day, stays excluded). **Not built, tests not run.** Still to do: the `MKDirections` lookup with an on-disk cache and rate limit, the connector line in the itinerary (click to change mode), the day-header total, offline fallback in the UI. AC: no more than one directions request per visible connector, none on reopen.
 
