@@ -237,7 +237,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | 🟡 ordering, tests, day menu, confirmation and undo written 2026-11-14 (Claude, not built); Mac check of the undo step and the stay as start still to do |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
-| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-2 checklist, M4-1 places-been card and M4-4 template logic written 2026-11-14 (Claude, not built); rest todo |
+| M4 | Places-been globe, checklist, attachments, duplicate trip, Spotlight and Handoff, menu bar extra, Plan with Claude | P1/P2 | 🟡 M4-1 places-been card, M4-2 checklist, M4-4 duplicate trip and M4-7 prompt written 2026-11-14 (Claude, not built); M4-3 attachments, M4-5 Spotlight/Handoff, M4-6 menu bar extra todo |
 
 ---
 
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M4-7: Plan with Claude (copy a prompt).** `Services/PlanPrompt.swift` (pure, 3 tests): "Help me plan Seville, Dec 27–29." with the cities and nights, what's already booked, what's still open (the To do list's rows), the ideas not yet scheduled, and an instruction to use Wooli's tools (`wooli_trips` to read, `wooli_add_to_trip` / `wooli_edit_trip` to change) without touching anything booked. Mac: More → **Copy Prompt for Claude**. No API calls from Wooli. **Not built, tests not run.** Not done: the PRD's "only when the MCP server has been set up" check (always shown), and opening Claude after copying (I left that out: the right app link isn't known).
 
 - **2026-11-14 · Claude** — **M4-4 (part): Duplicate Trip… on the Mac.** More → **Duplicate Trip…** opens a sheet (name, defaulting to "<trip> copy"; start day, defaulting to the same date next year) that makes the template copy with `TripTemplate`, saves it and opens it (`TripStore.openTripRequest`, picked up by `MacShell`). The sheet says what stays behind. **Not built, not checked on screen.** Not done: "Save as template" as a separate saved list of templates, an iPhone menu item, and a gallery context-menu entry.
 

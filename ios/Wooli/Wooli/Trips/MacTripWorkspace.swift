@@ -285,6 +285,8 @@ struct MacTripWorkspace: View {
         ToolbarItem(placement: .primaryAction) {
             Menu("More", systemImage: "ellipsis.circle") {
                 Button("Edit Trip…", systemImage: "pencil") { editingTrip = trip }
+                Button("Copy Prompt for Claude", systemImage: "sparkles") { copyPlanPrompt(trip) }
+                    .help("Copies a ready prompt for planning this trip with Claude and your Wooli tools")
                 Button("Duplicate Trip…", systemImage: "plus.square.on.square") { duplicating = true }
                 Button("Import Confirmation…", systemImage: "square.and.arrow.down") { importing = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
@@ -305,6 +307,12 @@ struct MacTripWorkspace: View {
                        role: .destructive) { confirmDeleteTrip = true }
             }
         }
+    }
+
+    /// "Plan with Claude": copies the prompt; nothing is sent from Wooli.
+    private func copyPlanPrompt(_ trip: Trip) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(PlanPrompt.make(trip: trip, items: store.items(in: trip.id)), forType: .string)
     }
 
     private func copyItinerary(_ trip: Trip, markdown: Bool) {
