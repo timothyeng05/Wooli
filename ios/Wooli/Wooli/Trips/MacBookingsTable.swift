@@ -13,19 +13,98 @@ struct MacBookingsTable: View {
     @State private var store = TripStore.shared
     @State private var sortOrder = [KeyPathComparator(\BookingRow.whenKey)]
     @State private var copied: String?
+    @State private var filter = BookingsFilter.all
+    @State private var search = ""
+    @AppStorage("trip.bookings.grouping") private var grouping = BookingsGrouping.none
 
     var body: some View {
         let rows = BookingsList.rows(trip: trip, items: store.items(in: trip.id))
-        let sorted = rows.sorted(using: sortOrder)
+        let shown = BookingsList.apply(filter, search: search, to: rows)
         VStack(spacing: 0) {
             if rows.isEmpty {
                 ContentUnavailableView("No bookings yet", systemImage: "ticket",
                                        description: Text("Flights, trains and stays you add to the plan show up here."))
             } else {
-                table(sorted)
+                header(BookingsList.summary(trip: trip, rows: rows))
+                Divider()
+                if shown.isEmpty {
+                    ContentUnavailableView("Nothing matches", systemImage: "line.3.horizontal.decrease.circle",
+                                           description: Text("Clear the filter or search to see every booking."))
+                } else if grouping == .none {
+                    table(shown.sorted(using: sortOrder))
+                } else {
+                    groupedList(shown.sorted(using: sortOrder))
+                }
             }
         }
         .background(Theme.background)
+        .searchable(text: $search, placement: .toolbar, prompt: "Search bookings")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Picker("Group By", selection: $grouping) {
+                    ForEach(BookingsGrouping.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .help("Group the bookings by type or city")
+            }
+        }
+    }
+
+    /// "9 of 14 booked · 3 nights without a bed · 2 travel days not booked"; each part filters.
+    private func header(_ summary: BookingsSummary) -> some View {
+        HStack(spacing: Space.s) {
+            ForEach(Array(summary.parts.enumerated()), id: \.offset) { index, part in
+                if index > 0 { Text("·").foregroundStyle(Theme.textTertiary) }
+                if part.filter == .all {
+                    Text(part.text).foregroundStyle(Theme.textSecondary)
+                } else {
+                    Button(part.text) { filter = filter == part.filter ? .all : part.filter }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(filter == part.filter ? Theme.brand : Theme.text)
+                        .fontWeight(filter == part.filter ? .semibold : .regular)
+                        .accessibilityHint("Filters the table")
+                }
+            }
+            Spacer()
+            Menu {
+                Button("All bookings") { filter = .all }
+                Button("Not booked") { filter = .notBooked }
+                Button("Booked") { filter = .booked }
+                Button("Without a price") { filter = .noPrice }
+            } label: {
+                Label(filterLabel, systemImage: "line.3.horizontal.decrease.circle")
+            }
+            .menuStyle(.borderlessButton).fixedSize()
+        }
+        .font(.callout)
+        .padding(.horizontal, Space.l).padding(.vertical, Space.s)
+    }
+
+    private var filterLabel: String {
+        switch filter {
+        case .all: "Filter"
+        case .booked: "Booked"
+        case .notBooked: "Not booked"
+        case .noPrice: "Without a price"
+        case .travelNotBooked: "Travel not booked"
+        }
+    }
+
+    /// Grouped by type or city: a section per group, each its own small table.
+    private func groupedList(_ rows: [BookingRow]) -> some View {
+        let groups = Dictionary(grouping: rows) { grouping == .type ? $0.typeLabel : ($0.city.isEmpty ? "No city" : $0.city) }
+        let order = groups.keys.sorted { (groups[$0]?.first?.whenKey ?? "") < (groups[$1]?.first?.whenKey ?? "") }
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: Space.l) {
+                ForEach(order, id: \.self) { name in
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text(name).font(.headline).padding(.horizontal, Space.l)
+                        table(groups[name] ?? []).frame(height: CGFloat(groups[name]?.count ?? 0) * 28 + 36)
+                    }
+                }
+            }
+            .padding(.vertical, Space.m)
+        }
     }
 
     private func table(_ rows: [BookingRow]) -> some View {

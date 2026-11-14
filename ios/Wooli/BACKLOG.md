@@ -227,7 +227,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M1-9 | First run for a stranger: sample trip in Release, no-iCloud path, coach marks | P0 | 🟡 sample trip, banner, Help menu, first-trip pointers done 2026-11-12 (Claude); signed-out run-through still to do |
 | M1-10 | App Store readiness: Google search opt-in, dark mode, VoiceOver, performance | P0 | 🟡 Google opt-in, VoiceOver rows, minimum window, per-trip item index done 2026-11-12 (Claude); dark mode / Increase Contrast pass, a real profile on a 30-day trip, Split View and listing work still to do |
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
-| M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes done 2026-11-14 (Claude); search, group by, header line filters, inspector, multi-select actions left |
+| M2-2 | Bookings page (table) | P0 | 🟡 table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); inspector, multi-select actions left; "nights without a bed" is text only (no row to filter to) |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | todo |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-2 story 2: search, group by, header line.** Bookings page gets toolbar search (what, type, city, code, date, notes), a Group By menu (none, type, city; remembered), and the header line "9 of 14 booked · 3 nights without a bed · 2 travel days not booked" where booked and travel-not-booked click to filter, plus a Filter menu (all, not booked, booked, without a price). Built for Mac: yes; tests not run (see story 1; the filter logic was added in story 1's `BookingsList` and tests). Not tried by hand.
 
 - **2026-11-14 · Claude** — **M2-2 story 1: Bookings page.** New sidebar row "Bookings" under each trip (red count of travel and stays not booked) opens a native `Table` (Mac only, `MacBookingsTable`): Status (menu: Not booked / Booked / Cancelled), Type, What ("CX831 JFK → HKG"), When, Until, Confirmation (monospaced, click copies), Cost (cash + points), City; sortable by any column, default by When. Rows, header-line counts and filters live in `BookingsList` (pure, shared). Unit tests in `WooliTests/BookingsListTests.swift`. Built for Mac: yes. **Tests not run** (the test target only supports iOS and this machine has no iOS 26 simulator). Not done: search, group by, header line, inspector, multi-select actions, double-click not tried by hand.
 
