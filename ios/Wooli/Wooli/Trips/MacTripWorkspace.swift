@@ -675,9 +675,11 @@ struct MacTripWorkspace: View {
                     selection = [$0]
                     scrollTarget = $0
                 }
-                TripCostsCard(costs: TripCosts(items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }),
+                let scoped = all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }
+                TripCostsCard(costs: TripCosts(items: scoped),
                               scope: leg.map { $0.name } ?? "this trip",
                               trip: trip,
+                              items: scoped,
                               days: leg.map { l in trip.days.filter(l.contains).count } ?? trip.days.count,
                               wholeTrip: leg == nil)
                 Divider().padding(.vertical, Space.xs)
@@ -1755,6 +1757,8 @@ struct TripCostsCard: View {
     let scope: String
     /// The trip, for its budget and rates (M2-4); nil = amounts shown as entered.
     var trip: Trip? = nil
+    /// The plans behind `costs`, for the by-type and by-city bars.
+    var items: [TripItem] = []
     /// Days this card covers, for "a day".
     var days = 0
     var wholeTrip = true
@@ -1778,6 +1782,7 @@ struct TripCostsCard: View {
             }
             if let trip {
                 TripBudgetLine(trip: trip, totals: costs.totals, days: days, wholeTrip: wholeTrip)
+                TripCostBars(trip: trip, items: items, wholeTrip: wholeTrip)
                 HStack {
                     Spacer()
                     Button(trip.extras.budget == nil ? "Set budget & rates…" : "Budget & rates…") { editingBudget = true }

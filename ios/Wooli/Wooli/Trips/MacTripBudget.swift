@@ -46,6 +46,48 @@ struct TripBudgetLine: View {
     }
 }
 
+/// Two small bar lists (M2-4): where the money goes by kind of booking and, for the whole trip, by city.
+/// Everything is in the budget currency at the trip's rates.
+struct TripCostBars: View {
+    let trip: Trip
+    let items: [TripItem]
+    var wholeTrip = true
+
+    var body: some View {
+        let code = trip.extras.budgetCurrency ?? TripItem.homeCurrency
+        let rates = trip.extras.fxRates ?? [:]
+        let types = TripCostBreakdown.byType(items: items, budget: code, rates: rates)
+        let cities = wholeTrip ? TripCostBreakdown.byCity(trip: trip, items: items, budget: code, rates: rates) : []
+        if types.count > 1 || cities.count > 1 {
+            VStack(alignment: .leading, spacing: Space.m) {
+                list("By type", types, code)
+                if cities.count > 1 { list("By city", cities, code) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func list(_ title: String, _ bars: [CostBar], _ code: String) -> some View {
+        if bars.count > 1 {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary)
+                ForEach(bars) { bar in
+                    HStack(spacing: Space.s) {
+                        Text(bar.title).font(.caption).foregroundStyle(Theme.text).lineLimit(1)
+                            .frame(width: 96, alignment: .leading)
+                        GeometryReader { geo in
+                            Capsule().fill(Theme.Group.travel.color.opacity(0.85))
+                                .frame(width: max(geo.size.width * bar.share, 4))
+                        }
+                        .frame(height: 8)
+                        Text(TripItem.money(bar.amount, code)).font(.caption).monospacedDigit().foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Budget, its currency, travellers and the rates between the trip's currencies.
 struct TripBudgetEditor: View {
     let tripID: String
