@@ -652,6 +652,13 @@ struct MacTripWorkspace: View {
                     scrollTarget = $0
                 }
                 let leg = trip.legs.first { $0.id == focusLeg }
+                // The To do list is for the whole trip; a city's page keeps just its own cards.
+                if focusLeg == nil {
+                    TripTodoCard(trip: trip, items: all) { itemID, day in
+                        if let itemID { selection = [itemID] }
+                        scrollTarget = itemID ?? day
+                    }
+                }
                 TripWarningsCard(trip: trip, items: all.filter { item in leg.map { l in item.day.map(l.contains) == true } ?? true }) {
                     selection = [$0]
                     scrollTarget = $0
