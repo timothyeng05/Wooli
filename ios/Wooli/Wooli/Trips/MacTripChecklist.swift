@@ -28,7 +28,7 @@ struct TripChecklistCard: View {
                     }
                     .buttonStyle(.link).font(.callout)
                 }
-                ForEach(TripChecklist.groups(items), id: \.name) { group in
+                ForEach(Array(TripChecklist.groups(items).enumerated()), id: \.offset) { _, group in
                     if !group.name.isEmpty {
                         Text(group.name).font(.caption.weight(.semibold)).foregroundStyle(Theme.textSecondary).padding(.top, Space.xs)
                     }
