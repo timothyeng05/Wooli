@@ -31,6 +31,20 @@ struct MacBookingsTable: View {
     }
 
     var body: some View {
+        bodyContent
+            // A link elsewhere (the Costs card) can open this page with a filter already on.
+            .onAppear { applyRequest() }
+            .onChange(of: store.bookingsRequest) { _, _ in applyRequest() }
+    }
+
+    private func applyRequest() {
+        guard let request = store.bookingsRequest, request.tripID == tripID else { return }
+        filter = Filter(rawValue: request.filter) ?? .all
+        store.bookingsRequest = nil
+    }
+
+    @ViewBuilder
+    private var bodyContent: some View {
         if let trip = store.trip(tripID) {
             let all = TripBookings.rows(trip: trip, items: store.items(in: tripID))
             let sorted = all.filter(filter.matches).filter(matchesSearch).sorted(using: sortOrder)

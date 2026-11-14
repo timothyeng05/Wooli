@@ -153,6 +153,11 @@ struct MacShellView: View {
         .task(id: trips.newTripRequested) {
             if trips.newTripRequested { trips.newTripRequested = false; showNewTrip = true }
         }
+        // The Costs card's "N bookings without a price" opens that trip's Bookings page, filtered.
+        .onChange(of: trips.bookingsRequest) { _, request in
+            guard let request else { return }
+            selection.wrappedValue = .trip(request.tripID, .bookings)
+        }
         .onAppear { tripSelection = TripSelectionStore.decode(lastTrip) }
         .onChange(of: tripSelection) { _, new in
             lastTrip = TripSelectionStore.encode(new)

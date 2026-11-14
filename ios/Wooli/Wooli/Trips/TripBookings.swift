@@ -22,6 +22,13 @@ struct BookingRow: Identifiable {
     var isTravelOrStay: Bool
 }
 
+/// "Open this trip's Bookings page showing only …".
+struct BookingsRequest: Equatable {
+    var tripID: String
+    /// A `MacBookingsTable` filter name: "Not booked", "No price", …
+    var filter: String
+}
+
 enum TripBookings {
     /// Travel and stays always; anything else once it has a status or a confirmation code.
     static func includes(_ item: TripItem) -> Bool {

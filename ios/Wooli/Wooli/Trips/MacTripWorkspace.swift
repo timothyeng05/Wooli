@@ -1825,9 +1825,17 @@ struct TripCostsCard: View {
                 }
             }
             if costs.unpriced > 0 {
-                Label("\(costs.unpriced) booking\(costs.unpriced == 1 ? "" : "s") without a price",
-                      systemImage: "exclamationmark.circle")
-                    .font(.caption).foregroundStyle(Theme.textSecondary)
+                let label = Label("\(costs.unpriced) booking\(costs.unpriced == 1 ? "" : "s") without a price",
+                                  systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                if let trip {
+                    // Opens the Bookings page showing only those.
+                    Button { TripStore.shared.bookingsRequest = BookingsRequest(tripID: trip.id, filter: "No price") } label: { label }
+                        .buttonStyle(.link)
+                        .help("Show these on the Bookings page")
+                } else {
+                    label.foregroundStyle(Theme.textSecondary)
+                }
             }
         }
         .padding(Space.l)

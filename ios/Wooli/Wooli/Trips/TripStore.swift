@@ -35,6 +35,8 @@ final class TripStore: CKSyncEngineDelegate {
     var tripToOpen: String?
     /// File → New Trip… on the Mac asks the trips list to open its sheet.
     var newTripRequested = false
+    /// Asks the Mac shell to open a trip's Bookings page already filtered (the Costs card's "without a price" link).
+    var bookingsRequest: BookingsRequest?
 
     /// The window's undo stack (set by the Mac trip page); nil on the iPhone.
     @ObservationIgnored weak var undoManager: UndoManager?

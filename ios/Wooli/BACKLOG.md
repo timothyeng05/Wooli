@@ -230,7 +230,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-2 | Bookings page (table) | P0 | 🟡 table, badge, grouping, clickable header and zones written 2026-11-14 (Claude, not built); nights-without-a-bed part and an iPhone page still to do |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 reader (flights and stays), review sheet, .eml/.txt/.pdf drop written 2026-11-14 (Claude, not built); ⌘V paste anywhere, Apple Intelligence path, place lookup, share extension still to do |
 | M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 text, Markdown, .ics and .woolitrip written 2026-11-14 (Claude, not built); Print/PDF, file-type declaration, double-click open and preview sheet still to do |
-| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, rates popover, bars and privacy line written 2026-11-14 (Claude, not built); "without a price" link and Budget-tag actuals still to do |
+| M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 planned side written 2026-11-14 (Claude, not built): conversion, budget line, rates, bars, privacy line, "without a price" link; the actual-spend side (Budget tag link, suggestions) still to do |
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
 | M3-2 | Travel time between stops | P0 | 🟡 logic, lookup, connector line and day total written 2026-11-14 (Claude, not built); fast-scroll request check and on-screen pass still to do |
@@ -314,6 +314,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-4 (part): "N bookings without a price" is a link.** In the Mac Costs card it opens that trip's Bookings page already filtered to No price (`TripStore.bookingsRequest`, a `BookingsRequest`, picked up by `MacShell` to switch page and by `MacBookingsTable` to set its filter; works from another page or while already on Bookings). **Not built, not checked on screen.** The planned side of M2-4 is now complete in code (one currency, rates, budget, per-day and traveller figures, by-type and by-city bars, the link, the privacy line); acceptance checks (a USD + EUR + JPY trip, offline totals) need running. The whole actual-spend side (P1: Budget tag link, suggestions, planned vs actual, unplanned) is not started.
 
 - **2026-11-14 · Claude** — **M2-4 (part): privacy page.** `/privacy` now has an **Exchange rates** section (the optional "Update rates" request to the European Central Bank: one anonymous request, nothing about the user or trip sent, none to the developer, manual rates otherwise) and says travel times between places come from Apple Maps. Website text only; `npm run check` passes (typecheck, no web tests). **Still to confirm:** the App Store Connect privacy answers, and that the site is redeployed with this page before a build that has the rates button ships.
 
