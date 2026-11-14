@@ -50,4 +50,25 @@ struct TripBookingsTests {
         #expect(TripBookings.summary(rows) == "1 of 2 booked")
         #expect(TripBookings.notBookedCount([a, b, c]) == 1)
     }
+
+    private func rows() -> [BookingRow] {
+        var flight = TripItem(tripID: "t", day: "2027-04-01", kind: .transit); flight.setStatus(.booked); flight.cost = 500
+        flight.transport = TripTransport(mode: .flight)
+        var stay = TripItem(tripID: "t", day: "2027-04-02", kind: .stay, title: "Hyatt"); stay.setStatus(.planned)
+        var stay2 = TripItem(tripID: "t", day: "2027-04-03", kind: .stay, title: "Inn"); stay2.setStatus(.cancelled)
+        return TripBookings.rows(trip: trip(), items: [flight, stay, stay2])
+    }
+
+    @Test func headerCountsSplitStatusAndMissingPrices() {
+        let c = TripBookings.headerCounts(rows())
+        #expect(c == TripBookings.HeaderCounts(booked: 1, needBooking: 2, notBooked: 1, cancelled: 1, withoutPrice: 1))
+    }
+
+    @Test func groupingKeepsFirstSeenOrderAndRowsTogether() {
+        let groups = TripBookings.grouped(rows(), by: .type)
+        #expect(groups.map(\.label) == ["Flight", "Stay"])
+        #expect(groups[1].rows.count == 2)
+        #expect(TripBookings.grouped(rows(), by: .none).count == 1)
+        #expect(TripBookings.grouped(rows(), by: .status).map(\.label) == ["Booked", "Not booked", "Cancelled"])
+    }
 }

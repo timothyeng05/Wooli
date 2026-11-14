@@ -114,4 +114,58 @@ enum TripBookings {
                 .filter { !$0.isEmpty }.joined(separator: " · ")
         }.joined(separator: "\n")
     }
+
+    // MARK: Grouping and the header line
+
+    enum Grouping: String, CaseIterable, Identifiable {
+        case none = "None", type = "Type", city = "City", status = "Status"
+        var id: String { rawValue }
+    }
+
+    /// The label a row is grouped under.
+    static func groupLabel(_ row: BookingRow, by grouping: Grouping) -> String {
+        switch grouping {
+        case .none: ""
+        case .type: row.kindLabel
+        case .city: row.city.isEmpty ? "No city" : row.city
+        case .status: row.status?.label ?? "Not set"
+        }
+    }
+
+    /// Rows with the same group label together (groups in the order of their first row), each group
+    /// in the order given. A `Table` can't show section headers, so the table sorts by this instead.
+    static func grouped(_ rows: [BookingRow], by grouping: Grouping) -> [(label: String, rows: [BookingRow])] {
+        guard grouping != .none else { return [("", rows)] }
+        var order: [String] = []
+        var buckets: [String: [BookingRow]] = [:]
+        for row in rows {
+            let label = groupLabel(row, by: grouping)
+            if buckets[label] == nil { order.append(label) }
+            buckets[label, default: []].append(row)
+        }
+        return order.map { ($0, buckets[$0] ?? []) }
+    }
+
+    /// The parts of the header line, each of which filters the table when clicked.
+    struct HeaderCounts: Equatable {
+        var booked = 0
+        var needBooking = 0
+        var notBooked = 0
+        var cancelled = 0
+        var withoutPrice = 0
+    }
+
+    static func headerCounts(_ rows: [BookingRow]) -> HeaderCounts {
+        var c = HeaderCounts()
+        for row in rows {
+            if row.status == .cancelled { c.cancelled += 1; continue }
+            if row.isTravelOrStay {
+                c.needBooking += 1
+                if row.status == .booked { c.booked += 1 }
+                if row.status == .planned { c.notBooked += 1 }
+                if row.cost == 0 && row.costText.isEmpty { c.withoutPrice += 1 }
+            }
+        }
+        return c
+    }
 }
