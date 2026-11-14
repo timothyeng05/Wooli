@@ -277,6 +277,10 @@ struct MacTripWorkspace: View {
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
+                Menu("Copy Itinerary", systemImage: "doc.on.clipboard") {
+                    Button("As Text") { copyItinerary(trip, markdown: false) }
+                    Button("As Markdown") { copyItinerary(trip, markdown: true) }
+                }
                 if !inOwnWindow {
                     Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
                 }
@@ -1080,6 +1084,13 @@ struct MacTripWorkspace: View {
             let ids = ids(in: texts)
             if !ids.isEmpty { perform(ids) }
         }
+    }
+
+    /// Plain or Markdown day-by-day text for Messages, Notes or email.
+    private func copyItinerary(_ trip: Trip, markdown: Bool) {
+        let text = TripExport.itinerary(trip: trip, items: store.items(in: trip.id), options: ExportOptions(markdown: markdown))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private func invite(_ trip: Trip) {

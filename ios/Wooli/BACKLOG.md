@@ -229,7 +229,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-1 | Booking status (replaces the "not booked yet" notes prefix) | P0 | ✅ done 2026-11-12 (Claude); see Done |
 | M2-2 | Bookings page (table) | P0 | 🟡 toolbar Codes menu (any code in two clicks, one to copy), table, sidebar row with not-booked badge, sorting, clickable status, click-to-copy codes, search, group by type/city and the clickable header line done 2026-11-14 (Claude); right-click menu (Edit, Copy Confirmation Code, Mark as Booked / Not Booked / Cancelled, Copy as Text) on one or several rows, and the inspector shows the selected row, done; "nights without a bed" is text only (no row to filter to) |
 | M2-3 | Paste or drop a confirmation, read on-device | P0 | 🟡 File > Import Confirmation… (⇧⌘I) with the deterministic reader and review sheet, ⌘V of a confirmation, and dropping .eml / .pdf / .txt / text files on the trip window, and the duplicate check ("Update existing") and an Apple Intelligence fallback reader done 2026-11-14 (Claude); the 12-confirmation test set, train confirmations, place lookup against the city (80 km check), and trying it on real emails left |
-| M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | todo |
+| M2-5 | Print, PDF, calendar file, text, `.woolitrip` file | P0/P1 | 🟡 Copy Itinerary as Text / Markdown done 2026-11-14 (Claude); print/PDF, calendar file, trip file and the Share menu left |
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | todo |
 | M3-1 | Time zones per city | P0 | todo |
 | M3-4 | Conflicts and warnings | P0 | todo |
@@ -310,6 +310,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M2-5 story 1: Copy Itinerary.** More (…) menu > Copy Itinerary > As Text / As Markdown puts a day-by-day itinerary on the clipboard: title, dates and route, then each day under its city with times, flight and stay details, confirmation codes, seats, addresses and notes. Cancelled plans, empty meal slots and Ideas are left out; costs are off by default. Pure builder `Trips/TripExport.swift` (`itinerary(trip:items:options:)`) with `TripExportTests`. Built for Mac: yes; tests not run. No options sheet yet (notes on, costs off).
 
 - **2026-11-14 · Claude** — **M2-3 story 4: Apple Intelligence fallback.** `Trips/BookingImportAI.swift` (`BookingReader`): when the pattern reader finds no booking and Apple Intelligence is available (macOS/iOS 26), a `LanguageModelSession` with `@Generable` output (flights, trains, stays: dates, times, airports, code, price) reads the text on-device, shown as "Reading with Apple Intelligence…" in the sheet; without the model the sheet says only the simple patterns ran. **Deviation from the PRD:** patterns run first and the model only when they find nothing (the recipe-import pattern), because patterns never invent a booking; swap if the model reads better in practice. Built for Mac: yes (compiles with `canImport(FoundationModels)`); **never run with the model**; tests not run. M2-3 stays 🟡: no 12-email fixture set (needs real anonymised confirmations from the user), no train patterns, no place lookup, nothing tried on a real email.
 

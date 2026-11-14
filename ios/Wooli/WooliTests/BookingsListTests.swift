@@ -272,3 +272,57 @@ struct BookingImportDuplicateTests {
         #expect(BookingImport.duplicate(of: b, in: [saved]) == nil)
     }
 }
+
+// Trip export (M2-5).
+
+struct TripExportTests {
+    private func sample() -> (Trip, [TripItem]) {
+        var trip = Trip(id: "t", name: "Spring in China", startDay: "2027-04-01", endDay: "2027-04-03")
+        trip.legs = [TripLeg(name: "Hong Kong", startDay: "2027-04-01", endDay: "2027-04-02"),
+                     TripLeg(name: "Hangzhou", startDay: "2027-04-02", endDay: "2027-04-03")]
+        var t = TripTransport(mode: .flight)
+        t.flightNumber = "CX831"; t.fromAirport = "JFK"; t.toAirport = "HKG"; t.confirmation = "X7K2PQ"; t.seats = "12A"
+        var flight = TripItem(tripID: "t", day: "2027-04-01", kind: .transit, title: "CX831 JFK → HKG", time: 570)
+        flight.transport = t
+        var hotel = TripItem(tripID: "t", day: "2027-04-02", kind: .stay, title: "Hyatt Regency Hangzhou")
+        hotel.checkOutDay = "2027-04-03"
+        hotel.cost = 400; hotel.currency = "USD"
+        hotel.notes = "Late check-in"
+        var cancelled = TripItem(tripID: "t", day: "2027-04-02", kind: .activity, title: "Cancelled tour")
+        cancelled.setStatus(.cancelled)
+        let slot = TripItem(tripID: "t", day: "2027-04-02", kind: .meal, title: "Lunch", time: 750)
+        return (trip, [flight, hotel, cancelled, slot])
+    }
+
+    @Test func textHasCitiesDaysAndConfirmationCodes() {
+        let (trip, items) = sample()
+        let text = TripExport.itinerary(trip: trip, items: items)
+        #expect(text.contains("SPRING IN CHINA"))
+        #expect(text.contains("Hong Kong → Hangzhou"))
+        #expect(text.contains("Confirmation X7K2PQ"))
+        #expect(text.contains("Seat 12A"))
+        #expect(text.contains("Hyatt Regency Hangzhou"))
+        #expect(text.contains("Late check-in"))
+        #expect(!text.contains("Cancelled tour"))
+        #expect(!text.contains("Lunch"))
+    }
+
+    @Test func costsAreOffUnlessAsked() {
+        let (trip, items) = sample()
+        #expect(!TripExport.itinerary(trip: trip, items: items).contains("$400"))
+        #expect(TripExport.itinerary(trip: trip, items: items, options: ExportOptions(costs: true)).contains("400"))
+    }
+
+    @Test func markdownUsesHeadingsAndBullets() {
+        let (trip, items) = sample()
+        let md = TripExport.itinerary(trip: trip, items: items, options: ExportOptions(markdown: true))
+        #expect(md.hasPrefix("# Spring in China"))
+        #expect(md.contains("## Hong Kong"))
+        #expect(md.contains("- "))
+    }
+
+    @Test func notesCanBeLeftOut() {
+        let (trip, items) = sample()
+        #expect(!TripExport.itinerary(trip: trip, items: items, options: ExportOptions(notes: false)).contains("Late check-in"))
+    }
+}
