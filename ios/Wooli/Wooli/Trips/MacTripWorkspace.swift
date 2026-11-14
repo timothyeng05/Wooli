@@ -1,6 +1,8 @@
 #if os(macOS)
+import AppKit
 import MapKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Which page of a trip the shell's sidebar has picked.
 enum TripPage: Hashable {
@@ -248,6 +250,11 @@ struct MacTripWorkspace: View {
                 Button("Edit Trip…", systemImage: "pencil") { editingTrip = trip }
                 Button("Import Confirmation…", systemImage: "square.and.arrow.down") { importing = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
+                Menu("Export", systemImage: "square.and.arrow.up") {
+                    Button("Copy Itinerary as Text") { copyItinerary(trip, markdown: false) }
+                    Button("Copy Itinerary as Markdown") { copyItinerary(trip, markdown: true) }
+                    Button("Calendar File (.ics)…") { saveCalendar(trip) }
+                }
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
@@ -259,6 +266,20 @@ struct MacTripWorkspace: View {
                        role: .destructive) { confirmDeleteTrip = true }
             }
         }
+    }
+
+    private func copyItinerary(_ trip: Trip, markdown: Bool) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(TripExport.text(trip: trip, items: store.items(in: trip.id), markdown: markdown), forType: .string)
+    }
+
+    /// A file rather than Calendar access, so no permission is needed.
+    private func saveCalendar(_ trip: Trip) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = (trip.name.isEmpty ? "Trip" : trip.name) + ".ics"
+        panel.allowedContentTypes = [UTType(filenameExtension: "ics") ?? .data]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? TripExport.ics(trip: trip, items: store.items(in: trip.id)).write(to: url, atomically: true, encoding: .utf8)
     }
 
     // MARK: Left: cities and ideas
