@@ -10,7 +10,11 @@ struct TravelConnectorRow: View {
     @State private var chosen: TravelMode?
 
     /// The same pair keeps the mode you picked, on this device.
-    private var defaultsKey: String { "travel.mode." + TravelTime.cacheKey(from: from, to: to, mode: .walk) }
+    private var defaultsKey: String { Self.defaultsKey(from: from, to: to) }
+
+    static func defaultsKey(from: TripPlace, to: TripPlace) -> String {
+        "travel.mode." + TravelTime.cacheKey(from: from, to: to, mode: .walk)
+    }
 
     var body: some View {
         Menu {

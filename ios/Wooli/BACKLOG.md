@@ -233,7 +233,7 @@ Full spec, acceptance criteria, data model and build order: **`PRD-MAC-TRIPS.md`
 | M2-4 | Trip budget: one currency, planned vs. actual from Budget | P0/P1 | 🟡 conversion, budget line, Budget & rates popover with ECB fetch written 2026-11-14 (Claude, not built); per-type/city bars, "without a price" link, Budget-tag actuals still to do |
 | M3-1 | Time zones per city | P0 | 🟡 zone maths, header note and real-zone .ics written 2026-11-14 (Claude, not built); header UI, flight arrival check, NOW pill still to do |
 | M3-4 | Conflicts and warnings | P0 | 🟡 checks, tests and a Warnings card with Ignore written 2026-11-14 (Claude, not built); plan marks, Overview count and fixes still to do |
-| M3-2 | Travel time between stops | P0 | 🟡 logic, lookup with disk cache and connector line written 2026-11-14 (Claude, not built); day-header total, visible-days-only check, Mac Table not needed still to do |
+| M3-2 | Travel time between stops | P0 | 🟡 logic, lookup, connector line and day total written 2026-11-14 (Claude, not built); fast-scroll request check and on-screen pass still to do |
 | M3-5 | Trip Overview with a To do list | P0 | 🟡 To do list, status line, Route card and notes written 2026-11-14 (Claude, not built); route reordering and a full Overview page still to do |
 | M3-3 | Order a day by shortest route | P1 | todo |
 | M3-6 | Weather (WeatherKit) | P1 | todo |
@@ -312,6 +312,8 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 ---
 
 ## Done
+
+- **2026-11-14 · Claude** — **M3-2 (part): day total.** Each day card's subtitle adds "· 4 stops · 1 h 10 min getting around" once the connectors have estimates (`TravelEstimator.known` reads only the cache, so the header never causes requests; the estimator is now `@Observable`, so the header updates as estimates arrive). Uses the mode you picked for a hop, else any cached mode; hops without directions add nothing to the minutes. Nothing shows for a day with fewer than two placed plans. **Not built, not checked on screen.** With this M3-2 has its logic, lookup, connectors and total; left is the real-device check that a 30-day trip makes one request per visible connector and none on reopen.
 
 - **2026-11-14 · Claude** — **M3-2 (part): connector line in the itinerary.** New `Trips/TravelConnectorRow.swift` (iPhone and Mac): between two consecutive placed plans in a day card (travel tickets and stays excluded) a small line shows the estimate ("14 min walk", "22 min by transit", the distance when there's no directions). Tap it for walk / by transit / drive, or "Pick Automatically"; the choice is remembered on this device for that pair. It asks `TravelEstimator` when the row first appears, so each hop is looked up once and then comes from the cache. The Calendar view has no connectors. **Not built, not checked on screen.** Added a harmonization-log line. Not done: the day-header total ("4 stops · 1 h 10 min getting around"), confirming no request fires while scrolling fast on a 30-day trip (relies on the day cards being lazy; unverified), and the iPhone check of the line's indent under the row icon.
 

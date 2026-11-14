@@ -1,5 +1,6 @@
 import Foundation
 import MapKit
+import Observation
 import OSLog
 
 /// Looks up travel times between two places with Apple's directions (M3-2).
@@ -7,17 +8,17 @@ import OSLog
 /// makes no requests. Requests go one at a time with a short gap, and a failure
 /// (offline, no route) falls back to the straight-line distance and isn't retried
 /// until the app is next launched.
-@MainActor
+@MainActor @Observable
 final class TravelEstimator {
     static let shared = TravelEstimator()
 
-    private let log = Logger(subsystem: "com.timothyeng.wooli", category: "TravelEstimator")
+    @ObservationIgnored private let log = Logger(subsystem: "com.timothyeng.wooli", category: "TravelEstimator")
     private var cache: [String: TravelEstimate]
     /// Pairs that failed this launch, so scrolling doesn't keep asking.
-    private var failed = Set<String>()
-    private var inFlight: [String: Task<TravelEstimate, Never>] = [:]
+    @ObservationIgnored private var failed = Set<String>()
+    @ObservationIgnored private var inFlight: [String: Task<TravelEstimate, Never>] = [:]
     /// The one request at a time, so a long trip doesn't fire dozens at once.
-    private var queue: Task<Void, Never> = Task {}
+    @ObservationIgnored private var queue: Task<Void, Never> = Task {}
 
     private static var fileURL: URL {
         URL.applicationSupportDirectory.appending(path: "travel-times.json")
@@ -30,6 +31,14 @@ final class TravelEstimator {
     /// What's already known for this hop, without asking anyone.
     func cached(from: TripPlace, to: TripPlace, mode: TravelMode) -> TravelEstimate? {
         cache[TravelTime.cacheKey(from: from, to: to, mode: mode)]
+    }
+
+    /// Whatever is already known for this hop: the mode you picked for it, else any mode that's cached.
+    /// Reads the cache only, so a day header can total a day without causing requests.
+    func known(from: TripPlace, to: TripPlace) -> TravelEstimate? {
+        let picked = UserDefaults.standard.string(forKey: TravelConnectorRow.defaultsKey(from: from, to: to)).flatMap(TravelMode.init(rawValue:))
+        if let picked, let hit = cached(from: from, to: to, mode: picked) { return hit }
+        return TravelMode.allCases.lazy.compactMap { self.cached(from: from, to: to, mode: $0) }.first
     }
 
     /// The estimate for a hop in `mode` (nil = choose by distance). Always returns something.

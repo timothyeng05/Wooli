@@ -894,7 +894,7 @@ struct TripDetailView: View {
         let connectors = Dictionary(TravelTime.pairs(plans).map { ($0.from.id, $0.to) }, uniquingKeysWith: { a, _ in a })
 
         return VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: title, subtitle: date) {
+            CardHeader(title: title, subtitle: [date, travelSummary(plans)].compactMap { $0 }.joined(separator: " · ")) {
                 HStack(spacing: 14) {
                     if plans.contains(where: { $0.place != nil }) {
                         Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
@@ -944,6 +944,16 @@ struct TripDetailView: View {
                 Capsule().fill(Theme.Group.travel.color.gradient).frame(width: 4).padding(.vertical, 22)
             }
         }
+    }
+
+    /// "4 stops · 1 h 10 min getting around", from what's already been looked up (never asks).
+    private func travelSummary(_ plans: [TripItem]) -> String? {
+        let hops = TravelTime.pairs(plans)
+        guard !hops.isEmpty, let first = hops.first?.from.place else { return nil }
+        let estimates = hops.compactMap { hop in
+            hop.to.place.flatMap { TravelEstimator.shared.known(from: hop.from.place ?? first, to: $0) }
+        }
+        return TravelTime.daySummary(stops: hops.count + 1, estimates: estimates)
     }
 
     /// A day's plan you can drag above or below another plan, in this day or
