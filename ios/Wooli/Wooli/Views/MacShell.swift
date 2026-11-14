@@ -1,6 +1,8 @@
 #if os(macOS)
+import AppKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// What the Mac sidebar can show: an app, one of Budget's pages, or a Budget tool.
 enum MacSection: Hashable {
@@ -254,6 +256,9 @@ struct MacShellView: View {
                 Button("New Trip", systemImage: "plus") { showNewTrip = true }
                     .buttonStyle(.borderless)
                     .help("New trip (⇧⌘N)")
+                Button("Open Trip File", systemImage: "square.and.arrow.down") { openTripFile() }
+                    .buttonStyle(.borderless).labelStyle(.iconOnly)
+                    .help("Open a .woolitrip file as a new trip")
                 Spacer()
                 SyncButton().buttonStyle(.borderless).labelStyle(.iconOnly)
                 Button("Settings", systemImage: "gearshape") { openSettings() }
@@ -261,6 +266,18 @@ struct MacShellView: View {
             }
             .padding(Space.m)
         }
+    }
+
+    /// A `.woolitrip` file becomes a new trip with new ids; nothing is overwritten.
+    private func openTripFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: TripFile.fileExtension) ?? .json, .json]
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? Data(contentsOf: url),
+              let copy = try? TripFile.newTrip(from: data) else { return }
+        trips.save(copy.trip)
+        copy.items.forEach { trips.save($0) }
+        selection.wrappedValue = .trip(copy.trip.id, .overview)
     }
 
     private func tripGroup(_ trip: Trip) -> some View {
