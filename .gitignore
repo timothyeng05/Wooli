@@ -44,3 +44,9 @@ next-env.d.ts
 
 # screenshot harness output
 /screenshots/
+
+# personal admin & Muse context (local only, never public)
+/admin/
+
+# Xcode profiling / LLVM coverage
+*.profraw

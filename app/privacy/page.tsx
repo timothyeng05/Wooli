@@ -99,6 +99,7 @@ export default function PrivacyPage() {
         <li>No accounts, sign-ups or analytics.</li>
         <li>No advertising, and no tracking across apps or websites.</li>
         <li>No selling or sharing of your information with anyone.</li>
+        <li>Wooli is open source under the Apache 2.0 license; the complete source code is public and inspectable on <a href="https://github.com/timothyeng05/Wooli" target="_blank" rel="noopener noreferrer">GitHub</a>.</li>
       </ul>
 
       <h2>Deleting your data</h2>

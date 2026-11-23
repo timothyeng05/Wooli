@@ -175,7 +175,13 @@ export default function Home() {
             No accounts, no ads, no analytics. Your lists and budget sync through your own iCloud, your cycle
             stays in Apple Health, and bank data goes straight from SimpleFIN to your devices.
           </p>
-          <p><Link href="/privacy">Read the privacy policy</Link></p>
+          <p>
+            <Link href="/privacy">Read the privacy policy</Link>
+            {" · "}
+            <a href="https://github.com/timothyeng05/Wooli" target="_blank" rel="noopener noreferrer">
+              Open source on GitHub
+            </a>
+          </p>
         </div>
         <StoreBadge />
       </section>

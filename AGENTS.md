@@ -1,5 +1,9 @@
 # Wooli Development Guide
 
+## Life Context & Muse Assistant
+For Timothy's personal context, open loops, and operating guidelines as Muse, see:
+`admin/context.md`
+
 ## Session Start (READ THIS FIRST)
 
 1. Run `/standup` — it reads the backlog and proposes today's focus
