@@ -14,23 +14,31 @@ files() {
 }
 count() { files | xargs -0 cat | grep -cE "$1" || true; }
 
-declare -A counts=(
-  [color_hex]=$(count 'Color\(hex:')
-  [corner_radius]=$(count 'cornerRadius: *[0-9]')
-  [font_system_size]=$(count '\.font\(\.system\(size:')
-  [padding_number]=$(count '\.padding\([^)]*[0-9]')
-)
+c_color_hex=$(count 'Color\(hex:')
+c_corner_radius=$(count 'cornerRadius: *[0-9]')
+c_font_system_size=$(count '\.font\(\.system\(size:')
+c_padding_number=$(count '\.padding\([^)]*[0-9]')
+
+get_count() {
+  case "$1" in
+    color_hex) echo "$c_color_hex" ;;
+    corner_radius) echo "$c_corner_radius" ;;
+    font_system_size) echo "$c_font_system_size" ;;
+    padding_number) echo "$c_padding_number" ;;
+  esac
+}
+
 keys=(color_hex corner_radius font_system_size padding_number)
 
 if [[ "${1:-}" == "--update" ]]; then
-  for k in "${keys[@]}"; do echo "$k ${counts[$k]}"; done > "$BASELINE"
+  for k in "${keys[@]}"; do echo "$k $(get_count "$k")"; done > "$BASELINE"
   echo "Baseline updated:"; cat "$BASELINE"; exit 0
 fi
 
 fail=0
 for k in "${keys[@]}"; do
   base=$(awk -v k="$k" '$1 == k {print $2}' "$BASELINE")
-  now=${counts[$k]}
+  now=$(get_count "$k")
   if (( now > base )); then
     echo "FAIL $k: $now (baseline $base)"; fail=1
   elif (( now < base )); then
@@ -39,4 +47,5 @@ for k in "${keys[@]}"; do
     echo "ok   $k: $now"
   fi
 done
+
 exit $fail
