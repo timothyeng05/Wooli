@@ -348,11 +348,10 @@ private struct CategoryBudgetRow: View {
         return nil
     }
 
-    /// The group colour, amber near the limit, red over it.
+    /// The group colour, red only once actually over the plan.
     private func barTint(planned: Double, actual: Double) -> Color {
         if isIncome { return Theme.income }
-        if actual > planned { return Theme.expense }
-        return actual >= planned * 0.85 ? Theme.pending : tint
+        return actual > planned ? Theme.expense : tint
     }
 }
 
