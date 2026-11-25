@@ -78,6 +78,9 @@ struct ForecastView: View {
             if showAssumptions {
                 Divider()
                 ForecastAssumptions(plan: $plan, actualSpending: actuals.spending, onClose: { showAssumptions = false })
+                    // The Mac shell centres page content with scroll margins;
+                    // the side panel must not inherit them or it collapses.
+                    .contentMargins(.horizontal, 0, for: .scrollContent)
                     .frame(width: 360)
                     .transition(.move(edge: .trailing))
             }
