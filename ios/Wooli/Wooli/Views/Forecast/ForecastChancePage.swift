@@ -10,13 +10,29 @@ struct ForecastChancePage: View {
     let isRunning: Bool
     @Binding var seenIntro: Bool
     var run: () -> Void
+    var onApply: (ForecastPlan) -> Void = { _ in }
+    var onSaveScenario: (ForecastPlan) -> Void = { _ in }
 
     var body: some View {
         if !seenIntro {
             ForecastChanceIntro { seenIntro = true; run() } skip: { seenIntro = true; run() }
         } else if let simulation {
-            ForecastChanceResults(simulation: simulation, todaysDollars: plan.settings.showTodaysDollars,
-                                  onReplay: { seenIntro = false })
+            VStack(spacing: Space.l) {
+                ForecastEarlyRetirementCard(plan: plan, onApply: onApply, onSaveScenario: onSaveScenario)
+                ForecastChanceResults(simulation: simulation, todaysDollars: plan.settings.showTodaysDollars,
+                                      onReplay: { seenIntro = false })
+                    .opacity(simulation.plan == plan ? 1 : 0.6)
+                    .animation(.easeInOut(duration: 0.2), value: simulation.plan == plan)
+            }
+            .overlay(alignment: .top) {
+                if isRunning {
+                    Label("Updating…", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, Space.m).padding(.vertical, Space.xs)
+                        .background(.regularMaterial, in: Capsule())
+                        .offset(y: -10)
+                }
+            }
         } else {
             VStack(spacing: Space.m) {
                 if isRunning || !seenIntro {
@@ -33,8 +49,93 @@ struct ForecastChancePage: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 80)
             .card()
-            // Opening the page (or editing the plan while on it) runs a fresh simulation.
-            .task(id: plan) { if !isRunning { run() } }
+        }
+    }
+}
+
+// MARK: - How early could you retire?
+
+/// Finds the earliest retirement (everyone moved together) that still meets a
+/// chosen chance of success, recomputed whenever the plan changes.
+struct ForecastEarlyRetirementCard: View {
+    let plan: ForecastPlan
+    var onApply: (ForecastPlan) -> Void
+    var onSaveScenario: (ForecastPlan) -> Void
+
+    @AppStorage("forecast.earlyTarget") private var target = 0.95
+    @State private var result: ForecastEngine.EarlyRetirement??
+    @State private var searchedFor: ForecastPlan?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("How early could you retire?").font(.headline)
+                    Text("The earliest everyone could retire together and still succeed in this share of simulated futures.")
+                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Picker("Target", selection: $target) {
+                    Text("90%").tag(0.9)
+                    Text("95%").tag(0.95)
+                    Text("99%").tag(0.99)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+            switch result {
+            case .none:
+                HStack(spacing: Space.s) { ProgressView().controlSize(.small); Text("Searching…").foregroundStyle(Theme.textSecondary) }
+            case .some(.none):
+                Text("Even retiring as late as your plan allows doesn't reach \(ForecastFormat.percent(target)). Try spending less or saving more.")
+                    .foregroundStyle(Theme.expense)
+            case .some(.some(let r)):
+                found(r)
+            }
+        }
+        .card()
+        .opacity(searchedFor == plan ? 1 : 0.6)
+        .task(id: SearchKey(plan: plan, target: target)) {
+            try? await Task.sleep(for: .milliseconds(result == nil ? 0 : 500))
+            guard !Task.isCancelled else { return }
+            let snapshot = plan, goal = target
+            let found = await Task.detached(priority: .utility) {
+                ForecastEngine.earliestRetirement(for: snapshot, target: goal)
+            }.value
+            guard !Task.isCancelled else { return }
+            result = .some(found)
+            searchedFor = snapshot
+        }
+    }
+
+    private struct SearchKey: Equatable { let plan: ForecastPlan; let target: Double }
+
+    @ViewBuilder
+    private func found(_ r: ForecastEngine.EarlyRetirement) -> some View {
+        let who = r.plan.people.map { "\($0.name) at \($0.retirementAge) (\(String($0.retirementYear)))" }.joined(separator: " · ")
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                if r.offset < 0 {
+                    Text("Retire \(-r.offset) year\(r.offset == -1 ? "" : "s") earlier").font(.title2.weight(.semibold))
+                } else if r.offset == 0 {
+                    Text("Your current retirement age is the earliest").font(.title2.weight(.semibold))
+                } else {
+                    Text("Retire \(r.offset) year\(r.offset == 1 ? "" : "s") later").font(.title2.weight(.semibold))
+                }
+                Text(who).foregroundStyle(Theme.textSecondary)
+                Text("\(Int((r.successRate * 100).rounded()))% chance of success · checked with 400 simulated futures")
+                    .font(.caption).foregroundStyle(Theme.textTertiary)
+            }
+            Spacer()
+            if r.offset != 0 {
+                Button("Save as scenario") {
+                    var copy = r.plan
+                    copy.name = "Retire at \(r.plan.primaryPerson?.retirementAge ?? 0)"
+                    onSaveScenario(copy)
+                }
+                Button("Use this") { onApply(r.plan) }.buttonStyle(.borderedProminent)
+            }
         }
     }
 }

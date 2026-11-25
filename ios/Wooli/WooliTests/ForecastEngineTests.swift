@@ -112,4 +112,17 @@ struct ForecastEngineTests {
         #expect(abs(a.spending - 12_000) < 1_200)
         #expect(a.months < 5)
     }
+
+    @Test func earliestRetirementMovesEarlierForStrongSavers() {
+        // Big saver: should be able to retire well before 65.
+        let rich = ForecastEngine.earliestRetirement(for: plan(income: 300_000, expenses: 60_000, savings: 200_000),
+                                                     target: 0.95, paths: 150, startYear: 2026, firstYearFraction: 1)
+        #expect(rich != nil)
+        #expect((rich?.offset ?? 0) < -5)
+        #expect((rich?.successRate ?? 0) >= 0.95)
+        // Overspender: nothing works.
+        let broke = ForecastEngine.earliestRetirement(for: plan(income: 40_000, expenses: 90_000, savings: 0),
+                                                      target: 0.95, paths: 150, startYear: 2026, firstYearFraction: 1)
+        #expect(broke == nil)
+    }
 }

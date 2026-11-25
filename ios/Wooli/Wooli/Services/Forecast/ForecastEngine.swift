@@ -379,6 +379,54 @@ enum ForecastEngine {
     }
 }
 
+// MARK: - Earliest safe retirement
+
+extension ForecastEngine {
+    struct EarlyRetirement: Equatable {
+        /// Years earlier (negative) or later than the plan, applied to everyone.
+        var offset: Int
+        var successRate: Double
+        /// The plan with that retirement timing.
+        var plan: ForecastPlan
+    }
+
+    /// Everyone's retirement moved by `offset` years (kept between today and their end of plan).
+    static func shiftingRetirement(_ plan: ForecastPlan, by offset: Int) -> ForecastPlan {
+        var p = plan
+        for i in p.people.indices {
+            let person = p.people[i]
+            p.people[i].retirementAge = min(max(person.retirementAge + offset, person.currentAge), person.endAge)
+        }
+        return p
+    }
+
+    /// The earliest retirement (moving everyone together) whose simulated
+    /// success rate still meets `target`. Assumes retiring later never hurts,
+    /// so it binary-searches the offset. nil if even the latest checked fails.
+    static func earliestRetirement(for plan: ForecastPlan, target: Double, paths: Int = 400, seed: UInt64 = 7,
+                                   startYear: Int = startYear(), firstYearFraction: Double = firstYearFraction()) -> EarlyRetirement? {
+        guard !plan.people.isEmpty else { return nil }
+        let earliest = -(plan.people.map { $0.retirementAge - $0.currentAge }.min() ?? 0)
+        let latest = max(plan.people.map { $0.endAge - $0.retirementAge }.min() ?? 0, 0)
+        var cache: [Int: Double] = [:]
+        func rate(_ offset: Int) -> Double {
+            if let r = cache[offset] { return r }
+            // Same seed for every offset so the comparison is like for like.
+            let r = simulate(shiftingRetirement(plan, by: offset), paths: paths, seed: seed,
+                             startYear: startYear, firstYearFraction: firstYearFraction).successRate
+            cache[offset] = r
+            return r
+        }
+        guard rate(latest) >= target else { return nil }
+        var lo = min(earliest, latest), hi = latest   // hi always passes
+        while lo < hi {
+            let mid = Int((Double(lo + hi) / 2).rounded(.down))
+            if rate(mid) >= target { hi = mid } else { lo = mid + 1 }
+        }
+        return EarlyRetirement(offset: hi, successRate: rate(hi), plan: shiftingRetirement(plan, by: hi))
+    }
+}
+
 /// Small, fast, reproducible RNG (SplitMix64) so "Run again" gives a new set
 /// and tests can pin one.
 struct ForecastRandom: RandomNumberGenerator {

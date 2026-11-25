@@ -22,7 +22,7 @@ struct ForecastMarker: Identifiable, Equatable {
             list.append(.init(id: "ret-\(p.id)", year: p.retirementYear, title: "Retirement (\(p.name))",
                               symbol: "sun.horizon", color: Theme.accentRose, target: .retirement(p.id)))
             list.append(.init(id: "end-\(p.id)", year: p.endYear, title: "End of plan (\(p.name))",
-                              symbol: "flag.checkered", color: Theme.accentSlate, target: .end(p.id)))
+                              symbol: ForecastEventIcon.ghost, color: Theme.accentSlate, target: .end(p.id)))
         }
         for e in plan.events {
             list.append(.init(id: e.id, year: e.year, title: e.displayTitle, symbol: e.kind.symbol,

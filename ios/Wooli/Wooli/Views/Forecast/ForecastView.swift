@@ -27,6 +27,8 @@ struct ForecastView: View {
     @State private var editingEvent: ForecastEvent?
     @State private var simulation: ForecastEngine.Simulation?
     @State private var isSimulating = false
+    /// Latest simulation started; older ones finishing late are ignored.
+    @State private var simulationRun = 0
     @State private var compareId = ""
 
     struct SetupRequest: Identifiable { let id = UUID() }
@@ -109,7 +111,16 @@ struct ForecastView: View {
                                             compareId: $compareId, onDuplicate: duplicate)
                     case .chance:
                         ForecastChancePage(plan: plan, simulation: simulation, isRunning: isSimulating,
-                                           seenIntro: $seenChanceIntro, run: runSimulation)
+                                           seenIntro: $seenChanceIntro, run: runSimulation,
+                                           onApply: { plan = $0 },
+                                           onSaveScenario: { finish($0); page = .plan })
+                            // Live: re-run shortly after any change to the plan.
+                            .task(id: plan) {
+                                guard seenChanceIntro, simulation?.plan != plan else { return }
+                                try? await Task.sleep(for: .milliseconds(simulation == nil ? 0 : 350))
+                                guard !Task.isCancelled else { return }
+                                runSimulation()
+                            }
                     }
                     Text("Estimates only, not guarantees or personalized investment, tax or financial advice. Results depend on your assumptions and may differ materially.")
                         .font(.caption)
@@ -231,7 +242,6 @@ struct ForecastView: View {
         guard let scenario, scenario.id == loadedId, scenario.plan != new else { return }
         scenario.plan = new
         try? context.save()
-        if simulation?.plan != new { simulation = nil }
     }
 
     private func finish(_ new: ForecastPlan) {
@@ -257,12 +267,15 @@ struct ForecastView: View {
 
     private func runSimulation() {
         let snapshot = plan
+        simulationRun += 1
+        let run = simulationRun
         isSimulating = true
         Task {
             let result = await Task.detached(priority: .userInitiated) {
                 ForecastEngine.simulate(snapshot, seed: UInt64.random(in: 1...UInt64.max))
             }.value
-            if plan == snapshot { simulation = result }
+            guard run == simulationRun else { return }
+            simulation = result
             isSimulating = false
         }
     }
@@ -311,16 +324,65 @@ struct ForecastAvatar: View {
 
 /// The small rounded icon used for events on the chart and in lists.
 struct ForecastEventIcon: View {
+    /// End of plan: a small ghost, drawn here since SF Symbols has none.
+    static let ghost = "wooli.ghost"
+
     let symbol: String
     let color: Color
     var size: CGFloat = 26
 
     var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.5, weight: .semibold))
-            .foregroundStyle(color)
-            .frame(width: size, height: size)
-            .background(color.opacity(0.16), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        Group {
+            if symbol == Self.ghost {
+                GhostGlyph(color: color).frame(width: size * 0.5, height: size * 0.56)
+            } else {
+                Image(systemName: symbol).font(.system(size: size * 0.5, weight: .semibold))
+            }
+        }
+        .foregroundStyle(color)
+        .frame(width: size, height: size)
+        .background(color.opacity(0.16), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}
+
+/// Outline ghost: domed head, wavy hem, two eyes.
+private struct GhostGlyph: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                GhostShape().stroke(color, style: StrokeStyle(lineWidth: max(w * 0.13, 1.4), lineJoin: .round))
+                HStack(spacing: w * 0.22) {
+                    Capsule().fill(color).frame(width: w * 0.14, height: w * 0.2)
+                    Capsule().fill(color).frame(width: w * 0.14, height: w * 0.2)
+                }
+                .position(x: w / 2, y: h * 0.42)
+            }
+        }
+    }
+}
+
+private struct GhostShape: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let w = r.width, h = r.height, x = r.minX, y = r.minY
+        let radius = w / 2
+        p.move(to: CGPoint(x: x, y: y + h * 0.9))
+        p.addLine(to: CGPoint(x: x, y: y + radius))
+        p.addArc(center: CGPoint(x: x + radius, y: y + radius), radius: radius,
+                 startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        p.addLine(to: CGPoint(x: x + w, y: y + h * 0.9))
+        // Three scallops along the hem.
+        let step = w / 3
+        for i in 0..<3 {
+            let endX = x + w - step * CGFloat(i + 1)
+            p.addQuadCurve(to: CGPoint(x: endX, y: y + h * 0.9),
+                           control: CGPoint(x: endX + step / 2, y: y + h * (i % 2 == 0 ? 1.08 : 0.72)))
+        }
+        p.closeSubpath()
+        return p
     }
 }
 #endif
