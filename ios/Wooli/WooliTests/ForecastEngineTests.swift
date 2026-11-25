@@ -152,4 +152,24 @@ struct ForecastEngineTests {
         #expect(abs(path.pay(in: 2040) - 1_300_000) < 0.01)
         #expect(abs(path.pay(in: 2050) - 1_300_000) < 0.01)
     }
+
+    @Test func switchingPayGrowthKeepsEachOptionsData() {
+        var inc = ForecastIncome(yearlyAmount: 100_000)
+        inc.career = ForecastCareerPath(levels: [ForecastCareerLevel(name: "A", base: 200_000)], nextPromotionYear: 2030)
+        inc.paySteps = [ForecastPayStep(year: 2027, amount: 150_000)]
+        inc.payGrowth = .steps
+        #expect(inc.amount(in: 2028, startYear: 2026) == 150_000)
+        #expect(inc.career?.levels.count == 1)
+        inc.payGrowth = .career
+        #expect(abs(inc.amount(in: 2028, startYear: 2026) - 200_000) < 0.01)
+        inc.payGrowth = .raise
+        #expect(inc.amount(in: 2028, startYear: 2026) == 100_000)
+        #expect(inc.paySteps.count == 1)
+    }
+
+    @Test func pasteSkipsHeaderAndReadsK() {
+        let rows = ForecastCareerPath.parse("Level\tBase\tBonus %\tYears\t+/yr\nAnalyst\t$100K\t10%\tnow\t\nManager\t$170K\t20%\t3\t$5K")
+        #expect(rows.count == 2)
+        #expect(rows[1].base == 170_000 && rows[1].bonusRate == 0.2 && rows[1].years == 3 && rows[1].yearlyIncrease == 5_000)
+    }
 }

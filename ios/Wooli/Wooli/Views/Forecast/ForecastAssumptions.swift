@@ -345,46 +345,73 @@ struct ForecastAssumptions: View {
         }
     }
 
-    private enum PayGrowth: String, CaseIterable { case raise = "Steady raise", steps = "Pay changes", career = "Career path" }
-
-    private func payGrowth(_ inc: ForecastIncome) -> PayGrowth {
-        inc.career != nil ? .career : (inc.steps?.isEmpty == false ? .steps : .raise)
-    }
-
     /// How pay grows: a steady raise, one-off pay changes, or a promotion path.
+    /// Switching keeps every option's data.
     private func payGrowthSection(_ income: Binding<ForecastIncome>) -> some View {
-        let inc = income.wrappedValue
-        let mode = payGrowth(inc)
+        let mode = income.wrappedValue.payGrowth
         return VStack(alignment: .leading, spacing: Space.s) {
             Divider()
-            Picker("Pay grows by", selection: Binding<PayGrowth>(get: { mode }, set: { new in
-                switch new {
-                case .raise: income.wrappedValue.career = nil; income.wrappedValue.steps = nil
-                case .steps:
-                    income.wrappedValue.career = nil
-                    if income.wrappedValue.paySteps.isEmpty {
-                        income.wrappedValue.paySteps = [ForecastPayStep(year: Calendar.current.component(.year, from: .now) + 1,
-                                                                       amount: income.wrappedValue.yearlyAmount)]
-                    }
-                case .career:
-                    income.wrappedValue.steps = nil
+            Picker("Pay grows by", selection: Binding<ForecastIncome.PayGrowth>(get: { mode }, set: { new in
+                income.wrappedValue.payGrowth = new
+                // First time on an option: start it from today's pay.
+                if new == .steps, income.wrappedValue.paySteps.isEmpty {
+                    income.wrappedValue.paySteps = [ForecastPayStep(year: Calendar.current.component(.year, from: .now) + 1,
+                                                                   amount: income.wrappedValue.yearlyAmount)]
+                }
+                if new == .career, income.wrappedValue.career?.levels.isEmpty != false {
                     income.wrappedValue.career = ForecastCareerPath(levels: [
                         ForecastCareerLevel(name: "Now", base: income.wrappedValue.yearlyAmount)])
                 }
             })) {
-                ForEach(PayGrowth.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(ForecastIncome.PayGrowth.allCases, id: \.self) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden()
-            switch mode {
-            case .raise:
+            if mode != .career {
                 HStack {
-                    Text("Raise above inflation").font(.caption)
+                    Text(mode == .steps ? "Raise after each change" : "Raise above inflation").font(.caption)
                     rateSlider(income.raise, range: 0...0.05)
                 }
+            }
+            switch mode {
+            case .raise: EmptyView()
             case .steps: paySteps(income)
             case .career: careerPath(income)
             }
         }
+    }
+
+    /// The columns "Paste from spreadsheet" reads, with an example and a template to copy.
+    private var pasteFormat: some View {
+        let rows = [["Level", "Base", "Bonus %", "Years", "+/yr"],
+                    ["Analyst", "$100K", "10%", "now", ""],
+                    ["Senior", "$130K", "15%", "2", ""],
+                    ["Manager", "$170K", "20%", "3", "$5K"]]
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("To paste: select these 5 columns in Sheets, Excel or Numbers (one row per level, your level now first), copy, then click Paste.")
+                .font(.caption2).foregroundStyle(Theme.textTertiary)
+            Grid(alignment: .leading, horizontalSpacing: Space.s, verticalSpacing: 2) {
+                ForEach(rows.indices, id: \.self) { r in
+                    GridRow {
+                        ForEach(rows[r].indices, id: \.self) { c in
+                            Text(rows[r][c]).font(r == 0 ? .caption2.weight(.semibold) : .caption2.monospacedDigit())
+                        }
+                    }
+                    .foregroundStyle(r == 0 ? Theme.textSecondary : Theme.textTertiary)
+                }
+            }
+            Text("Base: yearly salary ($193 or 193 means $193K). Bonus: % of base. Years: how long at that level (the first row is now; the last level holds). +/yr: optional raise each year at that level. A header row is fine.")
+                .font(.caption2).foregroundStyle(Theme.textTertiary)
+            Button {
+                let tsv = rows.map { $0.joined(separator: "\t") }.joined(separator: "\n")
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(tsv, forType: .string)
+                pasteNote = "Template copied. Paste it into a spreadsheet, fill it in, then copy it back."
+            } label: { Label("Copy template", systemImage: "doc.on.doc") }
+            .buttonStyle(.borderless).font(.caption)
+        }
+        .padding(Space.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// Levels with base, bonus and years — filled by hand or pasted from a spreadsheet.
@@ -431,14 +458,10 @@ struct ForecastAssumptions: View {
                     path.wrappedValue.levels.append(next)
                 } label: { Label("Add level", systemImage: "plus") }
                 Button {
-                    #if os(macOS)
                     let text = NSPasteboard.general.string(forType: .string) ?? ""
-                    #else
-                    let text = UIPasteboard.general.string ?? ""
-                    #endif
                     let rows = ForecastCareerPath.parse(text)
                     if rows.isEmpty {
-                        pasteNote = "Copy rows with columns Level, Base, Bonus %, Years, +/yr, then paste."
+                        pasteNote = "Nothing to paste. Copy rows in the format below (try Copy template), then paste."
                     } else {
                         path.wrappedValue.levels = rows
                         pasteNote = "Pasted \(rows.count) levels."
@@ -446,7 +469,8 @@ struct ForecastAssumptions: View {
                 } label: { Label("Paste from spreadsheet", systemImage: "doc.on.clipboard") }
             }
             .buttonStyle(.borderless).font(.caption)
-            if let pasteNote { Text(pasteNote).font(.caption2).foregroundStyle(Theme.textTertiary) }
+            if let pasteNote { Text(pasteNote).font(.caption2).foregroundStyle(Theme.textSecondary) }
+            pasteFormat
             HStack {
                 Picker("Next promotion", selection: path.nextPromotionYear) {
                     ForEach(now...(now + 10), id: \.self) { Text(String($0)).tag($0) }

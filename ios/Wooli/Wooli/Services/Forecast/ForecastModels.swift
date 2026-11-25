@@ -180,14 +180,41 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
         return min(max(retirementContribution ?? 0, 0), ForecastTax.retirementContributionLimit, max(wages, 0))
     }
 
-    /// Pay for a year in today's dollars: the latest step on or before it (else
-    /// `yearlyAmount`), with the raise compounding from when that pay started.
-    func amount(in year: Int, startYear: Int) -> Double {
-        if let career, !career.levels.isEmpty {
-            return career.pay(in: year) * pow(1 + raise, Double(year - startYear))
+    /// Which of the three ways pay grows is in use. Each keeps its own data, so
+    /// switching back and forth loses nothing. nil (older plans) = inferred.
+    var payGrowthRaw: String?
+
+    enum PayGrowth: String, CaseIterable, Codable {
+        case raise, steps, career
+        var label: String {
+            switch self {
+            case .raise: "Steady raise"
+            case .steps: "Pay changes"
+            case .career: "Career path"
+            }
         }
-        if let step = paySteps.last(where: { $0.year <= year }) {
-            return step.amount * pow(1 + raise, Double(year - step.year))
+    }
+
+    var payGrowth: PayGrowth {
+        get {
+            payGrowthRaw.flatMap(PayGrowth.init(rawValue:))
+                ?? (career?.levels.isEmpty == false ? .career : (steps?.isEmpty == false ? .steps : .raise))
+        }
+        set { payGrowthRaw = newValue.rawValue }
+    }
+
+    /// Pay for a year in today's dollars, by the chosen way pay grows. The raise
+    /// applies to a steady raise and to pay changes (from each change); a career
+    /// path has its own increases.
+    func amount(in year: Int, startYear: Int) -> Double {
+        switch payGrowth {
+        case .career:
+            if let career, !career.levels.isEmpty { return career.pay(in: year) }
+        case .steps:
+            if let step = paySteps.last(where: { $0.year <= year }) {
+                return step.amount * pow(1 + raise, Double(year - step.year))
+            }
+        case .raise: break
         }
         return yearlyAmount * pow(1 + raise, Double(year - startYear))
     }
