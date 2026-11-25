@@ -1,32 +1,35 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ACCOUNTS,
   APPS,
   BEEN,
   CATEGORIES,
+  FORECAST_DATA,
   MOVIES,
   NEW_PLACE,
   POSTED,
   RECIPES,
   REVIEW,
+  SIGHTS,
   TRIPS,
   WANT,
   type AppId,
   type Category,
   type Kind,
   type Place,
+  type Sight,
+  type Trip,
   type Txn,
 } from "./data";
 
-// A Mac window in the browser: the app switcher top right, a sidebar for the
-// apps with pages of their own (Trips, Budget), and the iPhone's screens laid
-// out wider. Nothing saves; every change lives until the page reloads.
+// A Mac window in the browser: app switcher top right, Mac sidebar for apps
+// with subpages (Trips, Budget), and the native Wooli experience laid out with fidelity.
 
 type TripPage = "overview" | "ideas" | "bookings" | `city:${string}`;
-type BudgetPage = "dashboard" | "transactions" | "plan" | "accounts";
+type BudgetPage = "dashboard" | "accounts" | "transactions" | "reports" | "plan" | "forecast" | "categories" | "rules" | "recurring";
 
 const money = (n: number, cents = false) =>
   (n < 0 ? "−" : "") +
@@ -45,7 +48,7 @@ export default function DemoApp() {
   const [sidebar, setSidebar] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Budget state is shared by Today and Budget, so it lives here.
+  // Budget state is shared across Today and Budget
   const [review, setReview] = useState<Txn[]>(REVIEW);
   const [posted, setPosted] = useState<Txn[]>(POSTED);
   const [plans, setPlans] = useState<Record<string, number>>(() => Object.fromEntries(CATEGORIES.map((c) => [c.id, c.plan])));
@@ -101,18 +104,26 @@ export default function DemoApp() {
   const title = APPS.find((a) => a.id === app)?.name ?? "Wooli";
 
   return (
-    <div className="dm-window" role="application" aria-label="Wooli demo window">
+    <div className="dm-window">
+      {/* macOS window title bar */}
       <div className="dm-titlebar">
         <div className="dm-lights" aria-hidden="true">
-          <i /> <i /> <i />
+          <span className="dm-light is-red" />
+          <span className="dm-light is-amber" />
+          <span className="dm-light is-green" />
         </div>
         {hasSidebar && (
-          <button className="dm-tool" onClick={() => setSidebar((s) => !s)} aria-label={sidebar ? "Hide sidebar" : "Show sidebar"} title="Show or hide the sidebar">
+          <button
+            className="dm-tool"
+            onClick={() => setSidebar((s) => !s)}
+            aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
+            title="Show or hide sidebar (⌃⌘S)"
+          >
             <SidebarGlyph />
           </button>
         )}
         <div className="dm-title">
-          <Image src={`/apps/${app}.png`} alt="" width={20} height={20} />
+          <Image src={`/apps/${app}.png`} alt="" width={22} height={22} style={{ borderRadius: 5 }} />
           <span>{title}</span>
         </div>
         <div className="dm-tools">
@@ -121,7 +132,13 @@ export default function DemoApp() {
             <kbd>⌘K</kbd>
           </button>
           <div className="dm-switch-wrap">
-            <button className="dm-tool" aria-label="Switch apps" aria-expanded={switcher} onClick={() => setSwitcher((s) => !s)} title="Switch apps">
+            <button
+              className="dm-tool"
+              aria-label="Switch apps"
+              aria-expanded={switcher}
+              onClick={() => setSwitcher((s) => !s)}
+              title="Switch apps"
+            >
               <GridGlyph />
             </button>
             {switcher && (
@@ -129,7 +146,7 @@ export default function DemoApp() {
                 {APPS.map((a) => (
                   <button key={a.id} role="menuitem" className={a.id === app ? "is-on" : ""} onClick={() => go(a.id)}>
                     <span className="dm-switch-icon">
-                      <Image src={`/apps/${a.id}.png`} alt="" width={52} height={52} />
+                      <Image src={`/apps/${a.id}.png`} alt="" width={48} height={48} />
                       {a.id === "budget" && review.length > 0 && <b className="dm-dot">{review.length}</b>}
                     </span>
                     <span>{a.name}</span>
@@ -145,19 +162,37 @@ export default function DemoApp() {
         {hasSidebar && sidebar && (
           <nav className="dm-sidebar" aria-label={`${title} pages`}>
             {app === "trips" ? (
-              <TripsSidebar tripId={tripId} page={tripPage} onPick={(id, page) => { setTripId(id); setTripPage(page); }} onNew={() => say("New Trip… works in the app")} />
+              <TripsSidebar
+                tripId={tripId}
+                page={tripPage}
+                onPick={(id, page) => {
+                  setTripId(id);
+                  setTripPage(page);
+                }}
+                onNew={() => say("New Trip… works in the Mac app")}
+              />
             ) : (
-              <BudgetRail page={budgetPage} reviewCount={review.length} onPick={setBudgetPage} />
+              <BudgetSidebar page={budgetPage} reviewCount={review.length} onPick={setBudgetPage} />
             )}
           </nav>
         )}
+
         <main className="dm-detail" onClick={() => setSwitcher(false)}>
           <div className="dm-scroll" key={`${app}-${tripId}-${tripPage}-${budgetPage}`}>
-            {app === "today" && <TodayScreen left={left} reviewCount={review.length} rankedCount={ranked.length} go={go} openTrip={() => { setTripId("portugal"); setTripPage("overview"); go("trips"); }} />}
-            {app === "trips" && <TripsScreen trip={trip} page={tripPage} setPage={setTripPage} say={say} />}
-            {app === "eats" && <EatsScreen ranked={ranked} setRanked={setRanked} say={say} />}
-            {app === "movies" && <MoviesScreen say={say} />}
-            {app === "recipes" && <RecipesScreen say={say} />}
+            {app === "today" && (
+              <TodayScreen
+                left={left}
+                spentTotal={totalSpent}
+                plannedTotal={totalPlan}
+                reviewCount={review.length}
+                go={go}
+                openTrip={() => {
+                  setTripId("spain");
+                  setTripPage("overview");
+                  go("trips");
+                }}
+              />
+            )}
             {app === "budget" && (
               <BudgetScreen
                 page={budgetPage}
@@ -170,8 +205,14 @@ export default function DemoApp() {
                 spent={spent}
                 left={left}
                 totalPlan={totalPlan}
+                totalSpent={totalSpent}
               />
             )}
+            {app === "sights" && <SightsScreen say={say} />}
+            {app === "trips" && <TripsScreen trip={trip} page={tripPage} setPage={setTripPage} say={say} />}
+            {app === "eats" && <EatsScreen ranked={ranked} setRanked={setRanked} say={say} />}
+            {app === "movies" && <MoviesScreen say={say} />}
+            {app === "recipes" && <RecipesScreen say={say} />}
           </div>
         </main>
       </div>
@@ -189,9 +230,11 @@ export default function DemoApp() {
               { id: `trip-${t.id}`, title: t.name, sub: `Trip · ${t.dates}`, icon: "/apps/trips.png", action: () => { setTripId(t.id); setTripPage("overview"); go("trips"); } },
               ...t.cities.map((c) => ({ id: `city-${c.id}`, title: c.name, sub: `City in ${t.name}`, icon: "/apps/trips.png", action: () => { setTripId(t.id); setTripPage(`city:${c.id}`); go("trips"); } })),
             ]),
-            ...(["dashboard", "transactions", "plan", "accounts"] as BudgetPage[]).map((p) => ({
-              id: `budget-${p}`, title: p[0].toUpperCase() + p.slice(1), sub: "Budget", icon: "/apps/budget.png", action: () => { setBudgetPage(p); go("budget"); },
-            })),
+            { id: "budget-forecast", title: "Forecast", sub: "Budget · Long-term projections", icon: "/apps/budget.png", action: () => { setBudgetPage("forecast"); go("budget"); } },
+            { id: "budget-plan", title: "Plan", sub: "Budget · Monthly categories", icon: "/apps/budget.png", action: () => { setBudgetPage("plan"); go("budget"); } },
+            { id: "budget-activity", title: "Transactions", sub: "Budget · Recent spending", icon: "/apps/budget.png", action: () => { setBudgetPage("transactions"); go("budget"); } },
+            { id: "budget-accounts", title: "Accounts", sub: "Budget · Balances", icon: "/apps/budget.png", action: () => { setBudgetPage("accounts"); go("budget"); } },
+            ...SIGHTS.map((s) => ({ id: `sight-${s.id}`, title: s.name, sub: `Sights · ${s.city}`, icon: "/apps/sights.png", action: () => go("sights") })),
             ...RECIPES.map((r) => ({ id: `recipe-${r.id}`, title: r.name, sub: "Recipe", icon: "/apps/recipes.png", action: () => go("recipes") })),
           ]}
         />
@@ -204,755 +247,217 @@ export default function DemoApp() {
   );
 }
 
-/* ---------- Chrome ---------- */
+/* =========================================================
+   TODAY SCREEN (Matches Image 2 & TodayBoard.swift)
+========================================================= */
 
-function SidebarGlyph() {
-  return (
-    <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
-      <rect x="0.75" y="0.75" width="16.5" height="12.5" rx="3" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="6.5" y1="1" x2="6.5" y2="13" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-function GridGlyph() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-      {[0, 6, 12].flatMap((x) => [0, 6, 12].map((y) => <rect key={`${x}${y}`} x={x} y={y} width="4" height="4" rx="1.2" fill="currentColor" />))}
-    </svg>
-  );
-}
+function TodayScreen({
+  left,
+  spentTotal,
+  plannedTotal,
+  reviewCount,
+  go,
+  openTrip,
+}: {
+  left: number;
+  spentTotal: number;
+  plannedTotal: number;
+  reviewCount: number;
+  go: (a: AppId) => void;
+  openTrip: () => void;
+}) {
+  const isOver = left < 0;
+  const headline = isOver ? `${money(Math.abs(left))} over` : `${money(left)} left`;
+  const progressPct = Math.min(Math.max((spentTotal / (plannedTotal || 1)) * 100, 0), 100);
 
-function Palette({ entries, onClose, onPick }: { entries: { id: string; title: string; sub: string; icon: string; action: () => void }[]; onClose: () => void; onPick: (a: () => void) => void }) {
-  const [q, setQ] = useState("");
-  const [i, setI] = useState(0);
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => input.current?.focus(), []);
-  const shown = entries.filter((e) => `${e.title} ${e.sub}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
   return (
-    <div className="dm-scrim" onClick={onClose}>
-      <div className="dm-palette" role="dialog" aria-label="Search Wooli" onClick={(e) => e.stopPropagation()}>
-        <input
-          ref={input}
-          value={q}
-          placeholder="Search trips, cities, apps, pages…"
-          onChange={(e) => { setQ(e.target.value); setI(0); }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setI((n) => Math.min(n + 1, shown.length - 1)); }
-            if (e.key === "ArrowUp") { e.preventDefault(); setI((n) => Math.max(n - 1, 0)); }
-            if (e.key === "Enter" && shown[i]) onPick(shown[i].action);
-          }}
-        />
-        <ul>
-          {shown.map((e, n) => (
-            <li key={e.id}>
-              <button className={n === i ? "is-on" : ""} onMouseEnter={() => setI(n)} onClick={() => onPick(e.action)}>
-                <Image src={e.icon} alt="" width={24} height={24} />
-                <b>{e.title}</b>
-                <small>{e.sub}</small>
-              </button>
-            </li>
-          ))}
-          {shown.length === 0 && <li className="dm-empty">Nothing matches “{q}”.</li>}
-        </ul>
-      </div>
-    </div>
-  );
-}
+    <div>
+      <div className="dm-date-header">Wednesday, November 25</div>
 
-/* ---------- Shared bits ---------- */
-
-function Head({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
-  return (
-    <header className="dm-head">
-      <div>
-        <h2>{title}</h2>
-        {sub && <p>{sub}</p>}
-      </div>
-      {action}
-    </header>
-  );
-}
-function Plus({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button className="dm-plus" onClick={onClick} aria-label={label} title={label}>
-      +
-    </button>
-  );
-}
-function Label({ children }: { children: React.ReactNode }) {
-  return <p className="dm-label">{children}</p>;
-}
-function Gauge({ value, max, warn }: { value: number; max: number; warn?: boolean }) {
-  const pct = Math.min(100, Math.round((value / Math.max(max, 1)) * 100));
-  return (
-    <span className={`dm-gauge ${warn || pct >= 90 ? "is-warn" : ""}`}>
-      <i style={{ width: `${pct}%` }} />
-    </span>
-  );
-}
-
-/* ---------- Today ---------- */
-
-function Board({ rows }: { rows: { date: string; what: string; status: string }[] }) {
-  return (
-    <div className="dm-board">
-      <div className="dm-board-head">
-        <span>Next up</span>
-        <span>Status</span>
-      </div>
-      {rows.map((r, n) => (
-        <div className="dm-board-row" key={r.what}>
-          <span className="dm-flaps">
-            {r.date.split("").map((ch, i) => (
-              <i key={i} style={{ animationDelay: `${n * 120 + i * 45}ms` }}>
-                {ch === " " ? " " : ch}
-              </i>
-            ))}
-          </span>
-          <span className="dm-board-what">{r.what}</span>
-          <span className="dm-board-status">{r.status}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TodayScreen({ left, reviewCount, rankedCount, go, openTrip }: { left: number; reviewCount: number; rankedCount: number; go: (a: AppId) => void; openTrip: () => void }) {
-  return (
-    <div className="dm-page">
-      <Head title="Today" sub="Wednesday, October 28" />
-      <div className="dm-today">
-        <div className="dm-today-main">
-          <Board
-            rows={[
-              { date: "TODAY ", what: "Spotify · $11.99", status: "DUE" },
-              { date: "FRI 30", what: "Dinner · Lucali", status: "7 PM" },
-              { date: "NOV 01", what: "Rent · $1,900", status: "AUTOPAY" },
-              { date: "NOV 13", what: "Fly to Lisbon", status: "ON TIME" },
-            ]}
-          />
-          <div className="dm-card dm-rows">
-            <button className="dm-row" onClick={() => go("budget")}>
-              <span className="dm-tile is-money">💳</span>
-              <span className="dm-row-text">
-                <b>{money(left)} left this month</b>
-                <small>Budget · $214 under pace</small>
-              </span>
-              <span className="dm-chev">›</span>
-            </button>
-            <button className="dm-row" onClick={() => go("budget")}>
-              <span className="dm-tile is-brand">✓</span>
-              <span className="dm-row-text">
-                <b>{reviewCount === 0 ? "All caught up" : `${reviewCount} to review`}</b>
-                <small>{reviewCount === 0 ? "Nothing waiting in Budget" : "4 have a suggested category"}</small>
-              </span>
-              <span className="dm-chev">›</span>
-            </button>
-            <button className="dm-row" onClick={openTrip}>
-              <span className="dm-tile is-travel">🧳</span>
-              <span className="dm-row-text">
-                <b>Lisbon & Porto in 16 days</b>
-                <small>Trips · 2 cities · 3 bookings to check</small>
-              </span>
-              <span className="dm-chev">›</span>
-            </button>
-          </div>
-        </div>
-        <div className="dm-today-side">
-          <div className="dm-card">
-            <Label>Your stickers</Label>
-            <div className="dm-stickers">
-              <button className="dm-sticker is-food" onClick={() => go("eats")}>{rankedCount} places</button>
-              <button className="dm-sticker is-brand" onClick={() => go("trips")}>8 cities</button>
-              <button className="dm-sticker is-slate" onClick={() => go("budget")}>3 months on budget</button>
-              <button className="dm-sticker is-rose" onClick={() => go("movies")}>{MOVIES.length} films</button>
+      {/* Hero: "This month" Budget Status Card (Image 2) */}
+      <div className="dm-today-hero" onClick={() => go("budget")} role="button" tabIndex={0}>
+        <div className="dm-hero-eyebrow">THIS MONTH</div>
+        <div className="dm-hero-amount">{headline}</div>
+        <div className="dm-hero-sub">5 days left this month</div>
+        <div className="dm-hero-progress">
+          <div className="dm-progress-track">
+            <div className="dm-progress-fill" style={{ width: `${progressPct}%` }}>
+              <span className="dm-progress-thumb" />
             </div>
           </div>
-          <div className="dm-card">
-            <Label>Tonight</Label>
-            <button className="dm-row" onClick={() => go("recipes")}>
-              <span className="dm-tile is-food">🍝</span>
-              <span className="dm-row-text">
-                <b>Cacio e pepe</b>
-                <small>Recipes · 20 min · 4 ingredients</small>
-              </span>
-              <span className="dm-chev">›</span>
-            </button>
-          </div>
-          <div className="dm-card">
-            <Label>Want to try nearby</Label>
-            <button className="dm-row" onClick={() => go("eats")}>
-              <span className="dm-tile is-food">🍜</span>
-              <span className="dm-row-text">
-                <b>Thai Diner</b>
-                <small>Thai · Nolita · 0.6 mi</small>
-              </span>
-              <span className="dm-chev">›</span>
-            </button>
+          <div className="dm-progress-labels">
+            <span>$0</span>
+            <span>{money(spentTotal)} spent</span>
+            <span>{money(plannedTotal)}</span>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-/* ---------- Trips ---------- */
-
-function TripsSidebar({ tripId, page, onPick, onNew }: { tripId: string; page: TripPage; onPick: (id: string, p: TripPage) => void; onNew: () => void }) {
-  return (
-    <div className="dm-trips-side">
-      <div className="dm-side-head">
-        <span>Trips</span>
-        <button onClick={onNew} aria-label="New trip">+</button>
-      </div>
-      {TRIPS.map((t) => {
-        const open = t.id === tripId;
-        return (
-          <div key={t.id} className="dm-side-group">
-            <button className={`dm-side-item is-trip ${open && page === "overview" ? "is-on" : ""}`} onClick={() => onPick(t.id, "overview")}>
-              <span>🧳</span>
-              <span className="dm-side-text">
-                <b>{t.name}</b>
-                <small>{t.dates}</small>
-              </span>
-            </button>
-            {open && (
-              <div className="dm-side-sub">
-                {t.cities.map((c, n) => (
-                  <button key={c.id} className={`dm-side-item ${page === `city:${c.id}` ? "is-on" : ""}`} onClick={() => onPick(t.id, `city:${c.id}`)}>
-                    <span className="dm-num">{n + 1}</span>
-                    <span>{c.name}</span>
-                  </button>
-                ))}
-                <button className={`dm-side-item ${page === "ideas" ? "is-on" : ""}`} onClick={() => onPick(t.id, "ideas")}>
-                  <span>💡</span>
-                  <span>Ideas</span>
-                </button>
-                <button className={`dm-side-item ${page === "bookings" ? "is-on" : ""}`} onClick={() => onPick(t.id, "bookings")}>
-                  <span>🎫</span>
-                  <span>Bookings</span>
-                </button>
-              </div>
-            )}
+      {/* Explore Section (Image 2) */}
+      <div className="dm-section-title">EXPLORE</div>
+      <div className="dm-explore-row">
+        {/* 1. Sights: Sézane Madrid */}
+        <div className="dm-explore-card" onClick={() => go("sights")}>
+          <div className="dm-explore-art">
+            <div className="dm-map-art">
+              <svg className="dm-map-grid" viewBox="0 0 160 120" preserveAspectRatio="none">
+                <rect width="160" height="120" fill="#e8eff9" />
+                <path d="M0,30 Q80,20 160,35 M0,75 L160,70 M40,0 L45,120 M115,0 L110,120" stroke="#cbdcf0" strokeWidth="6" fill="none" />
+                <path d="M70,0 Q80,60 90,120" stroke="#b9d0ec" strokeWidth="8" fill="none" />
+                <rect x="50" y="38" width="55" height="30" fill="#dbe6f5" rx="3" />
+              </svg>
+              <div className="dm-map-pin is-purple">📍</div>
+              <div className="dm-map-badge"> Maps Legal</div>
+            </div>
           </div>
-        );
-      })}
-    </div>
-  );
-}
+          <div className="dm-explore-info">
+            <div className="dm-explore-tag">SIGHTS</div>
+            <div className="dm-explore-title">Sézane Madrid</div>
+            <div className="dm-explore-sub">Next to see</div>
+          </div>
+        </div>
 
-function TripMap({ trip, active, onPick }: { trip: (typeof TRIPS)[number]; active?: string; onPick: (id: string) => void }) {
-  const pts = trip.cities.map((c) => `${c.x},${c.y}`).join(" ");
-  return (
-    <div className="dm-map">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <path className="dm-land" d={trip.id === "portugal" ? "M30,0 L70,0 L72,30 L66,55 L70,80 L60,100 L28,100 L24,86 L32,70 L28,50 L34,30 Z" : "M10,30 C30,18 50,22 64,30 C80,38 92,36 100,44 L100,100 L0,100 L0,52 C10,60 24,70 34,72 C30,56 18,44 10,30 Z"} />
-        <polyline className="dm-route" points={pts} />
-      </svg>
-      {trip.cities.map((c, n) => (
-        <button key={c.id} className={`dm-pin ${active === c.id ? "is-on" : ""}`} style={{ left: `${c.x}%`, top: `${c.y}%` }} onClick={() => onPick(c.id)}>
-          <b>{n + 1}</b>
-          <span>{c.name}</span>
+        {/* 2. Trips: Spain 2026 */}
+        <div className="dm-explore-card" onClick={openTrip}>
+          <div className="dm-explore-art">
+            <div className="dm-tint-art is-trips">
+              <Image src="/apps/trips.png" alt="Trips" width={88} height={88} style={{ objectFit: "contain" }} />
+            </div>
+          </div>
+          <div className="dm-explore-info">
+            <div className="dm-explore-tag">TRIPS</div>
+            <div className="dm-explore-title">Spain 2026</div>
+            <div className="dm-explore-sub">In 29 days</div>
+          </div>
+        </div>
+
+        {/* 3. Eats: JUA */}
+        <div className="dm-explore-card" onClick={() => go("eats")}>
+          <div className="dm-explore-art">
+            <div className="dm-map-art">
+              <svg className="dm-map-grid" viewBox="0 0 160 120" preserveAspectRatio="none">
+                <rect width="160" height="120" fill="#e8eff9" />
+                <path d="M0,45 L160,45 M0,85 L160,85 M30,0 L30,120 M85,0 L85,120 M140,0 L140,120" stroke="#cbdcf0" strokeWidth="5" fill="none" />
+                <path d="M0,15 L160,95" stroke="#f2dfcb" strokeWidth="7" fill="none" />
+                <rect x="35" y="50" width="45" height="30" fill="#dbe6f5" rx="3" />
+              </svg>
+              <div className="dm-map-pin is-orange">📍</div>
+              <div className="dm-map-badge"> Maps Legal</div>
+            </div>
+          </div>
+          <div className="dm-explore-info">
+            <div className="dm-explore-tag">EATS</div>
+            <div className="dm-explore-title">JUA</div>
+            <div className="dm-explore-sub">Your #1 place</div>
+          </div>
+        </div>
+
+        {/* 4. Recipes: 譚仔米線 inspired */}
+        <div className="dm-explore-card" onClick={() => go("recipes")}>
+          <div className="dm-explore-art">
+            <div className="dm-tint-art is-recipes">
+              <Image src="/apps/recipes.png" alt="Recipes" width={88} height={88} style={{ objectFit: "contain" }} />
+            </div>
+          </div>
+          <div className="dm-explore-info">
+            <div className="dm-explore-tag">RECIPES</div>
+            <div className="dm-explore-title">譚仔米線 inspired rice...</div>
+            <div className="dm-explore-sub">Dinner · Chinese · 45 min</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Your Apps Section (Image 2) */}
+      <div className="dm-section-title">YOUR APPS</div>
+      <div className="dm-apps-grid">
+        <button className="dm-app-tile" onClick={() => go("budget")}>
+          <div className="dm-app-tile-icon">
+            <Image src="/apps/budget.png" alt="Budget" width={84} height={84} />
+            {reviewCount > 0 && <span className="dm-dot">{reviewCount}</span>}
+          </div>
+          <span className="dm-app-tile-title">Budget</span>
         </button>
-      ))}
-    </div>
-  );
-}
 
-function Ticket({ trip }: { trip: (typeof TRIPS)[number] }) {
-  return (
-    <div className="dm-ticket">
-      <div className="dm-ticket-ends">
-        <div>
-          <small>From</small>
-          <b>{trip.from}</b>
-          <span>{trip.fromCity}</span>
-        </div>
-        <div className="dm-ticket-plane" aria-hidden="true">
-          <i /> <span>✈︎</span> <i />
-        </div>
-        <div className="is-right">
-          <small>To</small>
-          <b>{trip.to}</b>
-          <span>{trip.toCity}</span>
-        </div>
-      </div>
-      <p>
-        {trip.dates} · {trip.countdown} · {trip.cities.length} cities
-      </p>
-      <div className="dm-ticket-flight">
-        <span className="dm-ticket-badge">✈︎</span>
-        <b>{trip.flight}</b>
-        <span>{trip.times}</span>
-      </div>
-    </div>
-  );
-}
+        <button className="dm-app-tile" onClick={() => go("sights")}>
+          <div className="dm-app-tile-icon">
+            <Image src="/apps/sights.png" alt="Sights" width={84} height={84} />
+          </div>
+          <span className="dm-app-tile-title">Sights</span>
+        </button>
 
-function PlanRow({ p, onClick }: { p: { time: string; kind: Kind; title: string; sub: string }; onClick?: () => void }) {
-  return (
-    <button className="dm-plan" onClick={onClick}>
-      <span className="dm-plan-time">{p.time}</span>
-      <span className={`dm-plan-dot is-${p.kind}`}>{KIND_ICON[p.kind]}</span>
-      <span className="dm-row-text">
-        <b>{p.title}</b>
-        <small>{p.sub}</small>
-      </span>
-    </button>
-  );
-}
+        <button className="dm-app-tile" onClick={() => go("trips")}>
+          <div className="dm-app-tile-icon">
+            <Image src="/apps/trips.png" alt="Trips" width={84} height={84} />
+          </div>
+          <span className="dm-app-tile-title">Trips</span>
+        </button>
 
-function TripsScreen({ trip, page, setPage, say }: { trip: (typeof TRIPS)[number]; page: TripPage; setPage: (p: TripPage) => void; say: (s: string) => void }) {
-  if (page.startsWith("city:")) {
-    const city = trip.cities.find((c) => `city:${c.id}` === page) ?? trip.cities[0];
-    const n = trip.cities.indexOf(city) + 1;
-    return (
-      <div className="dm-page">
-        <Head title={city.name} sub={`${city.dates} · ${city.nights} nights · ${city.days.reduce((a, d) => a + d.plans.length, 0)} plans`} action={<Plus label="Add a plan" onClick={() => say("Adding plans works in the app")} />} />
-        <div className="dm-split">
-          <div className="dm-days">
-            {city.days.map((d) => (
-              <section key={d.label} className="dm-card">
-                <Label>{d.label}</Label>
-                {d.plans.map((p) => (
-                  <PlanRow key={p.title} p={p} onClick={() => say(`${p.title}: open in Maps, edit, or move to another day`)} />
-                ))}
-                <button className="dm-plan is-add" onClick={() => say("Adding plans works in the app")}>
-                  <span className="dm-plan-time" />
-                  <span className="dm-plan-dot is-add">+</span>
-                  <span className="dm-row-text">
-                    <b>Add to this day</b>
-                  </span>
-                </button>
-              </section>
-            ))}
+        <button className="dm-app-tile" onClick={() => go("eats")}>
+          <div className="dm-app-tile-icon">
+            <Image src="/apps/eats.png" alt="Eats" width={84} height={84} />
           </div>
-          <div className="dm-sticky">
-            <TripMap trip={trip} active={city.id} onPick={(id) => setPage(`city:${id}`)} />
-            <p className="dm-caption">
-              Stop {n} of {trip.cities.length}. Pick a pin to jump between cities.
-            </p>
+          <span className="dm-app-tile-title">Eats</span>
+        </button>
+
+        <button className="dm-app-tile" onClick={() => go("movies")}>
+          <div className="dm-app-tile-icon">
+            <Image src="/apps/movies.png" alt="Movies" width={84} height={84} />
           </div>
-        </div>
-      </div>
-    );
-  }
-  if (page === "ideas") {
-    return (
-      <div className="dm-page">
-        <Head title="Ideas" sub={`Saved for ${trip.name}, not yet on a day`} />
-        <div className="dm-grid2">
-          {trip.ideas.map((i) => (
-            <div key={i.title} className="dm-card dm-idea">
-              <span className={`dm-plan-dot is-${i.kind}`}>{KIND_ICON[i.kind]}</span>
-              <span className="dm-row-text">
-                <b>{i.title}</b>
-                <small>{i.sub}</small>
-              </span>
-              <button className="dm-btn is-soft" onClick={() => say(`${i.title} added to a day`)}>Add to a day</button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (page === "bookings") {
-    return (
-      <div className="dm-page">
-        <Head title="Bookings" sub="Flights, trains and stays, pulled from your confirmation emails" action={<button className="dm-btn" onClick={() => say("Import works in the app: paste or drop a confirmation")}>Import…</button>} />
-        <div className="dm-card dm-table-wrap">
-          <table className="dm-table">
-            <thead>
-              <tr>
-                <th>Booking</th>
-                <th>When</th>
-                <th>Reference</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trip.bookings.map((b) => (
-                <tr key={b.what}>
-                  <td>
-                    <span className={`dm-plan-dot is-${b.kind} is-small`}>{KIND_ICON[b.kind]}</span> {b.what}
-                  </td>
-                  <td>{b.when}</td>
-                  <td className="dm-mono">{b.ref}</td>
-                  <td>
-                    <span className={`dm-pill is-${b.status.toLowerCase()}`}>{b.status}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="dm-page">
-      <Head
-        title={trip.name}
-        sub={`${trip.dates} · ${trip.people.length > 1 ? "planning with Maya" : "just you"}`}
-        action={
-          <div className="dm-people">
-            {trip.people.map((p) => (
-              <span key={p} className="dm-avatar">{p}</span>
-            ))}
-            <button className="dm-btn is-soft" onClick={() => say("Invites work in the app, through iCloud sharing")}>Invite</button>
+          <span className="dm-app-tile-title">Movies</span>
+        </button>
+
+        <button className="dm-app-tile" onClick={() => go("recipes")}>
+          <div className="dm-app-tile-icon">
+            <Image src="/apps/recipes.png" alt="Recipes" width={84} height={84} />
           </div>
-        }
-      />
-      <div className="dm-split">
-        <div className="dm-days">
-          <Ticket trip={trip} />
-          {trip.cities.map((c, n) => (
-            <section key={c.id} className="dm-city">
-              <button className="dm-city-head" onClick={() => setPage(`city:${c.id}`)}>
-                <span className="dm-city-num">{n + 1}</span>
-                <span className="dm-row-text">
-                  <b>{c.name}</b>
-                  <small>
-                    {c.dates} · {c.nights} nights · {c.days.reduce((a, d) => a + d.plans.length, 0)} plans
-                  </small>
-                </span>
-                <span className="dm-chev">›</span>
-              </button>
-              <div className="dm-card">
-                {c.days[0].plans.slice(0, 3).map((p) => (
-                  <PlanRow key={p.title} p={p} onClick={() => setPage(`city:${c.id}`)} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-        <div className="dm-sticky">
-          <TripMap trip={trip} onPick={(id) => setPage(`city:${id}`)} />
-          <div className="dm-card dm-row is-static">
-            <span className="dm-tile is-food">🍽</span>
-            <span className="dm-row-text">
-              <b>3 to try in {trip.cities[0].name}</b>
-              <small>From your Eats list</small>
-            </span>
-            <span className="dm-pill is-pending">Want to try</span>
-          </div>
-        </div>
+          <span className="dm-app-tile-title">Recipes</span>
+        </button>
       </div>
     </div>
   );
 }
 
-/* ---------- Eats ---------- */
+/* =========================================================
+   BUDGET SIDEBAR & SCREENS (Matches Image 1)
+========================================================= */
 
-function Stamp({ n, big }: { n: number; big?: boolean }) {
-  return <span className={`dm-stamp ${big ? "is-big" : ""}`}>{big ? <><small>Loved</small>#{n}<small>Brooklyn</small></> : n}</span>;
-}
-
-function EatsScreen({ ranked, setRanked, say }: { ranked: Place[]; setRanked: (p: Place[]) => void; say: (s: string) => void }) {
-  const [tab, setTab] = useState<"been" | "want">("been");
-  const [sel, setSel] = useState<string>(ranked[2]?.id ?? ranked[0].id);
-  const placed = ranked.some((p) => p.id === NEW_PLACE.id);
-  const [range, setRange] = useState<[number, number]>([0, ranked.length]);
-  const [step, setStep] = useState(1);
-  const mid = Math.floor((range[0] + range[1]) / 2);
-  const ranking = !placed && range[0] < range[1];
-  const place = ranked.find((p) => p.id === sel) ?? ranked[0];
-  const rank = ranked.indexOf(place) + 1;
-
-  const choose = (newIsBetter: boolean) => {
-    const next: [number, number] = newIsBetter ? [range[0], mid] : [mid + 1, range[1]];
-    if (next[0] >= next[1]) {
-      const list = [...ranked];
-      list.splice(next[0], 0, NEW_PLACE);
-      setRanked(list);
-      setSel(NEW_PLACE.id);
-      say(`${NEW_PLACE.name} placed at #${next[0] + 1}`);
-    }
-    setRange(next);
-    setStep((s) => s + 1);
-  };
-
-  return (
-    <div className="dm-page">
-      <Head title="Eats" action={<Plus label="Add a place" onClick={() => say("Search Apple Maps for a place in the app")} />} />
-      <div className="dm-split is-eats">
-        <div className="dm-days">
-          <div className="dm-passport">
-            <small>Your passport</small>
-            <b>{ranked.length} places</b>
-            <span>8 cities · {WANT.length} want to try · last stamp Oct 24</span>
-            <div className="dm-passport-stamps">
-              {[3, 7, 18, 22].map((n) => (
-                <i key={n}>{n}</i>
-              ))}
-            </div>
-          </div>
-          <div className="dm-segment" role="tablist">
-            <button role="tab" aria-selected={tab === "been"} className={tab === "been" ? "is-on" : ""} onClick={() => setTab("been")}>Been</button>
-            <button role="tab" aria-selected={tab === "want"} className={tab === "want" ? "is-on" : ""} onClick={() => setTab("want")}>Want to try</button>
-          </div>
-          {tab === "been" ? (
-            <div className="dm-card dm-rows">
-              {ranked.map((p, n) => (
-                <button key={p.id} className={`dm-row ${p.id === sel ? "is-sel" : ""} ${p.id === NEW_PLACE.id ? "is-new" : ""}`} onClick={() => setSel(p.id)}>
-                  <Stamp n={n + 1} />
-                  <span className="dm-row-text">
-                    <b>{p.name}</b>
-                    <small>
-                      {p.cuisine} · {p.area}
-                    </small>
-                  </span>
-                  <span className="dm-chev">›</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="dm-card dm-rows">
-              {WANT.map((w) => (
-                <div key={w.name} className="dm-row is-static">
-                  <span className="dm-tile is-food">📍</span>
-                  <span className="dm-row-text">
-                    <b>{w.name}</b>
-                    <small>
-                      {w.cuisine} · {w.area} · {w.from}
-                    </small>
-                  </span>
-                  <button className="dm-btn is-soft is-small" onClick={() => say(`Log a visit to ${w.name}, then rank it`)}>Been</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {ranking && (
-            <div className="dm-card dm-versus">
-              <Label>Which was better?</Label>
-              <div className="dm-versus-pair">
-                <button className="dm-versus-card is-new" onClick={() => choose(true)}>
-                  <b>{NEW_PLACE.name}</b>
-                  <small>
-                    {NEW_PLACE.cuisine} · {NEW_PLACE.area}
-                  </small>
-                </button>
-                <span>or</span>
-                <button className="dm-versus-card" onClick={() => choose(false)}>
-                  <b>{ranked[mid].name}</b>
-                  <small>
-                    {ranked[mid].cuisine} · {ranked[mid].area}
-                  </small>
-                </button>
-              </div>
-              <p className="dm-caption">Step {step} of about {Math.ceil(Math.log2(ranked.length + 1))} · placing {NEW_PLACE.name} on your list</p>
-            </div>
-          )}
-        </div>
-        <div className="dm-sticky">
-          <div className="dm-place">
-            <div className="dm-place-head">
-              <div>
-                <h3>{place.name}</h3>
-                <p>
-                  {place.cuisine} · {place.area} · {place.price}
-                </p>
-              </div>
-              <Stamp n={rank} big />
-            </div>
-            <div className="dm-place-actions">
-              <button className="dm-btn" onClick={() => say(`Visit logged at ${place.name}`)}>+ Log a visit</button>
-              <button className="dm-btn is-soft" onClick={() => say("Opens Apple Maps in the app")}>Directions</button>
-            </div>
-            <div className="dm-card dm-note">
-              <Label>Your notes · {place.visits[0].date}</Label>
-              <p>{place.note}</p>
-              <span className="dm-postage" aria-hidden="true">{place.emoji}</span>
-            </div>
-            <div className="dm-card dm-rows">
-              {place.visits.map((v) => (
-                <div key={v.date} className="dm-row is-static">
-                  <span className="dm-avatar">{v.who.includes("Maya") ? "MJ" : v.who.includes("Sam") ? "SK" : v.who.includes("Mom") ? "MO" : "TE"}</span>
-                  <span className="dm-row-text">
-                    <b>
-                      {v.date} · {v.who}
-                    </b>
-                    <small>{v.ate}</small>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Movies ---------- */
-
-function MoviesScreen({ say }: { say: (s: string) => void }) {
-  const genres = ["All", ...Array.from(new Set(MOVIES.map((m) => m.genre)))];
-  const [genre, setGenre] = useState("All");
-  const shown = MOVIES.map((m, i) => ({ ...m, rank: i + 1 })).filter((m) => genre === "All" || m.genre === genre);
-  return (
-    <div className="dm-page">
-      <Head title="Movies" sub={`${MOVIES.length} films ranked · 4 loved`} action={<Plus label="Add a film" onClick={() => say("Search any film in the app, then say how you felt")} />} />
-      <div className="dm-chips" role="group" aria-label="Filter by genre">
-        {genres.map((g) => (
-          <button key={g} className={g === genre ? "is-on" : ""} aria-pressed={g === genre} onClick={() => setGenre(g)}>
-            {g}
-          </button>
-        ))}
-      </div>
-      <div className="dm-stubs">
-        {shown.map((m) => (
-          <button key={m.title} className={`dm-stub is-${m.feel.toLowerCase()}`} onClick={() => say(`${m.title} · ${m.director}`)}>
-            <span className="dm-stub-rank">#{m.rank}</span>
-            <span className="dm-stub-body">
-              <small>Admit one · {m.seen}</small>
-              <b>{m.title}</b>
-              <span>
-                {m.year} · {m.genre} · {m.director}
-              </span>
-            </span>
-            <span className="dm-stub-feel">{m.feel}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Recipes ---------- */
-
-function RecipesScreen({ say }: { say: (s: string) => void }) {
-  const [meal, setMeal] = useState("All");
-  const [open, setOpen] = useState<string | null>(null);
-  const [have, setHave] = useState<Record<string, boolean>>({});
-  const [cooking, setCooking] = useState<number | null>(null);
-  const meals = ["All", "Breakfast", "Lunch", "Dinner"];
-  const shown = RECIPES.filter((r) => meal === "All" || r.meal === meal);
-  const recipe = RECIPES.find((r) => r.id === open);
-
-  if (recipe) {
-    return (
-      <div className="dm-page">
-        <button className="dm-back" onClick={() => { setOpen(null); setCooking(null); }}>‹ Recipes</button>
-        <Head title={recipe.name} sub={`${recipe.meal} · ${recipe.mins} min · ${recipe.ingredients.length} ingredients`} action={<button className="dm-btn is-soft" onClick={() => say("Share sends the recipe card")}>Share</button>} />
-        <div className="dm-split">
-          <div className="dm-days">
-            <button className="dm-btn is-wide" onClick={() => setCooking(cooking === null ? 0 : null)}>{cooking === null ? "Start cooking" : "Stop cooking"}</button>
-            {cooking !== null ? (
-              <div className="dm-card dm-cook">
-                <Label>
-                  Step {cooking + 1} of {recipe.steps.length}
-                </Label>
-                <p>{recipe.steps[cooking]}</p>
-                <div className="dm-place-actions">
-                  <button className="dm-btn is-soft" disabled={cooking === 0} onClick={() => setCooking(cooking - 1)}>Back</button>
-                  {cooking < recipe.steps.length - 1 ? (
-                    <button className="dm-btn" onClick={() => setCooking(cooking + 1)}>Next step</button>
-                  ) : (
-                    <button className="dm-btn" onClick={() => { setCooking(null); say("Enjoy! Marked as cooked."); }}>Done</button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="dm-card">
-                <Label>Steps</Label>
-                <ol className="dm-steps">
-                  {recipe.steps.map((s) => (
-                    <li key={s}>{s}</li>
-                  ))}
-                </ol>
-              </div>
-            )}
-          </div>
-          <div className="dm-sticky">
-            <div className="dm-card dm-note">
-              <Label>{recipe.from}</Label>
-              <p>Pulled from a shared reel: ingredients and steps, tagged by meal and time.</p>
-              <span className="dm-postage" aria-hidden="true">{recipe.emoji}</span>
-            </div>
-            <div className="dm-card dm-rows">
-              {recipe.ingredients.map((i) => {
-                const key = `${recipe.id}-${i.name}`;
-                return (
-                  <label key={key} className={`dm-row dm-check ${have[key] ? "is-done" : ""}`}>
-                    <input type="checkbox" checked={!!have[key]} onChange={() => setHave((h) => ({ ...h, [key]: !h[key] }))} />
-                    <span className="dm-row-text">
-                      <b>{i.name}</b>
-                      <small>{i.amount}</small>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="dm-page">
-      <Head title="Recipes" sub="Share a recipe reel to Wooli and it splits it into ingredients and steps" action={<Plus label="Add a recipe" onClick={() => say("Share a reel from Instagram or TikTok in the app")} />} />
-      <div className="dm-chips" role="group" aria-label="Filter by meal">
-        {meals.map((m) => (
-          <button key={m} className={m === meal ? "is-on" : ""} aria-pressed={m === meal} onClick={() => setMeal(m)}>
-            {m}
-          </button>
-        ))}
-      </div>
-      <div className="dm-recipes">
-        {shown.map((r) => (
-          <button key={r.id} className="dm-recipe" onClick={() => setOpen(r.id)}>
-            <span className="dm-recipe-art">{r.emoji}</span>
-            <b>{r.name}</b>
-            <small>
-              {r.meal} · {r.mins} min
-            </small>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Budget ---------- */
-
-const BUDGET_PAGES: { id: BudgetPage; name: string; icon: string }[] = [
-  { id: "dashboard", name: "Dashboard", icon: "📊" },
-  { id: "transactions", name: "Activity", icon: "🧾" },
-  { id: "plan", name: "Plan", icon: "🗂️" },
-  { id: "accounts", name: "Accounts", icon: "🏦" },
+const BUDGET_SECTIONS: { id: BudgetPage; name: string; icon: string }[] = [
+  { id: "dashboard", name: "Dashboard", icon: "🏠" },
+  { id: "accounts", name: "Accounts", icon: "💳" },
+  { id: "transactions", name: "Transactions", icon: "🧾" },
+  { id: "reports", name: "Reports", icon: "📊" },
+  { id: "plan", name: "Plan", icon: "🎯" },
+  { id: "forecast", name: "Forecast", icon: "📈" },
+  { id: "categories", name: "Categories", icon: "🏷️" },
+  { id: "rules", name: "Rules", icon: "🪄" },
+  { id: "recurring", name: "Recurring", icon: "🔄" },
 ];
 
-function BudgetRail({ page, reviewCount, onPick }: { page: BudgetPage; reviewCount: number; onPick: (p: BudgetPage) => void }) {
+function BudgetSidebar({ page, reviewCount, onPick }: { page: BudgetPage; reviewCount: number; onPick: (p: BudgetPage) => void }) {
   return (
-    <div className="dm-rail">
-      {BUDGET_PAGES.map((p) => (
-        <button key={p.id} className={page === p.id ? "is-on" : ""} onClick={() => onPick(p.id)} title={p.name}>
-          <span className="dm-rail-icon">
-            {p.icon}
-            {p.id === "dashboard" && reviewCount > 0 && <b className="dm-dot">{reviewCount}</b>}
-          </span>
-          <small>{p.name}</small>
-        </button>
-      ))}
+    <div className="dm-mac-sidebar">
+      <div className="dm-sidebar-header">
+        <Image src="/apps/budget.png" alt="Budget" width={28} height={28} />
+        <span>Budget</span>
+      </div>
+      <div className="dm-sidebar-menu">
+        {BUDGET_SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            className={`dm-sidebar-row ${page === s.id ? "is-active" : ""}`}
+            onClick={() => onPick(s.id)}
+          >
+            <span>{s.icon}</span>
+            <span>{s.name}</span>
+            {s.id === "transactions" && reviewCount > 0 && <span className="dm-sidebar-badge">{reviewCount}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="dm-sidebar-footer">
+        <span>⚙️</span>
+        <span>Settings · Synced</span>
+      </div>
     </div>
-  );
-}
-
-function PaceCurve({ left }: { left: number }) {
-  return (
-    <svg className="dm-pace" viewBox="0 0 300 70" aria-hidden="true">
-      <path d="M8,52 C60,10 110,10 160,36 S 200,52 200,52" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <path d="M200,52 C230,40 260,28 292,20" fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="2.5" strokeDasharray="5 6" />
-      <circle cx="8" cy="52" r="5" fill="currentColor" />
-      <circle cx="292" cy="20" r="4" fill="currentColor" fillOpacity="0.6" />
-      <g transform="translate(200,52)">
-        <path d="M0,-4 C-9,-14 -9,-26 0,-28 C9,-26 9,-14 0,-4 Z" className="dm-pace-pin" transform="translate(0,-2)" />
-        <circle cy="-21" r="3.5" className="dm-pace-pin-dot" />
-      </g>
-      <title>{money(left)} left</title>
-    </svg>
   );
 }
 
@@ -967,17 +472,270 @@ function BudgetScreen(props: {
   spent: Record<string, number>;
   left: number;
   totalPlan: number;
+  totalSpent: number;
 }) {
-  const { page, review, posted, categorize, plans, setPlans, spent, left, totalPlan } = props;
-  const [picking, setPicking] = useState<string | null>(null);
+  const { page, review, posted, categorize, plans, spent, left, totalPlan, totalSpent } = props;
+  const [tab, setTab] = useState<"plan" | "compare" | "chance">("plan");
+  const [tableTab, setTableTab] = useState<"accounts" | "cashflow" | "events">("accounts");
   const [q, setQ] = useState("");
-  const catName = (id?: string) => (id === "income" ? "Income" : CATEGORIES.find((c) => c.id === id)?.name ?? "Uncategorized");
+  const [picking, setPicking] = useState<string | null>(null);
 
+  // 1. Forecast view (Image 1)
+  if (page === "forecast") {
+    return (
+      <div className="dm-forecast-screen">
+        <div className="dm-forecast-main">
+          {/* Top Bar */}
+          <div className="dm-forecast-top">
+            <div className="dm-forecast-headline">
+              <h2>Forecasting</h2>
+              <button className="dm-scenario-pill">
+                <span>🌐 {FORECAST_DATA.name}</span>
+                <small>▾</small>
+              </button>
+              <span className="dm-saved-text">{FORECAST_DATA.savedTime}</span>
+            </div>
+
+            <div className="dm-forecast-actions">
+              <div className="dm-segmented">
+                <button className={tab === "plan" ? "is-active" : ""} onClick={() => setTab("plan")}>
+                  Plan
+                </button>
+                <button className={tab === "compare" ? "is-active" : ""} onClick={() => setTab("compare")}>
+                  Compare
+                </button>
+                <button className={tab === "chance" ? "is-active" : ""} onClick={() => setTab("chance")}>
+                  Chance of success
+                </button>
+              </div>
+              <button className="dm-btn-primary">
+                <span>+ Add event</span>
+                <small>▾</small>
+              </button>
+            </div>
+          </div>
+
+          {/* 4 KPI cards */}
+          <div className="dm-kpi-grid">
+            <div className="dm-kpi-card">
+              <div className="dm-kpi-label">Net worth (EOY)</div>
+              <div className="dm-kpi-val">$186K</div>
+            </div>
+            <div className="dm-kpi-card">
+              <div className="dm-kpi-label">Net worth at retirement</div>
+              <div className="dm-kpi-val">$4.82M</div>
+            </div>
+            <div className="dm-kpi-card">
+              <div className="dm-kpi-label">Retirement age</div>
+              <div className="dm-kpi-val">62</div>
+            </div>
+            <div className="dm-kpi-card">
+              <div className="dm-kpi-label">Net worth at end</div>
+              <div className="dm-kpi-val">$3.95M</div>
+            </div>
+          </div>
+
+          {/* Projection Chart */}
+          <div className="dm-chart-card">
+            <div className="dm-chart-wrap">
+              <svg viewBox="0 0 760 220" width="100%" height="100%" preserveAspectRatio="none">
+                {/* Horizontal gridlines */}
+                <line x1="40" y1="30" x2="740" y2="30" stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 3" />
+                <line x1="40" y1="85" x2="740" y2="85" stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 3" />
+                <line x1="40" y1="140" x2="740" y2="140" stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 3" />
+                <line x1="40" y1="195" x2="740" y2="195" stroke="currentColor" strokeOpacity="0.15" />
+
+                {/* Y-axis labels */}
+                <text x="35" y="34" textAnchor="end" fontSize="10" fill="currentColor" opacity="0.6">$6.00M</text>
+                <text x="35" y="89" textAnchor="end" fontSize="10" fill="currentColor" opacity="0.6">$4.00M</text>
+                <text x="35" y="144" textAnchor="end" fontSize="10" fill="currentColor" opacity="0.6">$2.00M</text>
+                <text x="35" y="198" textAnchor="end" fontSize="10" fill="currentColor" opacity="0.6">$0</text>
+
+                {/* Vertical milestone lines */}
+                {FORECAST_DATA.milestones.map((m) => {
+                  const x = 50 + ((m.offsetPct / 100) * 670);
+                  return (
+                    <g key={m.year}>
+                      <line x1={x} y1="30" x2={x} y2="195" stroke="currentColor" strokeOpacity="0.12" strokeDasharray="2 3" />
+                      <circle cx={x} cy="38" r="10" fill="var(--dm-brand-soft)" stroke="var(--dm-brand)" strokeWidth="1.5" />
+                      <text x={x} y="42" textAnchor="middle" fontSize="10">{m.icon}</text>
+                    </g>
+                  );
+                })}
+
+                {/* Projected plan curve */}
+                <path
+                  d="M 50,192 C 120,185 200,165 280,135 C 360,105 420,60 480,48 C 540,55 640,58 720,60"
+                  fill="none"
+                  stroke="var(--dm-text)"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+
+                {/* X-axis labels */}
+                <text x="50" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2026</text>
+                <text x="120" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2028</text>
+                <text x="210" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2032</text>
+                <text x="300" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2036</text>
+                <text x="390" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2040</text>
+                <text x="480" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2056</text>
+                <text x="600" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2072</text>
+                <text x="720" y="212" textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.6">2088</text>
+              </svg>
+            </div>
+
+            <div className="dm-chart-legend">
+              <div className="dm-legend-left">
+                <span className="dm-legend-item">
+                  <span className="dm-legend-line" />
+                  <span>Projected plan</span>
+                </span>
+                <span className="dm-legend-item">
+                  <span className="dm-legend-line" style={{ background: "var(--dm-expense)" }} />
+                  <span>Below $0 (unfunded)</span>
+                </span>
+                <span>In today's dollars</span>
+              </div>
+              <div>Drag an icon to change when it happens</div>
+            </div>
+          </div>
+
+          {/* Projection Table */}
+          <div className="dm-forecast-table-card">
+            <div className="dm-table-tabs">
+              <button className={`dm-table-tab ${tableTab === "accounts" ? "is-active" : ""}`} onClick={() => setTableTab("accounts")}>
+                Accounts
+              </button>
+              <button className={`dm-table-tab ${tableTab === "cashflow" ? "is-active" : ""}`} onClick={() => setTableTab("cashflow")}>
+                Cash Flow
+              </button>
+              <button className={`dm-table-tab ${tableTab === "events" ? "is-active" : ""}`} onClick={() => setTableTab("events")}>
+                Events
+              </button>
+            </div>
+            <table className="dm-forecast-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  {FORECAST_DATA.projections.map((p) => (
+                    <th key={p.year}>{p.year}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Net Worth</td>
+                  {FORECAST_DATA.projections.map((p) => (
+                    <td key={p.year}>{p.netWorth}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td>Assets</td>
+                  {FORECAST_DATA.projections.map((p) => (
+                    <td key={p.year}>{p.assets}</td>
+                  ))}
+                </tr>
+                <tr className="is-sub">
+                  <td>Extra savings</td>
+                  {FORECAST_DATA.projections.map((p) => (
+                    <td key={p.year}>{p.savings}</td>
+                  ))}
+                </tr>
+                <tr className="is-sub">
+                  <td>Company 401(k)</td>
+                  {FORECAST_DATA.projections.map((p) => (
+                    <td key={p.year}>{p.retirement}</td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Right drawer: Edit assumptions */}
+        <div className="dm-forecast-side">
+          <div className="dm-assumptions-card">
+            <div className="dm-assumptions-title">Edit assumptions</div>
+
+            <div className="dm-field-group">
+              <div className="dm-field-label">Scenario name and icon</div>
+              <div className="dm-participant-row">
+                <span>🌐 {FORECAST_DATA.name}</span>
+              </div>
+            </div>
+
+            <div className="dm-field-group">
+              <div className="dm-field-label">Participants</div>
+              <div className="dm-participant-row">
+                <div className="dm-part-left">
+                  <span className="dm-part-avatar">M</span>
+                  <span>Me</span>
+                </div>
+                <span>Age 31</span>
+              </div>
+              <div className="dm-participant-row" style={{ marginTop: 4 }}>
+                <div className="dm-part-left">
+                  <span className="dm-part-avatar is-jess">S</span>
+                  <span>Sam</span>
+                </div>
+                <span>Age 30</span>
+              </div>
+            </div>
+
+            <div className="dm-field-group">
+              <div className="dm-field-label">Current income sources</div>
+              <div className="dm-income-row">
+                <span>💼 Income (Me)</span>
+                <b>$142K →</b>
+              </div>
+              <div className="dm-income-row" style={{ marginTop: 4 }}>
+                <span>💼 Income (Sam)</span>
+                <b>$128K →</b>
+              </div>
+            </div>
+
+            <div className="dm-field-group">
+              <div className="dm-field-label">Yearly living expenses</div>
+              <div className="dm-participant-row">
+                <span>$84,000</span>
+                <small>Match inflation (3%) ▾</small>
+              </div>
+            </div>
+
+            <div className="dm-field-group">
+              <div className="dm-field-label">Taxes</div>
+              <div className="dm-participant-row">
+                <span>Married filing jointly ▾</span>
+              </div>
+            </div>
+
+            <div className="dm-field-group">
+              <div className="dm-field-label">Yearly inflation rate</div>
+              <div className="dm-participant-row">
+                <span>2–3%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Transactions Activity
   if (page === "transactions") {
     const all = [...review, ...posted].filter((t) => t.payee.toLowerCase().includes(q.toLowerCase()));
     return (
-      <div className="dm-page">
-        <Head title="Activity" sub="October · synced from 4 accounts" action={<input className="dm-input" placeholder="Search payees" value={q} onChange={(e) => setQ(e.target.value)} />} />
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700 }}>Activity</h2>
+          <input
+            className="dm-search"
+            style={{ width: 220, padding: "6px 12px" }}
+            placeholder="Search payees…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
         <div className="dm-card dm-table-wrap">
           <table className="dm-table">
             <thead>
@@ -996,7 +754,7 @@ function BudgetScreen(props: {
                   <td>
                     {!t.category && <span className="dm-review-dot" title="Needs review" />} {t.payee}
                   </td>
-                  <td>{t.category ? catName(t.category) : <span className="dm-pill is-pending">Needs review</span>}</td>
+                  <td>{t.category ? t.category : <span className="dm-pill is-pending">Needs review</span>}</td>
                   <td>{t.account}</td>
                   <td className={`is-num ${t.amount > 0 ? "is-income" : ""}`}>{money(t.amount, true)}</td>
                 </tr>
@@ -1008,36 +766,79 @@ function BudgetScreen(props: {
     );
   }
 
+  // 3. Accounts
+  if (page === "accounts") {
+    return (
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Connected Accounts</h2>
+        <div className="dm-card dm-table-wrap">
+          <table className="dm-table">
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Type</th>
+                <th className="is-num">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ACCOUNTS.map((a) => (
+                <tr key={a.name}>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Image src={a.logo} alt="" width={24} height={24} style={{ borderRadius: 6 }} />
+                      <b>{a.name}</b>
+                    </div>
+                  </td>
+                  <td>{a.kind}</td>
+                  <td className={`is-num ${a.balance < 0 ? "" : "is-income"}`}>{money(a.balance, true)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Reports
+  if (page === "reports") {
+    return (
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Spending Reports</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
+          {CATEGORIES.map((c) => (
+            <div key={c.id} className="dm-card" style={{ padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>{c.emoji} <b>{c.name}</b></span>
+                <b>{money(spent[c.id])}</b>
+              </div>
+              <div style={{ marginTop: 8, height: 6, background: "var(--dm-track)", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${Math.min((spent[c.id] / (plans[c.id] || 1)) * 100, 100)}%`, background: "var(--dm-brand)", borderRadius: 999 }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--dm-text-2)", marginTop: 6 }}>
+                <span>Plan: {money(plans[c.id])}</span>
+                <span>Last month: {money(c.last)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Plan
   if (page === "plan") {
     return (
-      <div className="dm-page">
-        <Head title="Plan" sub={`October · ${money(totalPlan)} planned · drag a slider to change a category`} />
-        <div className="dm-grid2">
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Monthly Plan</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
           {CATEGORIES.map((c) => (
-            <div key={c.id} className={`dm-card dm-cat is-${c.group}`}>
-              <div className="dm-cat-top">
-                <span className={`dm-tile is-${c.group}`}>{c.emoji}</span>
-                <span className="dm-row-text">
-                  <b>{c.name}</b>
-                  <small>
-                    {money(spent[c.id])} of {money(plans[c.id])}
-                  </small>
-                </span>
-                <b className={plans[c.id] - spent[c.id] < 0 ? "is-over" : ""}>{money(plans[c.id] - spent[c.id])} left</b>
+            <div key={c.id} className="dm-card" style={{ padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span>{c.emoji} <b>{c.name}</b></span>
+                <span className="dm-pill" style={{ background: "var(--dm-brand-soft)", color: "var(--dm-brand)" }}>{money(plans[c.id])}</span>
               </div>
-              <Gauge value={spent[c.id]} max={plans[c.id]} />
-              <input
-                type="range"
-                min={Math.round(c.plan * 0.5)}
-                max={Math.round(c.plan * 1.6)}
-                step={c.plan > 500 ? 50 : 10}
-                value={plans[c.id]}
-                aria-label={`${c.name} plan`}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setPlans((p) => ({ ...p, [c.id]: v }));
-                }}
-              />
+              <div style={{ fontSize: 12, color: "var(--dm-text-2)" }}>{money(spent[c.id])} spent so far this month</div>
             </div>
           ))}
         </div>
@@ -1045,107 +846,534 @@ function BudgetScreen(props: {
     );
   }
 
-  if (page === "accounts") {
-    const net = ACCOUNTS.reduce((a, b) => a + b.balance, 0);
+  // 6. Categories / Rules / Recurring
+  if (page === "categories") {
     return (
-      <div className="dm-page">
-        <Head title="Accounts" sub={`Net worth ${money(net)} · synced 12 minutes ago through SimpleFIN`} />
-        <div className="dm-card dm-rows">
-          {ACCOUNTS.map((a) => (
-            <div key={a.name} className="dm-row is-static">
-              <Image className="dm-logo" src={a.logo} alt="" width={36} height={36} />
-              <span className="dm-row-text">
-                <b>{a.name}</b>
-                <small>{a.kind}</small>
-              </span>
-              <b className={a.balance < 0 ? "is-expense" : ""}>{money(a.balance, true)}</b>
-            </div>
-          ))}
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Categories ({CATEGORIES.length})</h2>
+        <div className="dm-card dm-table-wrap">
+          <table className="dm-table">
+            <thead>
+              <tr><th>Category</th><th>Group</th><th className="is-num">Plan</th></tr>
+            </thead>
+            <tbody>
+              {CATEGORIES.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.emoji} {c.name}</td>
+                  <td style={{ textTransform: "capitalize" }}>{c.group}</td>
+                  <td className="is-num">{money(c.plan)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
   }
+
+  if (page === "rules") {
+    return (
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Categorization Rules</h2>
+        <div className="dm-card" style={{ padding: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--dm-border)", paddingBottom: 10 }}>
+              <span>When payee contains <b>Whole Foods</b></span>
+              <span className="dm-pill" style={{ background: "var(--dm-brand-soft)", color: "var(--dm-brand)" }}>→ Groceries</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--dm-border)", paddingBottom: 10 }}>
+              <span>When payee contains <b>Spotify</b></span>
+              <span className="dm-pill" style={{ background: "var(--dm-brand-soft)", color: "var(--dm-brand)" }}>→ Subscriptions</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: 2 }}>
+              <span>When payee contains <b>MTA*NYCT</b></span>
+              <span className="dm-pill" style={{ background: "var(--dm-brand-soft)", color: "var(--dm-brand)" }}>→ Transport</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (page === "recurring") {
+    return (
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Recurring Bills & Subs</h2>
+        <div className="dm-card dm-table-wrap">
+          <table className="dm-table">
+            <thead>
+              <tr><th>Bill / Payee</th><th>Frequency</th><th>Account</th><th className="is-num">Amount</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Apartment Rent</td><td>Monthly · 1st</td><td>Chase Checking</td><td className="is-num">$2,200.00</td></tr>
+              <tr><td>Spotify Premium</td><td>Monthly · 20th</td><td>Amex 2008</td><td className="is-num">$11.99</td></tr>
+              <tr><td>iCloud+ 2TB</td><td>Monthly · 15th</td><td>Amex 2008</td><td className="is-num">$9.99</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // 7. Default: Dashboard
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800 }}>Budget Dashboard</h2>
+          <div style={{ color: "var(--dm-text-2)", fontSize: 13 }}>November 2026 · 4 connected accounts</div>
+        </div>
+      </div>
+
+      {/* Top summary row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
+        <div className="dm-card" style={{ padding: 18, background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)", color: "#fff" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", opacity: 0.85 }}>THIS MONTH</div>
+          <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{money(Math.abs(left))} {left < 0 ? "over" : "left"}</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>{money(totalSpent)} spent of {money(totalPlan)} target</div>
+        </div>
+
+        <div className="dm-card" style={{ padding: 18 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--dm-text-3)" }}>SPENDING PACE</div>
+          <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4, color: "var(--dm-income)" }}>$214 under pace</div>
+          <div style={{ fontSize: 12, color: "var(--dm-text-2)", marginTop: 2 }}>Pacing based on last 6 months</div>
+        </div>
+      </div>
+
+      {/* Needs review queue */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700 }}>Needs Review ({review.length})</h3>
+        {review.length > 0 && <span className="dm-pill is-pending">{review.length} to categorize</span>}
+      </div>
+
+      {review.length === 0 ? (
+        <div className="dm-card" style={{ padding: 28, textAlign: "center", marginBottom: 20 }}>
+          <b>All caught up!</b>
+          <div style={{ color: "var(--dm-text-2)", marginTop: 4, fontSize: 13 }}>No transactions waiting for category assignment.</div>
+        </div>
+      ) : (
+        <div className="dm-card dm-table-wrap" style={{ marginBottom: 24 }}>
+          <table className="dm-table">
+            <thead>
+              <tr>
+                <th>Payee</th>
+                <th>Date</th>
+                <th>Account</th>
+                <th>Action</th>
+                <th className="is-num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {review.map((t) => (
+                <tr key={t.id}>
+                  <td><b>{t.payee}</b></td>
+                  <td>{t.date}</td>
+                  <td>{t.account}</td>
+                  <td>
+                    {t.suggestion ? (
+                      <button
+                        className="dm-btn-primary"
+                        style={{ padding: "4px 10px", fontSize: 11 }}
+                        onClick={() => categorize(t.id, t.suggestion!)}
+                      >
+                        Accept {t.suggestion}
+                      </button>
+                    ) : (
+                      <button
+                        className="dm-search"
+                        style={{ padding: "4px 10px", fontSize: 11 }}
+                        onClick={() => categorize(t.id, "dining")}
+                      >
+                        Pick category
+                      </button>
+                    )}
+                  </td>
+                  <td className="is-num">{money(t.amount, true)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Recent Activity */}
+      <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Recent Activity</h3>
+      <div className="dm-card dm-table-wrap">
+        <table className="dm-table">
+          <thead>
+            <tr><th>Payee</th><th>Date</th><th>Category</th><th>Account</th><th className="is-num">Amount</th></tr>
+          </thead>
+          <tbody>
+            {posted.slice(0, 4).map((t) => (
+              <tr key={t.id}>
+                <td><b>{t.payee}</b></td>
+                <td>{t.date}</td>
+                <td><span className="dm-pill" style={{ background: "var(--dm-track)" }}>{t.category}</span></td>
+                <td>{t.account}</td>
+                <td className={`is-num ${t.amount > 0 ? "is-income" : ""}`}>{money(t.amount, true)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   SIGHTS SCREEN
+========================================================= */
+
+function SightsScreen({ say }: { say: (msg: string) => void }) {
+  const [tab, setTab] = useState<"want" | "been">("want");
+  const filtered = SIGHTS.filter((s) => (tab === "been" ? s.visited : !s.visited));
 
   return (
-    <div className="dm-page">
-      <Head title="October" />
-      <div className="dm-dash">
-        <div className="dm-days">
-          <div className="dm-hero">
-            <small>Left to spend</small>
-            <b>{money(left)}</b>
-            <PaceCurve left={left} />
-            <div className="dm-hero-foot">
-              <span>Oct 1</span>
-              <span>Day 28 · $214 under pace</span>
-              <span>Oct 31</span>
-            </div>
-          </div>
-          <div className={`dm-review-head ${review.length === 0 ? "is-done" : ""}`}>
-            <span className="dm-city-num">{review.length === 0 ? "✓" : review.length}</span>
-            <span className="dm-row-text">
-              <b>{review.length === 0 ? "All reviewed" : "Needs review"}</b>
-              <small>{review.length === 0 ? "Every transaction has a category" : `${review.filter((r) => r.suggestion).length} have a suggested category`}</small>
-            </span>
-          </div>
-          {review.length > 0 && (
-            <div className="dm-card dm-rows">
-              {review.map((t) => {
-                const sug = CATEGORIES.find((c) => c.id === t.suggestion);
-                return (
-                  <div key={t.id} className="dm-row is-static dm-txn">
-                    <span className={`dm-tile ${sug ? `is-${sug.group}` : ""}`}>{sug?.emoji ?? "?"}</span>
-                    <span className="dm-row-text">
-                      <b>{t.payee}</b>
-                      <small>
-                        {sug ? `✦ ${sug.name}?` : "Uncategorized"} · {t.account}
-                      </small>
-                    </span>
-                    <b className="dm-amt">{money(t.amount, true)}</b>
-                    <span className="dm-txn-actions">
-                      {sug && (
-                        <button className="dm-btn is-small" onClick={() => categorize(t.id, sug.id)}>
-                          ✓ {sug.name}
-                        </button>
-                      )}
-                      <button className="dm-btn is-soft is-small" onClick={() => setPicking(picking === t.id ? null : t.id)}>
-                        {sug ? "Change" : "Pick category"}
-                      </button>
-                    </span>
-                    {picking === t.id && (
-                      <div className="dm-picker">
-                        {CATEGORIES.map((c) => (
-                          <button key={c.id} onClick={() => { categorize(t.id, c.id); setPicking(null); }}>
-                            <span>{c.emoji}</span> {c.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+    <div>
+      {/* Sights Hero */}
+      <div className="dm-sights-hero">
+        <div className="dm-hero-eyebrow">YOUR SIGHTS</div>
+        <div style={{ fontSize: 28, fontWeight: 800 }}>{SIGHTS.length} places</div>
+        <div style={{ fontSize: 13, color: "var(--dm-text-2)" }}>2 been · 5 to go · 4 cities</div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div className="dm-segmented">
+          <button className={tab === "want" ? "is-active" : ""} onClick={() => setTab("want")}>
+            Want to go ({SIGHTS.filter((s) => !s.visited).length})
+          </button>
+          <button className={tab === "been" ? "is-active" : ""} onClick={() => setTab("been")}>
+            Been ({SIGHTS.filter((s) => s.visited).length})
+          </button>
         </div>
-        <div className="dm-days">
-          <Label>Categories</Label>
-          {CATEGORIES.filter((c) => c.id !== "rent").map((c: Category) => (
-            <div key={c.id} className="dm-card dm-cat">
-              <div className="dm-cat-top">
-                <span className={`dm-tile is-${c.group}`}>{c.emoji}</span>
-                <span className="dm-row-text">
-                  <b>{c.name}</b>
-                  <small>
-                    {money(spent[c.id])} of {money(plans[c.id])} · last month {money(c.last)}
-                  </small>
-                </span>
-                <b className={plans[c.id] - spent[c.id] < 0 ? "is-over" : ""}>{money(plans[c.id] - spent[c.id])} left</b>
-              </div>
-              <Gauge value={spent[c.id]} max={plans[c.id]} />
+      </div>
+
+      <div className="dm-sights-grid">
+        {filtered.map((s) => (
+          <div key={s.id} className="dm-sight-card" onClick={() => say(`${s.name} · ${s.city}`)}>
+            <div className="dm-sight-top">
+              <span className="dm-sight-city">{s.city}</span>
+              <span>{s.visited ? "✓ Visited" : "📍 To see"}</span>
             </div>
+            <div className="dm-sight-name">{s.name}</div>
+            <div style={{ fontSize: 11, color: "var(--dm-brand)", fontWeight: 600 }}>{s.category}</div>
+            <div className="dm-sight-notes">{s.notes}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   TRIPS SCREEN
+========================================================= */
+
+function TripsSidebar({
+  tripId,
+  page,
+  onPick,
+  onNew,
+}: {
+  tripId: string;
+  page: TripPage;
+  onPick: (id: string, p: TripPage) => void;
+  onNew: () => void;
+}) {
+  return (
+    <div className="dm-mac-sidebar">
+      <div className="dm-sidebar-header">
+        <Image src="/apps/trips.png" alt="Trips" width={28} height={28} />
+        <span>Trips</span>
+      </div>
+      <div className="dm-sidebar-menu">
+        {TRIPS.map((t) => (
+          <button
+            key={t.id}
+            className={`dm-sidebar-row ${tripId === t.id ? "is-active" : ""}`}
+            onClick={() => onPick(t.id, "overview")}
+          >
+            <span>🧳</span>
+            <span>{t.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TripsScreen({
+  trip,
+  page,
+  setPage,
+  say,
+}: {
+  trip: Trip;
+  page: TripPage;
+  setPage: (p: TripPage) => void;
+  say: (msg: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 800 }}>{trip.name}</h2>
+          <div style={{ color: "var(--dm-text-2)", fontSize: 13 }}>{trip.dates} · {trip.countdown}</div>
+        </div>
+      </div>
+
+      <div className="dm-card" style={{ padding: 20, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--dm-brand)", textTransform: "uppercase" }}>FLIGHT OUT</div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>{trip.from} → {trip.to}</div>
+            <div style={{ fontSize: 13, color: "var(--dm-text-2)" }}>{trip.flight} · {trip.times}</div>
+          </div>
+          <span className="dm-pill" style={{ background: "var(--dm-brand-soft)", color: "var(--dm-brand)" }}>Confirmed</span>
+        </div>
+      </div>
+
+      <div className="dm-section-title">CITIES & STOPS</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        {trip.cities.map((c) => (
+          <div key={c.id} className="dm-card" style={{ padding: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--dm-brand)", textTransform: "uppercase" }}>{c.dates}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{c.name}</div>
+            <div style={{ fontSize: 12, color: "var(--dm-text-2)", marginTop: 2 }}>{c.nights} nights</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   EATS SCREEN
+========================================================= */
+
+function EatsScreen({
+  ranked,
+  setRanked,
+  say,
+}: {
+  ranked: Place[];
+  setRanked: (fn: (p: Place[]) => Place[]) => void;
+  say: (msg: string) => void;
+}) {
+  const [duel, setDuel] = useState<Place | null>(NEW_PLACE);
+
+  const vote = (chosen: Place) => {
+    if (duel) {
+      setRanked((prev) => [duel, ...prev.filter((p) => p.id !== duel.id)]);
+      say(`Ranked ${duel.name} as #1!`);
+      setDuel(null);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800 }}>Eats Passport</h2>
+          <div style={{ color: "var(--dm-text-2)", fontSize: 13 }}>{ranked.length} ranked places · NYC & abroad</div>
+        </div>
+      </div>
+
+      {duel && (
+        <div className="dm-card" style={{ padding: 20, marginBottom: 20, background: "var(--dm-brand-soft)", border: "1px solid rgba(37, 99, 235, 0.2)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--dm-brand)", textTransform: "uppercase", marginBottom: 8 }}>
+            ⚡️ PAIRWISE DUEL · JUST VISITED
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
+            Which one did you enjoy more?
+          </div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button className="dm-btn-primary" onClick={() => vote(duel)}>
+              {duel.emoji} {duel.name} ({duel.area})
+            </button>
+            <button className="dm-btn-primary" style={{ background: "var(--dm-card)", color: "var(--dm-text)", border: "1px solid var(--dm-border)" }} onClick={() => vote(ranked[0])}>
+              {ranked[0]?.emoji} {ranked[0]?.name} ({ranked[0]?.area})
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="dm-card dm-table-wrap">
+        <table className="dm-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Place</th>
+              <th>Cuisine</th>
+              <th>Neighborhood</th>
+              <th>Visits</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranked.map((p, idx) => (
+              <tr key={p.id}>
+                <td><b>#{idx + 1}</b></td>
+                <td>
+                  <span style={{ marginRight: 8 }}>{p.emoji}</span>
+                  <b>{p.name}</b>
+                </td>
+                <td>{p.cuisine}</td>
+                <td>{p.area}</td>
+                <td>{p.visits.length} visit{p.visits.length === 1 ? "" : "s"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   MOVIES SCREEN
+========================================================= */
+
+function MoviesScreen({ say }: { say: (msg: string) => void }) {
+  return (
+    <div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 16 }}>Movies ({MOVIES.length} ranked)</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
+        {MOVIES.map((m, idx) => (
+          <div key={m.title} className="dm-card" style={{ padding: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--dm-brand)" }}>#{idx + 1}</span>
+              <span className="dm-pill" style={{ background: "var(--dm-brand-soft)", color: "var(--dm-brand)" }}>{m.feel}</span>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }}>{m.title}</div>
+            <div style={{ fontSize: 12, color: "var(--dm-text-2)", marginTop: 2 }}>
+              {m.year} · {m.genre} · Dir. {m.director}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   RECIPES SCREEN
+========================================================= */
+
+function RecipesScreen({ say }: { say: (msg: string) => void }) {
+  const [selected, setSelected] = useState(RECIPES[0]);
+
+  return (
+    <div style={{ display: "flex", gap: 20 }}>
+      <div style={{ flex: "0 0 260px" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>Recipes</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {RECIPES.map((r) => (
+            <button
+              key={r.id}
+              className={`dm-sidebar-row ${selected.id === r.id ? "is-active" : ""}`}
+              onClick={() => setSelected(r)}
+            >
+              <span>{r.emoji}</span>
+              <span>{r.name}</span>
+            </button>
           ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1 }}>
+        <div className="dm-card" style={{ padding: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--dm-brand)", textTransform: "uppercase" }}>{selected.meal} · {selected.mins} MIN</div>
+          <h3 style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>{selected.emoji} {selected.name}</h3>
+          <div style={{ fontSize: 13, color: "var(--dm-text-2)", marginTop: 2, marginBottom: 20 }}>{selected.from}</div>
+
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--dm-text-3)", marginBottom: 8 }}>
+            INGREDIENTS
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 24 }}>
+            {selected.ingredients.map((ing) => (
+              <div key={ing.name} style={{ display: "flex", justifyContent: "space-between", background: "var(--dm-track)", padding: "6px 12px", borderRadius: 8, fontSize: 12 }}>
+                <span>{ing.name}</span>
+                <b>{ing.amount}</b>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--dm-text-3)", marginBottom: 8 }}>
+            STEPS
+          </div>
+          <ol style={{ paddingLeft: 20, fontSize: 13, lineHeight: 1.6, display: "flex", flexDirection: "column", gap: 6 }}>
+            {selected.steps.map((st, i) => (
+              <li key={i}>{st}</li>
+            ))}
+          </ol>
         </div>
       </div>
     </div>
+  );
+}
+
+/* =========================================================
+   COMMAND PALETTE & GLYPHS
+========================================================= */
+
+function Palette({
+  onClose,
+  onPick,
+  entries,
+}: {
+  onClose: () => void;
+  onPick: (action: () => void) => void;
+  entries: { id: string; title: string; sub: string; icon: string; action: () => void }[];
+}) {
+  const [q, setQ] = useState("");
+  const filtered = entries.filter((e) => (e.title + " " + e.sub).toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div className="dm-palette-scrim" onClick={onClose}>
+      <div className="dm-palette" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          placeholder="Search apps, trips, places, sights, budget…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <div className="dm-palette-list">
+          {filtered.length === 0 ? (
+            <div style={{ padding: 16, color: "var(--dm-text-2)", textAlign: "center", fontSize: 13 }}>
+              Nothing matches "{q}".
+            </div>
+          ) : (
+            filtered.map((e) => (
+              <button key={e.id} className="dm-palette-item" onClick={() => onPick(e.action)}>
+                <Image src={e.icon} alt="" width={22} height={22} style={{ borderRadius: 5 }} />
+                <div className="dm-pal-text">
+                  <b>{e.title}</b>
+                  <small>{e.sub}</small>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SidebarGlyph() {
+  return (
+    <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
+      <rect x="0.75" y="0.75" width="16.5" height="12.5" rx="3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="6.5" y1="1" x2="6.5" y2="13" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function GridGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      {[0, 6, 12].flatMap((x) =>
+        [0, 6, 12].map((y) => <rect key={`${x}${y}`} x={x} y={y} width="4" height="4" rx="1.2" fill="currentColor" />)
+      )}
+    </svg>
   );
 }
