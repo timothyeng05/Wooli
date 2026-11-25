@@ -68,6 +68,7 @@ export default function Home() {
           <p className="lede">An app for the things you keep track of, on your iPhone and Mac.</p>
           <div className="hero-actions">
             <StoreBadge />
+            <Link className="hero-link" href="/demo">Try it in your browser</Link>
             <a className="hero-link" href="#apps">See the eight apps</a>
           </div>
           <p className="hero-note">For iPhone (iOS 26 and later) and Mac (macOS 26 and later).</p>
