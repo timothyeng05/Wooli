@@ -276,6 +276,14 @@ As of 2026-11-11 work happens on the Mac app first. Code is shared, so these cha
 - [ ] **Points and miles on bookings** (2026-11-12). Shared code: `TripPointsField` (amount + program picker, Other… to type one) sits under the price in `TripItemEditor`'s Cost section and on the dark flight/train ticket; rows and the blue ticket show `priceText` ("HKD 3,564 + 238,000 Asia Miles"). Check the iPhone editor's number pad, the program menu and the Other… field, and the ticket's price box. The iPhone still has no trip totals (the Costs card is Mac-only). Deploy `points` / `pointsProgram` to CloudKit Production first.
 - [ ] **Trip planning coverage heatmap** (2026-11-11, `TripCoverageCard`). Shared view: on the iPhone it sits under the trip map, above Ideas, and tapping a row scrolls to (and unfolds) that day. Check on an iPhone: the 9 columns fit at 375 pt with large Dynamic Type, the fold chevron, the tap-to-day scroll, VoiceOver reading each row as one button.
 
+### FC — Forecast (Mac, Monarch-style long-range plan)  · 🔨 built on `ios/forecasting` — Claude, 2026-11-24
+Budget → **Forecast** in the Mac sidebar (Mac only; iPhone untouched). Six-step setup seeded from People, account balances and the last 12 months of income/spending; Plan page (net-worth chart with draggable retirement / Social Security / end-of-plan / life-event markers, Accounts · Cash Flow · Events year tables); Compare scenarios; Chance of success (walkthrough, 1,000-path Monte Carlo, gauge, histograms, paths/range chart); Assumptions inspector (people, income, expenses, inflation, growth, volatility, accounts, savings split, withdrawal order).
+- Engine: `Services/Forecast/` (pure, tested in `ForecastEngineTests`). Scenarios are one `ForecastScenario` SwiftData record holding the plan as JSON, so later plan fields need no schema change.
+- **Release:** new record type `CD_ForecastScenario` → deploy CloudKit schema to Production before shipping.
+- Also: Mac Budget sidebar switched from the icon rail to labeled rows (Monarch-style). Debug-only `-localStore` launch flag runs with no iCloud, for a preview build under another bundle id.
+- Checked in a sample-data preview build on the Mac (setup, Plan, tables, Chance of success). Not checked: Compare with two scenarios, dragging markers by hand.
+- Not yet: taxes (amounts are take-home), RMDs, iPhone version.
+
 ## Phase 2 — Existing backlog (carried over)
 
 1. **Recurring in the budget** — count bills still due this month into "left to spend" (Copilot).

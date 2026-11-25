@@ -19,7 +19,8 @@ struct WooliApp: App {
     /// Every synced model. New models go here (and in `Deduplicator` if two devices can create the same one).
     static let schema = Schema([LocalAccount.self, LocalTransaction.self, BudgetCategory.self, MerchantRule.self, BalanceSnapshot.self,
                                 CategoryRule.self, TransactionRule.self, RecurringItem.self,
-                                PeriodEntry.self, Person.self, MovieEntry.self, RecipeEntry.self, SightEntry.self])
+                                PeriodEntry.self, Person.self, MovieEntry.self, RecipeEntry.self, SightEntry.self,
+                                ForecastScenario.self])
 
     let container: ModelContainer
     @State private var app = AppModel()
@@ -35,10 +36,13 @@ struct WooliApp: App {
         SyncDiagnostics.resetLocalDataIfRequested()
         #endif
         let schema = Self.schema
-        let configuration = ModelConfiguration(
+        var configuration = ModelConfiguration(
             schema: schema,
             cloudKitDatabase: .private("iCloud.com.timothyeng.wooli")
         )
+        if LaunchFlags.localStore {
+            configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+        }
         do {
             container = try ModelContainer(for: schema, configurations: [configuration])
         } catch {
@@ -110,4 +114,18 @@ struct WooliApp: App {
             .frame(minWidth: 900, minHeight: 600)
             #endif
     }
+}
+
+/// Debug-only launch switches.
+enum LaunchFlags {
+    /// `-localStore`: no iCloud at all — SwiftData stays on disk and CloudKit is
+    /// never touched. For a preview build (own bundle id, no iCloud entitlement)
+    /// that must never reach real, synced data.
+    static let localStore: Bool = {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-localStore")
+        #else
+        false
+        #endif
+    }()
 }

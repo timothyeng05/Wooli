@@ -62,7 +62,7 @@ final class TripStore: CKSyncEngineDelegate {
 
     /// The window's undo stack (set by the Mac trip page); nil on the iPhone.
     @ObservationIgnored weak var undoManager: UndoManager?
-    @ObservationIgnored let container = CKContainer(identifier: containerID)
+    @ObservationIgnored lazy var container = CKContainer(identifier: Self.containerID)
     @ObservationIgnored private var privateEngine: CKSyncEngine?
     @ObservationIgnored private var sharedEngine: CKSyncEngine?
     /// Saves per trip/item since launch, and the count each record had when it
@@ -122,6 +122,7 @@ final class TripStore: CKSyncEngineDelegate {
     func start() {
         guard privateEngine == nil else { return }
         load()
+        if LaunchFlags.localStore { return }
         startEngines()
         EatsBook.shared.start()
         if needsFullUpload { uploadEverythingMine() }

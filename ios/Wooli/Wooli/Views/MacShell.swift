@@ -7,6 +7,8 @@ enum MacSection: Hashable {
     case space(AppSpace)
     case budget(AppTab)
     case tool(SidebarDestination)
+    /// Budget's long-range Forecast (Mac only).
+    case forecast
     /// Trips' gallery, and one page (overview, a city, ideas) of one trip.
     case allTrips
     case trip(String, TripPage)
@@ -41,6 +43,7 @@ struct MacShellView: View {
     @Environment(\.openSettings) private var openSettings
     @State private var lineup = AppLineup.shared
     @State private var tool: SidebarDestination?
+    @State private var showsForecast = false
     /// Held here so the sidebar button (and ⌃⌘S) always folds the sidebar,
     /// whatever the screen beside it puts in the toolbar.
     @State private var columns: NavigationSplitViewVisibility = .all
@@ -73,6 +76,9 @@ struct MacShellView: View {
         }
         let pages: [(String, AppTab)] = [("Dashboard", .dashboard), ("Accounts", .accounts), ("Transactions", .transactions),
                                          ("Reports", .reports), ("Plan", .budget)]
+        list.append(.init(id: "tab-Forecast", title: "Forecast", subtitle: "Budget", symbol: "chart.line.uptrend.xyaxis") {
+            selection.wrappedValue = .forecast
+        })
         for (name, tab) in pages {
             list.append(.init(id: "tab-\(name)", title: name, subtitle: "Budget", symbol: "chart.pie") {
                 app.selectedTab = tab
@@ -85,6 +91,7 @@ struct MacShellView: View {
     private var selection: Binding<MacSection?> {
         Binding {
             if let tool { return .tool(tool) }
+            if showsForecast, app.space == .budget { return .forecast }
             let space = lineup.isEnabled(app.space) ? app.space : .today
             if space == .trips {
                 // A trip that was deleted or left falls back to the gallery.
@@ -93,11 +100,13 @@ struct MacShellView: View {
             }
             return space == .budget ? .budget(app.selectedTab) : .space(space)
         } set: { section in
+            showsForecast = section == .forecast
             switch section {
             case .allTrips, .trip: tool = nil; app.space = .trips; tripSelection = section ?? .allTrips
             case .space(let space): tool = nil; app.space = space
             case .budget(let tab): tool = nil; app.space = .budget; app.selectedTab = tab
             case .tool(let destination): tool = destination; app.space = .budget
+            case .forecast: tool = nil; app.space = .budget
             case nil: break
             }
         }
@@ -108,8 +117,7 @@ struct MacShellView: View {
             Group {
                 if showsTripsSidebar { tripsSidebar } else { sidebar }
             }
-            .navigationSplitViewColumnWidth(min: showsTripsSidebar ? 200 : 68, ideal: showsTripsSidebar ? 230 : 68,
-                                            max: showsTripsSidebar ? 300 : 68)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             // Scroll views stay window-wide (scroll bar at the edge, background
@@ -178,7 +186,7 @@ struct MacShellView: View {
     /// Only Budget has pages of its own to list.
     private var hasSidebar: Bool {
         switch selection.wrappedValue {
-        case .budget, .tool, .allTrips, .trip: true
+        case .budget, .tool, .forecast, .allTrips, .trip: true
         default: false
         }
     }
@@ -200,10 +208,10 @@ struct MacShellView: View {
     /// Budget's pages lay out in columns, so they get more room than a list.
     private var wideSelection: Bool {
         if case .budget = selection.wrappedValue { return true }
-        return false
+        return selection.wrappedValue == .forecast
     }
 
-    /// An icon-only rail, like Muse: names show as tooltips, so the page gets the room.
+    /// Labeled rows, like Monarch's: icon and name, with the review count as a badge.
     private var sidebar: some View {
         List(selection: selection) {
             Section {
@@ -212,11 +220,13 @@ struct MacShellView: View {
                 row(.budget(.transactions), "Transactions", "creditcard", badge: reviewCount)
                 row(.budget(.reports), "Reports", "chart.pie")
                 row(.budget(.budget), "Plan", "map")
+                row(.forecast, "Forecast", "chart.line.uptrend.xyaxis")
             } header: {
-                AppIconTile(.budget, size: 28)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, Space.xs)
-                    .help(AppSpace.budget.title)
+                HStack(spacing: Space.s) {
+                    AppIconTile(.budget, size: 24)
+                    Text(AppSpace.budget.title).font(.headline).foregroundStyle(Theme.text)
+                }
+                .padding(.bottom, Space.xs)
             }
             Section {
                 row(.tool(.categories), "Categories", "square.grid.2x2")
@@ -226,17 +236,16 @@ struct MacShellView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: Space.m) {
+            HStack {
+                Button("Settings", systemImage: "gearshape") { openSettings() }
+                    .buttonStyle(.borderless)
+                    .help("Settings (⌘,)")
+                Spacer()
                 SyncButton()
                     .buttonStyle(.borderless)
                     .labelStyle(.iconOnly)
-                Button("Settings", systemImage: "gearshape") { openSettings() }
-                    .buttonStyle(.borderless)
-                    .labelStyle(.iconOnly)
-                    .help("Settings (⌘,)")
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Space.m)
+            .padding(Space.m)
         }
     }
 
@@ -338,16 +347,13 @@ struct MacShellView: View {
         return trip.endDay >= today ? "now" : trip.dateRangeText
     }
 
-    /// Icon only; the name is the tooltip and VoiceOver label. A red dot stands in for the count.
+    /// Icon and name; a count shows as a small red badge on the right.
     private func row(_ section: MacSection, _ title: String, _ systemImage: String, badge: Int = 0) -> some View {
         Label(title, systemImage: systemImage)
-            .labelStyle(.iconOnly)
-            .font(.title3)
-            .frame(maxWidth: .infinity, minHeight: 30)
-            .overlay(alignment: .topTrailing) {
-                if badge > 0 { Circle().fill(Theme.expense).frame(width: 8, height: 8).offset(x: -4, y: 2) }
-            }
-            .help(title)
+            .font(.body)
+            .badge(badge > 0 ? Text("\(badge)").foregroundStyle(.white) : nil)
+            .badgeProminence(.increased)
+            .frame(minHeight: 26)
             .tag(section)
     }
 
@@ -369,6 +375,8 @@ struct MacShellView: View {
                 }
             }
             .appGuide(.budget)
+        case .forecast:
+            ForecastView().appGuide(.budget)
         case .allTrips:
             NavigationStack { TripsListView { selection.wrappedValue = .trip($0, .overview) } }
         case .trip(let id, let page):
