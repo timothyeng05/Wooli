@@ -172,4 +172,22 @@ struct ForecastEngineTests {
         #expect(rows.count == 2)
         #expect(rows[1].base == 170_000 && rows[1].bonusRate == 0.2 && rows[1].years == 3 && rows[1].yearlyIncrease == 5_000)
     }
+
+    @Test func rsuGrantVestsAfterCliffThenQuarterly() {
+        // $200K granted March 2027, 4 years, 1-year cliff, quarterly.
+        var eq = ForecastEquity()
+        eq.grants = [ForecastGrant(value: 200_000, year: 2027, month: 3, years: 4, cliffMonths: 12, everyMonths: 3)]
+        #expect(eq.vesting(in: 2027) == 0)
+        #expect(abs(eq.vesting(in: 2028) - 87_500) < 0.01) // cliff 50K in March + 3 quarters
+        #expect(abs(eq.vesting(in: 2029) - 50_000) < 0.01)
+        let total = (2027...2032).reduce(0.0) { $0 + eq.vesting(in: $1) }
+        #expect(abs(total - 200_000) < 0.01)
+        // Refreshers stack and the haircut scales everything.
+        eq.refresher = 40_000
+        eq.refresherStartYear = 2028
+        eq.refresherSchedule = ForecastGrant(value: 0, month: 1, years: 4, cliffMonths: 0, everyMonths: 12)
+        eq.haircut = 0.25
+        // 2029: original 50K + 2028 refresher's first yearly vest (10K, Jan 2029).
+        #expect(abs(eq.vesting(in: 2029) - 60_000 * 0.75) < 0.01)
+    }
 }

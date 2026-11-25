@@ -50,12 +50,25 @@ struct ForecastAssumptions: View {
 
                 section("Current income sources") {
                     ForEach($plan.incomes) { $income in incomeCard($income) }
-                    Button("Add new", systemImage: "plus.circle") {
-                        let owner = plan.primaryPerson
-                        plan.incomes.append(ForecastIncome(name: "Income (\(owner?.name ?? "new"))", ownerId: owner?.id))
-                        editingIncome = plan.incomes.last?.id
-                    }
-                    .buttonStyle(.borderless)
+                    Menu {
+                        Button("Salary or other income", systemImage: "building.2") {
+                            let owner = plan.primaryPerson
+                            plan.incomes.append(ForecastIncome(name: "Income (\(owner?.name ?? "new"))", ownerId: owner?.id))
+                            editingIncome = plan.incomes.last?.id
+                        }
+                        Button("RSUs / stock grants", systemImage: "chart.line.uptrend.xyaxis") {
+                            let owner = plan.primaryPerson
+                            var inc = ForecastIncome(name: "RSUs (\(owner?.name ?? "new"))", ownerId: owner?.id)
+                            inc.isBeforeTax = true
+                            inc.payGrowth = .equity
+                            var equity = ForecastEquity()
+                            equity.grants = [ForecastGrant(name: "Initial grant")]
+                            inc.equity = equity
+                            plan.incomes.append(inc)
+                            editingIncome = plan.incomes.last?.id
+                        }
+                    } label: { Label("Add new", systemImage: "plus.circle") }
+                    .menuStyle(.borderlessButton).fixedSize()
                 }
 
                 box {
@@ -263,7 +276,8 @@ struct ForecastAssumptions: View {
                     Image(systemName: "building.2").foregroundStyle(Theme.textSecondary)
                     Text(inc.name).font(.body.weight(.medium))
                     Spacer()
-                    Text(ForecastFormat.money(inc.yearlyAmount)).foregroundStyle(Theme.textSecondary)
+                    let year = Calendar.current.component(.year, from: .now)
+                    Text(ForecastFormat.money(inc.amount(in: year, startYear: year))).foregroundStyle(Theme.textSecondary)
                     Image(systemName: open ? "chevron.down" : "arrow.right").font(.caption)
                 }
                 .contentShape(Rectangle())
@@ -275,15 +289,19 @@ struct ForecastAssumptions: View {
                     Text("Shared").tag(String?.none)
                     ForEach(plan.people) { Text($0.name).tag(String?.some($0.id)) }
                 }
+                if inc.payGrowth != .equity {
                 Picker("Amount is", selection: income.isBeforeTax) {
                     Text("Salary before tax").tag(true)
                     Text("Take-home pay").tag(false)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                }
+                if inc.payGrowth == .raise || inc.payGrowth == .steps {
                 Text(inc.isBeforeTax ? "Yearly salary before tax" : "Yearly take-home income").font(.caption).foregroundStyle(Theme.textSecondary)
                 moneyField("Yearly amount", value: income.yearlyAmount)
-                if inc.isBeforeTax {
+                }
+                if inc.isBeforeTax && inc.payGrowth != .equity {
                     Text("Pre-tax 401(k) per year").font(.caption).foregroundStyle(Theme.textSecondary)
                     HStack {
                         moneyField("401(k)", value: Binding(get: { inc.retirementContribution ?? 0 },
@@ -358,6 +376,14 @@ struct ForecastAssumptions: View {
                     income.wrappedValue.paySteps = [ForecastPayStep(year: Calendar.current.component(.year, from: .now) + 1,
                                                                    amount: income.wrappedValue.yearlyAmount)]
                 }
+                if new == .equity {
+                    income.wrappedValue.isBeforeTax = true
+                    if income.wrappedValue.equity == nil {
+                        var e = ForecastEquity()
+                        e.grants = [ForecastGrant(name: "Initial grant")]
+                        income.wrappedValue.equity = e
+                    }
+                }
                 if new == .career, income.wrappedValue.career?.levels.isEmpty != false {
                     income.wrappedValue.career = ForecastCareerPath(levels: [
                         ForecastCareerLevel(name: "Now", base: income.wrappedValue.yearlyAmount)])
@@ -365,8 +391,7 @@ struct ForecastAssumptions: View {
             })) {
                 ForEach(ForecastIncome.PayGrowth.allCases, id: \.self) { Text($0.label).tag($0) }
             }
-            .pickerStyle(.segmented).labelsHidden()
-            if mode != .career {
+            if mode == .raise || mode == .steps {
                 HStack {
                     Text(mode == .steps ? "Raise after each change" : "Raise above inflation").font(.caption)
                     rateSlider(income.raise, range: 0...0.05)
@@ -376,8 +401,111 @@ struct ForecastAssumptions: View {
             case .raise: EmptyView()
             case .steps: paySteps(income)
             case .career: careerPath(income)
+            case .equity: equityEditor(income)
             }
         }
+    }
+
+    /// RSUs: grants with a vesting schedule, yearly refreshers, a haircut and price change.
+    private func equityEditor(_ income: Binding<ForecastIncome>) -> some View {
+        let eq = Binding<ForecastEquity>(get: { income.wrappedValue.equity ?? ForecastEquity() },
+                                         set: { income.wrappedValue.equity = $0 })
+        let now = Calendar.current.component(.year, from: .now)
+        return VStack(alignment: .leading, spacing: Space.s) {
+            Text("Taxed as pay in the year shares vest. Values in today's dollars at grant; vests stop when you retire (unvested shares are forfeited).")
+                .font(.caption).foregroundStyle(Theme.textTertiary)
+            ForEach(eq.wrappedValue.grants) { grant in
+                let g = Binding<ForecastGrant>(
+                    get: { eq.wrappedValue.grants.first { $0.id == grant.id } ?? grant },
+                    set: { new in eq.wrappedValue.grants = eq.wrappedValue.grants.map { $0.id == grant.id ? new : $0 } })
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    HStack {
+                        TextField("Name", text: g.name).textFieldStyle(.roundedBorder)
+                        Button {
+                            eq.wrappedValue.grants.removeAll { $0.id == grant.id }
+                        } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.borderless).foregroundStyle(Theme.textSecondary)
+                    }
+                    HStack {
+                        moneyField("Grant value", value: g.value)
+                        Picker("Granted", selection: g.month) {
+                            ForEach(1...12, id: \.self) { Text(Calendar.current.shortMonthSymbols[$0 - 1]).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 70)
+                        Picker("Year", selection: g.year) {
+                            ForEach((now - 5)...(now + 5), id: \.self) { Text(String($0)).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 76)
+                    }
+                    vestingSchedule(g)
+                }
+                .padding(Space.s)
+                .background(Theme.background, in: RoundedRectangle(cornerRadius: 8))
+            }
+            Button {
+                eq.wrappedValue.grants.append(ForecastGrant(name: "Grant \(eq.wrappedValue.grants.count + 1)"))
+            } label: { Label("Add grant", systemImage: "plus") }
+            .buttonStyle(.borderless).font(.caption)
+
+            Text("Refreshers").font(.caption.weight(.semibold))
+            HStack {
+                moneyField("New grant each year", value: eq.refresher)
+                Text("from").font(.caption)
+                Picker("from", selection: eq.refresherStartYear) {
+                    ForEach(now...(now + 10), id: \.self) { Text(String($0)).tag($0) }
+                }
+                .labelsHidden().frame(width: 76)
+            }
+            if eq.wrappedValue.refresher > 0 { vestingSchedule(eq.refresherSchedule) }
+
+            HStack {
+                Text("Count only").font(.caption)
+                Slider(value: Binding(get: { 1 - eq.wrappedValue.haircut }, set: { eq.wrappedValue.haircut = 1 - $0 }), in: 0.5...1, step: 0.05)
+                Text("\(Int(((1 - eq.wrappedValue.haircut) * 100).rounded()))%").font(.caption.monospacedDigit()).frame(width: 38)
+            }
+            Text("Knock some off for leaving before shares vest or the price falling.").font(.caption2).foregroundStyle(Theme.textTertiary)
+            HStack {
+                Text("Stock price above inflation").font(.caption)
+                rateSlider(eq.priceGrowth, range: -0.1...0.1)
+            }
+
+            let years = Array(now...(now + 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Vesting by year").font(.caption.weight(.semibold))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 2) {
+                    ForEach(years, id: \.self) { y in
+                        Text("\(String(y))  \(ForecastFormat.money(eq.wrappedValue.vesting(in: y)))")
+                            .font(.caption2.monospacedDigit()).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+            }
+            .padding(Space.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func vestingSchedule(_ g: Binding<ForecastGrant>) -> some View {
+        HStack(spacing: Space.xs) {
+            Picker("Vests over", selection: g.years) {
+                ForEach(1...6, id: \.self) { Text("\($0) yr").tag($0) }
+            }
+            .labelsHidden().frame(width: 66)
+            Picker("Cliff", selection: g.cliffMonths) {
+                Text("No cliff").tag(0)
+                Text("6-mo cliff").tag(6)
+                Text("1-yr cliff").tag(12)
+            }
+            .labelsHidden().frame(width: 96)
+            Picker("Every", selection: g.everyMonths) {
+                Text("Monthly").tag(1)
+                Text("Quarterly").tag(3)
+                Text("Every 6 mo").tag(6)
+                Text("Yearly").tag(12)
+            }
+            .labelsHidden().frame(width: 96)
+        }
+        .font(.caption)
     }
 
     /// The columns "Paste from spreadsheet" reads, with an example and a template to copy.

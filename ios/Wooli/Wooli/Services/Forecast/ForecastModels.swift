@@ -159,8 +159,10 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
 
     /// Pay changes from a given year (promotions). Optional for old plans.
     var steps: [ForecastPayStep]?
-    /// Promotion path; when set it decides pay instead of `yearlyAmount` and steps.
+    /// Promotion path (used when `payGrowth` is `.career`).
     var career: ForecastCareerPath?
+    /// Stock grants (used when `payGrowth` is `.equity`).
+    var equity: ForecastEquity?
 
     var isBeforeTax: Bool {
         get { beforeTaxRaw ?? false }
@@ -185,12 +187,13 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
     var payGrowthRaw: String?
 
     enum PayGrowth: String, CaseIterable, Codable {
-        case raise, steps, career
+        case raise, steps, career, equity
         var label: String {
             switch self {
             case .raise: "Steady raise"
             case .steps: "Pay changes"
             case .career: "Career path"
+            case .equity: "Stock grants"
             }
         }
     }
@@ -210,6 +213,8 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
         switch payGrowth {
         case .career:
             if let career, !career.levels.isEmpty { return career.pay(in: year) }
+        case .equity:
+            return equity?.vesting(in: year) ?? 0
         case .steps:
             if let step = paySteps.last(where: { $0.year <= year }) {
                 return step.amount * pow(1 + raise, Double(year - step.year))
@@ -217,6 +222,105 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
         case .raise: break
         }
         return yearlyAmount * pow(1 + raise, Double(year - startYear))
+    }
+}
+
+/// RSUs and other stock grants: taxed as pay in the year they vest.
+struct ForecastEquity: Codable, Equatable {
+    var grants: [ForecastGrant] = []
+    /// New grant each year (today's dollars at grant), on the same schedule as
+    /// `refresherSchedule`, from `refresherStartYear` until the owner retires. 0 = none.
+    var refresher: Double = 0
+    var refresherStartYear: Int = Calendar.current.component(.year, from: .now) + 1
+    var refresherSchedule = ForecastGrant(name: "Refresher", value: 0, years: 4, cliffMonths: 0, everyMonths: 3)
+    /// Share to knock off for leaving early, forfeits or a falling price (0.25 = count 75%).
+    var haircut: Double = 0
+    /// Stock price change per year above inflation, applied from each grant date.
+    var priceGrowth: Double = 0
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ForecastEquity()
+        grants = try c.decodeIfPresent([ForecastGrant].self, forKey: .grants) ?? d.grants
+        refresher = try c.decodeIfPresent(Double.self, forKey: .refresher) ?? d.refresher
+        refresherStartYear = try c.decodeIfPresent(Int.self, forKey: .refresherStartYear) ?? d.refresherStartYear
+        refresherSchedule = try c.decodeIfPresent(ForecastGrant.self, forKey: .refresherSchedule) ?? d.refresherSchedule
+        haircut = min(max(try c.decodeIfPresent(Double.self, forKey: .haircut) ?? 0, 0), 1)
+        priceGrowth = try c.decodeIfPresent(Double.self, forKey: .priceGrowth) ?? 0
+    }
+
+    /// Everything that vests in a calendar year, today's dollars.
+    func vesting(in year: Int) -> Double {
+        var all = grants
+        if refresher > 0, year >= refresherStartYear {
+            for y in refresherStartYear...year {
+                var g = refresherSchedule
+                g.value = refresher
+                g.year = y
+                all.append(g)
+            }
+        }
+        let total = all.reduce(0) { sum, g in
+            let vested = g.vested(in: year)
+            guard vested > 0 else { return sum }
+            let yearsHeld = Double(year) + 0.5 - (Double(g.year) + Double(g.month - 1) / 12)
+            return sum + vested * pow(1 + priceGrowth, max(yearsHeld, 0))
+        }
+        return total * (1 - haircut)
+    }
+}
+
+struct ForecastGrant: Codable, Equatable, Identifiable {
+    var id = UUID().uuidString
+    var name = "Grant"
+    /// Value when granted, today's dollars.
+    var value: Double = 0
+    /// Grant (vesting start) date.
+    var year = Calendar.current.component(.year, from: .now)
+    var month = 1
+    /// Vesting length.
+    var years = 4
+    /// Nothing vests before this; then what built up vests at once (12 = 1-year cliff).
+    var cliffMonths = 12
+    /// How often it vests after the cliff (3 = quarterly, 12 = yearly).
+    var everyMonths = 3
+
+    init(id: String = UUID().uuidString, name: String = "Grant", value: Double = 0,
+         year: Int = Calendar.current.component(.year, from: .now), month: Int = 1,
+         years: Int = 4, cliffMonths: Int = 12, everyMonths: Int = 3) {
+        self.id = id; self.name = name; self.value = value; self.year = year; self.month = month
+        self.years = years; self.cliffMonths = cliffMonths; self.everyMonths = everyMonths
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ForecastGrant()
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? d.id
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? d.name
+        value = try c.decodeIfPresent(Double.self, forKey: .value) ?? 0
+        year = try c.decodeIfPresent(Int.self, forKey: .year) ?? d.year
+        month = min(max(try c.decodeIfPresent(Int.self, forKey: .month) ?? 1, 1), 12)
+        years = max(try c.decodeIfPresent(Int.self, forKey: .years) ?? 4, 1)
+        cliffMonths = max(try c.decodeIfPresent(Int.self, forKey: .cliffMonths) ?? 12, 0)
+        everyMonths = max(try c.decodeIfPresent(Int.self, forKey: .everyMonths) ?? 3, 1)
+    }
+
+    /// Share of the grant vested `elapsed` months after the grant date.
+    private func vestedShare(after elapsed: Int) -> Double {
+        let total = years * 12
+        guard elapsed > 0, elapsed >= cliffMonths else { return 0 }
+        if elapsed >= total { return 1 }
+        // At the cliff, everything built up so far vests at once.
+        let step = max(everyMonths, 1)
+        return Double(max(elapsed / step * step, cliffMonths)) / Double(total)
+    }
+
+    /// Value vesting in a calendar year (before price change), today's dollars.
+    func vested(in calendarYear: Int) -> Double {
+        let january = (calendarYear - year) * 12 - (month - 1) // months since the grant at the start of the year
+        return max(vestedShare(after: january + 11) - vestedShare(after: january - 1), 0) * value
     }
 }
 
