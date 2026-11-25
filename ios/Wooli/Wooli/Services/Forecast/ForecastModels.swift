@@ -45,6 +45,19 @@ struct ForecastPlan: Codable, Equatable {
     var savingsSplit: [String: Double] = [:]
     /// Account ids, first drawn first. Accounts not listed are drawn last.
     var withdrawalOrder: [String] = []
+    // Added after the first release: optional so saved plans still decode.
+    var filingRaw: String?
+    /// Joint filing starts this year (nil = every year).
+    var marriedYear: Int?
+
+    var filing: FilingStatus {
+        get { filingRaw.flatMap(FilingStatus.init(rawValue:)) ?? .single }
+        set { filingRaw = newValue.rawValue }
+    }
+
+    func filesJointly(in year: Int) -> Bool {
+        filing == .joint && people.count > 1 && year >= (marriedYear ?? .min)
+    }
 
     /// Rolling bucket for surplus cash when no split is set (Monarch's "Extra savings").
     static let extraSavingsId = "extra-savings"
@@ -105,6 +118,14 @@ struct ForecastPerson: Codable, Equatable, Identifiable {
     var colorHex = "#2563eb"
     /// Photo-less avatar (first letter is shown when empty).
     var emoji = ""
+    // Optional so plans saved before taxes existed still decode.
+    var taxRegionRaw: String?
+    var otherStateRate: Double?
+
+    var taxRegion: TaxRegion {
+        get { taxRegionRaw.flatMap(TaxRegion.init(rawValue:)) ?? .newYorkCity }
+        set { taxRegionRaw = newValue.rawValue }
+    }
 
     var retirementYear: Int { birthYear + retirementAge }
     var socialSecurityYear: Int { birthYear + socialSecurityAge }
@@ -128,6 +149,24 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
     var yearlyAmount: Double = 0
     /// Real raise per year on top of inflation (0.01 = 1%).
     var raise: Double = 0
+    // Optional so plans saved before taxes existed still decode.
+    /// true = `yearlyAmount` is salary before tax; Forecast works out the tax.
+    var beforeTaxRaw: Bool?
+    /// Pre-tax 401(k)/403(b) per year, today's dollars (salary only).
+    var retirementContribution: Double?
+    /// Account the contribution goes into (nil = first retirement account, else Extra savings).
+    var retirementAccountId: String?
+
+    var isBeforeTax: Bool {
+        get { beforeTaxRaw ?? false }
+        set { beforeTaxRaw = newValue }
+    }
+
+    /// The contribution actually made: capped by the yearly limit and the salary.
+    var pretaxContribution: Double {
+        guard isBeforeTax else { return 0 }
+        return min(max(retirementContribution ?? 0, 0), ForecastTax.retirementContributionLimit, yearlyAmount)
+    }
 }
 
 enum ForecastAccountKind: String, Codable, CaseIterable, Identifiable {

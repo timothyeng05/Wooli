@@ -282,7 +282,9 @@ Budget → **Forecast** in the Mac sidebar (Mac only; iPhone untouched). Six-ste
 - **Release:** new record type `CD_ForecastScenario` → deploy CloudKit schema to Production before shipping.
 - Also: Mac Budget sidebar switched from the icon rail to labeled rows (Monarch-style). Debug-only `-localStore` launch flag runs with no iCloud, for a preview build under another bundle id.
 - Checked in a sample-data preview build on the Mac (setup, Plan, tables, Chance of success). Not checked: Compare with two scenarios, dragging markers by hand.
-- Not yet: taxes (amounts are take-home), RMDs, iPhone version.
+- Taxes: income can be salary before tax — 2026 federal / FICA / NY+NYC / CT brackets (indexed to inflation), joint filing from a chosen year, pre-tax 401(k) into a chosen account (`ForecastTax`, `ForecastTaxTests`). Not modelled: credits, itemizing, NY recapture, tax on SS and withdrawals.
+- CloudKit: `CD_ForecastScenario` deployed to Production 2026-11-24 (via `--init-cloudkit-schema`).
+- Not yet: RMDs, iPhone version.
 
 ## Phase 2 — Existing backlog (carried over)
 

@@ -118,15 +118,37 @@ enum ForecastEngine {
             }
             var row = Year(year: year, deflator: deflator)
 
-            // Income
+            // Income. Salaries entered before tax are taxed in today's dollars
+            // (brackets rise with inflation), then scaled to this year.
             var income = 0.0
+            var earners: [String: ForecastTax.Earner] = [:]
+            var contributions: [String: Double] = [:]
             for inc in plan.incomes {
                 let owner = plan.person(inc.ownerId)
                 if let owner, year >= owner.retirementYear || year > owner.endYear { continue }
                 if onCareerBreak(plan, owner: inc.ownerId, year: year) { continue }
-                let amount = inc.yearlyAmount * deflator * pow(1 + inc.raise, Double(t)) * fraction
+                let growth = pow(1 + inc.raise, Double(t))
+                let amount = inc.yearlyAmount * deflator * growth * fraction
                 income += amount
                 if detail { row.incomes.append(Line(id: inc.id, title: inc.name, symbol: "building.2", amount: amount)) }
+                guard inc.isBeforeTax else { continue }
+                let key = inc.ownerId ?? "shared"
+                var e = earners[key] ?? ForecastTax.Earner(id: key, wages: 0, pretax: 0,
+                                                           region: owner?.taxRegion ?? plan.primaryPerson?.taxRegion ?? .newYorkCity,
+                                                           otherRate: owner?.otherStateRate ?? 0.05)
+                e.wages += inc.yearlyAmount * growth
+                let pretax = inc.pretaxContribution * growth
+                e.pretax += pretax
+                earners[key] = e
+                if pretax > 0 {
+                    let target = inc.retirementAccountId.flatMap { id in plan.accounts.contains { $0.id == id && $0.kind != .debt } ? id : nil }
+                        ?? plan.accounts.first { $0.kind == .retirement }?.id ?? ForecastPlan.extraSavingsId
+                    contributions[target, default: 0] += pretax * deflator * fraction
+                }
+            }
+            var taxes = ForecastTax.Bill()
+            if !earners.isEmpty {
+                taxes = ForecastTax.bill(Array(earners.values).sorted { $0.id < $1.id }, joint: plan.filesJointly(in: year))
             }
             for p in plan.people where p.socialSecurityMonthly > 0 {
                 let on = year >= p.socialSecurityYear && year <= p.endYear
@@ -145,6 +167,13 @@ enum ForecastEngine {
             let living = plan.yearlyExpenses * expenseFactor * fraction
             expenses += living
             if detail { row.expenses.append(Line(id: "living", title: "Yearly living expenses", symbol: "cart", amount: living)) }
+            for (id, title, value) in [("tax-federal", "Federal income tax", taxes.federal),
+                                       ("tax-payroll", "Social Security & Medicare", taxes.payroll),
+                                       ("tax-state", "State & local income tax", taxes.state)] where value > 0 {
+                let amount = value * deflator * fraction
+                expenses += amount
+                if detail { row.expenses.append(Line(id: id, title: title, symbol: "building.columns", amount: amount)) }
+            }
 
             for e in plan.events {
                 var amount = 0.0
@@ -216,7 +245,12 @@ enum ForecastEngine {
             // Surplus pays back any shortfall, then is saved; a deficit is drawn down.
             var deposits: [String: Double] = [:]
             var withdrawals: [String: Double] = [:]
-            var net = income - expenses
+            // Pre-tax 401(k) money comes out of pay straight into its account.
+            for (id, amount) in contributions {
+                deposits[id, default: 0] += amount
+                balance[id, default: 0] += amount
+            }
+            var net = income - expenses - contributions.values.reduce(0, +)
             if net > 0 {
                 let repay = min(net, shortfall)
                 shortfall -= repay

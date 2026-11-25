@@ -85,6 +85,30 @@ struct ForecastAssumptions: View {
                     .labelsHidden()
                 }
 
+                if plan.incomes.contains(where: \.isBeforeTax) {
+                    box {
+                        Text("Taxes").font(.callout.weight(.semibold))
+                        Text("Salaries entered before tax are taxed with 2026 federal, Social Security, Medicare and state brackets, kept up with inflation.")
+                            .font(.caption).foregroundStyle(Theme.textSecondary)
+                        if plan.people.count > 1 {
+                            Picker("Filing", selection: $plan.filing) {
+                                ForEach(FilingStatus.allCases) { Text($0.label).tag($0) }
+                            }
+                            .labelsHidden()
+                            if plan.filing == .joint {
+                                Toggle("Starting in a later year", isOn: Binding(get: { plan.marriedYear != nil },
+                                                                                 set: { plan.marriedYear = $0 ? ForecastEngine.startYear() + 1 : nil }))
+                                if let y = plan.marriedYear {
+                                    Stepper("From \(String(y))", value: Binding(get: { y }, set: { plan.marriedYear = $0 }),
+                                            in: ForecastEngine.startYear()...(ForecastEngine.startYear() + 30))
+                                }
+                            }
+                        }
+                        Text("Not included: credits, itemized deductions, and tax on Social Security or retirement withdrawals.")
+                            .font(.caption2).foregroundStyle(Theme.textTertiary)
+                    }
+                }
+
                 box {
                     Text("Yearly inflation rate").font(.callout.weight(.semibold))
                     Text("Most financial plans use 2–3%. The long-term U.S. average is around 3%.")
@@ -194,6 +218,19 @@ struct ForecastAssumptions: View {
                     }
                     GridRow { Text("Retire at"); Stepper("\(p.retirementAge) (\(String(p.retirementYear)))", value: person.retirementAge, in: max(p.currentAge, 30)...85) }
                     GridRow { Text("Plan until"); Stepper("Age \(p.endAge)", value: person.endAge, in: max(p.retirementAge, p.currentAge + 1)...110) }
+                    GridRow {
+                        Text("Lives in")
+                        Picker("Lives in", selection: person.taxRegion) {
+                            ForEach(TaxRegion.allCases) { Text($0.label).tag($0) }
+                        }
+                        .labelsHidden()
+                    }
+                    if p.taxRegion == .other {
+                        GridRow {
+                            Text("State rate")
+                            rateSlider(Binding(get: { p.otherStateRate ?? 0.05 }, set: { person.wrappedValue.otherStateRate = $0 }), range: 0...0.15)
+                        }
+                    }
                     GridRow { Text("Social Security"); moneyField("Monthly", value: person.socialSecurityMonthly) }
                     GridRow { Text("Claim at"); Stepper("Age \(p.socialSecurityAge)", value: person.socialSecurityAge, in: 62...70) }
                 }
@@ -236,10 +273,32 @@ struct ForecastAssumptions: View {
                     Text("Shared").tag(String?.none)
                     ForEach(plan.people) { Text($0.name).tag(String?.some($0.id)) }
                 }
-                Text("Yearly take-home income").font(.caption).foregroundStyle(Theme.textSecondary)
-                moneyField("Yearly take-home", value: income.yearlyAmount)
-                Text("In today's dollars, after taxes and deductions like insurance and retirement contributions. Stops when its owner retires.")
-                    .font(.caption).foregroundStyle(Theme.textTertiary)
+                Picker("Amount is", selection: income.isBeforeTax) {
+                    Text("Salary before tax").tag(true)
+                    Text("Take-home pay").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(inc.isBeforeTax ? "Yearly salary before tax" : "Yearly take-home income").font(.caption).foregroundStyle(Theme.textSecondary)
+                moneyField("Yearly amount", value: income.yearlyAmount)
+                if inc.isBeforeTax {
+                    Text("Pre-tax 401(k) per year").font(.caption).foregroundStyle(Theme.textSecondary)
+                    HStack {
+                        moneyField("401(k)", value: Binding(get: { inc.retirementContribution ?? 0 },
+                                                            set: { income.wrappedValue.retirementContribution = $0 }))
+                        Button("Max") { income.wrappedValue.retirementContribution = ForecastTax.retirementContributionLimit }
+                    }
+                    Picker("Goes into", selection: income.retirementAccountId) {
+                        Text("First retirement account").tag(String?.none)
+                        ForEach(plan.accounts.filter { $0.kind != .debt }) { Text($0.name).tag(String?.some($0.id)) }
+                        Text("Extra savings").tag(String?.some(ForecastPlan.extraSavingsId))
+                    }
+                    takeHomeSummary(inc)
+                } else {
+                    Text("In today's dollars, after taxes and deductions like insurance and retirement contributions.")
+                        .font(.caption).foregroundStyle(Theme.textTertiary)
+                }
+                Text("Stops when its owner retires.").font(.caption).foregroundStyle(Theme.textTertiary)
                 HStack {
                     Text("Raise above inflation").font(.caption)
                     rateSlider(income.raise, range: 0...0.05)
@@ -249,6 +308,25 @@ struct ForecastAssumptions: View {
             }
         }
         .card(padding: Space.m)
+    }
+
+    /// This salary's tax on its own (single filer, owner's state), as a quick check.
+    private func takeHomeSummary(_ inc: ForecastIncome) -> some View {
+        let owner = plan.person(inc.ownerId) ?? plan.primaryPerson
+        let bill = ForecastTax.bill([.init(id: inc.id, wages: inc.yearlyAmount, pretax: inc.pretaxContribution,
+                                           region: owner?.taxRegion ?? .newYorkCity, otherRate: owner?.otherStateRate ?? 0.05)],
+                                    joint: false)
+        let takeHome = inc.yearlyAmount - bill.total - inc.pretaxContribution
+        return VStack(alignment: .leading, spacing: 2) {
+            Text("≈ \(takeHome.currency(cents: false)) take-home a year").font(.callout.weight(.semibold))
+            Text("Federal \(ForecastFormat.money(bill.federal)) · SS & Medicare \(ForecastFormat.money(bill.payroll)) · State/local \(ForecastFormat.money(bill.state))\(inc.pretaxContribution > 0 ? " · 401(k) \(ForecastFormat.money(inc.pretaxContribution))" : "")")
+                .font(.caption).foregroundStyle(Theme.textSecondary)
+            Text("Filing single in \((owner?.taxRegion ?? .newYorkCity).label), 2026 brackets. Estimate only.")
+                .font(.caption2).foregroundStyle(Theme.textTertiary)
+        }
+        .padding(Space.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func accountRow(_ account: Binding<ForecastAccount>) -> some View {
@@ -569,10 +647,17 @@ struct ForecastSetupFlow: View {
                         ForEach(plan.people) { Text($0.name).tag(String?.some($0.id)) }
                     }
                     .labelsHidden()
-                    Text("Yearly take-home income").font(.callout.weight(.semibold))
+                    Picker("Amount is", selection: $inc.isBeforeTax) {
+                        Text("Salary before tax").tag(true)
+                        Text("Take-home pay").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(inc.isBeforeTax ? "Yearly salary before tax" : "Yearly take-home income").font(.callout.weight(.semibold))
                     TextField("Yearly", value: $inc.yearlyAmount, format: .currency(code: "USD").precision(.fractionLength(0)))
                         .textFieldStyle(.roundedBorder)
-                    Text("In today's dollars, the amount you earn after taxes and deductions like insurance and retirement contributions.")
+                    Text(inc.isBeforeTax
+                         ? "In today's dollars. Forecast works out federal, Social Security, Medicare and state tax — set where each person lives and any 401(k) in Assumptions."
+                         : "In today's dollars, the amount you earn after taxes and deductions like insurance and retirement contributions.")
                         .font(.caption).foregroundStyle(Theme.textSecondary)
                     HStack { Spacer(); Button("Remove", role: .destructive) { plan.incomes.removeAll { $0.id == inc.id } }.buttonStyle(.borderless) }
                 }
