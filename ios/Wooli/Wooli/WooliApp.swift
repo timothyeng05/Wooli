@@ -7,6 +7,9 @@ import SwiftData
 enum WooliMain {
     static func main() {
         #if os(macOS)
+        #if DEBUG
+        if CommandLine.arguments.contains("--init-cloudkit-schema") { CloudKitSchemaInit.run() }
+        #endif
         if CommandLine.arguments.contains("--mcp") {
             MainActor.assumeIsolated { WooliMCPServer.run() }
         }
@@ -17,10 +20,13 @@ enum WooliMain {
 
 struct WooliApp: App {
     /// Every synced model. New models go here (and in `Deduplicator` if two devices can create the same one).
-    static let schema = Schema([LocalAccount.self, LocalTransaction.self, BudgetCategory.self, MerchantRule.self, BalanceSnapshot.self,
-                                CategoryRule.self, TransactionRule.self, RecurringItem.self,
-                                PeriodEntry.self, Person.self, MovieEntry.self, RecipeEntry.self, SightEntry.self,
-                                ForecastScenario.self])
+    static let modelTypes: [any PersistentModel.Type] = [
+        LocalAccount.self, LocalTransaction.self, BudgetCategory.self, MerchantRule.self, BalanceSnapshot.self,
+        CategoryRule.self, TransactionRule.self, RecurringItem.self,
+        PeriodEntry.self, Person.self, MovieEntry.self, RecipeEntry.self, SightEntry.self,
+        ForecastScenario.self,
+    ]
+    static let schema = Schema(modelTypes)
 
     let container: ModelContainer
     @State private var app = AppModel()
