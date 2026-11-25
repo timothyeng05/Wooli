@@ -157,15 +157,164 @@ struct ForecastIncome: Codable, Equatable, Identifiable {
     /// Account the contribution goes into (nil = first retirement account, else Extra savings).
     var retirementAccountId: String?
 
+    /// Pay changes from a given year (promotions). Optional for old plans.
+    var steps: [ForecastPayStep]?
+    /// Promotion path; when set it decides pay instead of `yearlyAmount` and steps.
+    var career: ForecastCareerPath?
+
     var isBeforeTax: Bool {
         get { beforeTaxRaw ?? false }
         set { beforeTaxRaw = newValue }
     }
 
+    var paySteps: [ForecastPayStep] {
+        get { (steps ?? []).sorted { $0.year < $1.year } }
+        set { steps = newValue.isEmpty ? nil : newValue }
+    }
+
     /// The contribution actually made: capped by the yearly limit and the salary.
-    var pretaxContribution: Double {
+    var pretaxContribution: Double { pretaxContribution(on: yearlyAmount) }
+
+    func pretaxContribution(on wages: Double) -> Double {
         guard isBeforeTax else { return 0 }
-        return min(max(retirementContribution ?? 0, 0), ForecastTax.retirementContributionLimit, yearlyAmount)
+        return min(max(retirementContribution ?? 0, 0), ForecastTax.retirementContributionLimit, max(wages, 0))
+    }
+
+    /// Pay for a year in today's dollars: the latest step on or before it (else
+    /// `yearlyAmount`), with the raise compounding from when that pay started.
+    func amount(in year: Int, startYear: Int) -> Double {
+        if let career, !career.levels.isEmpty {
+            return career.pay(in: year) * pow(1 + raise, Double(year - startYear))
+        }
+        if let step = paySteps.last(where: { $0.year <= year }) {
+            return step.amount * pow(1 + raise, Double(year - step.year))
+        }
+        return yearlyAmount * pow(1 + raise, Double(year - startYear))
+    }
+}
+
+struct ForecastPayStep: Codable, Equatable, Identifiable {
+    var id = UUID().uuidString
+    var year: Int
+    /// Yearly pay from this year on, today's dollars (same before/after-tax basis as the income).
+    var amount: Double
+    var label = ""
+
+    init(id: String = UUID().uuidString, year: Int, amount: Double, label: String = "") {
+        self.id = id; self.year = year; self.amount = amount; self.label = label
+    }
+
+    // Missing keys fall back to defaults, so hand-written JSON (Claude's edits) decodes.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        year = try c.decode(Int.self, forKey: .year)
+        amount = try c.decode(Double.self, forKey: .amount)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+    }
+}
+
+/// A promotion path: each level's base, bonus and how long it lasts. Works for
+/// any career with levels (consulting, law, banking, tech ladders).
+struct ForecastCareerPath: Codable, Equatable {
+    /// levels[0] is the level held now; it lasts until `nextPromotionYear`.
+    var levels: [ForecastCareerLevel] = []
+    var nextPromotionYear: Int = Calendar.current.component(.year, from: .now) + 1
+    /// Month promotions take effect (7 = July). Pay that year is a blend.
+    var promotionMonth: Int = 7
+
+    init(levels: [ForecastCareerLevel] = [], nextPromotionYear: Int = Calendar.current.component(.year, from: .now) + 1,
+         promotionMonth: Int = 7) {
+        self.levels = levels; self.nextPromotionYear = nextPromotionYear; self.promotionMonth = promotionMonth
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        levels = try c.decodeIfPresent([ForecastCareerLevel].self, forKey: .levels) ?? []
+        nextPromotionYear = try c.decodeIfPresent(Int.self, forKey: .nextPromotionYear) ?? Calendar.current.component(.year, from: .now) + 1
+        promotionMonth = min(max(try c.decodeIfPresent(Int.self, forKey: .promotionMonth) ?? 7, 1), 12)
+    }
+
+    /// Base and bonus rate held at a moment (year + fraction through it).
+    private func level(at time: Double) -> (base: Double, bonus: Double) {
+        guard let first = levels.first else { return (0, 0) }
+        let promo = Double(nextPromotionYear) + Double(promotionMonth - 1) / 12
+        guard time >= promo, levels.count > 1 else { return (first.base, first.bonusRate) }
+        var start = promo
+        for (i, l) in levels.enumerated().dropFirst() {
+            let span = Double(max(l.years, 1))
+            let last = i == levels.count - 1
+            if time < start + span || last {
+                let yearsIn = Int(min(time - start, span - 1))
+                return (l.base + Double(max(yearsIn, 0)) * l.yearlyIncrease, l.bonusRate)
+            }
+            start += span
+        }
+        return (first.base, first.bonusRate)
+    }
+
+    /// Calendar-year pay: base earned month by month, plus the yearly bonus
+    /// (bonus % of the base held on January 1).
+    func pay(in year: Int) -> Double {
+        var base = 0.0
+        for m in 0..<12 { base += level(at: Double(year) + Double(m) / 12).base / 12 }
+        let jan = level(at: Double(year))
+        return base + jan.base * jan.bonus
+    }
+
+    /// Reads rows pasted from a spreadsheet: Name, Base, Bonus %, Years, Yearly increase.
+    /// Amounts under 5,000 are read as thousands ($193 → $193,000).
+    static func parse(_ text: String) -> [ForecastCareerLevel] {
+        func number(_ s: String) -> Double? {
+            let clean = s.replacingOccurrences(of: "[$,%\\s]", with: "", options: .regularExpression).lowercased()
+            if clean.hasSuffix("k"), let v = Double(clean.dropLast()) { return v * 1_000 }
+            if clean.hasSuffix("m"), let v = Double(clean.dropLast()) { return v * 1_000_000 }
+            return Double(clean)
+        }
+        var rows: [ForecastCareerLevel] = []
+        for line in text.split(whereSeparator: \.isNewline) {
+            let cells = line.split(separator: line.contains("\t") ? "\t" : ",", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            guard cells.count >= 2, let base = number(cells[1]) else { continue }
+            var l = ForecastCareerLevel(name: cells[0], base: base)
+            if cells.count > 2, let b = number(cells[2]) { l.bonusRate = cells[2].contains("%") || b > 1 ? b / 100 : b }
+            if cells.count > 3, let y = number(cells[3]) { l.years = max(Int(y), 1) }
+            if cells.count > 4, let inc = number(cells[4]) { l.yearlyIncrease = inc }
+            rows.append(l)
+        }
+        if !rows.isEmpty, rows.allSatisfy({ $0.base < 5_000 }) {
+            rows = rows.map { var r = $0; r.base *= 1_000; r.yearlyIncrease *= r.yearlyIncrease < 5_000 ? 1_000 : 1; return r }
+        }
+        return rows
+    }
+}
+
+struct ForecastCareerLevel: Codable, Equatable, Identifiable {
+    var id = UUID().uuidString
+    var name = ""
+    /// Base salary, today's dollars.
+    var base: Double = 0
+    /// Yearly bonus as a share of base (0.24 = 24%).
+    var bonusRate: Double = 0
+    /// Years at this level before the next promotion (the last level holds).
+    var years = 1
+    /// Added to base each extra year at this level (the last level stops after `years`).
+    var yearlyIncrease: Double = 0
+
+    init(id: String = UUID().uuidString, name: String = "", base: Double = 0, bonusRate: Double = 0,
+         years: Int = 1, yearlyIncrease: Double = 0) {
+        self.id = id; self.name = name; self.base = base; self.bonusRate = bonusRate
+        self.years = years; self.yearlyIncrease = yearlyIncrease
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        base = try c.decodeIfPresent(Double.self, forKey: .base) ?? 0
+        bonusRate = try c.decodeIfPresent(Double.self, forKey: .bonusRate) ?? 0
+        years = max(try c.decodeIfPresent(Int.self, forKey: .years) ?? 1, 1)
+        yearlyIncrease = try c.decodeIfPresent(Double.self, forKey: .yearlyIncrease) ?? 0
     }
 }
 

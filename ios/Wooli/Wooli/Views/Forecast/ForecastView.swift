@@ -67,6 +67,7 @@ struct ForecastView: View {
             } onCancel: { editingEvent = nil }
         }
         .onChange(of: scenario?.id, initial: true) { _, _ in load() }
+        .onReceive(NotificationCenter.default.publisher(for: ForecastEdits.didApply)) { _ in load() }
         .onChange(of: plan) { _, new in save(new) }
     }
 

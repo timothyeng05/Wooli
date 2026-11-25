@@ -44,6 +44,7 @@ struct MacShellView: View {
     @State private var lineup = AppLineup.shared
     @State private var tool: SidebarDestination?
     @State private var showsForecast = false
+    @Environment(\.modelContext) private var inboxContext
     /// Held here so the sidebar button (and ⌃⌘S) always folds the sidebar,
     /// whatever the screen beside it puts in the toolbar.
     @State private var columns: NavigationSplitViewVisibility = .all
@@ -159,6 +160,14 @@ struct MacShellView: View {
             CommandPalette(entries: paletteEntries, onClose: { app.showPalette = false })
         }
         // File → New Trip… and the toolbar's + both come through here.
+        .task {
+            // Changes Claude queued through the MCP server (forecast, categories).
+            while !Task.isCancelled {
+                ForecastEdits.apply(in: inboxContext)
+                CategoryEdits.apply(in: inboxContext)
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
         .task(id: trips.newTripRequested) {
             if trips.newTripRequested { trips.newTripRequested = false; showNewTrip = true }
         }

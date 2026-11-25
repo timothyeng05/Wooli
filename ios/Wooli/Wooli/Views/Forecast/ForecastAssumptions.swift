@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 
 // MARK: - Edit assumptions (inspector)
 
@@ -10,6 +11,7 @@ struct ForecastAssumptions: View {
 
     @State private var expandedPeople: Set<String> = []
     @State private var editingIncome: String?
+    @State private var pasteNote: String?
     @State private var showWithdrawalOrder = false
     @State private var showSavingsSplit = false
 
@@ -299,15 +301,178 @@ struct ForecastAssumptions: View {
                         .font(.caption).foregroundStyle(Theme.textTertiary)
                 }
                 Text("Stops when its owner retires.").font(.caption).foregroundStyle(Theme.textTertiary)
-                HStack {
-                    Text("Raise above inflation").font(.caption)
-                    rateSlider(income.raise, range: 0...0.05)
-                }
+                payGrowthSection(income)
                 Button("Remove", role: .destructive) { plan.incomes.removeAll { $0.id == inc.id } }
                     .buttonStyle(.borderless).font(.caption)
             }
         }
         .card(padding: Space.m)
+    }
+
+    /// Promotions: pay that changes from a given year.
+    private func paySteps(_ income: Binding<ForecastIncome>) -> some View {
+        let steps = income.wrappedValue.paySteps
+        return VStack(alignment: .leading, spacing: Space.xs) {
+            HStack {
+                Text("Pay changes").font(.caption.weight(.semibold))
+                Spacer()
+                Button {
+                    let last = steps.last
+                    let year = (last?.year ?? Calendar.current.component(.year, from: .now)) + 1
+                    income.wrappedValue.paySteps = steps + [ForecastPayStep(year: year, amount: last?.amount ?? income.wrappedValue.yearlyAmount)]
+                } label: { Label("Add", systemImage: "plus") }
+                .buttonStyle(.borderless).font(.caption)
+            }
+            if steps.isEmpty {
+                Text("Add a year your pay changes, like a promotion. Each amount is yearly pay in today's dollars and lasts until the next change; the raise adds on top.")
+                    .font(.caption).foregroundStyle(Theme.textTertiary)
+            }
+            ForEach(steps) { step in
+                let binding = Binding<ForecastPayStep>(
+                    get: { income.wrappedValue.paySteps.first { $0.id == step.id } ?? step },
+                    set: { new in income.wrappedValue.paySteps = income.wrappedValue.paySteps.map { $0.id == step.id ? new : $0 } })
+                HStack(spacing: Space.xs) {
+                    TextField("Year", value: binding.year, format: .number.grouping(.never))
+                        .textFieldStyle(.roundedBorder).frame(width: 56)
+                    moneyField("Pay", value: binding.amount).frame(width: 96)
+                    TextField("Note", text: binding.label).textFieldStyle(.roundedBorder)
+                    Button {
+                        income.wrappedValue.paySteps = income.wrappedValue.paySteps.filter { $0.id != step.id }
+                    } label: { Image(systemName: "minus.circle") }
+                    .buttonStyle(.borderless).foregroundStyle(Theme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private enum PayGrowth: String, CaseIterable { case raise = "Steady raise", steps = "Pay changes", career = "Career path" }
+
+    private func payGrowth(_ inc: ForecastIncome) -> PayGrowth {
+        inc.career != nil ? .career : (inc.steps?.isEmpty == false ? .steps : .raise)
+    }
+
+    /// How pay grows: a steady raise, one-off pay changes, or a promotion path.
+    private func payGrowthSection(_ income: Binding<ForecastIncome>) -> some View {
+        let inc = income.wrappedValue
+        let mode = payGrowth(inc)
+        return VStack(alignment: .leading, spacing: Space.s) {
+            Divider()
+            Picker("Pay grows by", selection: Binding<PayGrowth>(get: { mode }, set: { new in
+                switch new {
+                case .raise: income.wrappedValue.career = nil; income.wrappedValue.steps = nil
+                case .steps:
+                    income.wrappedValue.career = nil
+                    if income.wrappedValue.paySteps.isEmpty {
+                        income.wrappedValue.paySteps = [ForecastPayStep(year: Calendar.current.component(.year, from: .now) + 1,
+                                                                       amount: income.wrappedValue.yearlyAmount)]
+                    }
+                case .career:
+                    income.wrappedValue.steps = nil
+                    income.wrappedValue.career = ForecastCareerPath(levels: [
+                        ForecastCareerLevel(name: "Now", base: income.wrappedValue.yearlyAmount)])
+                }
+            })) {
+                ForEach(PayGrowth.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented).labelsHidden()
+            switch mode {
+            case .raise:
+                HStack {
+                    Text("Raise above inflation").font(.caption)
+                    rateSlider(income.raise, range: 0...0.05)
+                }
+            case .steps: paySteps(income)
+            case .career: careerPath(income)
+            }
+        }
+    }
+
+    /// Levels with base, bonus and years — filled by hand or pasted from a spreadsheet.
+    private func careerPath(_ income: Binding<ForecastIncome>) -> some View {
+        let path = Binding<ForecastCareerPath>(get: { income.wrappedValue.career ?? ForecastCareerPath() },
+                                               set: { income.wrappedValue.career = $0 })
+        let levels = path.wrappedValue.levels
+        let now = Calendar.current.component(.year, from: .now)
+        return VStack(alignment: .leading, spacing: Space.xs) {
+            Text("Your level now first, then each promotion. Base and bonus in today's dollars; the last level holds once its years are up.")
+                .font(.caption).foregroundStyle(Theme.textTertiary)
+            Grid(alignment: .leading, horizontalSpacing: Space.xs, verticalSpacing: Space.xs) {
+                GridRow {
+                    Text("Level"); Text("Base"); Text("Bonus"); Text("Yrs"); Text("+/yr"); Color.clear.frame(width: 1, height: 1)
+                }
+                .font(.caption2).foregroundStyle(Theme.textSecondary)
+                ForEach(levels) { level in
+                    let l = Binding<ForecastCareerLevel>(
+                        get: { path.wrappedValue.levels.first { $0.id == level.id } ?? level },
+                        set: { new in path.wrappedValue.levels = path.wrappedValue.levels.map { $0.id == level.id ? new : $0 } })
+                    let first = level.id == levels.first?.id
+                    GridRow {
+                        TextField("Level", text: l.name).frame(minWidth: 44)
+                        TextField("Base", value: l.base, format: .currency(code: "USD").precision(.fractionLength(0))).frame(width: 78)
+                        TextField("Bonus", value: l.bonusRate, format: .percent.precision(.fractionLength(0))).frame(width: 44)
+                        if first {
+                            Text("now").font(.caption2).foregroundStyle(Theme.textTertiary)
+                        } else {
+                            TextField("Yrs", value: l.years, format: .number).frame(width: 30)
+                        }
+                        TextField("+/yr", value: l.yearlyIncrease, format: .currency(code: "USD").precision(.fractionLength(0))).frame(width: 64)
+                        Button {
+                            path.wrappedValue.levels.removeAll { $0.id == level.id }
+                        } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.borderless).foregroundStyle(Theme.textSecondary)
+                    }
+                    .textFieldStyle(.roundedBorder).font(.caption)
+                }
+            }
+            HStack {
+                Button {
+                    var next = levels.last ?? ForecastCareerLevel(base: income.wrappedValue.yearlyAmount)
+                    next.id = UUID().uuidString; next.name = ""
+                    path.wrappedValue.levels.append(next)
+                } label: { Label("Add level", systemImage: "plus") }
+                Button {
+                    #if os(macOS)
+                    let text = NSPasteboard.general.string(forType: .string) ?? ""
+                    #else
+                    let text = UIPasteboard.general.string ?? ""
+                    #endif
+                    let rows = ForecastCareerPath.parse(text)
+                    if rows.isEmpty {
+                        pasteNote = "Copy rows with columns Level, Base, Bonus %, Years, +/yr, then paste."
+                    } else {
+                        path.wrappedValue.levels = rows
+                        pasteNote = "Pasted \(rows.count) levels."
+                    }
+                } label: { Label("Paste from spreadsheet", systemImage: "doc.on.clipboard") }
+            }
+            .buttonStyle(.borderless).font(.caption)
+            if let pasteNote { Text(pasteNote).font(.caption2).foregroundStyle(Theme.textTertiary) }
+            HStack {
+                Picker("Next promotion", selection: path.nextPromotionYear) {
+                    ForEach(now...(now + 10), id: \.self) { Text(String($0)).tag($0) }
+                }
+                Picker("in", selection: path.promotionMonth) {
+                    ForEach(1...12, id: \.self) { Text(Calendar.current.shortMonthSymbols[$0 - 1]).tag($0) }
+                }
+                .frame(width: 90)
+            }
+            .font(.caption)
+            if levels.count > 0 {
+                let years = Array(now...(now + 14))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pay by year (base + bonus)").font(.caption.weight(.semibold))
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 2) {
+                        ForEach(years, id: \.self) { y in
+                            Text("\(String(y))  \(ForecastFormat.money(path.wrappedValue.pay(in: y)))")
+                                .font(.caption2.monospacedDigit()).foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                }
+                .padding(Space.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.brandSoft, in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
     }
 
     /// This salary's tax on its own (single filer, owner's state), as a quick check.

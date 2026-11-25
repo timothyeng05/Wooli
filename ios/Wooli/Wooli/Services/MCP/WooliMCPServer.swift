@@ -53,8 +53,10 @@ enum WooliMCPServer {
                 "capabilities": ["tools": ["listChanged": false]],
                 "serverInfo": ["name": "wooli", "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1"],
                 "instructions": """
-                Read-only access to the user's Wooli data on this Mac: budget, bank transactions, \
-                accounts, recurring bills, trips, and their Eats, Movies, Recipes and Sights lists. \
+                Access to the user's Wooli data on this Mac: budget, bank transactions, accounts, \
+                recurring bills, trips, forecasts, and their Eats, Movies, Recipes and Sights lists. \
+                Most tools only read; wooli_edit_trip, wooli_edit_forecast and wooli_categorize queue changes \
+                that the Mac app saves. \
                 Amounts are in the account's currency; spending is negative in transactions. \
                 Data is as of the Mac app's last iCloud and bank sync.
                 """,

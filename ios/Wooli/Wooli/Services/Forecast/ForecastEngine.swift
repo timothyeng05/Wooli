@@ -127,8 +127,8 @@ enum ForecastEngine {
                 let owner = plan.person(inc.ownerId)
                 if let owner, year >= owner.retirementYear || year > owner.endYear { continue }
                 if onCareerBreak(plan, owner: inc.ownerId, year: year) { continue }
-                let growth = pow(1 + inc.raise, Double(t))
-                let amount = inc.yearlyAmount * deflator * growth * fraction
+                let pay = inc.amount(in: year, startYear: startYear)
+                let amount = pay * deflator * fraction
                 income += amount
                 if detail { row.incomes.append(Line(id: inc.id, title: inc.name, symbol: "building.2", amount: amount)) }
                 guard inc.isBeforeTax else { continue }
@@ -136,8 +136,8 @@ enum ForecastEngine {
                 var e = earners[key] ?? ForecastTax.Earner(id: key, wages: 0, pretax: 0,
                                                            region: owner?.taxRegion ?? plan.primaryPerson?.taxRegion ?? .newYorkCity,
                                                            otherRate: owner?.otherStateRate ?? 0.05)
-                e.wages += inc.yearlyAmount * growth
-                let pretax = inc.pretaxContribution * growth
+                e.wages += pay
+                let pretax = inc.pretaxContribution(on: pay)
                 e.pretax += pretax
                 earners[key] = e
                 if pretax > 0 {

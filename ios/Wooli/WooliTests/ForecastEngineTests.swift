@@ -125,4 +125,31 @@ struct ForecastEngineTests {
                                                       target: 0.95, paths: 150, startYear: 2026, firstYearFraction: 1)
         #expect(broke == nil)
     }
+
+    @Test func payStepsChangeIncomeFromTheirYear() {
+        var pl = plan(income: 100_000)
+        pl.settings.inflation = 0
+        pl.incomes[0].paySteps = [ForecastPayStep(year: 2028, amount: 150_000), ForecastPayStep(year: 2030, amount: 200_000)]
+        let p = ForecastEngine.project(pl, startYear: 2026, firstYearFraction: 1)
+        let pay = { (y: Int) in p.year(y)!.incomes.first { $0.id == "inc" }!.amount }
+        #expect(pay(2027) == 100_000)
+        #expect(pay(2028) == 150_000)
+        #expect(pay(2029) == 150_000)
+        #expect(pay(2031) == 200_000)
+    }
+
+    @Test func careerPathBlendsPromotionsAndBonus() {
+        // Paste format: Level, Base ($K), Bonus %, Years, +/yr ($K).
+        let levels = ForecastCareerPath.parse("SA2\t$193\t24%\t1\nSA3\t$197\t24%\t1\nPartner\t$500\t0%\t9\t$100")
+        #expect(levels.count == 3)
+        #expect(levels[0].base == 193_000)
+        #expect(levels[2].yearlyIncrease == 100_000)
+        let path = ForecastCareerPath(levels: levels, nextPromotionYear: 2027, promotionMonth: 7)
+        // 2027: half a year at each base, bonus on the January base.
+        #expect(abs(path.pay(in: 2027) - ((193_000 + 197_000) / 2 + 193_000 * 0.24)) < 0.01)
+        // Partner from July 2028: +$100K a year, capped after 9 years at $1.3M.
+        #expect(abs(path.pay(in: 2030) - 650_000) < 0.01) // $600K to June, $700K from July
+        #expect(abs(path.pay(in: 2040) - 1_300_000) < 0.01)
+        #expect(abs(path.pay(in: 2050) - 1_300_000) < 0.01)
+    }
 }
