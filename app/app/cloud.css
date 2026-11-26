@@ -1,0 +1,253 @@
+.ck-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+
+.ck-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ck-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+  margin: 0 0 6px;
+}
+
+.ck-head h1 {
+  font-family: var(--font-source-serif), Georgia, serif;
+  font-size: clamp(28px, 4vw, 38px);
+  margin: 0 0 6px;
+}
+
+.ck-sub {
+  margin: 0;
+  color: #475569;
+  max-width: 640px;
+}
+
+.ck-auth-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ck-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ck-btn:hover {
+  background: #f1f5f9;
+}
+
+.ck-btn.is-primary {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.ck-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.ck-setup-steps {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.ck-setup-steps code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ck-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.ck-tab {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ck-tab.is-active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.ck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.ck-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.ck-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ck-item h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.ck-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+
+.ck-badge.is-shared {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.ck-meta {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.ck-notes {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #334155;
+  white-space: pre-line;
+}
+
+.ck-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.ck-form input,
+.ck-form select {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.ck-trip-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 760px) {
+  .ck-trip-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ck-trip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ck-trip-btn {
+  text-align: left;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ck-trip-btn.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.ck-day {
+  margin-bottom: 18px;
+}
+
+.ck-day h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ck-plan-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: #fff;
+}
+
+.ck-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #2563eb;
+  min-width: 52px;
+}
+
+.ck-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}

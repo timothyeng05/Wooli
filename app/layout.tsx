@@ -27,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             Wooli
           </Link>
           <nav aria-label="Site">
+            <Link href="/app">Web App</Link>
             <Link href="/demo">Try the demo</Link>
             <Link href="/support">Support</Link>
             <Link href="/privacy">Privacy</Link>
