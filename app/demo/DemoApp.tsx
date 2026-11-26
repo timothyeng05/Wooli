@@ -38,9 +38,26 @@ const money = (n: number, cents = false) =>
 
 const KIND_ICON: Record<Kind, string> = { transit: "✈︎", stay: "⌂", meal: "🍽", activity: "★", note: "✎" };
 
-export default function DemoApp() {
+export interface DemoAppProps {
+  cloudMode?: boolean;
+  initialTrips?: Trip[];
+  initialEats?: Place[];
+  onRefreshCloud?: () => void;
+  onAddCloudEat?: (input: { name: string; address: string; sentiment: "loved" | "liked" | "fine" | "disliked"; isWish: boolean }) => Promise<void>;
+  signOutSlot?: React.ReactNode;
+}
+
+export default function DemoApp({
+  cloudMode = false,
+  initialTrips,
+  initialEats,
+  onRefreshCloud,
+  onAddCloudEat,
+  signOutSlot,
+}: DemoAppProps = {}) {
+  const tripsList = initialTrips && initialTrips.length > 0 ? initialTrips : TRIPS;
   const [app, setApp] = useState<AppId>("today");
-  const [tripId, setTripId] = useState(TRIPS[0].id);
+  const [tripId, setTripId] = useState(tripsList[0].id);
   const [tripPage, setTripPage] = useState<TripPage>("overview");
   const [budgetPage, setBudgetPage] = useState<BudgetPage>("dashboard");
   const [switcher, setSwitcher] = useState(false);
@@ -52,7 +69,17 @@ export default function DemoApp() {
   const [review, setReview] = useState<Txn[]>(REVIEW);
   const [posted, setPosted] = useState<Txn[]>(POSTED);
   const [plans, setPlans] = useState<Record<string, number>>(() => Object.fromEntries(CATEGORIES.map((c) => [c.id, c.plan])));
-  const [ranked, setRanked] = useState<Place[]>(BEEN);
+  const [ranked, setRanked] = useState<Place[]>(initialEats ?? BEEN);
+
+  useEffect(() => {
+    if (initialEats) setRanked(initialEats);
+  }, [initialEats]);
+
+  useEffect(() => {
+    if (initialTrips && initialTrips.length > 0 && !initialTrips.some((t) => t.id === tripId)) {
+      setTripId(initialTrips[0].id);
+    }
+  }, [initialTrips, tripId]);
 
   const spent = useMemo(() => {
     const extra: Record<string, number> = {};
@@ -100,7 +127,7 @@ export default function DemoApp() {
   };
 
   const hasSidebar = app === "trips" || app === "budget";
-  const trip = TRIPS.find((t) => t.id === tripId) ?? TRIPS[0];
+  const trip = tripsList.find((t) => t.id === tripId) ?? tripsList[0];
   const title = APPS.find((a) => a.id === app)?.name ?? "Wooli";
 
   return (
@@ -127,6 +154,12 @@ export default function DemoApp() {
           <span>{title}</span>
         </div>
         <div className="dm-tools">
+          {cloudMode && onRefreshCloud && (
+            <button className="dm-tool" onClick={onRefreshCloud} title="Refresh iCloud" aria-label="Refresh iCloud" style={{ width: "auto", padding: "0 10px", fontSize: 12, fontWeight: 600 }}>
+              ☁️ Sync
+            </button>
+          )}
+          {cloudMode && signOutSlot}
           <button className="dm-search" onClick={() => setPalette(true)}>
             <span>Search</span>
             <kbd>⌘K</kbd>
@@ -163,6 +196,7 @@ export default function DemoApp() {
           <nav className="dm-sidebar" aria-label={`${title} pages`}>
             {app === "trips" ? (
               <TripsSidebar
+                trips={tripsList}
                 tripId={tripId}
                 page={tripPage}
                 onPick={(id, page) => {
@@ -187,7 +221,7 @@ export default function DemoApp() {
                 reviewCount={review.length}
                 go={go}
                 openTrip={() => {
-                  setTripId("spain");
+                  setTripId(tripsList[0].id);
                   setTripPage("overview");
                   go("trips");
                 }}
@@ -210,7 +244,7 @@ export default function DemoApp() {
             )}
             {app === "sights" && <SightsScreen say={say} />}
             {app === "trips" && <TripsScreen trip={trip} page={tripPage} setPage={setTripPage} say={say} />}
-            {app === "eats" && <EatsScreen ranked={ranked} setRanked={setRanked} say={say} />}
+            {app === "eats" && <EatsScreen ranked={ranked} setRanked={setRanked} say={say} cloudMode={cloudMode} onAddCloudEat={onAddCloudEat} />}
             {app === "movies" && <MoviesScreen say={say} />}
             {app === "recipes" && <RecipesScreen say={say} />}
           </div>
@@ -226,7 +260,7 @@ export default function DemoApp() {
           }}
           entries={[
             ...APPS.map((a) => ({ id: `app-${a.id}`, title: a.name, sub: "App", icon: `/apps/${a.id}.png`, action: () => go(a.id) })),
-            ...TRIPS.flatMap((t) => [
+            ...tripsList.flatMap((t) => [
               { id: `trip-${t.id}`, title: t.name, sub: `Trip · ${t.dates}`, icon: "/apps/trips.png", action: () => { setTripId(t.id); setTripPage("overview"); go("trips"); } },
               ...t.cities.map((c) => ({ id: `city-${c.id}`, title: c.name, sub: `City in ${t.name}`, icon: "/apps/trips.png", action: () => { setTripId(t.id); setTripPage(`city:${c.id}`); go("trips"); } })),
             ]),
@@ -1070,11 +1104,13 @@ function SightsScreen({ say }: { say: (msg: string) => void }) {
 ========================================================= */
 
 function TripsSidebar({
+  trips,
   tripId,
   page,
   onPick,
   onNew,
 }: {
+  trips: Trip[];
   tripId: string;
   page: TripPage;
   onPick: (id: string, p: TripPage) => void;
@@ -1087,7 +1123,7 @@ function TripsSidebar({
         <span>Trips</span>
       </div>
       <div className="dm-sidebar-menu">
-        {TRIPS.map((t) => (
+        {trips.map((t) => (
           <button
             key={t.id}
             className={`dm-sidebar-row ${tripId === t.id ? "is-active" : ""}`}
@@ -1155,12 +1191,35 @@ function EatsScreen({
   ranked,
   setRanked,
   say,
+  cloudMode = false,
+  onAddCloudEat,
 }: {
   ranked: Place[];
   setRanked: (fn: (p: Place[]) => Place[]) => void;
   say: (msg: string) => void;
+  cloudMode?: boolean;
+  onAddCloudEat?: (input: { name: string; address: string; sentiment: "loved" | "liked" | "fine" | "disliked"; isWish: boolean }) => Promise<void>;
 }) {
-  const [duel, setDuel] = useState<Place | null>(NEW_PLACE);
+  const [duel, setDuel] = useState<Place | null>(cloudMode ? null : NEW_PLACE);
+  const [addName, setAddName] = useState("");
+  const [addAddr, setAddAddr] = useState("");
+  const [addSentiment, setAddSentiment] = useState<"loved" | "liked" | "fine" | "disliked">("loved");
+  const [addWish, setAddWish] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const submitCloudEat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addName.trim() || !onAddCloudEat) return;
+    setSaving(true);
+    try {
+      await onAddCloudEat({ name: addName.trim(), address: addAddr.trim(), sentiment: addSentiment, isWish: addWish });
+      say(`Saved ${addName.trim()} to iCloud`);
+      setAddName("");
+      setAddAddr("");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const vote = (chosen: Place) => {
     if (duel) {
@@ -1178,6 +1237,43 @@ function EatsScreen({
           <div style={{ color: "var(--dm-text-2)", fontSize: 13 }}>{ranked.length} ranked places · NYC & abroad</div>
         </div>
       </div>
+
+      {cloudMode && onAddCloudEat && (
+        <form onSubmit={submitCloudEat} className="dm-card" style={{ padding: 14, marginBottom: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="text"
+            placeholder="Add restaurant or cafe…"
+            value={addName}
+            onChange={(e) => setAddName(e.target.value)}
+            required
+            style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--dm-border)", fontSize: 13, flex: "1 1 180px" }}
+          />
+          <input
+            type="text"
+            placeholder="Neighborhood / address"
+            value={addAddr}
+            onChange={(e) => setAddAddr(e.target.value)}
+            style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--dm-border)", fontSize: 13, flex: "1 1 160px" }}
+          />
+          <select
+            value={addSentiment}
+            onChange={(e) => setAddSentiment(e.target.value as "loved" | "liked" | "fine" | "disliked")}
+            style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--dm-border)", fontSize: 13 }}
+          >
+            <option value="loved">Loved</option>
+            <option value="liked">Liked</option>
+            <option value="fine">Fine</option>
+            <option value="disliked">Disliked</option>
+          </select>
+          <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>
+            <input type="checkbox" checked={addWish} onChange={(e) => setAddWish(e.target.checked)} />
+            Want to Try
+          </label>
+          <button className="dm-btn-primary" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save to iCloud"}
+          </button>
+        </form>
+      )}
 
       {duel && (
         <div className="dm-card" style={{ padding: 20, marginBottom: 20, background: "var(--dm-brand-soft)", border: "1px solid rgba(37, 99, 235, 0.2)" }}>
