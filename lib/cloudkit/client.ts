@@ -22,6 +22,7 @@ export interface WooliCloudSnapshot {
   trips: TripRecord[];
   tripItems: TripItemRecord[];
   eats: EatsPlaceRecord[];
+  warnings: string[];
 }
 
 export function getCloudKitConfig() {
@@ -31,20 +32,32 @@ export function getCloudKitConfig() {
   return { apiToken, environment, containerIdentifier };
 }
 
+interface CKZoneID {
+  zoneName: string;
+  ownerRecordName?: string;
+}
+
+interface CKZoneChangeResult {
+  zoneID?: CKZoneID;
+  records?: CloudKitRecordPayload[];
+  syncToken?: string;
+  moreComing?: boolean;
+}
+
 interface CKDatabase {
-  fetchAllRecordZones(): Promise<{ zones: Array<{ zoneID: { zoneName: string; ownerRecordName?: string } }> }>;
+  fetchAllRecordZones(): Promise<{ zones: Array<{ zoneID: CKZoneID }> }>;
+  fetchRecordZoneChanges?(
+    zones: Array<{ zoneID: CKZoneID; syncToken?: string }>,
+  ): Promise<{ zones?: CKZoneChangeResult[]; hasErrors?: boolean; errors?: Array<{ reason?: string }> }>;
   performQuery(
-    query: { recordType: string },
-    options?: { zoneID: { zoneName: string; ownerRecordName?: string } },
+    query: { recordType: string; zoneID?: CKZoneID },
+    options?: { zoneID?: CKZoneID },
   ): Promise<{ records: CloudKitRecordPayload[] }>;
   saveRecords(
     records: CloudKitRecordPayload[],
-    options?: { zoneID: { zoneName: string; ownerRecordName?: string } },
+    options?: { zoneID: CKZoneID },
   ): Promise<{ records: CloudKitRecordPayload[] }>;
-  deleteRecords(
-    recordNames: string[],
-    options?: { zoneID: { zoneName: string; ownerRecordName?: string } },
-  ): Promise<unknown>;
+  deleteRecords(recordNames: string[], options?: { zoneID: CKZoneID }): Promise<unknown>;
 }
 
 interface CKContainer {
@@ -79,7 +92,9 @@ export function loadCloudKitScript(): Promise<CKGlobal> {
   scriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${CLOUDKIT_JS_URL}"]`);
     if (existing) {
-      existing.addEventListener("load", () => (window.CloudKit ? resolve(window.CloudKit) : reject(new Error("CloudKit failed to load"))));
+      existing.addEventListener("load", () =>
+        window.CloudKit ? resolve(window.CloudKit) : reject(new Error("CloudKit failed to load")),
+      );
       existing.addEventListener("error", () => reject(new Error("Failed to load Apple CloudKit JS")));
       return;
     }
@@ -120,31 +135,71 @@ export async function initCloudKit(): Promise<CKContainer> {
   return CK.getDefaultContainer();
 }
 
-async function queryZone(db: CKDatabase, zone: ZoneRef, recordType: string): Promise<CloudKitRecordPayload[]> {
-  try {
-    const res = await db.performQuery(
-      { recordType },
-      { zoneID: { zoneName: zone.zoneName, ownerRecordName: zone.ownerRecordName } },
-    );
-    return res.records ?? [];
-  } catch {
-    return [];
+async function fetchAllRecordsInZone(
+  db: CKDatabase,
+  zoneID: CKZoneID,
+  recordTypes: string[],
+  warnings: string[],
+): Promise<CloudKitRecordPayload[]> {
+  // Prefer fetchRecordZoneChanges (like iOS CKSyncEngine) because it does not
+  // require QUERYABLE indexes in CloudKit Console.
+  if (typeof db.fetchRecordZoneChanges === "function") {
+    try {
+      const all: CloudKitRecordPayload[] = [];
+      let syncToken: string | undefined;
+      for (let page = 0; page < 20; page++) {
+        const res = await db.fetchRecordZoneChanges([{ zoneID, ...(syncToken ? { syncToken } : {}) }]);
+        const zoneRes = res.zones?.[0];
+        if (zoneRes?.records?.length) {
+          all.push(...zoneRes.records);
+        }
+        if (zoneRes?.moreComing && zoneRes.syncToken && zoneRes.syncToken !== syncToken) {
+          syncToken = zoneRes.syncToken;
+        } else {
+          break;
+        }
+      }
+      return all;
+    } catch (err) {
+      warnings.push(`Zone ${zoneID.zoneName} changes fallback: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
+
+  const fallback: CloudKitRecordPayload[] = [];
+  for (const recordType of recordTypes) {
+    try {
+      const res = await db.performQuery({ recordType, zoneID }, { zoneID });
+      if (res.records?.length) fallback.push(...res.records);
+    } catch (err) {
+      warnings.push(`${zoneID.zoneName}/${recordType}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return fallback;
 }
 
 export async function fetchWooliCloudSnapshot(container: CKContainer, userRecordName: string): Promise<WooliCloudSnapshot> {
+  const warnings: string[] = [];
+
   const [privZonesRes, sharedZonesRes] = await Promise.all([
-    container.privateCloudDatabase.fetchAllRecordZones().catch(() => ({ zones: [] })),
-    container.sharedCloudDatabase.fetchAllRecordZones().catch(() => ({ zones: [] })),
+    container.privateCloudDatabase.fetchAllRecordZones().catch((err) => {
+      warnings.push(`private zones: ${err instanceof Error ? err.message : String(err)}`);
+      return { zones: [] };
+    }),
+    container.sharedCloudDatabase.fetchAllRecordZones().catch((err) => {
+      warnings.push(`shared zones: ${err instanceof Error ? err.message : String(err)}`);
+      return { zones: [] };
+    }),
   ]);
 
-  const zones: Array<{ db: CKDatabase; ref: ZoneRef }> = [
+  const zones: Array<{ db: CKDatabase; rawZoneID: CKZoneID; ref: ZoneRef }> = [
     ...(privZonesRes.zones ?? []).map((z) => ({
       db: container.privateCloudDatabase,
+      rawZoneID: z.zoneID,
       ref: { zoneName: z.zoneID.zoneName, ownerRecordName: z.zoneID.ownerRecordName, scope: "private" as const },
     })),
     ...(sharedZonesRes.zones ?? []).map((z) => ({
       db: container.sharedCloudDatabase,
+      rawZoneID: z.zoneID,
       ref: { zoneName: z.zoneID.zoneName, ownerRecordName: z.zoneID.ownerRecordName, scope: "shared" as const },
     })),
   ];
@@ -154,25 +209,23 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
   const eats: EatsPlaceRecord[] = [];
 
   await Promise.all(
-    zones.map(async ({ db, ref }) => {
+    zones.map(async ({ db, rawZoneID, ref }) => {
       if (isEatsZone(ref.zoneName)) {
-        const [places, wishes] = await Promise.all([
-          queryZone(db, ref, "EatsPlace"),
-          queryZone(db, ref, "EatsWish"),
-        ]);
-        for (const rec of [...places, ...wishes]) {
-          eats.push(decodeEatsRecord(rec, ref));
+        const recs = await fetchAllRecordsInZone(db, rawZoneID, ["EatsPlace", "EatsWish"], warnings);
+        for (const rec of recs) {
+          if (rec.recordType === "EatsPlace" || rec.recordType === "EatsWish") {
+            eats.push(decodeEatsRecord(rec, ref));
+          }
         }
         return;
       }
       const tripID = tripIDFromZone(ref.zoneName);
       if (tripID) {
-        const [tripRecs, itemRecs] = await Promise.all([
-          queryZone(db, ref, "Trip"),
-          queryZone(db, ref, "TripItem"),
-        ]);
-        for (const rec of tripRecs) trips.push(decodeTripRecord(rec, ref));
-        for (const rec of itemRecs) tripItems.push(decodeTripItemRecord(rec, ref, tripID));
+        const recs = await fetchAllRecordsInZone(db, rawZoneID, ["Trip", "TripItem"], warnings);
+        for (const rec of recs) {
+          if (rec.recordType === "Trip") trips.push(decodeTripRecord(rec, ref));
+          else if (rec.recordType === "TripItem") tripItems.push(decodeTripItemRecord(rec, ref, tripID));
+        }
       }
     }),
   );
@@ -180,12 +233,12 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
   trips.sort((a, b) => b.startDay.localeCompare(a.startDay));
   eats.sort((a, b) => b.rank - a.rank);
 
-  return { userRecordName, trips, tripItems, eats };
+  return { userRecordName, trips, tripItems, eats, warnings };
 }
 
 export async function saveEatsPlaceToCloud(container: CKContainer, place: EatsPlaceRecord): Promise<EatsPlaceRecord> {
   const db = place.scope === "shared" ? container.sharedCloudDatabase : container.privateCloudDatabase;
-  const zoneID = { zoneName: place.zoneName, ownerRecordName: place.ownerRecordName };
+  const zoneID: CKZoneID = { zoneName: place.zoneName, ownerRecordName: place.ownerRecordName };
   const res = await db.saveRecords([encodeEatsRecord(place)], { zoneID });
   const saved = res.records?.[0];
   if (!saved) return place;

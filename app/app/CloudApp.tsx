@@ -167,6 +167,13 @@ export default function CloudApp() {
       </header>
 
       {error && <div className="ck-error">{error}</div>}
+      {snapshot && snapshot.warnings.length > 0 && (
+        <div className="ck-error">
+          {snapshot.warnings.map((w, i) => (
+            <div key={i}>{w}</div>
+          ))}
+        </div>
+      )}
 
       {!hasToken && (
         <section className="ck-card">
