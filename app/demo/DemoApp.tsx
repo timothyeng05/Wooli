@@ -155,7 +155,7 @@ export default function DemoApp({
     if (!txn) return;
     setReview((r) => r.filter((t) => t.id !== id));
     setPosted((p) => [{ ...txn, category, suggestion: undefined }, ...p]);
-    const cat = CATEGORIES.find((c) => c.id === category);
+    const cat = categoriesList.find((c) => c.id === category);
     say(`${txn.payee} → ${cat?.name ?? category}`);
   };
 
@@ -273,6 +273,8 @@ export default function DemoApp({
                 left={left}
                 totalPlan={totalPlan}
                 totalSpent={totalSpent}
+                accounts={accountsList}
+                categories={categoriesList}
               />
             )}
             {app === "sights" && <SightsScreen sights={sightsList} say={say} />}
@@ -540,8 +542,10 @@ function BudgetScreen(props: {
   left: number;
   totalPlan: number;
   totalSpent: number;
+  accounts: typeof ACCOUNTS;
+  categories: Category[];
 }) {
-  const { page, review, posted, categorize, plans, spent, left, totalPlan, totalSpent } = props;
+  const { page, review, posted, categorize, plans, spent, left, totalPlan, totalSpent, accounts, categories } = props;
   const [tab, setTab] = useState<"plan" | "compare" | "chance">("plan");
   const [tableTab, setTableTab] = useState<"accounts" | "cashflow" | "events">("accounts");
   const [q, setQ] = useState("");
@@ -848,7 +852,7 @@ function BudgetScreen(props: {
               </tr>
             </thead>
             <tbody>
-              {ACCOUNTS.map((a) => (
+              {accounts.map((a) => (
                 <tr key={a.name}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -873,7 +877,7 @@ function BudgetScreen(props: {
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Spending Reports</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <div key={c.id} className="dm-card" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>{c.emoji} <b>{c.name}</b></span>
@@ -899,7 +903,7 @@ function BudgetScreen(props: {
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Monthly Plan</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <div key={c.id} className="dm-card" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span>{c.emoji} <b>{c.name}</b></span>
@@ -917,14 +921,14 @@ function BudgetScreen(props: {
   if (page === "categories") {
     return (
       <div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Categories ({CATEGORIES.length})</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Categories ({categories.length})</h2>
         <div className="dm-card dm-table-wrap">
           <table className="dm-table">
             <thead>
               <tr><th>Category</th><th>Group</th><th className="is-num">Plan</th></tr>
             </thead>
             <tbody>
-              {CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <tr key={c.id}>
                   <td>{c.emoji} {c.name}</td>
                   <td style={{ textTransform: "capitalize" }}>{c.group}</td>
