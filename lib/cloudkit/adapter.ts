@@ -1,5 +1,15 @@
-import type { Place, Trip } from "@/app/demo/data";
-import type { EatsPlaceRecord, TripItemRecord, TripRecord } from "./schema";
+import type { Category, Movie, Place, Recipe, Sight, Trip, Txn } from "@/app/demo/data";
+import type {
+  AccountRecord,
+  BudgetCategoryRecord,
+  EatsPlaceRecord,
+  MovieEntryRecord,
+  RecipeEntryRecord,
+  SightEntryRecord,
+  TransactionRecord,
+  TripItemRecord,
+  TripRecord,
+} from "./schema";
 
 function formatClock(minutes?: number): string {
   if (typeof minutes !== "number") return "—";
@@ -117,4 +127,105 @@ export function toDemoEats(eats: EatsPlaceRecord[]): Place[] {
       })),
     };
   });
+}
+
+export function toDemoSights(sights: SightEntryRecord[]): Sight[] {
+  return sights.map((s) => ({
+    id: s.id,
+    name: s.name,
+    city: s.address.split(",").slice(-2, -1)[0]?.trim() || s.address || "Saved",
+    category: s.visitedDay ? "Visited" : "Want to go",
+    visited: Boolean(s.visitedDay),
+    notes: s.notes,
+    lat: s.latitude ?? 0,
+    lng: s.longitude ?? 0,
+  }));
+}
+
+export function toDemoMovies(movies: MovieEntryRecord[]): Movie[] {
+  return movies
+    .filter((m) => !m.isWishlist)
+    .map((m) => ({
+      title: m.title,
+      year: Number(m.year) || 0,
+      genre: m.genre || "Film",
+      director: m.director || "",
+      feel: m.sentiment === "loved" ? "Loved" : m.sentiment === "fine" || m.sentiment === "disliked" ? "Fine" : "Liked",
+      seen: m.watchedDay || "",
+    }));
+}
+
+export function toDemoRecipes(recipes: RecipeEntryRecord[]): Recipe[] {
+  return recipes.map((r) => ({
+    id: r.id,
+    name: r.title || "Untitled Recipe",
+    emoji: "🍳",
+    meal: r.meal || "Meal",
+    mins: r.minutes || 30,
+    from: r.cuisine || (r.sourceURL ? "Saved from reel" : "Saved"),
+    ingredients: r.ingredientsText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => ({ name: line, amount: "" })),
+    steps: r.stepsText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
+  }));
+}
+
+export function toDemoAccounts(accounts: AccountRecord[]) {
+  return accounts
+    .filter((a) => !a.isHidden)
+    .map((a) => ({
+      name: a.nickname || a.name,
+      kind: a.kindRaw || "Account",
+      balance: a.balance,
+      logo: "/wooli-icon.png",
+    }));
+}
+
+export function toDemoCategories(categories: BudgetCategoryRecord[], txns: TransactionRecord[]): Category[] {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const spentByCat: Record<string, number> = {};
+  for (const t of txns) {
+    if (!t.isHidden && !t.isTransfer && !t.isSplit && t.transactedAt >= monthStart && t.categoryId && t.amount < 0) {
+      spentByCat[t.categoryId] = (spentByCat[t.categoryId] ?? 0) + Math.abs(t.amount);
+    }
+  }
+  return categories
+    .filter((c) => !c.isIncome && !c.isTransfer)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      emoji: c.icon || "•",
+      group: "home" as const,
+      plan: c.monthlyTarget,
+      spent: Math.round(spentByCat[c.id] ?? 0),
+      last: 0,
+    }));
+}
+
+export function toDemoTxns(txns: TransactionRecord[], accounts: AccountRecord[]) {
+  const acctName = new Map(accounts.map((a) => [a.providerAccountId, a.nickname || a.name]));
+  const formatDay = (ts: number) =>
+    new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const visible = txns.filter((t) => !t.isHidden && !t.isSplit);
+  const toTxn = (t: TransactionRecord): Txn => ({
+    id: t.id,
+    payee: t.customTitle || t.payee || t.description,
+    amount: t.amount,
+    date: formatDay(t.transactedAt),
+    account: acctName.get(t.accountId) || "Account",
+    category: t.categoryId,
+  });
+
+  return {
+    review: visible.filter((t) => t.needsReview).slice(0, 50).map(toTxn),
+    posted: visible.filter((t) => !t.needsReview).slice(0, 100).map(toTxn),
+  };
 }

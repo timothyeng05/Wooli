@@ -3,7 +3,16 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DemoApp from "@/app/demo/DemoApp";
-import { toDemoEats, toDemoTrips } from "@/lib/cloudkit/adapter";
+import {
+  toDemoAccounts,
+  toDemoCategories,
+  toDemoEats,
+  toDemoMovies,
+  toDemoRecipes,
+  toDemoSights,
+  toDemoTrips,
+  toDemoTxns,
+} from "@/lib/cloudkit/adapter";
 import {
   fetchWooliCloudSnapshot,
   getCloudKitConfig,
@@ -58,11 +67,20 @@ export default function CloudApp() {
     refresh();
   }, [refresh]);
 
-  const demoTrips = useMemo(
-    () => (snapshot ? toDemoTrips(snapshot.trips, snapshot.tripItems) : []),
+  const demoTrips = useMemo(() => (snapshot ? toDemoTrips(snapshot.trips, snapshot.tripItems) : []), [snapshot]);
+  const demoEats = useMemo(() => (snapshot ? toDemoEats(snapshot.eats) : []), [snapshot]);
+  const demoSights = useMemo(() => (snapshot ? toDemoSights(snapshot.sights) : []), [snapshot]);
+  const demoMovies = useMemo(() => (snapshot ? toDemoMovies(snapshot.movies) : []), [snapshot]);
+  const demoRecipes = useMemo(() => (snapshot ? toDemoRecipes(snapshot.recipes) : []), [snapshot]);
+  const demoAccounts = useMemo(() => (snapshot ? toDemoAccounts(snapshot.accounts) : []), [snapshot]);
+  const demoCategories = useMemo(
+    () => (snapshot ? toDemoCategories(snapshot.categories, snapshot.transactions) : []),
     [snapshot],
   );
-  const demoEats = useMemo(() => (snapshot ? toDemoEats(snapshot.eats) : []), [snapshot]);
+  const demoTxns = useMemo(
+    () => (snapshot ? toDemoTxns(snapshot.transactions, snapshot.accounts) : { review: [], posted: [] }),
+    [snapshot],
+  );
 
   const handleAddCloudEat = useCallback(
     async (input: { name: string; address: string; sentiment: MealSentiment; isWish: boolean }) => {
@@ -107,8 +125,8 @@ export default function CloudApp() {
             Sign in to Wooli
           </h1>
           <p className="ck-sub" style={{ margin: "0 auto 20px" }}>
-            Log in with your Apple ID to unlock the full Wooli app with your live private and shared{" "}
-            <strong>Trips</strong> and <strong>Eats</strong>.
+            Log in with your Apple ID to unlock your live iCloud <strong>Trips</strong>, <strong>Eats</strong>,{" "}
+            <strong>Sights</strong>, <strong>Movies</strong>, <strong>Recipes</strong>, and <strong>Budget</strong>.
           </p>
 
           {error && <div className="ck-error" style={{ textAlign: "left" }}>{error}</div>}
@@ -142,13 +160,21 @@ export default function CloudApp() {
             cloudMode
             initialTrips={demoTrips}
             initialEats={demoEats}
+            initialSights={demoSights}
+            initialMovies={demoMovies}
+            initialRecipes={demoRecipes}
+            initialAccounts={demoAccounts}
+            initialCategories={demoCategories}
+            initialReview={demoTxns.review}
+            initialPosted={demoTxns.posted}
             onRefreshCloud={refresh}
             onAddCloudEat={handleAddCloudEat}
             signOutSlot={signOutButton}
           />
           <p className="demo-foot">
-            Signed in with Apple iCloud ({snapshot.trips.length} trips · {snapshot.eats.length} eats synced).
-            Budget, Sights, Movies, and Recipes remain on-device in the iPhone/Mac app.
+            Synced with Apple iCloud · {snapshot.trips.length} trips · {snapshot.eats.length} eats ·{" "}
+            {snapshot.sights.length} sights · {snapshot.movies.length} movies · {snapshot.recipes.length} recipes ·{" "}
+            {snapshot.accounts.length} accounts.
           </p>
         </>
       )}

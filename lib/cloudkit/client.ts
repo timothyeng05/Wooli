@@ -1,15 +1,28 @@
 "use client";
 
 import {
+  decodeAccountCD,
+  decodeCategoryCD,
   decodeEatsRecord,
+  decodeMovieCD,
+  decodeRecipeCD,
+  decodeSightCD,
+  decodeTransactionCD,
   decodeTripItemRecord,
   decodeTripRecord,
   encodeEatsRecord,
+  isCoreDataZone,
   isEatsZone,
   tripIDFromZone,
   WOOLI_CONTAINER_ID,
+  type AccountRecord,
+  type BudgetCategoryRecord,
   type CloudKitRecordPayload,
   type EatsPlaceRecord,
+  type MovieEntryRecord,
+  type RecipeEntryRecord,
+  type SightEntryRecord,
+  type TransactionRecord,
   type TripItemRecord,
   type TripRecord,
   type ZoneRef,
@@ -22,6 +35,12 @@ export interface WooliCloudSnapshot {
   trips: TripRecord[];
   tripItems: TripItemRecord[];
   eats: EatsPlaceRecord[];
+  sights: SightEntryRecord[];
+  movies: MovieEntryRecord[];
+  recipes: RecipeEntryRecord[];
+  accounts: AccountRecord[];
+  categories: BudgetCategoryRecord[];
+  transactions: TransactionRecord[];
   warnings: string[];
 }
 
@@ -207,6 +226,12 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
   const trips: TripRecord[] = [];
   const tripItems: TripItemRecord[] = [];
   const eats: EatsPlaceRecord[] = [];
+  const sights: SightEntryRecord[] = [];
+  const movies: MovieEntryRecord[] = [];
+  const recipes: RecipeEntryRecord[] = [];
+  const accounts: AccountRecord[] = [];
+  const categories: BudgetCategoryRecord[] = [];
+  const transactions: TransactionRecord[] = [];
 
   await Promise.all(
     zones.map(async ({ db, rawZoneID, ref }) => {
@@ -215,6 +240,37 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
         for (const rec of recs) {
           if (rec.recordType === "EatsPlace" || rec.recordType === "EatsWish") {
             eats.push(decodeEatsRecord(rec, ref));
+          }
+        }
+        return;
+      }
+      if (isCoreDataZone(ref.zoneName)) {
+        const recs = await fetchAllRecordsInZone(
+          db,
+          rawZoneID,
+          ["CD_SightEntry", "CD_MovieEntry", "CD_RecipeEntry", "CD_LocalAccount", "CD_BudgetCategory", "CD_LocalTransaction"],
+          warnings,
+        );
+        for (const rec of recs) {
+          switch (rec.recordType) {
+            case "CD_SightEntry":
+              sights.push(decodeSightCD(rec));
+              break;
+            case "CD_MovieEntry":
+              movies.push(decodeMovieCD(rec));
+              break;
+            case "CD_RecipeEntry":
+              recipes.push(decodeRecipeCD(rec));
+              break;
+            case "CD_LocalAccount":
+              accounts.push(decodeAccountCD(rec));
+              break;
+            case "CD_BudgetCategory":
+              categories.push(decodeCategoryCD(rec));
+              break;
+            case "CD_LocalTransaction":
+              transactions.push(decodeTransactionCD(rec));
+              break;
           }
         }
         return;
@@ -232,8 +288,10 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
 
   trips.sort((a, b) => b.startDay.localeCompare(a.startDay));
   eats.sort((a, b) => b.rank - a.rank);
+  movies.sort((a, b) => b.rank - a.rank);
+  transactions.sort((a, b) => b.transactedAt - a.transactedAt);
 
-  return { userRecordName, trips, tripItems, eats, warnings };
+  return { userRecordName, trips, tripItems, eats, sights, movies, recipes, accounts, categories, transactions, warnings };
 }
 
 export async function saveEatsPlaceToCloud(container: CKContainer, place: EatsPlaceRecord): Promise<EatsPlaceRecord> {

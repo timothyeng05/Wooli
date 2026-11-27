@@ -19,7 +19,9 @@ import {
   type AppId,
   type Category,
   type Kind,
+  type Movie,
   type Place,
+  type Recipe,
   type Sight,
   type Trip,
   type Txn,
@@ -42,6 +44,13 @@ export interface DemoAppProps {
   cloudMode?: boolean;
   initialTrips?: Trip[];
   initialEats?: Place[];
+  initialSights?: Sight[];
+  initialMovies?: Movie[];
+  initialRecipes?: Recipe[];
+  initialAccounts?: typeof ACCOUNTS;
+  initialCategories?: Category[];
+  initialReview?: Txn[];
+  initialPosted?: Txn[];
   onRefreshCloud?: () => void;
   onAddCloudEat?: (input: { name: string; address: string; sentiment: "loved" | "liked" | "fine" | "disliked"; isWish: boolean }) => Promise<void>;
   signOutSlot?: React.ReactNode;
@@ -51,11 +60,23 @@ export default function DemoApp({
   cloudMode = false,
   initialTrips,
   initialEats,
+  initialSights,
+  initialMovies,
+  initialRecipes,
+  initialAccounts,
+  initialCategories,
+  initialReview,
+  initialPosted,
   onRefreshCloud,
   onAddCloudEat,
   signOutSlot,
 }: DemoAppProps = {}) {
   const tripsList = initialTrips && initialTrips.length > 0 ? initialTrips : TRIPS;
+  const sightsList = initialSights && initialSights.length > 0 ? initialSights : cloudMode ? [] : SIGHTS;
+  const moviesList = initialMovies && initialMovies.length > 0 ? initialMovies : cloudMode ? [] : MOVIES;
+  const recipesList = initialRecipes && initialRecipes.length > 0 ? initialRecipes : cloudMode ? [] : RECIPES;
+  const categoriesList = initialCategories && initialCategories.length > 0 ? initialCategories : cloudMode ? [] : CATEGORIES;
+  const accountsList = initialAccounts && initialAccounts.length > 0 ? initialAccounts : cloudMode ? [] : ACCOUNTS;
   const [app, setApp] = useState<AppId>("today");
   const [tripId, setTripId] = useState(tripsList[0].id);
   const [tripPage, setTripPage] = useState<TripPage>("overview");
@@ -66,14 +87,26 @@ export default function DemoApp({
   const [toast, setToast] = useState<string | null>(null);
 
   // Budget state is shared across Today and Budget
-  const [review, setReview] = useState<Txn[]>(REVIEW);
-  const [posted, setPosted] = useState<Txn[]>(POSTED);
-  const [plans, setPlans] = useState<Record<string, number>>(() => Object.fromEntries(CATEGORIES.map((c) => [c.id, c.plan])));
-  const [ranked, setRanked] = useState<Place[]>(initialEats ?? BEEN);
+  const [review, setReview] = useState<Txn[]>(initialReview ?? (cloudMode ? [] : REVIEW));
+  const [posted, setPosted] = useState<Txn[]>(initialPosted ?? (cloudMode ? [] : POSTED));
+  const [plans, setPlans] = useState<Record<string, number>>(() => Object.fromEntries(categoriesList.map((c) => [c.id, c.plan])));
+  const [ranked, setRanked] = useState<Place[]>(initialEats ?? (cloudMode ? [] : BEEN));
 
   useEffect(() => {
     if (initialEats) setRanked(initialEats);
   }, [initialEats]);
+
+  useEffect(() => {
+    if (initialReview) setReview(initialReview);
+  }, [initialReview]);
+
+  useEffect(() => {
+    if (initialPosted) setPosted(initialPosted);
+  }, [initialPosted]);
+
+  useEffect(() => {
+    if (initialCategories) setPlans(Object.fromEntries(initialCategories.map((c) => [c.id, c.plan])));
+  }, [initialCategories]);
 
   useEffect(() => {
     if (initialTrips && initialTrips.length > 0 && !initialTrips.some((t) => t.id === tripId)) {
@@ -84,8 +117,8 @@ export default function DemoApp({
   const spent = useMemo(() => {
     const extra: Record<string, number> = {};
     for (const t of posted) if (t.category && !POSTED.includes(t)) extra[t.category] = (extra[t.category] ?? 0) - t.amount;
-    return Object.fromEntries(CATEGORIES.map((c) => [c.id, c.spent + (extra[c.id] ?? 0)]));
-  }, [posted]);
+    return Object.fromEntries(categoriesList.map((c) => [c.id, c.spent + (extra[c.id] ?? 0)]));
+  }, [posted, categoriesList]);
   const totalPlan = Object.values(plans).reduce((a, b) => a + b, 0);
   const totalSpent = Object.values(spent).reduce((a, b) => a + b, 0);
   const left = totalPlan - totalSpent;
@@ -242,11 +275,11 @@ export default function DemoApp({
                 totalSpent={totalSpent}
               />
             )}
-            {app === "sights" && <SightsScreen say={say} />}
+            {app === "sights" && <SightsScreen sights={sightsList} say={say} />}
             {app === "trips" && <TripsScreen trip={trip} page={tripPage} setPage={setTripPage} say={say} />}
             {app === "eats" && <EatsScreen ranked={ranked} setRanked={setRanked} say={say} cloudMode={cloudMode} onAddCloudEat={onAddCloudEat} />}
-            {app === "movies" && <MoviesScreen say={say} />}
-            {app === "recipes" && <RecipesScreen say={say} />}
+            {app === "movies" && <MoviesScreen movies={moviesList} say={say} />}
+            {app === "recipes" && <RecipesScreen recipes={recipesList} say={say} />}
           </div>
         </main>
       </div>
@@ -268,8 +301,8 @@ export default function DemoApp({
             { id: "budget-plan", title: "Plan", sub: "Budget · Monthly categories", icon: "/apps/budget.png", action: () => { setBudgetPage("plan"); go("budget"); } },
             { id: "budget-activity", title: "Transactions", sub: "Budget · Recent spending", icon: "/apps/budget.png", action: () => { setBudgetPage("transactions"); go("budget"); } },
             { id: "budget-accounts", title: "Accounts", sub: "Budget · Balances", icon: "/apps/budget.png", action: () => { setBudgetPage("accounts"); go("budget"); } },
-            ...SIGHTS.map((s) => ({ id: `sight-${s.id}`, title: s.name, sub: `Sights · ${s.city}`, icon: "/apps/sights.png", action: () => go("sights") })),
-            ...RECIPES.map((r) => ({ id: `recipe-${r.id}`, title: r.name, sub: "Recipe", icon: "/apps/recipes.png", action: () => go("recipes") })),
+            ...sightsList.map((s) => ({ id: `sight-${s.id}`, title: s.name, sub: `Sights · ${s.city}`, icon: "/apps/sights.png", action: () => go("sights") })),
+            ...recipesList.map((r) => ({ id: `recipe-${r.id}`, title: r.name, sub: "Recipe", icon: "/apps/recipes.png", action: () => go("recipes") })),
           ]}
         />
       )}
@@ -1058,17 +1091,19 @@ function BudgetScreen(props: {
    SIGHTS SCREEN
 ========================================================= */
 
-function SightsScreen({ say }: { say: (msg: string) => void }) {
+function SightsScreen({ sights, say }: { sights: Sight[]; say: (msg: string) => void }) {
   const [tab, setTab] = useState<"want" | "been">("want");
-  const filtered = SIGHTS.filter((s) => (tab === "been" ? s.visited : !s.visited));
+  const filtered = sights.filter((s) => (tab === "been" ? s.visited : !s.visited));
 
   return (
     <div>
       {/* Sights Hero */}
       <div className="dm-sights-hero">
         <div className="dm-hero-eyebrow">YOUR SIGHTS</div>
-        <div style={{ fontSize: 28, fontWeight: 800 }}>{SIGHTS.length} places</div>
-        <div style={{ fontSize: 13, color: "var(--dm-text-2)" }}>2 been · 5 to go · 4 cities</div>
+        <div style={{ fontSize: 28, fontWeight: 800 }}>{sights.length} places</div>
+        <div style={{ fontSize: 13, color: "var(--dm-text-2)" }}>
+          {sights.filter((s) => s.visited).length} been · {sights.filter((s) => !s.visited).length} to go
+        </div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -1329,12 +1364,12 @@ function EatsScreen({
    MOVIES SCREEN
 ========================================================= */
 
-function MoviesScreen({ say }: { say: (msg: string) => void }) {
+function MoviesScreen({ movies, say }: { movies: Movie[]; say: (msg: string) => void }) {
   return (
     <div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 16 }}>Movies ({MOVIES.length} ranked)</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 16 }}>Movies ({movies.length} ranked)</h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
-        {MOVIES.map((m, idx) => (
+        {movies.map((m, idx) => (
           <div key={m.title} className="dm-card" style={{ padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--dm-brand)" }}>#{idx + 1}</span>
@@ -1355,15 +1390,24 @@ function MoviesScreen({ say }: { say: (msg: string) => void }) {
    RECIPES SCREEN
 ========================================================= */
 
-function RecipesScreen({ say }: { say: (msg: string) => void }) {
-  const [selected, setSelected] = useState(RECIPES[0]);
+function RecipesScreen({ recipes, say }: { recipes: Recipe[]; say: (msg: string) => void }) {
+  const [selected, setSelected] = useState<Recipe | undefined>(recipes[0]);
+
+  if (!selected) {
+    return (
+      <div className="dm-card" style={{ padding: 24 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800 }}>Recipes</h2>
+        <p style={{ color: "var(--dm-text-2)", marginTop: 6 }}>No recipes found in iCloud yet.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", gap: 20 }}>
       <div style={{ flex: "0 0 260px" }}>
         <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>Recipes</h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {RECIPES.map((r) => (
+          {recipes.map((r) => (
             <button
               key={r.id}
               className={`dm-sidebar-row ${selected.id === r.id ? "is-active" : ""}`}

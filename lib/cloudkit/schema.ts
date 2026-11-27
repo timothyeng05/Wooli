@@ -5,6 +5,7 @@
 export const WOOLI_CONTAINER_ID = "iCloud.com.timothyeng.wooli";
 export const EATS_ZONE_NAME = "eats";
 export const TRIP_ZONE_PREFIX = "trip-";
+export const COREDATA_ZONE_NAME = "com.apple.coredata.cloudkit.zone";
 
 export type DatabaseScope = "private" | "shared";
 
@@ -250,5 +251,178 @@ export function decodeTripItemRecord(rec: CloudKitRecordPayload, zone: ZoneRef, 
     pointsProgram: field<string>(f, "pointsProgram"),
     transport: parseJson<TripTransport | undefined>(field<string>(f, "transport"), undefined),
     createdAt: field<number>(f, "createdAt") ?? rec.created?.timestamp ?? Date.now(),
+  };
+}
+
+export interface SightEntryRecord {
+  id: string;
+  name: string;
+  address: string;
+  latitude?: number;
+  longitude?: number;
+  visitedDay: string;
+  notes: string;
+}
+
+export interface MovieEntryRecord {
+  id: string;
+  title: string;
+  year: string;
+  director: string;
+  genre: string;
+  sentiment: MealSentiment;
+  rank: number;
+  watchedDay: string;
+  notes: string;
+  isWishlist: boolean;
+}
+
+export interface RecipeEntryRecord {
+  id: string;
+  title: string;
+  ingredientsText: string;
+  stepsText: string;
+  notes: string;
+  sourceURL: string;
+  meal: string;
+  cuisine: string;
+  minutes: number;
+}
+
+export interface AccountRecord {
+  id: string;
+  providerAccountId: string;
+  name: string;
+  nickname: string;
+  institutionName: string;
+  currency: string;
+  balance: number;
+  kindRaw: string;
+  isHidden: boolean;
+}
+
+export interface BudgetCategoryRecord {
+  id: string;
+  name: string;
+  icon: string;
+  parentId?: string;
+  isIncome: boolean;
+  isTransfer: boolean;
+  sortOrder: number;
+  monthlyTarget: number;
+}
+
+export interface TransactionRecord {
+  id: string;
+  providerTransactionId: string;
+  accountId: string;
+  amount: number;
+  description: string;
+  payee?: string;
+  transactedAt: number;
+  categoryId?: string;
+  isTransfer: boolean;
+  needsReview: boolean;
+  isHidden: boolean;
+  customTitle: string;
+  isSplit: boolean;
+}
+
+export function isCoreDataZone(zoneName: string): boolean {
+  return zoneName === COREDATA_ZONE_NAME;
+}
+
+export function decodeSightCD(rec: CloudKitRecordPayload): SightEntryRecord {
+  const f = rec.fields ?? {};
+  return {
+    id: field<string>(f, "CD_id") ?? rec.recordName,
+    name: field<string>(f, "CD_name") ?? "",
+    address: field<string>(f, "CD_address") ?? "",
+    latitude: field<number>(f, "CD_latitude"),
+    longitude: field<number>(f, "CD_longitude"),
+    visitedDay: field<string>(f, "CD_visitedDay") ?? "",
+    notes: field<string>(f, "CD_notes") ?? "",
+  };
+}
+
+export function decodeMovieCD(rec: CloudKitRecordPayload): MovieEntryRecord {
+  const f = rec.fields ?? {};
+  const s = field<string>(f, "CD_sentimentRaw");
+  const sentiment: MealSentiment =
+    s === "loved" || s === "liked" || s === "fine" || s === "disliked" ? s : "liked";
+  return {
+    id: field<string>(f, "CD_id") ?? rec.recordName,
+    title: field<string>(f, "CD_title") ?? "",
+    year: field<string>(f, "CD_year") ?? "",
+    director: field<string>(f, "CD_director") ?? "",
+    genre: field<string>(f, "CD_genre") ?? "",
+    sentiment,
+    rank: field<number>(f, "CD_rank") ?? 0,
+    watchedDay: field<string>(f, "CD_watchedDay") ?? "",
+    notes: field<string>(f, "CD_notes") ?? "",
+    isWishlist: Boolean(field<number | boolean>(f, "CD_isWishlist")),
+  };
+}
+
+export function decodeRecipeCD(rec: CloudKitRecordPayload): RecipeEntryRecord {
+  const f = rec.fields ?? {};
+  return {
+    id: field<string>(f, "CD_id") ?? rec.recordName,
+    title: field<string>(f, "CD_title") ?? "",
+    ingredientsText: field<string>(f, "CD_ingredientsText") ?? "",
+    stepsText: field<string>(f, "CD_stepsText") ?? "",
+    notes: field<string>(f, "CD_notes") ?? "",
+    sourceURL: field<string>(f, "CD_sourceURL") ?? "",
+    meal: field<string>(f, "CD_meal") ?? "",
+    cuisine: field<string>(f, "CD_cuisine") ?? "",
+    minutes: field<number>(f, "CD_minutes") ?? 0,
+  };
+}
+
+export function decodeAccountCD(rec: CloudKitRecordPayload): AccountRecord {
+  const f = rec.fields ?? {};
+  return {
+    id: rec.recordName,
+    providerAccountId: field<string>(f, "CD_providerAccountId") ?? rec.recordName,
+    name: field<string>(f, "CD_name") ?? "",
+    nickname: field<string>(f, "CD_nickname") ?? "",
+    institutionName: field<string>(f, "CD_institutionName") ?? "",
+    currency: field<string>(f, "CD_currency") ?? "USD",
+    balance: field<number>(f, "CD_balance") ?? 0,
+    kindRaw: field<string>(f, "CD_kindRaw") ?? "other",
+    isHidden: Boolean(field<number | boolean>(f, "CD_isHidden")),
+  };
+}
+
+export function decodeCategoryCD(rec: CloudKitRecordPayload): BudgetCategoryRecord {
+  const f = rec.fields ?? {};
+  return {
+    id: field<string>(f, "CD_id") ?? rec.recordName,
+    name: field<string>(f, "CD_name") ?? "",
+    icon: field<string>(f, "CD_icon") ?? "•",
+    parentId: field<string>(f, "CD_parentId"),
+    isIncome: Boolean(field<number | boolean>(f, "CD_isIncome")),
+    isTransfer: Boolean(field<number | boolean>(f, "CD_isTransfer")),
+    sortOrder: field<number>(f, "CD_sortOrder") ?? 0,
+    monthlyTarget: field<number>(f, "CD_monthlyTarget") ?? 0,
+  };
+}
+
+export function decodeTransactionCD(rec: CloudKitRecordPayload): TransactionRecord {
+  const f = rec.fields ?? {};
+  return {
+    id: rec.recordName,
+    providerTransactionId: field<string>(f, "CD_providerTransactionId") ?? rec.recordName,
+    accountId: field<string>(f, "CD_accountId") ?? "",
+    amount: field<number>(f, "CD_amount") ?? 0,
+    description: field<string>(f, "CD_transactionDescription") ?? "",
+    payee: field<string>(f, "CD_payee"),
+    transactedAt: field<number>(f, "CD_transactedAt") ?? rec.created?.timestamp ?? Date.now(),
+    categoryId: field<string>(f, "CD_categoryId"),
+    isTransfer: Boolean(field<number | boolean>(f, "CD_isTransfer")),
+    needsReview: Boolean(field<number | boolean>(f, "CD_needsReview")),
+    isHidden: Boolean(field<number | boolean>(f, "CD_isHidden")),
+    customTitle: field<string>(f, "CD_customTitle") ?? "",
+    isSplit: Boolean(field<number | boolean>(f, "CD_isSplit")),
   };
 }
