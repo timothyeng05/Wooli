@@ -106,7 +106,7 @@ struct ModuleGate<Content: View>: View {
 @ViewBuilder
 func moduleScreen(_ module: WooliModule) -> some View {
     switch module {
-    case .period: ModuleGate(module: .period) { PeriodView().appGuide(.period) }
+    case .period: ModuleGate(module: .period) { HealthRootView().appGuide(.period) }
     }
 }
 

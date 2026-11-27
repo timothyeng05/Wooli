@@ -20,6 +20,10 @@
 	<array>
 		<string>group.com.timothyeng.wooli</string>
 	</array>
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.personal-information.location</key>
