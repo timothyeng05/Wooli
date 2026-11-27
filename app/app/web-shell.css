@@ -1,0 +1,523 @@
+/* Mac-faithful WebShell styles using Wooli Theme.swift & DesignSystem tokens */
+
+.ws-root {
+  --ws-bg: #eef3fa;
+  --ws-card: #ffffff;
+  --ws-chrome: #f6f8fc;
+  --ws-sidebar: #e8eef7;
+  --ws-border: #d8e2f0;
+  --ws-track: #e3eaf5;
+  --ws-text: #0f1b33;
+  --ws-text-2: #475877;
+  --ws-text-3: #5f6f8e;
+  --ws-brand: #2563eb;
+  --ws-brand-dark: #1d4ed8;
+  --ws-brand-soft: #f0f5ff;
+  --ws-on-brand: #ffffff;
+  --ws-income: #15803d;
+  --ws-expense: #b91c1c;
+  --ws-pending: #b45309;
+  --ws-pending-soft: #fff4dc;
+  --ws-travel: #2563eb;
+  --ws-shadow-card: 0 1px 2px rgba(15, 27, 51, 0.06);
+  --ws-shadow-pop: 0 18px 40px -12px rgba(15, 27, 51, 0.28), 0 0 0 1px rgba(15, 27, 51, 0.08);
+  --ws-radius-s: 10px;
+  --ws-radius-m: 14px;
+  --ws-radius-l: 22px;
+  --ws-font-display: var(--font-source-serif), ui-serif, "New York", Georgia, serif;
+  --ws-font-body: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+
+  min-height: calc(100vh - 68px);
+  background: var(--ws-bg);
+  color: var(--ws-text);
+  font-family: var(--ws-font-body);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ws-root {
+    --ws-bg: #070d1c;
+    --ws-card: #13213d;
+    --ws-chrome: #0d162b;
+    --ws-sidebar: #0b1326;
+    --ws-border: #22314f;
+    --ws-track: #1d2b4a;
+    --ws-text: #eef2fa;
+    --ws-text-2: #b3c0d9;
+    --ws-text-3: #8d9bba;
+    --ws-brand: #60a5fa;
+    --ws-brand-dark: #93c5fd;
+    --ws-brand-soft: #1b2f5c;
+    --ws-on-brand: #0f1b33;
+    --ws-income: #4ade80;
+    --ws-expense: #f87171;
+    --ws-pending: #fbbf24;
+    --ws-pending-soft: #3a2606;
+    --ws-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --ws-shadow-pop: 0 18px 40px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+}
+
+.ws-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* 68px Budget Icon Rail */
+.ws-rail {
+  width: 68px;
+  flex-shrink: 0;
+  background: var(--ws-sidebar);
+  border-right: 1px solid var(--ws-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 8px;
+  gap: 6px;
+}
+
+.ws-rail-header {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ws-rail-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  box-shadow: 0 1px 3px rgba(15, 27, 51, 0.15);
+}
+
+.ws-rail-divider {
+  width: 32px;
+  height: 1px;
+  background: var(--ws-border);
+  margin: 6px 0;
+}
+
+.ws-rail-btn {
+  position: relative;
+  width: 44px;
+  height: 38px;
+  border: none;
+  border-radius: var(--ws-radius-s);
+  background: transparent;
+  color: var(--ws-text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ws-rail-btn:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--ws-text);
+}
+
+.ws-rail-btn.is-active {
+  background: var(--ws-brand-soft);
+  color: var(--ws-brand);
+}
+
+.ws-rail-dot {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ws-expense);
+}
+
+.ws-rail-spacer {
+  flex: 1;
+}
+
+/* 230px Trips Expandable Sidebar */
+.ws-trips-sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--ws-sidebar);
+  border-right: 1px solid var(--ws-border);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+  overflow-y: auto;
+}
+
+.ws-sb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--ws-radius-s);
+  background: transparent;
+  color: var(--ws-text);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ws-sb-item:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.ws-sb-item.is-active {
+  background: var(--ws-brand-soft);
+  color: var(--ws-brand);
+  font-weight: 600;
+}
+
+.ws-sb-section {
+  margin-top: 14px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ws-text-3);
+}
+
+.ws-trip-group {
+  margin-bottom: 2px;
+}
+
+.ws-trip-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ws-trip-chevron {
+  width: 20px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--ws-text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.ws-trip-chevron:hover {
+  background: rgba(15, 27, 51, 0.06);
+  color: var(--ws-text);
+}
+
+.ws-trip-trigger {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: var(--ws-radius-s);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ws-trip-trigger:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.ws-trip-trigger.is-active {
+  background: var(--ws-brand-soft);
+}
+
+.ws-trip-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ws-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-trip-trigger.is-active .ws-trip-name {
+  color: var(--ws-brand);
+}
+
+.ws-trip-caption {
+  font-size: 11.5px;
+  color: var(--ws-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-trip-children {
+  padding-left: 20px;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-city-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--ws-travel);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ws-city-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-now-pill {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  background: var(--ws-brand);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.ws-nights-label {
+  font-size: 11.5px;
+  color: var(--ws-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Main Column + Top Toolbar */
+.ws-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-toolbar {
+  height: 52px;
+  padding: 0 20px;
+  background: var(--ws-chrome);
+  border-bottom: 1px solid var(--ws-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.ws-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ws-toolbar-title {
+  font-family: var(--ws-font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ws-text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.ws-icon-btn {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius-s);
+  background: var(--ws-card);
+  color: var(--ws-text);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ws-icon-btn:hover {
+  background: var(--ws-brand-soft);
+  border-color: var(--ws-brand);
+}
+
+.ws-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ws-icon-btn.is-square {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.ws-signout-slot {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 3x3 Apps Popover */
+.ws-apps-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 356px;
+  max-width: calc(100vw - 24px);
+  background: var(--ws-card);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius-l);
+  box-shadow: var(--ws-shadow-pop);
+  padding: 18px;
+  z-index: 50;
+}
+
+.ws-popover-heading {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ws-text);
+  margin: 0 0 14px;
+}
+
+.ws-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 8px;
+}
+
+.ws-app-tile-btn {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  border-radius: var(--ws-radius-m);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ws-app-tile-btn:hover {
+  background: var(--ws-brand-soft);
+}
+
+.ws-app-tile-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  box-shadow: 0 2px 6px rgba(15, 27, 51, 0.14);
+}
+
+.ws-app-tile-label {
+  font-size: 12.5px;
+  color: var(--ws-text-2);
+  font-weight: 500;
+}
+
+.ws-app-tile-btn.is-current .ws-app-tile-label {
+  color: var(--ws-brand);
+  font-weight: 700;
+}
+
+.ws-app-badge {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ws-expense);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ws-popover-sep {
+  height: 1px;
+  background: var(--ws-border);
+  margin: 14px 0;
+}
+
+.ws-popover-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Detail Content */
+.ws-detail {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 24px 48px;
+}
+
+.ws-detail-inner {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.ws-detail-inner.is-wide {
+  max-width: 1320px;
+}
+
+.ws-footer-bar {
+  padding: 12px 24px 20px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ws-text-3);
+}
+
+@media (max-width: 760px) {
+  .ws-trips-sidebar {
+    position: absolute;
+    left: 0;
+    top: 52px;
+    bottom: 0;
+    z-index: 30;
+    box-shadow: var(--ws-shadow-pop);
+  }
+  .ws-detail {
+    padding: 16px 14px 36px;
+  }
+}

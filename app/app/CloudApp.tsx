@@ -1,18 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import DemoApp from "@/app/demo/DemoApp";
-import {
-  toDemoAccounts,
-  toDemoCategories,
-  toDemoEats,
-  toDemoMovies,
-  toDemoRecipes,
-  toDemoSights,
-  toDemoTrips,
-  toDemoTxns,
-} from "@/lib/cloudkit/adapter";
+import { useCallback, useState, useEffect } from "react";
+import WebShell from "./WebShell";
 import {
   fetchWooliCloudSnapshot,
   getCloudKitConfig,
@@ -34,7 +24,7 @@ export default function CloudApp() {
 
   const refresh = useCallback(async () => {
     if (!hasToken) return;
-    setStatus("loading");
+    setStatus((prev) => (prev === "signed-in" ? "signed-in" : "loading"));
     setError(null);
     try {
       const container = await initCloudKit();
@@ -66,21 +56,6 @@ export default function CloudApp() {
   useEffect(() => {
     refresh();
   }, [refresh]);
-
-  const demoTrips = useMemo(() => (snapshot ? toDemoTrips(snapshot.trips, snapshot.tripItems) : []), [snapshot]);
-  const demoEats = useMemo(() => (snapshot ? toDemoEats(snapshot.eats) : []), [snapshot]);
-  const demoSights = useMemo(() => (snapshot ? toDemoSights(snapshot.sights) : []), [snapshot]);
-  const demoMovies = useMemo(() => (snapshot ? toDemoMovies(snapshot.movies) : []), [snapshot]);
-  const demoRecipes = useMemo(() => (snapshot ? toDemoRecipes(snapshot.recipes) : []), [snapshot]);
-  const demoAccounts = useMemo(() => (snapshot ? toDemoAccounts(snapshot.accounts) : []), [snapshot]);
-  const demoCategories = useMemo(
-    () => (snapshot ? toDemoCategories(snapshot.categories, snapshot.transactions) : []),
-    [snapshot],
-  );
-  const demoTxns = useMemo(
-    () => (snapshot ? toDemoTxns(snapshot.transactions, snapshot.accounts) : { review: [], posted: [] }),
-    [snapshot],
-  );
 
   const handleAddCloudEat = useCallback(
     async (input: { name: string; address: string; sentiment: MealSentiment; isWish: boolean }) => {
@@ -116,20 +91,18 @@ export default function CloudApp() {
   );
 
   return (
-    <main className={status === "signed-in" ? "demo-page" : "ck-page"}>
+    <main className={status === "signed-in" ? "ck-signed-in-main" : "ck-page"}>
       {status !== "signed-in" && (
-        <section className="ck-card" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center" }}>
-          <Image src="/wooli-icon.png" alt="Wooli" width={64} height={64} style={{ borderRadius: 14, margin: "0 auto 12px" }} />
+        <section className="ck-card ck-signin-card">
+          <Image src="/wooli-icon.png" alt="Wooli" width={64} height={64} className="ck-signin-logo" />
           <p className="ck-kicker">Apple iCloud · Cross-Platform</p>
-          <h1 style={{ fontFamily: "var(--font-source-serif), Georgia, serif", margin: "0 0 8px" }}>
-            Sign in to Wooli
-          </h1>
-          <p className="ck-sub" style={{ margin: "0 auto 20px" }}>
+          <h1 className="ck-signin-title">Sign in to Wooli</h1>
+          <p className="ck-sub ck-signin-sub">
             Log in with your Apple ID to unlock your live iCloud <strong>Trips</strong>, <strong>Eats</strong>,{" "}
             <strong>Sights</strong>, <strong>Movies</strong>, <strong>Recipes</strong>, and <strong>Budget</strong>.
           </p>
 
-          {error && <div className="ck-error" style={{ textAlign: "left" }}>{error}</div>}
+          {error && <div className="ck-error ck-signin-error">{error}</div>}
 
           {!hasToken && (
             <p className="ck-meta">
@@ -138,11 +111,13 @@ export default function CloudApp() {
             </p>
           )}
 
-          {hasToken && status === "loading" && <p className="ck-meta">Connecting to Apple iCloud ({config.environment})…</p>}
+          {hasToken && status === "loading" && (
+            <p className="ck-meta">Connecting to Apple iCloud ({config.environment})…</p>
+          )}
 
           <div
             id="apple-sign-in-button"
-            style={{ display: hasToken && status === "signed-out" ? "inline-block" : "none", marginTop: 8 }}
+            style={{ display: hasToken && status === "signed-out" ? "inline-block" : "none", marginTop: 12 }}
           />
         </section>
       )}
@@ -150,32 +125,20 @@ export default function CloudApp() {
       {status === "signed-in" && snapshot && (
         <>
           {snapshot.warnings.length > 0 && (
-            <div className="ck-error" style={{ maxWidth: 1120, margin: "0 auto 12px" }}>
-              {snapshot.warnings.map((w, i) => (
-                <div key={i}>{w}</div>
-              ))}
+            <div className="ck-warnings-wrap">
+              <div className="ck-error">
+                {snapshot.warnings.map((w, i) => (
+                  <div key={i}>{w}</div>
+                ))}
+              </div>
             </div>
           )}
-          <DemoApp
-            cloudMode
-            initialTrips={demoTrips}
-            initialEats={demoEats}
-            initialSights={demoSights}
-            initialMovies={demoMovies}
-            initialRecipes={demoRecipes}
-            initialAccounts={demoAccounts}
-            initialCategories={demoCategories}
-            initialReview={demoTxns.review}
-            initialPosted={demoTxns.posted}
-            onRefreshCloud={refresh}
+          <WebShell
+            snapshot={snapshot}
+            onSync={refresh}
             onAddCloudEat={handleAddCloudEat}
             signOutSlot={signOutButton}
           />
-          <p className="demo-foot">
-            Synced with Apple iCloud · {snapshot.trips.length} trips · {snapshot.eats.length} eats ·{" "}
-            {snapshot.sights.length} sights · {snapshot.movies.length} movies · {snapshot.recipes.length} recipes ·{" "}
-            {snapshot.accounts.length} accounts.
-          </p>
         </>
       )}
 
