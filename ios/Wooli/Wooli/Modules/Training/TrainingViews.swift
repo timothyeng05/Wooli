@@ -90,6 +90,7 @@ private struct TrainingDashboard: View {
 
     var body: some View {
         GeometryReader { geo in
+        let left = min(760, max(560, geo.size.width * 0.5))
         HStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.l) {
@@ -99,10 +100,10 @@ private struct TrainingDashboard: View {
                     HStack(alignment: .top, spacing: Space.l) { heatmap; trends }
                     footer
                 }
+                .frame(width: left - 2 * Space.xl, alignment: .leading)
                 .padding(Space.xl)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: min(760, max(560, geo.size.width * 0.5)))
+            .frame(width: left)
             Divider()
             routeMap.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -120,8 +121,8 @@ private struct TrainingDashboard: View {
     private static func fit(_ coords: [CLLocationCoordinate2D]) -> MapCameraPosition {
         let lats = coords.map(\.latitude), lons = coords.map(\.longitude)
         let center = CLLocationCoordinate2D(latitude: (lats.min()! + lats.max()!) / 2, longitude: (lons.min()! + lons.max()!) / 2)
-        let span = MKCoordinateSpan(latitudeDelta: max((lats.max()! - lats.min()!) * 1.5, 0.005),
-                                    longitudeDelta: max((lons.max()! - lons.min()!) * 1.5, 0.005))
+        let span = MKCoordinateSpan(latitudeDelta: max((lats.max()! - lats.min()!) * 0.65, 0.004),
+                                    longitudeDelta: max((lons.max()! - lons.min()!) * 0.65, 0.004))
         return .region(MKCoordinateRegion(center: center, span: span))
     }
 
