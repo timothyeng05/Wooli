@@ -4,10 +4,14 @@ import Image from "next/image";
 import type {
   AccountRecord,
   BudgetCategoryRecord,
+  MealSentiment,
   TransactionRecord,
   TripRecord,
 } from "@/lib/cloudkit/schema";
 import type { WooliCloudSnapshot } from "@/lib/cloudkit/client";
+import { Badge, Card, type BadgeTone } from "@/app/components/ds";
+
+const SENTIMENT_ORDER: MealSentiment[] = ["mustTry", "loved", "liked", "fine", "disliked"];
 
 export type AppSpace = "today" | "budget" | "trips" | "eats" | "sights" | "movies" | "recipes";
 
@@ -49,6 +53,12 @@ function daysBetween(fromDayKey: string, toDayKeyStr: string): number {
   const a = new Date(`${fromDayKey}T00:00:00`).getTime();
   const b = new Date(`${toDayKeyStr}T00:00:00`).getTime();
   return Math.round((b - a) / 86400000);
+}
+
+function formatShortDay(dayKey: string): string {
+  const d = new Date(`${dayKey}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dayKey;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 interface TodayTripSummary {
@@ -110,12 +120,6 @@ function computeTodayTrip(trips: TripRecord[]): TodayTripSummary | null {
   };
 }
 
-function formatShortDay(dayKey: string): string {
-  const d = new Date(`${dayKey}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return dayKey;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 interface TodayBudgetSummary {
   spent: number;
   planned: number;
@@ -133,10 +137,13 @@ function computeTodayBudget(
 ): TodayBudgetSummary {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const reviewStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const daysLeft = Math.max(0, lastDay.getDate() - now.getDate());
 
-  const hiddenAccountIds = new Set(accounts.filter((a) => a.isHidden).map((a) => a.providerAccountId));
+  const hiddenAccountIds = new Set(
+    accounts.filter((a) => a.isHidden || a.hideTransactions).map((a) => a.providerAccountId),
+  );
   const catById = new Map(categories.map((c) => [c.id, c]));
 
   let spent = 0;
@@ -144,18 +151,20 @@ function computeTodayBudget(
 
   for (const tx of transactions) {
     if (tx.isHidden || tx.isSplit || hiddenAccountIds.has(tx.accountId)) continue;
+    if (tx.needsReview && tx.transactedAt >= reviewStart) toReview += 1;
+
     const cat = tx.categoryId ? catById.get(tx.categoryId) : undefined;
     if (tx.isTransfer || cat?.isTransfer) continue;
 
-    if (tx.needsReview) toReview += 1;
-
     if (tx.transactedAt >= monthStart) {
-      if (cat?.isIncome) continue;
-      if (tx.amount < 0) spent += Math.abs(tx.amount);
+      if (cat) {
+        if (!cat.isIncome) spent -= tx.amount;
+      } else if (tx.amount < 0) {
+        spent -= tx.amount;
+      }
     }
   }
 
-  // Planned expenses: groups with monthlyTarget > 0 use group target, otherwise sum of children
   const expenseGroups = categories.filter((c) => !c.parentId && !c.isIncome && !c.isTransfer);
   let planned = 0;
   for (const g of expenseGroups) {
@@ -189,19 +198,22 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
   });
 
   const tripSummary = computeTodayTrip(snapshot.trips);
-  const hasBudgetData = snapshot.accounts.length > 0 || snapshot.transactions.length > 0 || snapshot.categories.length > 0;
+  const hasBudgetData =
+    snapshot.accounts.length > 0 || snapshot.transactions.length > 0 || snapshot.categories.length > 0;
   const budget = hasBudgetData
     ? computeTodayBudget(snapshot.accounts, snapshot.categories, snapshot.transactions)
     : null;
 
   const heroTrip = tripSummary && (tripSummary.isClose || !budget) ? tripSummary : null;
 
-  // Eats counts
-  const rankedEats = snapshot.eats.filter((e) => !e.isWish);
-  const wishEats = snapshot.eats.filter((e) => e.isWish);
+  const ownEats = snapshot.eats.filter((e) => e.scope !== "shared");
+  const eatsPool = ownEats.length > 0 ? ownEats : snapshot.eats;
+  const rankedEats = eatsPool
+    .filter((e) => !e.isWish)
+    .sort((a, b) => SENTIMENT_ORDER.indexOf(a.sentiment) - SENTIMENT_ORDER.indexOf(b.sentiment) || b.rank - a.rank);
+  const wishEats = eatsPool.filter((e) => e.isWish);
   const topEat = rankedEats[0];
 
-  // Sights counts
   const visitedSights = snapshot.sights.filter((s) => Boolean(s.visitedDay));
   const wantSights = snapshot.sights.filter((s) => !s.visitedDay);
   const nextSight = wantSights[0];
@@ -212,31 +224,32 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
   };
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", padding: "8px 4px 40px" }}>
-      {/* Header: Greeting + Date */}
-      <header style={{ marginBottom: 20 }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-source-serif), Georgia, serif",
-            fontSize: "clamp(28px, 3.6vw, 34px)",
-            fontWeight: 800,
-            letterSpacing: "-0.015em",
-            margin: "0 0 4px",
-            color: "var(--ink, #0f1b33)",
-          }}
-        >
-          {getGreeting()}
-        </h1>
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: "var(--space-8) var(--space-4) var(--space-40)" }}>
+      <header style={{ marginBottom: "var(--space-24)" }}>
         <p
           style={{
-            margin: 0,
-            fontSize: 14,
-            fontWeight: 500,
-            color: "var(--ink-2, #475877)",
+            margin: "0 0 var(--space-4)",
+            fontSize: 12,
+            fontWeight: "var(--weight-semibold)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--ink-tertiary)",
           }}
         >
           {todayFormatted}
         </p>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "clamp(28px, 3.6vw, 36px)",
+            fontWeight: 600,
+            letterSpacing: "-0.02em",
+            margin: 0,
+            color: "var(--ink-primary)",
+          }}
+        >
+          {getGreeting()}
+        </h1>
       </header>
 
       {/* Hero Card: Trip (if close or no budget) else Budget */}
@@ -248,101 +261,106 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
             width: "100%",
             textAlign: "left",
             border: "none",
-            borderRadius: 22,
-            padding: "20px 22px",
-            marginBottom: 16,
+            borderRadius: "var(--radius-card)",
+            padding: "var(--space-24)",
+            marginBottom: "var(--space-16)",
             cursor: "pointer",
-            color: "#ffffff",
-            background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)",
-            boxShadow: "0 12px 28px rgba(37, 99, 235, 0.24)",
+            color: "var(--on-ticket)",
+            background: "linear-gradient(135deg, var(--ticket-start) 0%, var(--ticket-end) 100%)",
+            boxShadow: "var(--shadow-ticket)",
             display: "block",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "var(--space-12)",
+            }}
+          >
             <span
               style={{
                 fontSize: 11,
-                fontWeight: 700,
+                fontWeight: "var(--weight-semibold)",
                 letterSpacing: "0.09em",
                 textTransform: "uppercase",
-                color: "#fef3c7",
+                color: "var(--ticket-highlight)",
               }}
             >
               {heroTrip.isUnderway ? "On your trip" : "Next trip"}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>
+            <span style={{ fontSize: 13, fontWeight: "var(--weight-medium)", color: "rgba(255,255,255,0.88)" }}>
               {heroTrip.dateRange}
             </span>
           </div>
           <div
             style={{
+              fontFamily: "var(--font-display)",
               fontSize: 32,
-              fontWeight: 700,
+              fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
               lineHeight: 1.15,
-              marginBottom: 4,
+              marginBottom: "var(--space-4)",
             }}
           >
             {heroTrip.status}
           </div>
-          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: heroTrip.route ? 12 : 0 }}>
+          <div
+            style={{
+              fontSize: 17,
+              fontWeight: "var(--weight-semibold)",
+              marginBottom: heroTrip.route ? "var(--space-12)" : 0,
+            }}
+          >
             {heroTrip.trip.name}
           </div>
           {heroTrip.route && (
             <div
               style={{
-                borderTop: "1px solid rgba(255,255,255,0.28)",
-                paddingTop: 10,
+                borderTop: "1px solid var(--ticket-rule)",
+                paddingTop: "var(--space-12)",
                 fontSize: 13,
                 color: "rgba(255,255,255,0.92)",
               }}
             >
-              📍 {heroTrip.route}
+              {heroTrip.route}
             </div>
           )}
         </button>
       ) : budget ? (
-        <button
-          type="button"
+        <Card
+          interactive
+          padding="lg"
           onClick={() => onOpenSpace("budget")}
-          style={{
-            width: "100%",
-            textAlign: "left",
-            border: "1px solid var(--line, #d8e2f0)",
-            borderRadius: 22,
-            padding: "20px 22px",
-            marginBottom: 16,
-            cursor: "pointer",
-            background: "var(--card, #ffffff)",
-            boxShadow: "0 4px 16px rgba(15, 27, 51, 0.05)",
-            display: "block",
-          }}
+          style={{ marginBottom: "var(--space-16)", cursor: "pointer" }}
+          eyebrow="This month"
+          actions={
+            <Badge tone={budget.left < 0 ? "expense" : "brand"}>
+              {budget.planned > 0 ? `${Math.round(budget.fraction * 100)}% used` : "Active"}
+            </Badge>
+          }
         >
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.09em",
-              textTransform: "uppercase",
-              color: "var(--brand, #2563eb)",
-              marginBottom: 8,
-            }}
-          >
-            This month
-          </div>
-          <div
-            style={{
+              fontFamily: "var(--font-display)",
               fontSize: 32,
-              fontWeight: 700,
+              fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
-              color: "var(--ink, #0f1b33)",
+              color: "var(--ink-primary)",
               lineHeight: 1.15,
-              marginBottom: 4,
+              marginBottom: "var(--space-4)",
             }}
           >
             {budget.headline}
           </div>
-          <div style={{ fontSize: 13, color: "var(--ink-2, #475877)", marginBottom: budget.planned > 0 ? 14 : 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              color: "var(--ink-tertiary)",
+              marginBottom: budget.planned > 0 ? "var(--space-16)" : 0,
+            }}
+          >
             {budget.daysLeftText}
           </div>
           {budget.planned > 0 && (
@@ -350,18 +368,18 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
               <div
                 style={{
                   height: 8,
-                  borderRadius: 999,
-                  background: "var(--line, #e3eaf5)",
+                  borderRadius: "var(--radius-full)",
+                  background: "var(--track)",
                   overflow: "hidden",
-                  marginBottom: 6,
+                  marginBottom: "var(--space-8)",
                 }}
               >
                 <div
                   style={{
                     height: "100%",
                     width: `${Math.min(100, Math.round(budget.fraction * 100))}%`,
-                    borderRadius: 999,
-                    background: budget.left < 0 ? "#b91c1c" : "var(--brand, #2563eb)",
+                    borderRadius: "var(--radius-full)",
+                    background: budget.left < 0 ? "var(--expense)" : "var(--brand)",
                   }}
                 />
               </div>
@@ -370,7 +388,7 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
                   display: "flex",
                   justifyContent: "space-between",
                   fontSize: 12,
-                  color: "var(--ink-2, #475877)",
+                  color: "var(--ink-tertiary)",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
@@ -380,76 +398,69 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
               </div>
             </div>
           )}
-        </button>
+        </Card>
       ) : null}
 
-      {/* To-Do Card (only when there are items needing attention) */}
+      {/* To-Do Card (read-only link to Budget review) */}
       {budget && budget.toReview > 0 && (
-        <button
-          type="button"
+        <Card
+          interactive
+          padding="sm"
           onClick={() => onOpenSpace("budget")}
           style={{
-            width: "100%",
+            marginBottom: "var(--space-24)",
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            padding: "12px 16px",
-            marginBottom: 18,
-            borderRadius: 14,
-            border: "1px solid var(--line, #d8e2f0)",
-            background: "var(--card, #ffffff)",
-            cursor: "pointer",
-            textAlign: "left",
+            gap: "var(--space-12)",
           }}
         >
-          <Image src="/apps/budget.png" alt="" width={40} height={40} style={{ borderRadius: 10 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink, #0f1b33)" }}>
-              Review {budget.toReview} transaction{budget.toReview === 1 ? "" : "s"}
+          <Image src="/apps/budget.png" alt="" width={40} height={40} style={{ borderRadius: "var(--radius-s)" }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", color: "var(--ink-primary)" }}>
+              {budget.toReview} transaction{budget.toReview === 1 ? "" : "s"} flagged for review
             </div>
-            <div style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>Categorize recent activity</div>
+            <div style={{ fontSize: 13, color: "var(--ink-tertiary)" }}>Open Budget to inspect recent activity</div>
           </div>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2, #475877)" }}>›</span>
-        </button>
+          <Badge tone="pending">{budget.toReview}</Badge>
+        </Card>
       )}
 
-      {/* TodayBoard Summary Cards: Trip, Budget, Eats, Sights */}
+      {/* TodayBoard Summary Cards */}
       <div
         style={{
           fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.09em",
+          fontWeight: "var(--weight-semibold)",
+          letterSpacing: "0.08em",
           textTransform: "uppercase",
-          color: "var(--ink-2, #475877)",
-          margin: "4px 4px 10px",
+          color: "var(--ink-tertiary)",
+          margin: "0 var(--space-4) var(--space-12)",
         }}
       >
-        Today
+        Field Notes Overview
       </div>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
-          gap: 12,
-          marginBottom: 28,
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "var(--space-12)",
+          marginBottom: "var(--space-32)",
         }}
       >
-        {/* Next Upcoming Trip Card */}
         <SummaryCard
           label="Next Trip"
+          tone="travel"
           title={tripSummary ? tripSummary.trip.name : "No upcoming trips"}
           detail={
             tripSummary
               ? `${tripSummary.status} · ${tripSummary.dateRange}`
               : `${snapshot.trips.length} trip${snapshot.trips.length === 1 ? "" : "s"} saved`
           }
-          accent="#2563eb"
           onClick={() => (tripSummary ? openTripTarget(tripSummary.trip.id) : onOpenSpace("trips"))}
         />
 
-        {/* Budget Status Card */}
         <SummaryCard
           label="Budget"
+          tone={budget && budget.left < 0 ? "expense" : "income"}
           title={budget ? budget.headline : "No accounts"}
           detail={
             budget
@@ -458,47 +469,40 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
                 : `${snapshot.accounts.filter((a) => !a.isHidden).length} active accounts`
               : "Connect accounts in iCloud"
           }
-          accent={budget && budget.left < 0 ? "#b91c1c" : "#15803d"}
           ringPercent={budget && budget.planned > 0 ? Math.min(100, Math.round(budget.fraction * 100)) : undefined}
           onClick={() => onOpenSpace("budget")}
         />
 
-        {/* Eats Count Card */}
         <SummaryCard
           label="Eats"
+          tone="pending"
           title={`${snapshot.eats.length} place${snapshot.eats.length === 1 ? "" : "s"}`}
           detail={
             topEat
               ? `#1 ${topEat.name} · ${wishEats.length} want to try`
               : `${rankedEats.length} ranked · ${wishEats.length} want to try`
           }
-          accent="#d97706"
           onClick={() => onOpenSpace("eats")}
         />
 
-        {/* Sights Count Card */}
         <SummaryCard
           label="Sights"
+          tone="brand"
           title={`${snapshot.sights.length} sight${snapshot.sights.length === 1 ? "" : "s"}`}
-          detail={
-            nextSight
-              ? `Next: ${nextSight.name}`
-              : `${visitedSights.length} visited · ${wantSights.length} to go`
-          }
-          accent="#0d9488"
+          detail={nextSight ? `Next: ${nextSight.name}` : `${visitedSights.length} visited · ${wantSights.length} to go`}
           onClick={() => onOpenSpace("sights")}
         />
       </div>
 
-      {/* 3-Column "Your apps" Grid of 88px sheep icons */}
+      {/* 3-Column "Your apps" Grid */}
       <div
         style={{
           fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.09em",
+          fontWeight: "var(--weight-semibold)",
+          letterSpacing: "0.08em",
           textTransform: "uppercase",
-          color: "var(--ink-2, #475877)",
-          margin: "0 4px 14px",
+          color: "var(--ink-tertiary)",
+          margin: "0 var(--space-4) var(--space-16)",
         }}
       >
         Your apps
@@ -507,7 +511,7 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "20px 12px",
+          gap: "var(--space-20) var(--space-12)",
           maxWidth: 460,
         }}
       >
@@ -519,12 +523,12 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
             style={{
               background: "transparent",
               border: "none",
-              padding: 4,
+              padding: "var(--space-4)",
               cursor: "pointer",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 6,
+              gap: "var(--space-8)",
             }}
           >
             <Image
@@ -535,16 +539,16 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
               style={{
                 width: 88,
                 height: 88,
-                borderRadius: 23,
+                borderRadius: "var(--radius-l)",
                 objectFit: "cover",
-                boxShadow: "0 4px 14px rgba(15, 27, 51, 0.12)",
+                boxShadow: "var(--shadow-card)",
               }}
             />
             <span
               style={{
                 fontSize: 14,
-                fontWeight: 500,
-                color: "var(--ink, #0f1b33)",
+                fontWeight: "var(--weight-medium)",
+                color: "var(--ink-primary)",
               }}
             >
               {item.title}
@@ -558,57 +562,51 @@ export function TodayScreen({ snapshot, onOpenSpace, onOpenTrip }: TodayScreenPr
 
 function SummaryCard({
   label,
+  tone,
   title,
   detail,
-  accent,
   ringPercent,
   onClick,
 }: {
   label: string;
+  tone: BadgeTone;
   title: string;
   detail: string;
-  accent: string;
   ringPercent?: number;
   onClick: () => void;
 }) {
+  const ringColor =
+    tone === "expense"
+      ? "var(--expense)"
+      : tone === "income"
+        ? "var(--income)"
+        : tone === "travel"
+          ? "var(--brand-blue)"
+          : "var(--brand)";
+
   return (
-    <button
-      type="button"
+    <Card
+      interactive
+      padding="sm"
       onClick={onClick}
       style={{
-        textAlign: "left",
-        padding: 16,
-        borderRadius: 14,
-        border: "1px solid var(--line, #d8e2f0)",
-        background: "var(--card, #ffffff)",
-        boxShadow: "0 2px 10px rgba(15, 27, 51, 0.04)",
-        cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: "var(--space-8)",
+        textAlign: "left",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: accent,
-          }}
-        >
-          {label}
-        </span>
+        <Badge tone={tone}>{label}</Badge>
         {typeof ringPercent === "number" && (
           <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-            <circle cx="13" cy="13" r="10" fill="none" stroke="var(--line, #d8e2f0)" strokeWidth="3" />
+            <circle cx="13" cy="13" r="10" fill="none" stroke="var(--track)" strokeWidth="3" />
             <circle
               cx="13"
               cy="13"
               r="10"
               fill="none"
-              stroke={accent}
+              stroke={ringColor}
               strokeWidth="3"
               strokeDasharray={`${(ringPercent / 100) * 62.83} 62.83`}
               strokeLinecap="round"
@@ -620,8 +618,8 @@ function SummaryCard({
       <div
         style={{
           fontSize: 17,
-          fontWeight: 700,
-          color: "var(--ink, #0f1b33)",
+          fontWeight: "var(--weight-semibold)",
+          color: "var(--ink-primary)",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -633,7 +631,7 @@ function SummaryCard({
       <div
         style={{
           fontSize: 12.5,
-          color: "var(--ink-2, #475877)",
+          color: "var(--ink-tertiary)",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -641,7 +639,7 @@ function SummaryCard({
       >
         {detail}
       </div>
-    </button>
+    </Card>
   );
 }
 

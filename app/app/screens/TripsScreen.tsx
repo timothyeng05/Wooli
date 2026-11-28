@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import type {
   TripItemKind,
   TripItemRecord,
   TripLeg,
   TripRecord,
 } from "@/lib/cloudkit/schema";
+import { Badge, Card, ListMapSplit, Pill, type BadgeTone } from "@/app/components/ds";
 
 export type TripPage = "overview" | "ideas" | `city:${string}`;
 
@@ -17,10 +18,6 @@ export interface TripsScreenProps {
   page: TripPage;
   onSelectTrip: (tripId: string | null, page?: TripPage) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Date & formatting helpers (timezone-safe for yyyy-MM-dd DayKeys)
-// ---------------------------------------------------------------------------
 
 function todayKey(): string {
   const now = new Date();
@@ -49,7 +46,6 @@ function enumerateDays(startDay: string, endDay: string): string[] {
   if (!start || !end || end < start) return startDay ? [startDay] : [];
   const days: string[] = [];
   const cursor = new Date(start.getTime());
-  // Guard against malformed multi-year ranges
   for (let i = 0; i < 120 && cursor <= end; i++) {
     const y = cursor.getUTCFullYear();
     const m = String(cursor.getUTCMonth() + 1).padStart(2, "0");
@@ -64,23 +60,14 @@ function formatDayShort(day?: string): string {
   if (!day) return "TBD";
   const dt = parseDayUTC(day);
   if (!dt) return day;
-  return dt.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 function formatDayWithWeekday(day?: string): string {
   if (!day) return "TBD";
   const dt = parseDayUTC(day);
   if (!dt) return day;
-  return dt.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 function formatDateRange(startDay?: string, endDay?: string): string {
@@ -88,12 +75,7 @@ function formatDateRange(startDay?: string, endDay?: string): string {
   if (startDay && (!endDay || startDay === endDay)) {
     const dt = parseDayUTC(startDay);
     return dt
-      ? dt.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          timeZone: "UTC",
-        })
+      ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
       : startDay;
   }
   const s = parseDayUTC(startDay ?? "");
@@ -106,12 +88,7 @@ function formatDateRange(startDay?: string, endDay?: string): string {
     ...(sameYear ? {} : { year: "numeric" }),
     timeZone: "UTC",
   });
-  const endStr = e.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  const endStr = e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   return `${startStr} – ${endStr}`;
 }
 
@@ -134,50 +111,16 @@ function formatMoney(amount: number, currency = "USD"): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Design system tokens & kind metadata (Theme.swift)
-// ---------------------------------------------------------------------------
-
-const KIND_META: Record<
-  TripItemKind,
-  { label: string; icon: string; color: string; softBg: string }
-> = {
-  transit: {
-    label: "Transit",
-    icon: "✈️",
-    color: "#2563EB",
-    softBg: "rgba(37, 99, 235, 0.12)",
-  },
-  stay: {
-    label: "Stay",
-    icon: "🛏️",
-    color: "#7C3AED",
-    softBg: "rgba(124, 58, 237, 0.12)",
-  },
-  meal: {
-    label: "Meal",
-    icon: "🍽️",
-    color: "#D97706",
-    softBg: "rgba(217, 119, 6, 0.13)",
-  },
-  activity: {
-    label: "Activity",
-    icon: "📍",
-    color: "#0D9488",
-    softBg: "rgba(13, 148, 136, 0.12)",
-  },
-  note: {
-    label: "Note",
-    icon: "📝",
-    color: "#64748B",
-    softBg: "rgba(100, 116, 139, 0.12)",
-  },
+const KIND_META: Record<TripItemKind, { label: string; icon: string; colorVar: string }> = {
+  transit: { label: "Travel", icon: "✈️", colorVar: "var(--kind-transit)" },
+  stay: { label: "Stay", icon: "🏨", colorVar: "var(--kind-stay)" },
+  meal: { label: "Meal", icon: "🍽️", colorVar: "var(--kind-meal)" },
+  activity: { label: "Activity", icon: "📍", colorVar: "var(--kind-activity)" },
+  note: { label: "Note", icon: "📝", colorVar: "var(--kind-note)" },
 };
 
 function sortLegs(legs: TripLeg[]): TripLeg[] {
-  return [...legs]
-    .filter((l) => !l.isHome)
-    .sort((a, b) => a.startDay.localeCompare(b.startDay));
+  return [...legs].filter((l) => !l.isHome).sort((a, b) => a.startDay.localeCompare(b.startDay));
 }
 
 function sortTripItems(items: TripItemRecord[]): TripItemRecord[] {
@@ -192,9 +135,7 @@ function sortTripItems(items: TripItemRecord[]): TripItemRecord[] {
 
 function heroEyebrow(trip: TripRecord, today: string): string {
   if (!trip.startDay) return "Upcoming trip";
-  if (trip.startDay <= today && (!trip.endDay || trip.endDay >= today)) {
-    return "On your trip";
-  }
+  if (trip.startDay <= today && (!trip.endDay || trip.endDay >= today)) return "On your trip";
   const days = diffDays(today, trip.startDay);
   if (days === 0) return "Next trip · today";
   if (days === 1) return "Next trip · tomorrow";
@@ -202,109 +143,52 @@ function heroEyebrow(trip: TripRecord, today: string): string {
   return "Trip";
 }
 
-function formatCostTotals(
-  totals: Record<string, number>,
-  points: Record<string, number>,
-): string {
+function formatCostTotals(totals: Record<string, number>, points: Record<string, number>): string {
   const parts: string[] = [];
   for (const [currency, amount] of Object.entries(totals)) {
     if (amount > 0) parts.push(formatMoney(amount, currency));
   }
   for (const [program, pts] of Object.entries(points)) {
-    if (pts > 0) {
-      const label = program ? ` ${program}` : "";
-      parts.push(`${pts.toLocaleString("en-US")} pts${label}`);
-    }
+    if (pts > 0) parts.push(`${pts.toLocaleString("en-US")} pts${program ? ` ${program}` : ""}`);
   }
   return parts.join(" + ") || "—";
 }
 
-// ---------------------------------------------------------------------------
-// Shared UI primitives (TicketCard, LuggageTag)
-// ---------------------------------------------------------------------------
-
-function LuggageTag({
-  label,
-  color = "#2563EB",
-}: {
-  label: string;
-  color?: string;
-}) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "3px 10px 3px 8px",
-        borderRadius: "4px 10px 10px 4px",
-        border: `1.5px solid ${color}`,
-        background: `color-mix(in srgb, ${color} 14%, var(--card, #ffffff))`,
-        color: "var(--ink, #0F1B33)",
-        fontSize: 12,
-        fontWeight: 600,
-        lineHeight: 1.2,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: "var(--paper, #EEF3FA)",
-          border: `1.5px solid ${color}`,
-          flexShrink: 0,
-        }}
-      />
-      {label}
-    </span>
-  );
+function stayLabelOnDay(item: TripItemRecord, day: string): string | null {
+  if (item.kind !== "stay") return null;
+  if (item.day === day) return "Check in";
+  if (item.checkOutDay === day) return "Check out";
+  return null;
 }
 
-const cardStyle: CSSProperties = {
-  background: "var(--card, #FFFFFF)",
-  border: "1px solid var(--line, #D8E2F0)",
-  borderRadius: 14,
-  padding: 20,
-  boxShadow: "0 2px 6px rgba(15, 27, 51, 0.05)",
-};
-
-const eyebrowStyle: CSSProperties = {
+const eyebrowStyle: React.CSSProperties = {
   fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.09em",
+  fontWeight: "var(--weight-semibold)",
+  letterSpacing: "0.08em",
   textTransform: "uppercase",
-  color: "#5F6F8E",
+  color: "var(--ink-tertiary)",
   margin: 0,
 };
 
-// ---------------------------------------------------------------------------
-// Main Component
-// ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
+/* Main Component                                                             */
+/* -------------------------------------------------------------------------- */
 
-export function TripsScreen({
-  trips,
-  tripItems,
-  selectedTripId,
-  page,
-  onSelectTrip,
-}: TripsScreenProps) {
+export function TripsScreen({ trips, tripItems, selectedTripId, page, onSelectTrip }: TripsScreenProps) {
   const [search, setSearch] = useState("");
   const today = useMemo(() => todayKey(), []);
+  const visibleTripItems = useMemo(() => tripItems.filter((i) => !i.isHiddenPlaceholder), [tripItems]);
 
   const selectedTrip = useMemo(
     () => (selectedTripId ? trips.find((t) => t.id === selectedTripId) ?? null : null),
     [trips, selectedTripId],
   );
 
-  // Gallery view when no trip is selected
   if (!selectedTrip) {
     return (
       <TripsGalleryView
         trips={trips}
-        tripItems={tripItems}
+        tripItems={visibleTripItems}
         today={today}
         onOpenTrip={(id) => onSelectTrip(id, "overview")}
       />
@@ -314,7 +198,7 @@ export function TripsScreen({
   return (
     <SingleTripView
       trip={selectedTrip}
-      allItems={tripItems.filter((i) => i.tripID === selectedTrip.id)}
+      allItems={visibleTripItems.filter((i) => i.tripID === selectedTrip.id)}
       page={page}
       today={today}
       search={search}
@@ -326,9 +210,9 @@ export function TripsScreen({
 
 export default TripsScreen;
 
-// ---------------------------------------------------------------------------
-// 1. All Trips Gallery View
-// ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
+/* 1. All Trips Gallery View                                                  */
+/* -------------------------------------------------------------------------- */
 
 function TripsGalleryView({
   trips,
@@ -363,38 +247,16 @@ function TripsGalleryView({
 
   if (trips.length === 0) {
     return (
-      <div style={{ maxWidth: 920, margin: "0 auto", padding: "48px 20px" }}>
-        <div
-          style={{
-            ...cardStyle,
-            textAlign: "center",
-            padding: "48px 24px",
-          }}
-        >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🧳</div>
-          <h2
-            style={{
-              fontFamily: "var(--font-source-serif), Georgia, serif",
-              fontSize: 24,
-              fontWeight: 700,
-              margin: "0 0 8px",
-              color: "var(--ink, #0F1B33)",
-            }}
-          >
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "var(--space-48) var(--space-16)" }}>
+        <Card padding="lg" style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: "var(--space-12)" }}>🧳</div>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, margin: "0 0 8px" }}>
             Plan your first trip
           </h2>
-          <p
-            style={{
-              margin: "0 auto",
-              maxWidth: 420,
-              color: "var(--ink-2, #475877)",
-              fontSize: 15,
-            }}
-          >
-            Create a trip in Wooli on Mac or iPhone to see your itinerary,
-            boarding passes, stays, and trip costs here.
+          <p style={{ margin: "0 auto", maxWidth: 420, color: "var(--ink-tertiary)", fontSize: 15 }}>
+            Create a trip in Wooli on Mac or iPhone to see your itinerary, boarding passes, stays, and trip costs here.
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -403,21 +265,13 @@ function TripsGalleryView({
   const otherUpcoming = upcoming.slice(1);
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "24px 20px 64px" }}>
-      <div style={{ marginBottom: 20 }}>
-        <p style={eyebrowStyle}>iCloud Trips</p>
-        <h1
-          style={{
-            fontFamily: "var(--font-source-serif), Georgia, serif",
-            fontSize: 30,
-            fontWeight: 800,
-            margin: "4px 0 0",
-            color: "var(--ink, #0F1B33)",
-          }}
-        >
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "var(--space-16) var(--space-16) var(--space-48)" }}>
+      <header style={{ marginBottom: "var(--space-20)" }}>
+        <p style={eyebrowStyle}>Read-only iCloud Trips</p>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 600, margin: "4px 0 0" }}>
           All Trips
         </h1>
-      </div>
+      </header>
 
       {nextTrip && (
         <NextTripTicketHero
@@ -429,21 +283,125 @@ function TripsGalleryView({
       )}
 
       {otherUpcoming.length > 0 && (
-        <TripSection
-          title="Upcoming"
-          trips={otherUpcoming}
-          itemsByTrip={itemsByTrip}
-          onOpenTrip={onOpenTrip}
-        />
+        <section style={{ marginTop: "var(--space-24)" }}>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, margin: "0 0 var(--space-12)" }}>
+            Upcoming
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "var(--space-16)" }}>
+            {otherUpcoming.map((trip) => {
+              const items = itemsByTrip.get(trip.id) ?? [];
+              const legs = sortLegs(trip.legs);
+              const nights = trip.startDay && trip.endDay ? Math.max(0, diffDays(trip.startDay, trip.endDay)) : 0;
+              const plansCount = items.filter((i) => Boolean(i.day)).length;
+              return (
+                <Card
+                  key={trip.id}
+                  interactive
+                  padding="md"
+                  onClick={() => onOpenTrip(trip.id)}
+                  style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div>
+                      <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600 }}>
+                        {trip.name || "Untitled trip"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--ink-tertiary)", marginTop: 2 }}>
+                        {formatDateRange(trip.startDay, trip.endDay)}
+                        {nights > 0 ? ` · ${nights}n` : ""}
+                      </div>
+                    </div>
+                    {trip.scope === "shared" && <Badge tone="travel">Shared</Badge>}
+                  </div>
+                  {(trip.destination || legs.length > 0) && (
+                    <div style={{ fontSize: 13, color: "var(--brand)", fontWeight: "var(--weight-medium)" }}>
+                      {legs.length > 0 ? legs.map((l) => `${l.emoji ? `${l.emoji} ` : ""}${l.name}`).join(" → ") : trip.destination}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      marginTop: "auto",
+                      paddingTop: "var(--space-8)",
+                      borderTop: "1px solid var(--border-hairline)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                      color: "var(--ink-tertiary)",
+                    }}
+                  >
+                    <span>{plansCount} plans</span>
+                    <span>{legs.length > 0 ? `${legs.length} stops` : "Single stop"}</span>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
       )}
 
+      {/* 2-col 16:9 Past Trips cards with bottom scrims */}
       {past.length > 0 && (
-        <TripSection
-          title="Past"
-          trips={past}
-          itemsByTrip={itemsByTrip}
-          onOpenTrip={onOpenTrip}
-        />
+        <section style={{ marginTop: "var(--space-32)" }}>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, margin: "0 0 var(--space-12)" }}>
+            Past Trips
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "var(--space-16)" }}>
+            {past.map((trip, i) => {
+              const legs = sortLegs(trip.legs);
+              const items = itemsByTrip.get(trip.id) ?? [];
+              const plansCount = items.filter((it) => Boolean(it.day)).length;
+              const palette = [
+                "linear-gradient(135deg, #1e3a2f 0%, #2b4c3f 100%)",
+                "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)",
+                "linear-gradient(135deg, #3b2f2f 0%, #6b4f3b 100%)",
+              ][i % 3];
+              return (
+                <button
+                  key={trip.id}
+                  type="button"
+                  onClick={() => onOpenTrip(trip.id)}
+                  style={{
+                    position: "relative",
+                    aspectRatio: "16 / 9",
+                    borderRadius: "var(--radius-card)",
+                    overflow: "hidden",
+                    border: "1px solid var(--border-hairline)",
+                    background: palette,
+                    color: "#ffffff",
+                    textAlign: "left",
+                    padding: 0,
+                    cursor: "pointer",
+                    boxShadow: "var(--shadow-card)",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "linear-gradient(to top, rgba(14, 22, 18, 0.85) 0%, rgba(14, 22, 18, 0.15) 60%, transparent 100%)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "flex-end",
+                      padding: "var(--space-20)",
+                    }}
+                  >
+                    <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.85, marginBottom: 4 }}>
+                      {formatDateRange(trip.startDay, trip.endDay)} · {plansCount} plans
+                    </div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600 }}>
+                      {trip.name || "Untitled trip"}
+                    </div>
+                    {(legs.length > 0 || trip.destination) && (
+                      <div style={{ fontSize: 13, opacity: 0.9, marginTop: 4 }}>
+                        {legs.length > 0 ? legs.map((l) => l.name).join(" → ") : trip.destination}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );
@@ -462,11 +420,9 @@ function NextTripTicketHero({
 }) {
   const legs = sortLegs(trip.legs);
   const cities = legs.map((l) => l.name).filter(Boolean);
-  const nights =
-    trip.startDay && trip.endDay ? Math.max(0, diffDays(trip.startDay, trip.endDay)) : 0;
+  const nights = trip.startDay && trip.endDay ? Math.max(0, diffDays(trip.startDay, trip.endDay)) : 0;
   const scheduledCount = items.filter((i) => Boolean(i.day)).length;
-  const routeText =
-    cities.length > 0 ? cities.join(" → ") : trip.destination || "Destination TBD";
+  const routeText = cities.length > 0 ? cities.join(" → ") : trip.destination || "Destination TBD";
 
   return (
     <button
@@ -477,279 +433,45 @@ function NextTripTicketHero({
         width: "100%",
         textAlign: "left",
         border: "none",
+        borderRadius: "var(--radius-card)",
+        padding: "var(--space-24)",
+        background: "linear-gradient(135deg, var(--ticket-start) 0%, var(--ticket-end) 100%)",
+        color: "var(--on-ticket)",
+        boxShadow: "var(--shadow-ticket)",
         cursor: "pointer",
-        position: "relative",
-        borderRadius: 22,
-        padding: 22,
-        marginBottom: 28,
-        color: "#FFFFFF",
-        background: "linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)",
-        boxShadow: "0 10px 26px rgba(37, 99, 235, 0.28)",
       }}
     >
-      {/* Ticket side notches */}
-      <span
-        aria-hidden
-        style={{
-          position: "absolute",
-          left: -9,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 18,
-          height: 18,
-          borderRadius: "50%",
-          background: "var(--paper, #EEF3FA)",
-        }}
-      />
-      <span
-        aria-hidden
-        style={{
-          position: "absolute",
-          right: -9,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 18,
-          height: 18,
-          borderRadius: "50%",
-          background: "var(--paper, #EEF3FA)",
-        }}
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          marginBottom: 8,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: "#FEF3C7",
-          }}
-        >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-12)" }}>
+        <span style={{ fontSize: 11, fontWeight: "var(--weight-semibold)", letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--ticket-highlight)" }}>
           {heroEyebrow(trip, today)}
         </span>
-        {trip.scope === "shared" && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              padding: "3px 10px",
-              borderRadius: 999,
-              background: "rgba(255, 255, 255, 0.18)",
-              color: "#FFFFFF",
-            }}
-          >
-            Shared
-          </span>
-        )}
+        <span style={{ fontSize: 13, opacity: 0.9 }}>{formatDateRange(trip.startDay, trip.endDay)}</span>
       </div>
-
-      <div
-        style={{
-          fontFamily: "var(--font-source-serif), Georgia, serif",
-          fontSize: "clamp(24px, 3vw, 32px)",
-          fontWeight: 800,
-          lineHeight: 1.15,
-          marginBottom: 6,
-        }}
-      >
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 600, marginBottom: 4 }}>
         {trip.name || "Untitled trip"}
       </div>
-
+      <div style={{ fontSize: 15, opacity: 0.92, marginBottom: "var(--space-16)" }}>{routeText}</div>
       <div
         style={{
+          borderTop: "1px dashed var(--ticket-rule)",
+          paddingTop: "var(--space-12)",
+          display: "flex",
+          gap: "var(--space-20)",
           fontSize: 13,
-          color: "rgba(255, 255, 255, 0.85)",
-          marginBottom: 14,
+          opacity: 0.9,
         }}
       >
-        {scheduledCount} scheduled plan{scheduledCount === 1 ? "" : "s"}
-        {legs.length > 0 ? ` · ${legs.length} stop${legs.length === 1 ? "" : "s"}` : ""}
-      </div>
-
-      {/* Inset dark panel (TicketCard.swift) */}
-      <div
-        style={{
-          background: "rgba(15, 27, 51, 0.24)",
-          borderRadius: 12,
-          padding: "2px 14px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            padding: "10px 0",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.22)",
-          }}
-        >
-          <span style={{ fontSize: 14, fontWeight: 600 }}>
-            📅 {formatDateRange(trip.startDay, trip.endDay)}
-          </span>
-          <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
-            {nights} night{nights === 1 ? "" : "s"}
-          </span>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            padding: "10px 0",
-          }}
-        >
-          <span style={{ fontSize: 14, fontWeight: 600 }}>📍 {routeText}</span>
-          <span style={{ fontSize: 13, color: "#FEF3C7", fontWeight: 600 }}>
-            Open →
-          </span>
-        </div>
+        <span>{nights > 0 ? `${nights} nights` : "Dates TBD"}</span>
+        <span>{legs.length > 0 ? `${legs.length} stops` : "Single destination"}</span>
+        <span>{scheduledCount} scheduled plans</span>
       </div>
     </button>
   );
 }
 
-function TripSection({
-  title,
-  trips,
-  itemsByTrip,
-  onOpenTrip,
-}: {
-  title: string;
-  trips: TripRecord[];
-  itemsByTrip: Map<string, TripItemRecord[]>;
-  onOpenTrip: (tripId: string) => void;
-}) {
-  return (
-    <section style={{ marginTop: 24 }}>
-      <h2
-        style={{
-          fontSize: 18,
-          fontWeight: 700,
-          margin: "0 0 12px",
-          color: "var(--ink, #0F1B33)",
-        }}
-      >
-        {title}
-      </h2>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {trips.map((trip) => {
-          const items = itemsByTrip.get(trip.id) ?? [];
-          const legs = sortLegs(trip.legs);
-          const nights =
-            trip.startDay && trip.endDay
-              ? Math.max(0, diffDays(trip.startDay, trip.endDay))
-              : 0;
-          const plansCount = items.filter((i) => Boolean(i.day)).length;
-
-          return (
-            <button
-              key={trip.id}
-              type="button"
-              onClick={() => onOpenTrip(trip.id)}
-              style={{
-                ...cardStyle,
-                textAlign: "left",
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                gap: 10,
-                transition: "transform 120ms ease, box-shadow 120ms ease",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 17,
-                      fontWeight: 700,
-                      color: "var(--ink, #0F1B33)",
-                      marginBottom: 2,
-                    }}
-                  >
-                    {trip.name || "Untitled trip"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: "var(--ink-2, #475877)",
-                    }}
-                  >
-                    {formatDateRange(trip.startDay, trip.endDay)}
-                    {nights > 0 ? ` · ${nights}n` : ""}
-                  </div>
-                </div>
-                {trip.scope === "shared" && <LuggageTag label="Shared" />}
-              </div>
-
-              {(trip.destination || legs.length > 0) && (
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "#2563EB",
-                    fontWeight: 600,
-                  }}
-                >
-                  {legs.length > 0
-                    ? legs.map((l) => `${l.emoji ? `${l.emoji} ` : ""}${l.name}`).join(" → ")
-                    : trip.destination}
-                </div>
-              )}
-
-              <div
-                style={{
-                  marginTop: "auto",
-                  paddingTop: 8,
-                  borderTop: "1px solid var(--line, #D8E2F0)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 12,
-                  color: "#5F6F8E",
-                }}
-              >
-                <span>
-                  {plansCount} plan{plansCount === 1 ? "" : "s"}
-                </span>
-                <span>
-                  {legs.length > 0
-                    ? `${legs.length} cit${legs.length === 1 ? "y" : "ies"}`
-                    : "Single stop"}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 2. Single Trip View (Overview / City:<legId> / Ideas)
-// ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
+/* 2. Single Trip View (List + Map Split)                                     */
+/* -------------------------------------------------------------------------- */
 
 function SingleTripView({
   trip,
@@ -768,6 +490,7 @@ function SingleTripView({
   onSearchChange: (v: string) => void;
   onSelectTrip: (tripId: string | null, page?: TripPage) => void;
 }) {
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const legs = useMemo(() => sortLegs(trip.legs), [trip.legs]);
   const sortedItems = useMemo(() => sortTripItems(allItems), [allItems]);
 
@@ -783,93 +506,69 @@ function SingleTripView({
         item.kind,
         item.transport?.flightNumber,
         item.transport?.airline,
-        item.transport?.fromAirport,
-        item.transport?.toAirport,
       ]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(q)),
     );
   }, [sortedItems, search]);
 
-  const tripDaySet = useMemo(
-    () => new Set(enumerateDays(trip.startDay, trip.endDay)),
-    [trip.startDay, trip.endDay],
-  );
-
+  const tripDaySet = useMemo(() => new Set(enumerateDays(trip.startDay, trip.endDay)), [trip.startDay, trip.endDay]);
   const ideas = useMemo(
-    () =>
-      filteredItems.filter(
-        (i) => !i.day || (tripDaySet.size > 0 && !tripDaySet.has(i.day)),
-      ),
+    () => filteredItems.filter((i) => !i.day || (tripDaySet.size > 0 && !tripDaySet.has(i.day))),
     [filteredItems, tripDaySet],
   );
 
   const activeLegId = page.startsWith("city:") ? page.slice(5) : null;
   const activeLeg = activeLegId ? legs.find((l) => l.id === activeLegId) ?? null : null;
 
-  return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "20px 20px 64px" }}>
-      {/* Top breadcrumb & search bar */}
+  const mapItems = useMemo(() => {
+    if (activeLeg) {
+      const legDays = new Set(enumerateDays(activeLeg.startDay, activeLeg.endDay));
+      return filteredItems.filter((i) => i.day && legDays.has(i.day));
+    }
+    return filteredItems.filter((i) => Boolean(i.day));
+  }, [activeLeg, filteredItems]);
+
+  const leftColumn = (
+    <div>
+      {/* Header & Search */}
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 16,
+          gap: "var(--space-12)",
+          marginBottom: "var(--space-16)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => onSelectTrip(null)}
-            style={{
-              border: "1px solid var(--line, #D8E2F0)",
-              background: "var(--card, #FFFFFF)",
-              color: "var(--ink, #0F1B33)",
-              borderRadius: 10,
-              padding: "6px 12px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)", flexWrap: "wrap" }}>
+          <Pill size="sm" onClick={() => onSelectTrip(null)}>
             ← All Trips
-          </button>
+          </Pill>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <h1
-                style={{
-                  fontFamily: "var(--font-source-serif), Georgia, serif",
-                  fontSize: 24,
-                  fontWeight: 800,
-                  margin: 0,
-                  color: "var(--ink, #0F1B33)",
-                }}
-              >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+              <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, margin: 0 }}>
                 {trip.name || "Untitled trip"}
               </h1>
-              {trip.scope === "shared" && <LuggageTag label="Shared" />}
+              {trip.scope === "shared" && <Badge tone="travel">Shared</Badge>}
             </div>
-            <div style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>
+            <div style={{ fontSize: 13, color: "var(--ink-tertiary)" }}>
               {formatDateRange(trip.startDay, trip.endDay)}
               {trip.destination ? ` · ${trip.destination}` : ""}
             </div>
           </div>
         </div>
-
         <input
           type="search"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search plans…"
-          aria-label="Search plans"
+          placeholder="Search itinerary…"
           style={{
-            border: "1px solid var(--line, #D8E2F0)",
-            background: "var(--card, #FFFFFF)",
-            color: "var(--ink, #0F1B33)",
-            borderRadius: 10,
+            border: "1px solid var(--border-hairline)",
+            background: "var(--bg-card)",
+            color: "var(--ink-primary)",
+            borderRadius: "var(--radius-s)",
             padding: "7px 12px",
             fontSize: 13,
             minWidth: 200,
@@ -877,1098 +576,631 @@ function SingleTripView({
         />
       </div>
 
-      {/* Subpage pill bar (mirrors sidebar for narrow/collapsed states) */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          marginBottom: 20,
-        }}
-      >
-        <PagePill
-          active={page === "overview"}
-          label="Overview"
-          onClick={() => onSelectTrip(trip.id, "overview")}
-        />
+      {/* Subpage Pills */}
+      <div style={{ display: "flex", gap: "var(--space-8)", flexWrap: "wrap", marginBottom: "var(--space-20)" }}>
+        <Pill size="sm" active={page === "overview"} onClick={() => onSelectTrip(trip.id, "overview")}>
+          Overview
+        </Pill>
         {legs.map((leg, idx) => (
-          <PagePill
+          <Pill
             key={leg.id}
+            size="sm"
             active={page === `city:${leg.id}`}
-            label={`${leg.emoji && leg.emoji !== "📍" ? leg.emoji : `${idx + 1}.`} ${leg.name || `City ${idx + 1}`}`}
             onClick={() => onSelectTrip(trip.id, `city:${leg.id}`)}
-          />
+          >
+            {leg.emoji && leg.emoji !== "📍" ? leg.emoji : `${idx + 1}.`} {leg.name || `City ${idx + 1}`}
+          </Pill>
         ))}
-        <PagePill
-          active={page === "ideas"}
-          label={`Ideas (${ideas.length})`}
-          onClick={() => onSelectTrip(trip.id, "ideas")}
-        />
+        <Pill size="sm" active={page === "ideas"} count={ideas.length} onClick={() => onSelectTrip(trip.id, "ideas")}>
+          Wishlists &amp; Ideas
+        </Pill>
       </div>
 
       {page === "ideas" ? (
         <IdeasPageView ideas={ideas} search={search} />
       ) : activeLeg ? (
-        <CityLegView
+        <CityLegTimeline
           trip={trip}
           leg={activeLeg}
-          legIndex={legs.findIndex((l) => l.id === activeLeg.id)}
-          items={filteredItems}
-          allTripItems={sortedItems}
+          items={mapItems}
           today={today}
+          selectedPinId={selectedPinId}
+          onSelectPin={setSelectedPinId}
         />
       ) : (
         <TripOverviewView
           trip={trip}
           legs={legs}
           items={filteredItems}
-          allTripItems={sortedItems}
           today={today}
+          selectedPinId={selectedPinId}
+          onSelectPin={setSelectedPinId}
           onOpenLeg={(legId) => onSelectTrip(trip.id, `city:${legId}`)}
         />
       )}
     </div>
   );
-}
 
-function PagePill({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
+  const mapColumn = (
+    <TripSpatialMap
+      legs={activeLeg ? [activeLeg] : legs}
+      items={page === "ideas" ? ideas : mapItems}
+      selectedId={selectedPinId}
+      onSelect={setSelectedPinId}
+    />
+  );
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        border: active ? "1px solid #2563EB" : "1px solid var(--line, #D8E2F0)",
-        background: active ? "#2563EB" : "var(--card, #FFFFFF)",
-        color: active ? "#FFFFFF" : "var(--ink, #0F1B33)",
-        borderRadius: 999,
-        padding: "6px 14px",
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "var(--space-16) var(--space-16) var(--space-48)" }}>
+      <ListMapSplit
+        left={leftColumn}
+        right={mapColumn}
+        mapToggleLabel={{ show: "Show route map", hide: "Hide route map" }}
+      />
+    </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// 2a. Trip Overview (Departure-board route header, legs, bookings, costs)
-// ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
+/* 2a. Trip Overview + Chronological Itinerary Timeline                       */
+/* -------------------------------------------------------------------------- */
 
 function TripOverviewView({
   trip,
   legs,
   items,
-  allTripItems,
   today,
+  selectedPinId,
+  onSelectPin,
   onOpenLeg,
 }: {
   trip: TripRecord;
   legs: TripLeg[];
   items: TripItemRecord[];
-  allTripItems: TripItemRecord[];
   today: string;
+  selectedPinId: string | null;
+  onSelectPin: (id: string | null) => void;
   onOpenLeg: (legId: string) => void;
 }) {
-  const firstFlight = allTripItems.find(
-    (i) => i.kind === "transit" && i.transport?.mode === "flight",
-  );
-  const bookings = items.filter((i) => i.kind === "transit" || i.kind === "stay");
-  const totalDays =
-    trip.startDay && trip.endDay ? Math.max(1, diffDays(trip.startDay, trip.endDay) + 1) : 0;
-  const scheduledPlans = allTripItems.filter((i) => Boolean(i.day)).length;
-
-  const fromCode = firstFlight?.transport?.fromAirport || "HOME";
-  const toCode =
-    firstFlight?.transport?.toAirport ||
-    (trip.destination ? trip.destination.slice(0, 3).toUpperCase() : "DEST");
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Departure-board style route header */}
-      <div
-        style={{
-          background: "#0F1B33",
-          color: "#FFFFFF",
-          borderRadius: 18,
-          padding: 22,
-          boxShadow: "0 8px 24px rgba(15, 27, 51, 0.18)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 14,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "#FEF3C7",
-            }}
-          >
-            Departure Board · Route Summary
-          </span>
-          <span style={{ fontSize: 12, color: "#B3C0D9" }}>
-            {totalDays > 0 ? `${totalDays} days · ` : ""}
-            {legs.length} cit{legs.length === 1 ? "y" : "ies"} · {scheduledPlans} plan
-            {scheduledPlans === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 16,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 30,
-              fontWeight: 900,
-              letterSpacing: "0.04em",
-              color: "#FEF3C7",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {fromCode}
-          </div>
-          <div
-            style={{
-              flex: 1,
-              minWidth: 80,
-              borderTop: "2px dashed rgba(255, 255, 255, 0.28)",
-              position: "relative",
-              textAlign: "center",
-            }}
-          >
-            <span
-              style={{
-                position: "relative",
-                top: -12,
-                background: "#0F1B33",
-                padding: "0 8px",
-                fontSize: 14,
-              }}
-            >
-              ✈️
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 30,
-              fontWeight: 900,
-              letterSpacing: "0.04em",
-              color: "#FEF3C7",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {toCode}
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 10,
-            background: "rgba(255, 255, 255, 0.08)",
-            borderRadius: 12,
-            padding: 12,
-          }}
-        >
-          <BoardCell label="Dates" value={formatDateRange(trip.startDay, trip.endDay)} />
-          <BoardCell
-            label="Route"
-            value={
-              legs.length > 0
-                ? legs.map((l) => l.name).filter(Boolean).join(" → ")
-                : trip.destination || "—"
-            }
-          />
-          <BoardCell
-            label="Primary Transit"
-            value={
-              firstFlight?.transport?.flightNumber
-                ? `${firstFlight.transport.airline ?? ""} ${firstFlight.transport.flightNumber}`.trim()
-                : "See bookings"
-            }
-          />
-        </div>
-
-        {trip.notes && (
-          <p
-            style={{
-              margin: "14px 0 0",
-              fontSize: 14,
-              color: "#B3C0D9",
-              lineHeight: 1.5,
-            }}
-          >
-            {trip.notes}
-          </p>
-        )}
-      </div>
-
-      {/* Two-column body: Legs/Stops + Costs */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: 16,
-          alignItems: "start",
-        }}
-      >
-        {/* Legs / Stops Summary */}
-        <div style={cardStyle}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              marginBottom: 12,
-            }}
-          >
-            <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "var(--ink, #0F1B33)" }}>
-              Stops &amp; Cities
-            </h2>
-            <span style={{ fontSize: 12, color: "#5F6F8E" }}>
-              {legs.length} stop{legs.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          {legs.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 14, color: "#5F6F8E" }}>
-              No city legs defined yet. All scheduled plans are grouped under the trip dates.
-            </p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {legs.map((leg, idx) => {
-                const nights = Math.max(0, diffDays(leg.startDay, leg.endDay));
-                const isNow = leg.startDay <= today && leg.endDay >= today;
-                const legPlanCount = allTripItems.filter(
-                  (i) => i.day && i.day >= leg.startDay && i.day <= leg.endDay,
-                ).length;
-
-                return (
-                  <button
-                    key={leg.id}
-                    type="button"
-                    onClick={() => onOpenLeg(leg.id)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid var(--line, #D8E2F0)",
-                      background: "var(--paper, #EEF3FA)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: "50%",
-                        background: "#2563EB",
-                        color: "#FFFFFF",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {leg.emoji && leg.emoji !== "📍" ? leg.emoji : idx + 1}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: 15,
-                          fontWeight: 600,
-                          color: "var(--ink, #0F1B33)",
-                        }}
-                      >
-                        <span>{leg.name || `City ${idx + 1}`}</span>
-                        {isNow && (
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 800,
-                              padding: "2px 6px",
-                              borderRadius: 999,
-                              background: "#2563EB",
-                              color: "#FFFFFF",
-                            }}
-                          >
-                            NOW
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
-                        {formatDayShort(leg.startDay)} – {formatDayShort(leg.endDay)} ·{" "}
-                        {nights} night{nights === 1 ? "" : "s"} · {legPlanCount} plan
-                        {legPlanCount === 1 ? "" : "s"}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 13, color: "#2563EB", fontWeight: 600 }}>→</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Trip Costs Card (TripCostsCard from MacTripWorkspace.swift) */}
-        <TripCostsCard items={allTripItems} />
-      </div>
-
-      {/* Bookings & Stays (DepartureBoard style) */}
-      <div style={cardStyle}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: 12,
-          }}
-        >
-          <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "var(--ink, #0F1B33)" }}>
-            Bookings &amp; Stays
-          </h2>
-          <span style={{ fontSize: 12, color: "#5F6F8E" }}>
-            {bookings.length} item{bookings.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        {bookings.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 14, color: "#5F6F8E" }}>
-            No flights, trains, or stays added yet.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {bookings.map((b, idx) => {
-              const meta = KIND_META[b.kind];
-              const t = b.transport;
-              const route =
-                t?.fromAirport || t?.toAirport
-                  ? `${t.fromAirport ?? "?"} → ${t.toAirport ?? "?"}`
-                  : null;
-              const detailParts = [
-                b.day ? formatDayWithWeekday(b.day) : "Unscheduled",
-                typeof b.time === "number" ? formatClock(b.time) : null,
-                b.checkOutDay ? `out ${formatDayShort(b.checkOutDay)}` : null,
-                t?.airline || t?.flightNumber
-                  ? `${t.airline ?? ""} ${t.flightNumber ?? ""}`.trim()
-                  : null,
-                route,
-                t?.seats ? `Seats ${t.seats}` : null,
-                b.placeName,
-              ].filter(Boolean);
-
-              return (
-                <div
-                  key={b.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    padding: "11px 0",
-                    borderTop: idx > 0 ? "1px solid var(--line, #D8E2F0)" : "none",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <span
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: meta.softBg,
-                        color: meta.color,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 14,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {t?.mode === "train" ? "🚆" : meta.icon}
-                    </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "var(--ink, #0F1B33)",
-                        }}
-                      >
-                        {b.title || b.placeName || meta.label}
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
-                        {detailParts.join(" · ")}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    {t?.confirmation && (
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: "#2563EB",
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {t.confirmation}
-                      </div>
-                    )}
-                    {typeof b.cost === "number" && b.cost > 0 && (
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "var(--ink, #0F1B33)",
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {formatMoney(b.cost, b.currency)}
-                      </div>
-                    )}
-                    {typeof b.points === "number" && b.points > 0 && (
-                      <div style={{ fontSize: 12, color: "#5F6F8E" }}>
-                        {b.points.toLocaleString("en-US")} {b.pointsProgram ?? "pts"}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BoardCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "#B3C0D9",
-          marginBottom: 2,
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>{value}</div>
-    </div>
-  );
-}
-
-function TripCostsCard({ items }: { items: TripItemRecord[] }) {
-  const { grandTotals, grandPoints, lines, unpricedCount } = useMemo(() => {
-    const totals: Record<string, number> = {};
-    const points: Record<string, number> = {};
-    const buckets: Record<
-      "transit" | "stay" | "meal" | "other",
-      {
-        title: string;
-        icon: string;
-        count: number;
-        totals: Record<string, number>;
-        points: Record<string, number>;
+  const days = useMemo(() => enumerateDays(trip.startDay, trip.endDay), [trip.startDay, trip.endDay]);
+  const totals = useMemo(() => {
+    const cur: Record<string, number> = {};
+    const pts: Record<string, number> = {};
+    for (const it of items) {
+      if (typeof it.cost === "number" && it.cost > 0) {
+        const c = it.currency || "USD";
+        cur[c] = (cur[c] ?? 0) + it.cost;
       }
-    > = {
-      transit: { title: "Flights & Trains", icon: "✈️", count: 0, totals: {}, points: {} },
-      stay: { title: "Stays", icon: "🛏️", count: 0, totals: {}, points: {} },
-      meal: { title: "Meals", icon: "🍽️", count: 0, totals: {}, points: {} },
-      other: { title: "Activities & Other", icon: "📍", count: 0, totals: {}, points: {} },
-    };
-
-    let unpriced = 0;
-
-    for (const item of items) {
-      const hasCost = typeof item.cost === "number" && item.cost > 0;
-      const hasPoints = typeof item.points === "number" && item.points > 0;
-      if (!hasCost && !hasPoints) {
-        if (item.kind === "transit" || item.kind === "stay") unpriced += 1;
-        continue;
-      }
-
-      const key =
-        item.kind === "transit"
-          ? "transit"
-          : item.kind === "stay"
-            ? "stay"
-            : item.kind === "meal"
-              ? "meal"
-              : "other";
-      const bucket = buckets[key];
-      bucket.count += 1;
-
-      if (hasCost && item.cost) {
-        const cur = item.currency || "USD";
-        totals[cur] = (totals[cur] ?? 0) + item.cost;
-        bucket.totals[cur] = (bucket.totals[cur] ?? 0) + item.cost;
-      }
-      if (hasPoints && item.points) {
-        const prog = item.pointsProgram || "";
-        points[prog] = (points[prog] ?? 0) + item.points;
-        bucket.points[prog] = (bucket.points[prog] ?? 0) + item.points;
+      if (typeof it.points === "number" && it.points > 0) {
+        const p = it.pointsProgram || "Points";
+        pts[p] = (pts[p] ?? 0) + it.points;
       }
     }
-
-    return {
-      grandTotals: totals,
-      grandPoints: points,
-      lines: Object.values(buckets).filter((b) => b.count > 0),
-      unpricedCount: unpriced,
-    };
+    return formatCostTotals(cur, pts);
   }, [items]);
 
-  const hasAnyCost =
-    Object.keys(grandTotals).length > 0 || Object.keys(grandPoints).length > 0;
-
   return (
-    <div style={cardStyle}>
-      <div
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
+      {/* Departure Board Route & Cost Strip */}
+      <Card
+        padding="md"
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: 12,
-          marginBottom: 12,
+          background: "var(--board)",
+          color: "var(--on-board)",
+          borderColor: "transparent",
         }}
       >
-        <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "var(--ink, #0F1B33)" }}>
-          Trip Costs
-        </h2>
-        {hasAnyCost && (
-          <span
-            style={{
-              fontSize: 18,
-              fontWeight: 800,
-              color: "var(--ink, #0F1B33)",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {formatCostTotals(grandTotals, grandPoints)}
-          </span>
-        )}
-      </div>
-
-      {lines.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 14, color: "#5F6F8E" }}>
-          Add prices or points to flights, trains, and stays to see what this trip costs.
-        </p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {lines.map((line) => (
-            <div
-              key={line.title}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    background: "rgba(37, 99, 235, 0.12)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 12,
-                  }}
-                >
-                  {line.icon}
-                </span>
-                <span style={{ fontSize: 14, color: "var(--ink, #0F1B33)" }}>{line.title}</span>
-                <span style={{ fontSize: 12, color: "#5F6F8E" }}>{line.count}</span>
-              </div>
-              <span
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "var(--ink, #0F1B33)",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {formatCostTotals(line.totals, line.points)}
-              </span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "var(--space-12)" }}>
+          <div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--board-muted)" }}>
+              Route
             </div>
+            <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", marginTop: 2 }}>
+              {legs.length > 0 ? legs.map((l) => l.name).join(" → ") : trip.destination || "TBD"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--board-muted)" }}>
+              Duration
+            </div>
+            <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", marginTop: 2 }}>
+              {days.length > 0 ? `${days.length} days` : "TBD"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--board-muted)" }}>
+              Tracked Cost
+            </div>
+            <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+              {totals}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* City Legs */}
+      {legs.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: "var(--space-12)" }}>
+          {legs.map((leg, i) => (
+            <Card key={leg.id} interactive padding="sm" onClick={() => onOpenLeg(leg.id)}>
+              <div style={{ fontSize: 11, color: "var(--ink-tertiary)", fontWeight: "var(--weight-semibold)" }}>
+                STOP {i + 1} · {formatDayShort(leg.startDay)} – {formatDayShort(leg.endDay)}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: "var(--weight-semibold)", marginTop: 4 }}>
+                {leg.emoji && leg.emoji !== "📍" ? `${leg.emoji} ` : ""}
+                {leg.name}
+              </div>
+            </Card>
           ))}
         </div>
       )}
 
-      {unpricedCount > 0 && (
-        <div style={{ marginTop: 12, fontSize: 12, color: "#5F6F8E" }}>
-          ⓘ {unpricedCount} booking{unpricedCount === 1 ? "" : "s"} without a price
-        </div>
-      )}
+      {/* Chronological Itinerary Timeline */}
+      <ItineraryTimeline
+        trip={trip}
+        days={days}
+        items={items}
+        today={today}
+        selectedPinId={selectedPinId}
+        onSelectPin={onSelectPin}
+      />
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// 2b. City / Leg Day-by-Day Itinerary View
-// ---------------------------------------------------------------------------
-
-function CityLegView({
+function CityLegTimeline({
   trip,
   leg,
-  legIndex,
   items,
-  allTripItems,
   today,
+  selectedPinId,
+  onSelectPin,
 }: {
   trip: TripRecord;
   leg: TripLeg;
-  legIndex: number;
   items: TripItemRecord[];
-  allTripItems: TripItemRecord[];
   today: string;
+  selectedPinId: string | null;
+  onSelectPin: (id: string | null) => void;
 }) {
   const days = useMemo(() => enumerateDays(leg.startDay, leg.endDay), [leg.startDay, leg.endDay]);
-  const nights = Math.max(0, diffDays(leg.startDay, leg.endDay));
-  const isNow = leg.startDay <= today && leg.endDay >= today;
+  return (
+    <ItineraryTimeline
+      trip={trip}
+      days={days}
+      items={items}
+      today={today}
+      selectedPinId={selectedPinId}
+      onSelectPin={onSelectPin}
+    />
+  );
+}
+
+function ItineraryTimeline({
+  trip,
+  days,
+  items,
+  today,
+  selectedPinId,
+  onSelectPin,
+}: {
+  trip: TripRecord;
+  days: string[];
+  items: TripItemRecord[];
+  today: string;
+  selectedPinId: string | null;
+  onSelectPin: (id: string | null) => void;
+}) {
+  if (days.length === 0) {
+    return (
+      <Card>
+        <p style={{ margin: 0, color: "var(--ink-tertiary)" }}>No scheduled days for this trip yet.</p>
+      </Card>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Leg header */}
-      <div
-        style={{
-          ...cardStyle,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              background: "#2563EB",
-              color: "#FFFFFF",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              fontWeight: 700,
-            }}
-          >
-            {leg.emoji && leg.emoji !== "📍" ? leg.emoji : legIndex + 1}
-          </span>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <h2
-                style={{
-                  fontFamily: "var(--font-source-serif), Georgia, serif",
-                  fontSize: 22,
-                  fontWeight: 800,
-                  margin: 0,
-                  color: "var(--ink, #0F1B33)",
-                }}
-              >
-                {leg.name || `City ${legIndex + 1}`}
-              </h2>
-              {isNow && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                    background: "#2563EB",
-                    color: "#FFFFFF",
-                  }}
-                >
-                  NOW
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>
-              {formatDateRange(leg.startDay, leg.endDay)} · {nights} night
-              {nights === 1 ? "" : "s"}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Day-by-day cards */}
-      {days.map((day) => {
-        const dayIndex = trip.startDay ? diffDays(trip.startDay, day) + 1 : null;
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-24)" }}>
+      {days.map((day, dayIdx) => {
+        const dayItems = items.filter((i) => i.day === day || i.checkOutDay === day);
         const dayTitle = trip.dayTitles[day];
-        const dayPlans = items.filter((i) => i.day === day);
-        const stayingOver = allTripItems.filter(
-          (i) =>
-            i.kind === "stay" &&
-            i.day &&
-            i.day < day &&
-            i.checkOutDay &&
-            i.checkOutDay > day,
-        );
         const isToday = day === today;
-
         return (
-          <div
-            key={day}
-            style={{
-              ...cardStyle,
-              borderColor: isToday ? "#2563EB" : "var(--line, #D8E2F0)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 8,
-                marginBottom: 12,
-                paddingBottom: 10,
-                borderBottom: "1px solid var(--line, #D8E2F0)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                {dayIndex !== null && dayIndex > 0 && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      color: isToday ? "#2563EB" : "#5F6F8E",
-                    }}
-                  >
-                    Day {dayIndex}
-                  </span>
-                )}
-                <h3
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 700,
-                    margin: 0,
-                    color: "var(--ink, #0F1B33)",
-                  }}
-                >
+          <section key={day} style={{ borderTop: dayIdx > 0 ? "1px solid var(--border-hairline)" : "none", paddingTop: dayIdx > 0 ? "var(--space-20)" : 0 }}>
+            {/* Day Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-12)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600 }}>
                   {formatDayWithWeekday(day)}
-                </h3>
-                {dayTitle && (
-                  <span style={{ fontSize: 14, color: "var(--ink-2, #475877)" }}>
-                    · {dayTitle}
-                  </span>
-                )}
-                {isToday && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 800,
-                      padding: "2px 7px",
-                      borderRadius: 999,
-                      background: "rgba(37, 99, 235, 0.14)",
-                      color: "#2563EB",
-                    }}
-                  >
-                    Today
-                  </span>
-                )}
+                </span>
+                {dayTitle && <span style={{ fontSize: 14, color: "var(--ink-tertiary)" }}>— {dayTitle}</span>}
               </div>
-              <span style={{ fontSize: 12, color: "#5F6F8E" }}>
-                {dayPlans.length} plan{dayPlans.length === 1 ? "" : "s"}
-              </span>
+              {isToday && <Badge tone="brand">Today</Badge>}
             </div>
 
-            {stayingOver.length > 0 && (
+            {dayItems.length === 0 ? (
               <div
                 style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginBottom: 10,
+                  padding: "var(--space-12) var(--space-16)",
+                  borderRadius: "var(--radius-m)",
+                  background: "var(--bg-paper-soft)",
+                  fontSize: 13,
+                  color: "var(--ink-tertiary)",
                 }}
               >
-                {stayingOver.map((s) => (
-                  <span
-                    key={s.id}
-                    style={{
-                      fontSize: 12,
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      background: "rgba(124, 58, 237, 0.1)",
-                      color: "#7C3AED",
-                      fontWeight: 600,
-                    }}
-                  >
-                    🛏️ Staying at {s.placeName || s.title}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {dayPlans.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#5F6F8E", padding: "4px 0" }}>
-                Nothing scheduled for this day yet.
+                Open day — no scheduled items
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {dayPlans.map((item) => (
-                  <TripPlanRow key={item.id} item={item} />
-                ))}
+              /* Vertical Timeline Track beside soft #F4F0EA containers holding nested white booking cards */
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+                {dayItems.map((item) => {
+                  const meta = KIND_META[item.kind];
+                  const stayLabel = stayLabelOnDay(item, day);
+                  const milestoneTitle = stayLabel ?? meta.label;
+                  const status = item.extras?.status;
+                  const statusTone: BadgeTone =
+                    status === "booked" ? "income" : status === "planned" ? "travel" : status === "cancelled" ? "expense" : "neutral";
+                  const selected = selectedPinId === item.id;
+
+                  return (
+                    <div key={`${item.id}-${day}`} style={{ display: "flex", gap: "var(--space-12)", alignItems: "stretch" }}>
+                      {/* Circular Milestone Header + Vertical Track */}
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
+                        <span
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: "var(--radius-full)",
+                            background: "var(--bg-card)",
+                            border: `1.5px solid ${meta.colorVar}`,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 14,
+                            flexShrink: 0,
+                          }}
+                          title={milestoneTitle}
+                        >
+                          {stayLabel === "Check out" ? "🗝️" : meta.icon}
+                        </span>
+                        <span style={{ flex: 1, width: 1.5, background: "var(--border-hairline)", marginTop: 4 }} />
+                      </div>
+
+                      {/* Soft #F4F0EA container holding nested white booking card */}
+                      <div
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: "var(--space-8)",
+                          borderRadius: "var(--radius-card)",
+                          background: "var(--bg-paper-soft)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "var(--weight-semibold)",
+                            letterSpacing: "0.06em",
+                            textTransform: "uppercase",
+                            color: "var(--ink-tertiary)",
+                            marginBottom: 6,
+                            paddingLeft: 4,
+                          }}
+                        >
+                          {milestoneTitle}
+                          {typeof item.time === "number" ? ` · ${formatClock(item.time)}` : ""}
+                        </div>
+                        <Card
+                          interactive
+                          padding="sm"
+                          onClick={() => onSelectPin(selected ? null : item.id)}
+                          style={{ borderColor: selected ? "var(--brand)" : undefined }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", color: "var(--ink-primary)" }}>
+                                {item.title || item.placeName || milestoneTitle}
+                              </div>
+                              {(item.placeName || item.placeAddress) && (
+                                <div style={{ fontSize: 12.5, color: "var(--ink-tertiary)", marginTop: 2 }}>
+                                  {[item.placeName, item.placeAddress].filter(Boolean).join(" · ")}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                              {status && <Badge tone={statusTone}>{status}</Badge>}
+                              {typeof item.cost === "number" && item.cost > 0 && (
+                                <Badge tone="neutral">{formatMoney(item.cost, item.currency)}</Badge>
+                              )}
+                            </div>
+                          </div>
+                          {item.transport && (
+                            <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", marginTop: 6 }}>
+                              {[
+                                item.transport.airline,
+                                item.transport.flightNumber,
+                                item.transport.fromAirport && item.transport.toAirport
+                                  ? `${item.transport.fromAirport} → ${item.transport.toAirport}`
+                                  : null,
+                                item.transport.confirmation ? `Conf ${item.transport.confirmation}` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          )}
+                          {item.notes && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                paddingTop: 8,
+                                borderTop: "1px solid var(--border-hairline)",
+                                fontSize: 12.5,
+                                color: "var(--ink-secondary)",
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              {item.notes}
+                            </div>
+                          )}
+                        </Card>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </div>
+          </section>
         );
       })}
     </div>
   );
 }
 
-function TripPlanRow({ item }: { item: TripItemRecord }) {
-  const meta = KIND_META[item.kind];
-  const t = item.transport;
-  const route =
-    t?.fromAirport || t?.toAirport
-      ? `${t.fromAirport ?? "?"} → ${t.toAirport ?? "?"}`
-      : null;
+/* -------------------------------------------------------------------------- */
+/* 2b. Airbnb Wishlists / Saves (Ideas)                                       */
+/* -------------------------------------------------------------------------- */
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 12,
-        padding: "10px 12px",
-        borderRadius: 12,
-        background: "var(--paper, #EEF3FA)",
-        border: "1px solid var(--line, #D8E2F0)",
-      }}
-    >
-      {/* Time column */}
-      <div
-        style={{
-          width: 48,
-          flexShrink: 0,
-          fontSize: 13,
-          fontWeight: 600,
-          color: "var(--ink-2, #475877)",
-          fontVariantNumeric: "tabular-nums",
-          paddingTop: 3,
-        }}
-      >
-        {formatClock(item.time)}
-      </div>
-
-      {/* Kind badge */}
-      <span
-        title={meta.label}
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          background: meta.softBg,
-          color: meta.color,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 14,
-          flexShrink: 0,
-        }}
-      >
-        {item.kind === "transit" && t?.mode === "train" ? "🚆" : meta.icon}
-      </span>
-
-      {/* Main details */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 15,
-              fontWeight: 600,
-              color: "var(--ink, #0F1B33)",
-            }}
-          >
-            {item.title || item.placeName || meta.label}
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              padding: "2px 7px",
-              borderRadius: 999,
-              background: meta.softBg,
-              color: meta.color,
-            }}
-          >
-            {meta.label}
-          </span>
-        </div>
-
-        {(item.placeName || item.placeAddress) && (
-          <div style={{ fontSize: 13, color: "var(--ink-2, #475877)", marginTop: 2 }}>
-            {[
-              item.placeName && item.placeName !== item.title ? item.placeName : null,
-              item.placeAddress,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
-        )}
-
-        {t && (
-          <div style={{ fontSize: 12, color: "#2563EB", fontWeight: 600, marginTop: 3 }}>
-            {[
-              t.airline || t.flightNumber
-                ? `${t.airline ?? ""} ${t.flightNumber ?? ""}`.trim()
-                : null,
-              route,
-              t.seats ? `Seats ${t.seats}` : null,
-              t.confirmation ? `Ref ${t.confirmation}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
-        )}
-
-        {item.notes && (
-          <div
-            style={{
-              fontSize: 13,
-              color: "var(--ink-2, #475877)",
-              marginTop: 4,
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {item.notes}
-          </div>
-        )}
-      </div>
-
-      {/* Cost / Points */}
-      {(typeof item.cost === "number" && item.cost > 0) ||
-      (typeof item.points === "number" && item.points > 0) ? (
-        <div style={{ textAlign: "right", flexShrink: 0, fontSize: 13, fontWeight: 600 }}>
-          {typeof item.cost === "number" && item.cost > 0 && (
-            <div style={{ color: "var(--ink, #0F1B33)", fontVariantNumeric: "tabular-nums" }}>
-              {formatMoney(item.cost, item.currency)}
-            </div>
-          )}
-          {typeof item.points === "number" && item.points > 0 && (
-            <div style={{ fontSize: 12, color: "#5F6F8E" }}>
-              {item.points.toLocaleString("en-US")} {item.pointsProgram ?? "pts"}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 2c. Ideas View (Unscheduled trip items)
-// ---------------------------------------------------------------------------
-
-function IdeasPageView({
-  ideas,
-  search,
-}: {
-  ideas: TripItemRecord[];
-  search: string;
-}) {
+function IdeasPageView({ ideas, search }: { ideas: TripItemRecord[]; search: string }) {
   if (ideas.length === 0) {
     return (
-      <div style={{ ...cardStyle, textAlign: "center", padding: "40px 24px" }}>
-        <div style={{ fontSize: 34, marginBottom: 8 }}>💡</div>
-        <h2
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            margin: "0 0 6px",
-            color: "var(--ink, #0F1B33)",
-          }}
-        >
-          {search.trim() ? "No matching ideas" : "No ideas yet"}
-        </h2>
-        <p style={{ margin: 0, fontSize: 14, color: "#5F6F8E" }}>
-          {search.trim()
-            ? "Try clearing your search filter."
-            : "Unscheduled places and ideas saved on Mac or iPhone will appear here."}
+      <Card>
+        <p style={{ margin: 0, color: "var(--ink-tertiary)" }}>
+          {search ? "No saved ideas match your search." : "No unscheduled ideas or wishlist saves yet."}
         </p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div style={cardStyle}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "var(--space-16)" }}>
+      {ideas.map((item) => {
+        const meta = KIND_META[item.kind];
+        return (
+          <Card key={item.id} padding="sm" style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+            <div
+              style={{
+                aspectRatio: "1 / 1",
+                borderRadius: "var(--radius-s)",
+                background: "var(--bg-paper-soft)",
+                border: "1px solid var(--border-hairline)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "var(--space-16)",
+                textAlign: "center",
+              }}
+            >
+              <span style={{ fontSize: 32, marginBottom: 8 }}>{meta.icon}</span>
+              <Badge tone="neutral">{meta.label}</Badge>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)" }}>{item.title || item.placeName}</div>
+            {item.placeAddress && (
+              <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>{item.placeAddress}</div>
+            )}
+            {item.notes && (
+              <div
+                style={{
+                  marginTop: "auto",
+                  padding: "6px 8px",
+                  borderRadius: "var(--radius-xs)",
+                  background: "var(--bg-paper-soft)",
+                  fontSize: 12,
+                  color: "var(--ink-secondary)",
+                }}
+              >
+                {item.notes}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. Trip Spatial Map (Floating pill pins + dashed flight/route polylines)   */
+/* -------------------------------------------------------------------------- */
+
+function TripSpatialMap({
+  legs,
+  items,
+  selectedId,
+  onSelect,
+}: {
+  legs: TripLeg[];
+  items: TripItemRecord[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const geoLegs = useMemo(
+    () => legs.filter((l) => typeof l.latitude === "number" && typeof l.longitude === "number"),
+    [legs],
+  );
+  const geoItems = useMemo(
+    () => items.filter((i) => typeof i.latitude === "number" && typeof i.longitude === "number"),
+    [items],
+  );
+
+  const allCoords = useMemo(
+    () => [
+      ...geoLegs.map((l) => ({ lat: l.latitude!, lng: l.longitude! })),
+      ...geoItems.map((i) => ({ lat: i.latitude!, lng: i.longitude! })),
+    ],
+    [geoLegs, geoItems],
+  );
+
+  const bounds = useMemo(() => {
+    if (allCoords.length === 0) return null;
+    const lats = allCoords.map((c) => c.lat);
+    const lngs = allCoords.map((c) => c.lng);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      minLat,
+      minLng,
+      latSpan: Math.max(0.02, maxLat - minLat),
+      lngSpan: Math.max(0.02, maxLng - minLng),
+    };
+  }, [allCoords]);
+
+  const toPct = (lat: number, lng: number) => {
+    if (!bounds) return { x: 50, y: 50 };
+    return {
+      x: 12 + ((lng - bounds.minLng) / bounds.lngSpan) * 76,
+      y: 86 - ((lat - bounds.minLat) / bounds.latSpan) * 72,
+    };
+  };
+
+  const legRoutePts = geoLegs.map((l) => toPct(l.latitude!, l.longitude!));
+
+  return (
+    <Card padding="none" style={{ height: 540, overflow: "hidden", background: "var(--bg-paper-soft)" }}>
       <div
         style={{
+          padding: "var(--space-12) var(--space-16)",
+          borderBottom: "1px solid var(--border-hairline)",
+          background: "var(--bg-card)",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 14,
+          alignItems: "center",
         }}
       >
-        <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "var(--ink, #0F1B33)" }}>
-          Ideas &amp; Unscheduled Plans
-        </h2>
-        <span style={{ fontSize: 12, color: "#5F6F8E" }}>
-          {ideas.length} item{ideas.length === 1 ? "" : "s"}
+        <span style={{ fontSize: 13, fontWeight: "var(--weight-semibold)" }}>Route &amp; Places Map</span>
+        <span style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
+          {geoLegs.length} stops · {geoItems.length} pins
         </span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {ideas.map((item) => (
-          <TripPlanRow key={item.id} item={item} />
-        ))}
-      </div>
-    </div>
+
+      {!bounds ? (
+        <div
+          style={{
+            height: "calc(100% - 44px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "var(--space-24)",
+            textAlign: "center",
+            color: "var(--ink-tertiary)",
+            fontSize: 13.5,
+          }}
+        >
+          No coordinates synced for this trip yet.
+        </div>
+      ) : (
+        <div
+          style={{
+            position: "relative",
+            height: "calc(100% - 44px)",
+            backgroundImage: "radial-gradient(circle at 1px 1px, var(--border-hairline) 1px, transparent 0)",
+            backgroundSize: "24px 24px",
+          }}
+        >
+          {/* Dashed flight/route polylines */}
+          {legRoutePts.length >= 2 && (
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+            >
+              <polyline
+                fill="none"
+                stroke="var(--brand-blue)"
+                strokeWidth="0.7"
+                strokeDasharray="2 1.8"
+                points={legRoutePts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+              />
+            </svg>
+          )}
+
+          {/* City Leg Markers */}
+          {geoLegs.map((leg, i) => {
+            const pt = toPct(leg.latitude!, leg.longitude!);
+            return (
+              <div
+                key={leg.id}
+                style={{
+                  position: "absolute",
+                  left: `${pt.x}%`,
+                  top: `${pt.y}%`,
+                  transform: "translate(-50%, -50%)",
+                  padding: "4px 10px",
+                  borderRadius: "var(--radius-full)",
+                  background: "var(--board)",
+                  color: "var(--on-board)",
+                  fontSize: 11.5,
+                  fontWeight: "var(--weight-semibold)",
+                  boxShadow: "var(--shadow-card)",
+                  zIndex: 8,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {i + 1}. {leg.name}
+              </div>
+            );
+          })}
+
+          {/* Trip Item Floating Pill Pins */}
+          {geoItems.slice(0, 45).map((item) => {
+            const pt = toPct(item.latitude!, item.longitude!);
+            const active = selectedId === item.id;
+            const meta = KIND_META[item.kind];
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelect(active ? null : item.id)}
+                title={item.title || item.placeName}
+                style={{
+                  position: "absolute",
+                  left: `${pt.x}%`,
+                  top: `${pt.y}%`,
+                  transform: `translate(-50%, -50%) scale(${active ? 1.12 : 1})`,
+                  zIndex: active ? 20 : 10,
+                  padding: "4px 9px",
+                  borderRadius: "var(--radius-full)",
+                  border: active ? "2px solid var(--ink-primary)" : "1px solid var(--border-strong)",
+                  background: active ? "var(--brand)" : "var(--bg-card)",
+                  color: active ? "var(--on-brand)" : "var(--ink-primary)",
+                  fontSize: 11.5,
+                  fontWeight: "var(--weight-medium)",
+                  boxShadow: "var(--shadow-card)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  maxWidth: 150,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {meta.icon} {item.title || item.placeName}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }

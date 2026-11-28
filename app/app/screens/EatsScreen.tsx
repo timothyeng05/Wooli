@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { EatsPlaceRecord, MealSentiment } from "@/lib/cloudkit/schema";
+import { Badge, Card, InspectorDrawer, ListMapSplit, Pill, type BadgeTone } from "@/app/components/ds";
 
 export interface EatsScreenProps {
   eats: EatsPlaceRecord[];
@@ -17,20 +18,20 @@ type ScopeFilter = "all" | "mine" | "shared";
 type ListTab = "ranked" | "wish";
 type SortBy = "score" | "recent" | "name";
 
-const SENTIMENT_ORDER: MealSentiment[] = ["loved", "liked", "fine", "disliked"];
-
 const SENTIMENT_LABEL: Record<MealSentiment, string> = {
+  mustTry: "Must try",
   loved: "Loved",
   liked: "Liked",
   fine: "Fine",
   disliked: "Disliked",
 };
 
-const SENTIMENT_COLOR: Record<MealSentiment, string> = {
-  loved: "#15803d",
-  liked: "#2563eb",
-  fine: "#0f766e",
-  disliked: "#b91c1c",
+const SENTIMENT_TONE: Record<MealSentiment, BadgeTone> = {
+  mustTry: "income",
+  loved: "income",
+  liked: "travel",
+  fine: "brand",
+  disliked: "expense",
 };
 
 function extractCity(address: string): string | null {
@@ -58,13 +59,13 @@ function extractCity(address: string): string | null {
 function extractCuisine(notes: string): string | null {
   const first = notes.split("\n")[0]?.trim();
   if (!first || first.startsWith("http")) return null;
-  return first.length > 40 ? `${first.slice(0, 38)}…` : first;
+  return first.length > 44 ? `${first.slice(0, 42)}…` : first;
 }
 
 function computeScores(items: EatsPlaceRecord[]): Map<string, { score: number; rankPos: number }> {
   const result = new Map<string, { score: number; rankPos: number }>();
   const bands: { sentiments: MealSentiment[]; min: number; max: number }[] = [
-    { sentiments: ["loved", "liked"], min: 6.7, max: 10.0 },
+    { sentiments: ["mustTry", "loved", "liked"], min: 6.7, max: 10.0 },
     { sentiments: ["fine"], min: 3.4, max: 6.6 },
     { sentiments: ["disliked"], min: 1.0, max: 3.3 },
   ];
@@ -97,13 +98,18 @@ function verdictForScore(score: number): string {
   return "Pass";
 }
 
-function scoreColor(score: number): string {
-  if (score >= 6.7) return "#15803d";
-  if (score >= 3.4) return "#0f766e";
-  return "#b91c1c";
+function scoreTone(score: number): BadgeTone {
+  if (score >= 6.7) return "income";
+  if (score >= 3.4) return "brand";
+  return "expense";
 }
 
-export function EatsScreen({ eats, onAddCloudEat }: EatsScreenProps) {
+function mapsUrlFor(place: EatsPlaceRecord): string {
+  const q = encodeURIComponent(place.address ? `${place.name}, ${place.address}` : place.name);
+  return `https://maps.apple.com/?q=${q}`;
+}
+
+export function EatsScreen({ eats }: EatsScreenProps) {
   const [scope, setScope] = useState<ScopeFilter>("all");
   const [tab, setTab] = useState<ListTab>("ranked");
   const [sort, setSort] = useState<SortBy>("score");
@@ -111,29 +117,25 @@ export function EatsScreen({ eats, onAddCloudEat }: EatsScreenProps) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newAddress, setNewAddress] = useState("");
-  const [newSentiment, setNewSentiment] = useState<MealSentiment>("liked");
-  const [newIsWish, setNewIsWish] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
   const scoped = useMemo(() => {
     if (scope === "mine") return eats.filter((e) => e.scope === "private");
     if (scope === "shared") return eats.filter((e) => e.scope === "shared");
     return eats;
   }, [eats, scope]);
 
-  const scores = useMemo(() => computeScores(scoped), [scoped]);
+  const myScores = useMemo(() => computeScores(eats.filter((e) => e.scope !== "shared")), [eats]);
+  const sharedScores = useMemo(() => computeScores(eats.filter((e) => e.scope === "shared")), [eats]);
+  const scores = useMemo(() => {
+    const merged = new Map<string, { score: number; rankPos: number }>();
+    for (const [k, v] of sharedScores) merged.set(k, v);
+    for (const [k, v] of myScores) merged.set(k, v);
+    return merged;
+  }, [myScores, sharedScores]);
 
   const wishCount = useMemo(() => scoped.filter((e) => e.isWish).length, [scoped]);
   const rankedCount = useMemo(() => scoped.filter((e) => !e.isWish).length, [scoped]);
 
-  const pool = useMemo(
-    () => scoped.filter((e) => (tab === "wish" ? e.isWish : !e.isWish)),
-    [scoped, tab],
-  );
+  const pool = useMemo(() => scoped.filter((e) => (tab === "wish" ? e.isWish : !e.isWish)), [scoped, tab]);
 
   const cities = useMemo(() => {
     const set = new Set<string>();
@@ -170,758 +172,507 @@ export function EatsScreen({ eats, onAddCloudEat }: EatsScreenProps) {
     });
   }, [pool, cityFilter, query, sort, tab, scores]);
 
-  const selected = useMemo(
-    () => eats.find((e) => e.id === selectedId) ?? null,
-    [eats, selectedId],
-  );
+  const selected = useMemo(() => eats.find((e) => e.id === selectedId) ?? null, [eats, selectedId]);
 
-  const allCitiesCount = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of scoped) {
-      const c = extractCity(p.address);
-      if (c) set.add(c);
-    }
-    return set.size;
-  }, [scoped]);
-
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim() || saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await onAddCloudEat({
-        name: newName.trim(),
-        address: newAddress.trim(),
-        sentiment: newSentiment,
-        isWish: newIsWish,
-      });
-      setNewName("");
-      setNewAddress("");
-      setShowAdd(false);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Could not save to iCloud");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div style={styles.root}>
-      {/* Left browser column */}
-      <div style={styles.listPane}>
-        <div style={styles.header}>
-          <div style={styles.titleRow}>
-            <div>
-              <h1 style={styles.title}>Eats</h1>
-              <p style={styles.subtitle}>
-                {rankedCount} ranked · {wishCount} want to try
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowAdd((v) => !v)}
-              style={showAdd ? styles.secondaryBtn : styles.primaryBtn}
-            >
-              {showAdd ? "Cancel" : "+ Add Place"}
-            </button>
-          </div>
-
-          {showAdd && (
-            <form onSubmit={handleAddSubmit} style={styles.addForm}>
-              <input
-                type="text"
-                placeholder="Restaurant name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                required
-                style={styles.input}
-              />
-              <input
-                type="text"
-                placeholder="Neighborhood, City (optional)"
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
-                style={styles.input}
-              />
-              <div style={styles.formRow}>
-                <select
-                  value={newIsWish ? "wish" : "ranked"}
-                  onChange={(e) => setNewIsWish(e.target.value === "wish")}
-                  style={styles.select}
-                >
-                  <option value="ranked">Ranked (Been)</option>
-                  <option value="wish">Want to Try</option>
-                </select>
-                {!newIsWish && (
-                  <select
-                    value={newSentiment}
-                    onChange={(e) => setNewSentiment(e.target.value as MealSentiment)}
-                    style={styles.select}
-                  >
-                    {SENTIMENT_ORDER.map((s) => (
-                      <option key={s} value={s}>
-                        {SENTIMENT_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button type="submit" disabled={saving || !newName.trim()} style={styles.primaryBtn}>
-                  {saving ? "Saving…" : "Save to iCloud"}
-                </button>
-              </div>
-              {saveError && <div style={styles.errorText}>{saveError}</div>}
-            </form>
-          )}
-
-          {/* Scope filter */}
-          <div style={styles.pillRow}>
-            {(
-              [
-                { id: "all", label: `All (${eats.length})` },
-                { id: "mine", label: `My Eats (${eats.filter((e) => e.scope === "private").length})` },
-                { id: "shared", label: `Shared with Me (${eats.filter((e) => e.scope === "shared").length})` },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setScope(item.id)}
-                style={scope === item.id ? styles.pillActive : styles.pill}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Ranked vs Want to Try tabs */}
-          <div style={styles.tabRow}>
-            <button
-              type="button"
-              onClick={() => {
-                setTab("ranked");
-                setCityFilter("");
+  const listColumn = (
+    <div>
+      {/* Header */}
+      <header style={{ marginBottom: "var(--space-16)" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+            gap: "var(--space-12)",
+            marginBottom: "var(--space-12)",
+          }}
+        >
+          <div>
+            <p
+              style={{
+                margin: "0 0 var(--space-4)",
+                fontSize: 11,
+                fontWeight: "var(--weight-semibold)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--ink-tertiary)",
               }}
-              style={tab === "ranked" ? styles.tabActive : styles.tab}
             >
-              Ranked · {rankedCount}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTab("wish");
-                setCityFilter("");
+              Read-only iCloud Places
+            </p>
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 28,
+                fontWeight: 600,
+                margin: 0,
+                color: "var(--ink-primary)",
               }}
-              style={tab === "wish" ? styles.tabActive : styles.tab}
             >
-              Want to Try · {wishCount}
-            </button>
+              Eats
+            </h1>
+            <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--ink-tertiary)" }}>
+              {rankedCount} ranked · {wishCount} want to try · {cities.length} cities
+            </p>
           </div>
+          <Badge tone="neutral">Read-only</Badge>
+        </div>
 
-          {/* Search, city, sort */}
-          <div style={styles.filterBar}>
-            <input
-              type="search"
-              placeholder="Search places, cities, notes…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              style={styles.searchInput}
-            />
-            {cities.length > 0 && (
-              <select
-                value={cityFilter}
-                onChange={(e) => setCityFilter(e.target.value)}
-                style={styles.selectSmall}
-                aria-label="Filter by city"
-              >
-                <option value="">All cities</option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            )}
+        {/* Scope + Tab Pills */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-8)", marginBottom: "var(--space-12)" }}>
+          <Pill size="sm" active={tab === "ranked"} count={rankedCount} onClick={() => { setTab("ranked"); setCityFilter(""); }}>
+            Ranked
+          </Pill>
+          <Pill size="sm" active={tab === "wish"} count={wishCount} onClick={() => { setTab("wish"); setCityFilter(""); }}>
+            Want to Try
+          </Pill>
+          <span style={{ width: 1, height: 22, background: "var(--border-hairline)", alignSelf: "center" }} />
+          {(
+            [
+              { id: "all", label: `All (${eats.length})` },
+              { id: "mine", label: `Mine (${eats.filter((e) => e.scope === "private").length})` },
+              { id: "shared", label: `Shared (${eats.filter((e) => e.scope === "shared").length})` },
+            ] as const
+          ).map((item) => (
+            <Pill key={item.id} size="sm" variant="outline" active={scope === item.id} onClick={() => setScope(item.id)}>
+              {item.label}
+            </Pill>
+          ))}
+        </div>
+
+        {/* Search + Sort + City filter */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-8)", alignItems: "center" }}>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search restaurants, neighborhoods, notes…"
+            style={{
+              flex: "1 1 220px",
+              padding: "8px 12px",
+              borderRadius: "var(--radius-s)",
+              border: "1px solid var(--border-hairline)",
+              background: "var(--bg-card)",
+              fontSize: 13.5,
+              color: "var(--ink-primary)",
+            }}
+          />
+          {cities.length > 0 && (
             <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortBy)}
-              style={styles.selectSmall}
-              aria-label="Sort eats"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              aria-label="Filter by city"
+              style={{
+                padding: "8px 10px",
+                borderRadius: "var(--radius-s)",
+                border: "1px solid var(--border-hairline)",
+                background: "var(--bg-card)",
+                fontSize: 13,
+                color: "var(--ink-primary)",
+              }}
             >
-              <option value="score">Score</option>
-              <option value="recent">Recent</option>
-              <option value="name">A–Z</option>
+              <option value="">All cities ({cities.length})</option>
+              {cities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
-          </div>
-        </div>
-
-        <div style={styles.listBody}>
-          {shown.length === 0 ? (
-            <div style={styles.emptyState}>
-              <p style={styles.emptyTitle}>No places match</p>
-              <p style={styles.emptySub}>
-                {pool.length === 0
-                  ? "Add a place above to save it to your iCloud Eats list."
-                  : "Try clearing your search or city filter."}
-              </p>
-            </div>
-          ) : (
-            shown.map((place) => {
-              const info = scores.get(place.id);
-              const isSelected = selectedId === place.id;
-              const city = extractCity(place.address);
-              const cuisine = extractCuisine(place.notes);
-              const meta = [city, cuisine, place.scope === "shared" ? "Shared" : null]
-                .filter(Boolean)
-                .join(" · ");
-
-              return (
-                <button
-                  key={place.id}
-                  type="button"
-                  onClick={() => setSelectedId(place.id)}
-                  style={{
-                    ...styles.rowBtn,
-                    background: isSelected ? "var(--dm-brand-soft, #f0f5ff)" : "transparent",
-                  }}
-                >
-                  <div style={styles.rowMain}>
-                    <div style={styles.rowName}>{place.name || "Untitled Place"}</div>
-                    <div style={styles.rowMeta}>{meta || place.address || "Saved"}</div>
-                  </div>
-                  {!place.isWish && info ? (
-                    <div
-                      style={{
-                        ...styles.scoreBadge,
-                        borderColor: scoreColor(info.score),
-                        color: scoreColor(info.score),
-                      }}
-                    >
-                      <span style={styles.scoreNum}>{info.score.toFixed(1)}</span>
-                      <span style={styles.scoreRank}>#{info.rankPos}</span>
-                    </div>
-                  ) : (
-                    <span style={styles.wishBadge}>Want to try</span>
-                  )}
-                </button>
-              );
-            })
           )}
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortBy)}
+            aria-label="Sort places"
+            style={{
+              padding: "8px 10px",
+              borderRadius: "var(--radius-s)",
+              border: "1px solid var(--border-hairline)",
+              background: "var(--bg-card)",
+              fontSize: 13,
+              color: "var(--ink-primary)",
+            }}
+          >
+            <option value="score">Rank</option>
+            <option value="recent">Recent</option>
+            <option value="name">Name</option>
+          </select>
         </div>
-      </div>
+      </header>
 
-      {/* Right detail / passport pane */}
-      <div style={styles.detailPane}>
-        {selected ? (
-          <div style={styles.detailCard}>
-            <div style={styles.detailHeader}>
-              <div>
-                <div style={styles.eyebrowRow}>
-                  <span style={styles.eyebrow}>
-                    {selected.isWish ? "Want to try" : "Ranked place"}
-                  </span>
-                  {selected.scope === "shared" && (
-                    <span style={styles.sharedBadge}>Shared with Me</span>
-                  )}
-                </div>
-                <h2 style={styles.detailTitle}>{selected.name}</h2>
-                {selected.address && <p style={styles.detailAddress}>{selected.address}</p>}
-              </div>
-
-              {!selected.isWish && scores.get(selected.id) && (
-                <div
-                  style={{
-                    ...styles.bigStamp,
-                    borderColor: scoreColor(scores.get(selected.id)!.score),
-                    color: scoreColor(scores.get(selected.id)!.score),
-                  }}
-                >
-                  <div style={styles.bigScore}>
-                    {scores.get(selected.id)!.score.toFixed(1)}
-                  </div>
-                  <div style={styles.bigRank}>
-                    #{scores.get(selected.id)!.rankPos} ·{" "}
-                    {verdictForScore(scores.get(selected.id)!.score)}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={styles.metaChips}>
-              <span
+      {/* Results */}
+      {shown.length === 0 ? (
+        <Card>
+          <p style={{ margin: 0, color: "var(--ink-tertiary)", fontSize: 14 }}>No places match your filter.</p>
+        </Card>
+      ) : tab === "wish" ? (
+        /* Airbnb Wishlists / Saves Cards */
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            gap: "var(--space-12)",
+          }}
+        >
+          {shown.map((place) => {
+            const city = extractCity(place.address);
+            const active = selectedId === place.id;
+            return (
+              <Card
+                key={place.id}
+                interactive
+                padding="sm"
+                onClick={() => setSelectedId(active ? null : place.id)}
                 style={{
-                  ...styles.sentimentChip,
-                  background: `${SENTIMENT_COLOR[selected.sentiment]}18`,
-                  color: SENTIMENT_COLOR[selected.sentiment],
+                  borderColor: active ? "var(--brand)" : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  gap: "var(--space-8)",
                 }}
               >
-                {SENTIMENT_LABEL[selected.sentiment]}
-              </span>
-              {selected.visitedDay && (
-                <span style={styles.metaChip}>Last visited {selected.visitedDay}</span>
-              )}
-              {typeof selected.latitude === "number" && typeof selected.longitude === "number" && (
-                <span style={styles.metaChip}>
-                  {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}
+                <div>
+                  <div
+                    style={{
+                      height: 84,
+                      borderRadius: "var(--radius-s)",
+                      background: "var(--bg-paper-soft)",
+                      border: "1px solid var(--border-hairline)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 28,
+                      marginBottom: "var(--space-8)",
+                    }}
+                  >
+                    🍽️
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", color: "var(--ink-primary)" }}>
+                    {place.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink-tertiary)", marginTop: 2 }}>
+                    {city || place.address || "Saved spot"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    padding: "6px 8px",
+                    borderRadius: "var(--radius-xs)",
+                    background: "var(--bg-paper-soft)",
+                    fontSize: 12,
+                    color: "var(--ink-secondary)",
+                    minHeight: 28,
+                  }}
+                >
+                  {place.notes ? extractCuisine(place.notes) : "Saved to Want to Try"}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        /* Ranked Borderless List */
+        <Card padding="none" style={{ overflow: "hidden" }}>
+          {shown.map((place, idx) => {
+            const sc = scores.get(place.id);
+            const city = extractCity(place.address);
+            const note = extractCuisine(place.notes);
+            const active = selectedId === place.id;
+            return (
+              <button
+                key={place.id}
+                type="button"
+                onClick={() => setSelectedId(active ? null : place.id)}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-12)",
+                  padding: "var(--space-12) var(--space-16)",
+                  border: "none",
+                  borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
+                  background: active ? "var(--brand-soft)" : "transparent",
+                  cursor: "pointer",
+                }}
+              >
+                <span
+                  style={{
+                    width: 28,
+                    fontSize: 12.5,
+                    fontWeight: "var(--weight-semibold)",
+                    color: "var(--ink-tertiary)",
+                    fontVariantNumeric: "tabular-nums",
+                    flexShrink: 0,
+                  }}
+                >
+                  {sc ? `#${sc.rankPos}` : "—"}
                 </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 14.5,
+                      fontWeight: "var(--weight-semibold)",
+                      color: "var(--ink-primary)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {place.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
+                    {[city, note].filter(Boolean).join(" · ") || place.address || "No address"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", flexShrink: 0 }}>
+                  {place.scope === "shared" && <Badge tone="neutral">Shared</Badge>}
+                  {sc && <Badge tone={scoreTone(sc.score)}>{sc.score.toFixed(1)}</Badge>}
+                </div>
+              </button>
+            );
+          })}
+        </Card>
+      )}
+    </div>
+  );
+
+  const mapColumn = (
+    <EatsSpatialMap
+      places={shown}
+      scores={scores}
+      selectedId={selectedId}
+      onSelect={(id) => setSelectedId(id)}
+    />
+  );
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <ListMapSplit
+        left={listColumn}
+        right={mapColumn}
+        mapToggleLabel={{ show: "Show map", hide: "Hide map" }}
+      />
+
+      {selected && (
+        <div style={{ marginTop: "var(--space-16)" }}>
+          <InspectorDrawer
+            open
+            onClose={() => setSelectedId(null)}
+            eyebrow={selected.isWish ? "Want to Try" : "Ranked Place"}
+            title={selected.name}
+            subtitle={selected.address || "No address saved"}
+          >
+            <div style={{ display: "flex", gap: "var(--space-8)", flexWrap: "wrap", marginBottom: "var(--space-16)" }}>
+              {!selected.isWish && scores.get(selected.id) && (
+                <Badge tone={scoreTone(scores.get(selected.id)!.score)} size="md">
+                  {scores.get(selected.id)!.score.toFixed(1)} · {verdictForScore(scores.get(selected.id)!.score)}
+                </Badge>
               )}
+              {!selected.isWish && (
+                <Badge tone={SENTIMENT_TONE[selected.sentiment]} size="md">
+                  {SENTIMENT_LABEL[selected.sentiment]}
+                </Badge>
+              )}
+              {selected.scope === "shared" && <Badge tone="neutral">Shared</Badge>}
             </div>
 
+            {selected.notes && (
+              <div style={{ marginBottom: "var(--space-16)" }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "var(--weight-semibold)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-tertiary)",
+                    marginBottom: 4,
+                  }}
+                >
+                  Notes
+                </div>
+                <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap", color: "var(--ink-primary)" }}>
+                  {selected.notes}
+                </p>
+              </div>
+            )}
+
             {selected.visits.length > 0 && (
-              <div style={styles.section}>
-                <h3 style={styles.sectionHeading}>Visits ({selected.visits.length})</h3>
-                <div style={styles.visitsList}>
-                  {selected.visits.map((v, idx) => (
-                    <div key={v.id ?? `${v.day}-${idx}`} style={styles.visitItem}>
-                      <span style={styles.visitDay}>{v.day || "Visited"}</span>
-                      {v.notes && <span style={styles.visitNote}>{v.notes}</span>}
+              <div style={{ marginBottom: "var(--space-16)" }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "var(--weight-semibold)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-tertiary)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Visits ({selected.visits.length})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {selected.visits.map((v, i) => (
+                    <div
+                      key={v.id ?? i}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: "var(--radius-s)",
+                        background: "var(--bg-paper-soft)",
+                        fontSize: 12.5,
+                      }}
+                    >
+                      <div style={{ fontWeight: "var(--weight-semibold)" }}>{v.day}</div>
+                      {(v.note || v.notes) && (
+                        <div style={{ color: "var(--ink-tertiary)", marginTop: 2 }}>{v.note || v.notes}</div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {selected.notes && (
-              <div style={styles.section}>
-                <h3 style={styles.sectionHeading}>Notes</h3>
-                <p style={styles.notesText}>{selected.notes}</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={styles.passportWrap}>
-            <div style={styles.passportCard}>
-              <div style={styles.passportEyebrow}>Your passport</div>
-              <div style={styles.passportBig}>{rankedCount} places</div>
-              <div style={styles.passportSub}>
-                {allCitiesCount} {allCitiesCount === 1 ? "city" : "cities"} · {wishCount} on want to try
-              </div>
-            </div>
-            <p style={styles.placeholderHint}>
-              Select a place on the left to inspect its score, visits, and notes.
-            </p>
-          </div>
-        )}
-      </div>
+            <a
+              href={mapsUrlFor(selected)}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                fontWeight: "var(--weight-semibold)",
+                color: "var(--brand)",
+                textDecoration: "none",
+              }}
+            >
+              Open in Apple Maps ↗
+            </a>
+          </InspectorDrawer>
+        </div>
+      )}
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: "grid",
-    gridTemplateColumns: "minmax(340px, 430px) 1fr",
-    height: "100%",
-    minHeight: 560,
-    background: "var(--dm-bg, #eef3fa)",
-    color: "var(--dm-text, #0f1b33)",
-  },
-  listPane: {
-    display: "flex",
-    flexDirection: "column",
-    borderRight: "1px solid var(--dm-border, #d8e2f0)",
-    background: "var(--dm-card, #ffffff)",
-    minHeight: 0,
-  },
-  header: {
-    padding: "16px 16px 12px",
-    borderBottom: "1px solid var(--dm-border, #d8e2f0)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
-  titleRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  title: {
-    margin: 0,
-    fontFamily: "var(--font-source-serif), Georgia, serif",
-    fontSize: 24,
-    fontWeight: 800,
-    letterSpacing: "-0.02em",
-  },
-  subtitle: {
-    margin: "2px 0 0",
-    fontSize: 12,
-    color: "var(--dm-text-2, #475877)",
-  },
-  primaryBtn: {
-    border: "none",
-    background: "var(--dm-brand, #2563eb)",
-    color: "var(--dm-on-brand, #ffffff)",
-    padding: "7px 12px",
-    borderRadius: 999,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  secondaryBtn: {
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    background: "transparent",
-    color: "var(--dm-text, #0f1b33)",
-    padding: "7px 12px",
-    borderRadius: 999,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  addForm: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    background: "var(--dm-bg, #eef3fa)",
-    border: "1px solid var(--dm-border, #d8e2f0)",
-  },
-  formRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-  input: {
-    padding: "8px 10px",
-    borderRadius: 8,
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    background: "var(--dm-card, #ffffff)",
-    color: "var(--dm-text, #0f1b33)",
-    fontSize: 13,
-  },
-  select: {
-    padding: "7px 10px",
-    borderRadius: 8,
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    background: "var(--dm-card, #ffffff)",
-    color: "var(--dm-text, #0f1b33)",
-    fontSize: 13,
-  },
-  errorText: {
-    fontSize: 12,
-    color: "var(--dm-expense, #b91c1c)",
-  },
-  pillRow: {
-    display: "flex",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  pill: {
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    background: "transparent",
-    color: "var(--dm-text-2, #475877)",
-    padding: "5px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  pillActive: {
-    border: "1px solid var(--dm-brand, #2563eb)",
-    background: "var(--dm-brand-soft, #f0f5ff)",
-    color: "var(--dm-brand, #2563eb)",
-    padding: "5px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  tabRow: {
-    display: "flex",
-    gap: 18,
-    borderBottom: "1px solid var(--dm-border, #d8e2f0)",
-  },
-  tab: {
-    border: "none",
-    background: "transparent",
-    color: "var(--dm-text-3, #5f6f8e)",
-    padding: "6px 0 8px",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    borderBottom: "2px solid transparent",
-  },
-  tabActive: {
-    border: "none",
-    background: "transparent",
-    color: "var(--dm-text, #0f1b33)",
-    padding: "6px 0 8px",
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-    borderBottom: "2px solid var(--dm-text, #0f1b33)",
-  },
-  filterBar: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 120,
-    padding: "7px 10px",
-    borderRadius: 8,
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    background: "var(--dm-bg, #eef3fa)",
-    color: "var(--dm-text, #0f1b33)",
-    fontSize: 13,
-  },
-  selectSmall: {
-    padding: "7px 8px",
-    borderRadius: 8,
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    background: "var(--dm-card, #ffffff)",
-    color: "var(--dm-text, #0f1b33)",
-    fontSize: 12,
-    maxWidth: 120,
-  },
-  listBody: {
-    flex: 1,
-    overflowY: "auto",
-  },
-  rowBtn: {
-    width: "100%",
-    textAlign: "left",
-    border: "none",
-    borderBottom: "1px solid var(--dm-border, #d8e2f0)",
-    padding: "12px 16px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    cursor: "pointer",
-  },
-  rowMain: {
-    minWidth: 0,
-    flex: 1,
-  },
-  rowName: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "var(--dm-text, #0f1b33)",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  rowMeta: {
-    fontSize: 12,
-    color: "var(--dm-text-2, #475877)",
-    marginTop: 2,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  scoreBadge: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "1.5px solid",
-    borderRadius: 10,
-    padding: "3px 8px",
-    minWidth: 46,
-    flexShrink: 0,
-  },
-  scoreNum: {
-    fontSize: 14,
-    fontWeight: 800,
-    fontVariantNumeric: "tabular-nums",
-    lineHeight: 1.1,
-  },
-  scoreRank: {
-    fontSize: 10,
-    fontWeight: 700,
-    opacity: 0.85,
-  },
-  wishBadge: {
-    fontSize: 11,
-    fontWeight: 600,
-    padding: "3px 8px",
-    borderRadius: 999,
-    background: "var(--dm-pending-soft, #fff4dc)",
-    color: "var(--dm-pending, #b45309)",
-    flexShrink: 0,
-  },
-  detailPane: {
-    padding: 28,
-    overflowY: "auto",
-  },
-  detailCard: {
-    maxWidth: 680,
-    background: "var(--dm-card, #ffffff)",
-    border: "1px solid var(--dm-border, #d8e2f0)",
-    borderRadius: 18,
-    padding: 24,
-    boxShadow: "var(--dm-shadow, 0 1px 3px rgb(15 27 51 / 0.08))",
-  },
-  detailHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-  },
-  eyebrowRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 6,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    color: "var(--dm-brand, #2563eb)",
-  },
-  sharedBadge: {
-    fontSize: 11,
-    fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: 999,
-    background: "var(--dm-pending-soft, #fff4dc)",
-    color: "var(--dm-pending, #b45309)",
-  },
-  detailTitle: {
-    margin: 0,
-    fontFamily: "var(--font-source-serif), Georgia, serif",
-    fontSize: 28,
-    fontWeight: 800,
-    lineHeight: 1.15,
-  },
-  detailAddress: {
-    margin: "6px 0 0",
-    fontSize: 14,
-    color: "var(--dm-text-2, #475877)",
-  },
-  bigStamp: {
-    border: "2px solid",
-    borderRadius: 14,
-    padding: "8px 14px",
-    textAlign: "center",
-    flexShrink: 0,
-  },
-  bigScore: {
-    fontSize: 26,
-    fontWeight: 800,
-    fontVariantNumeric: "tabular-nums",
-    lineHeight: 1.1,
-  },
-  bigRank: {
-    fontSize: 11,
-    fontWeight: 700,
-    marginTop: 2,
-  },
-  metaChips: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 16,
-  },
-  sentimentChip: {
-    fontSize: 12,
-    fontWeight: 700,
-    padding: "4px 10px",
-    borderRadius: 999,
-  },
-  metaChip: {
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "4px 10px",
-    borderRadius: 999,
-    background: "var(--dm-bg, #eef3fa)",
-    color: "var(--dm-text-2, #475877)",
-  },
-  section: {
-    marginTop: 22,
-    paddingTop: 18,
-    borderTop: "1px solid var(--dm-border, #d8e2f0)",
-  },
-  sectionHeading: {
-    margin: "0 0 10px",
-    fontSize: 14,
-    fontWeight: 700,
-    color: "var(--dm-text, #0f1b33)",
-  },
-  visitsList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  visitItem: {
-    display: "flex",
-    gap: 12,
-    fontSize: 13,
-    padding: "8px 10px",
-    borderRadius: 10,
-    background: "var(--dm-bg, #eef3fa)",
-  },
-  visitDay: {
-    fontWeight: 700,
-    fontVariantNumeric: "tabular-nums",
-    color: "var(--dm-text, #0f1b33)",
-  },
-  visitNote: {
-    color: "var(--dm-text-2, #475877)",
-  },
-  notesText: {
-    margin: 0,
-    fontSize: 14,
-    lineHeight: 1.6,
-    color: "var(--dm-text, #0f1b33)",
-    whiteSpace: "pre-line",
-  },
-  passportWrap: {
-    maxWidth: 520,
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  passportCard: {
-    background: "linear-gradient(135deg, var(--dm-ticket-start, #1e3a8a), var(--dm-ticket-end, #2563eb))",
-    color: "#ffffff",
-    borderRadius: 20,
-    padding: 24,
-    boxShadow: "var(--dm-shadow-ticket, 0 5px 20px rgb(37 99 235 / 0.3))",
-  },
-  passportEyebrow: {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    opacity: 0.85,
-  },
-  passportBig: {
-    fontSize: 32,
-    fontWeight: 800,
-    fontVariantNumeric: "tabular-nums",
-    marginTop: 6,
-  },
-  passportSub: {
-    fontSize: 13,
-    opacity: 0.9,
-    marginTop: 4,
-  },
-  placeholderHint: {
-    margin: 0,
-    fontSize: 14,
-    color: "var(--dm-text-2, #475877)",
-  },
-  emptyState: {
-    padding: "36px 20px",
-    textAlign: "center",
-  },
-  emptyTitle: {
-    margin: 0,
-    fontSize: 15,
-    fontWeight: 700,
-  },
-  emptySub: {
-    margin: "6px 0 0",
-    fontSize: 13,
-    color: "var(--dm-text-2, #475877)",
-  },
-};
+function EatsSpatialMap({
+  places,
+  scores,
+  selectedId,
+  onSelect,
+}: {
+  places: EatsPlaceRecord[];
+  scores: Map<string, { score: number; rankPos: number }>;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const geo = useMemo(
+    () => places.filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number"),
+    [places],
+  );
+
+  const bounds = useMemo(() => {
+    if (geo.length === 0) return null;
+    const lats = geo.map((p) => p.latitude!);
+    const lngs = geo.map((p) => p.longitude!);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      minLat,
+      maxLat,
+      minLng,
+      maxLng,
+      latSpan: Math.max(0.01, maxLat - minLat),
+      lngSpan: Math.max(0.01, maxLng - minLng),
+    };
+  }, [geo]);
+
+  return (
+    <Card padding="none" style={{ height: 520, overflow: "hidden", position: "relative", background: "var(--bg-paper-soft)" }}>
+      <div
+        style={{
+          padding: "var(--space-12) var(--space-16)",
+          borderBottom: "1px solid var(--border-hairline)",
+          background: "var(--bg-card)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: "var(--weight-semibold)", color: "var(--ink-primary)" }}>
+          Places Map
+        </span>
+        <span style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>{geo.length} pinned</span>
+      </div>
+
+      {!bounds ? (
+        <div
+          style={{
+            height: "calc(100% - 44px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "var(--space-24)",
+            textAlign: "center",
+            color: "var(--ink-tertiary)",
+            fontSize: 13.5,
+          }}
+        >
+          No coordinates synced for the current filter.
+        </div>
+      ) : (
+        <div
+          style={{
+            position: "relative",
+            height: "calc(100% - 44px)",
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, var(--border-hairline) 1px, transparent 0)",
+            backgroundSize: "24px 24px",
+          }}
+        >
+          {geo.slice(0, 60).map((place) => {
+            const xPct = 10 + ((place.longitude! - bounds.minLng) / bounds.lngSpan) * 80;
+            const yPct = 88 - ((place.latitude! - bounds.minLat) / bounds.latSpan) * 76;
+            const sc = scores.get(place.id);
+            const active = selectedId === place.id;
+            return (
+              <button
+                key={place.id}
+                type="button"
+                onClick={() => onSelect(place.id)}
+                title={place.name}
+                style={{
+                  position: "absolute",
+                  left: `${xPct}%`,
+                  top: `${yPct}%`,
+                  transform: `translate(-50%, -50%) scale(${active ? 1.12 : 1})`,
+                  zIndex: active ? 20 : 5,
+                  padding: "4px 9px",
+                  borderRadius: "var(--radius-full)",
+                  border: active ? "2px solid var(--ink-primary)" : "1px solid var(--border-strong)",
+                  background: active ? "var(--brand)" : "var(--bg-card)",
+                  color: active ? "var(--on-brand)" : "var(--ink-primary)",
+                  fontSize: 11.5,
+                  fontWeight: "var(--weight-semibold)",
+                  boxShadow: "var(--shadow-card)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  maxWidth: 150,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {sc ? `${sc.score.toFixed(1)} · ` : ""}
+                {place.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export default EatsScreen;

@@ -1,13 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AccountRecord,
   BudgetCategoryRecord,
+  RecurringItemRecord,
   TransactionRecord,
 } from "@/lib/cloudkit/schema";
+import { Badge, Card, ChartCard, InspectorDrawer, Pill } from "@/app/components/ds";
+import { BudgetForecastView, BudgetReportsView } from "./BudgetReports";
 
 export type BudgetTab = "dashboard" | "accounts" | "transactions" | "plan" | "categories" | "recurring";
+type BudgetSubView = "reports" | "forecast" | null;
 
 export interface BudgetScreenProps {
   activeTab: BudgetTab;
@@ -15,6 +19,7 @@ export interface BudgetScreenProps {
   accounts: AccountRecord[];
   categories: BudgetCategoryRecord[];
   transactions: TransactionRecord[];
+  recurringItems?: RecurringItemRecord[];
 }
 
 function money(amount: number, cents = false): string {
@@ -64,6 +69,11 @@ function formatDayHeader(dayKey: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+function reviewWindowStart(): number {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+}
+
 function monthBounds(offsetMonths: number): { start: number; end: number; label: string; isCurrent: boolean } {
   const now = new Date();
   const startD = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
@@ -76,21 +86,46 @@ function monthBounds(offsetMonths: number): { start: number; end: number; label:
   };
 }
 
-const cardStyle: React.CSSProperties = {
-  background: "var(--card, #ffffff)",
-  border: "1px solid var(--line, #d8e2f0)",
-  borderRadius: 14,
-  padding: 18,
-  boxShadow: "0 2px 10px rgba(15, 27, 51, 0.04)",
-};
+function downloadCsv(
+  rows: TransactionRecord[],
+  catById: Map<string, BudgetCategoryRecord>,
+  acctById: Map<string, AccountRecord>,
+) {
+  const header = ["Date", "Merchant", "Category", "Account", "Amount", "Status", "Description"];
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const lines = [header.join(",")];
+  for (const tx of rows) {
+    const cat = tx.categoryId ? catById.get(tx.categoryId)?.name ?? "" : "Uncategorized";
+    const acct = acctById.get(tx.accountId)?.nickname || acctById.get(tx.accountId)?.name || tx.accountId;
+    const status = tx.isPending ? "Pending" : tx.needsReview ? "Needs Review" : "Cleared";
+    lines.push(
+      [
+        new Date(tx.transactedAt).toISOString().slice(0, 10),
+        escape(tx.customTitle || tx.payee || tx.description),
+        escape(cat),
+        escape(acct),
+        tx.amount.toFixed(2),
+        status,
+        escape(tx.description),
+      ].join(","),
+    );
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `wooli-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
-const sectionLabelStyle: React.CSSProperties = {
+const sectionEyebrowStyle: React.CSSProperties = {
   fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.09em",
+  fontWeight: "var(--weight-semibold)",
+  letterSpacing: "0.08em",
   textTransform: "uppercase",
-  color: "var(--ink-2, #475877)",
-  marginBottom: 8,
+  color: "var(--ink-tertiary)",
+  margin: "0 0 var(--space-8)",
 };
 
 export function BudgetScreen({
@@ -99,11 +134,22 @@ export function BudgetScreen({
   accounts,
   categories,
   transactions,
+  recurringItems = [],
 }: BudgetScreenProps) {
+  const [subView, setSubView] = useState<BudgetSubView>(null);
+  const [lastPropTab, setLastPropTab] = useState<BudgetTab>(activeTab);
+  const [initialCatFilter, setInitialCatFilter] = useState<string>("all");
+  const [initialTypeFilter, setInitialTypeFilter] = useState<"all" | "review" | "expenses" | "income">("all");
+
+  if (activeTab !== lastPropTab) {
+    setLastPropTab(activeTab);
+    setSubView(null);
+  }
+
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const acctById = useMemo(() => new Map(accounts.map((a) => [a.providerAccountId, a])), [accounts]);
   const hiddenAccountIds = useMemo(
-    () => new Set(accounts.filter((a) => a.isHidden).map((a) => a.providerAccountId)),
+    () => new Set(accounts.filter((a) => a.isHidden || a.hideTransactions).map((a) => a.providerAccountId)),
     [accounts],
   );
 
@@ -115,162 +161,420 @@ export function BudgetScreen({
     [transactions, hiddenAccountIds],
   );
 
-  switch (activeTab) {
-    case "dashboard":
-      return (
+  const handleNavigateTab = useCallback(
+    (tab: BudgetTab, opts?: { categoryId?: string; filterMode?: "all" | "review" | "expenses" | "income" }) => {
+      setSubView(null);
+      if (opts?.categoryId) setInitialCatFilter(opts.categoryId);
+      if (opts?.filterMode) setInitialTypeFilter(opts.filterMode);
+      onSelectTab(tab);
+    },
+    [onSelectTab],
+  );
+
+  return (
+    <div style={{ paddingBottom: "var(--space-40)" }}>
+      {/* Top Field Notes Sub-navigation */}
+      <nav
+        aria-label="Budget sections"
+        style={{
+          maxWidth: 1120,
+          margin: "0 auto var(--space-20)",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          flexWrap: "wrap",
+          paddingBottom: "var(--space-12)",
+          borderBottom: "1px solid var(--border-hairline)",
+        }}
+      >
+        {(
+          [
+            { id: "dashboard", label: "Dashboard" },
+            { id: "transactions", label: "Transactions" },
+            { id: "plan", label: "Plan" },
+            { id: "accounts", label: "Accounts" },
+            { id: "categories", label: "Categories" },
+            { id: "recurring", label: "Recurring" },
+          ] as const
+        ).map((item) => (
+          <Pill
+            key={item.id}
+            size="sm"
+            active={subView === null && activeTab === item.id}
+            onClick={() => handleNavigateTab(item.id)}
+          >
+            {item.label}
+          </Pill>
+        ))}
+        <span style={{ width: 1, height: 18, background: "var(--border-hairline)", margin: "0 var(--space-4)" }} />
+        <Pill
+          size="sm"
+          active={subView === "reports"}
+          onClick={() => setSubView((v) => (v === "reports" ? null : "reports"))}
+        >
+          Reports &amp; Cash Flow
+        </Pill>
+        <Pill
+          size="sm"
+          active={subView === "forecast"}
+          onClick={() => setSubView((v) => (v === "forecast" ? null : "forecast"))}
+        >
+          Forecast
+        </Pill>
+      </nav>
+
+      {subView === "reports" ? (
+        <BudgetReportsView visibleTxns={visibleTxns} catById={catById} acctById={acctById} />
+      ) : subView === "forecast" ? (
+        <BudgetForecastView
+          accounts={accounts}
+          visibleTxns={visibleTxns}
+          catById={catById}
+          recurringItems={recurringItems}
+        />
+      ) : activeTab === "dashboard" ? (
         <BudgetDashboard
+          accounts={accounts}
+          categories={categories}
+          visibleTxns={visibleTxns}
+          recurringItems={recurringItems}
+          hiddenAccountIds={hiddenAccountIds}
+          catById={catById}
+          acctById={acctById}
+          onNavigateTab={handleNavigateTab}
+          onOpenSubView={setSubView}
+        />
+      ) : activeTab === "accounts" ? (
+        <BudgetAccounts accounts={accounts} />
+      ) : activeTab === "transactions" ? (
+        <BudgetTransactions
           accounts={accounts}
           categories={categories}
           visibleTxns={visibleTxns}
           catById={catById}
           acctById={acctById}
-          onSelectTab={onSelectTab}
+          initialCatFilter={initialCatFilter}
+          initialTypeFilter={initialTypeFilter}
         />
-      );
-    case "accounts":
-      return <BudgetAccounts accounts={accounts} />;
-    case "transactions":
-      return (
-        <BudgetTransactions
-          accounts={accounts}
+      ) : activeTab === "plan" ? (
+        <BudgetPlanView categories={categories} visibleTxns={visibleTxns} catById={catById} />
+      ) : activeTab === "categories" ? (
+        <BudgetCategoriesView categories={categories} />
+      ) : (
+        <BudgetRecurringView
           visibleTxns={visibleTxns}
           catById={catById}
-          acctById={acctById}
+          recurringItems={recurringItems}
+          hiddenAccountIds={hiddenAccountIds}
         />
-      );
-    case "plan":
-      return <BudgetPlanView categories={categories} visibleTxns={visibleTxns} catById={catById} />;
-    case "categories":
-      return <BudgetCategoriesView categories={categories} />;
-    case "recurring":
-      return <BudgetRecurringView visibleTxns={visibleTxns} catById={catById} />;
-  }
+      )}
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/* 1. Dashboard                                                               */
+/* 1. Dashboard (2-col Bento "What changed?")                                 */
 /* -------------------------------------------------------------------------- */
+
+type NetWorthRange = "1W" | "1M" | "3M" | "YTD" | "1Y" | "ALL";
 
 function BudgetDashboard({
   accounts,
   categories,
   visibleTxns,
+  recurringItems,
+  hiddenAccountIds,
   catById,
   acctById,
-  onSelectTab,
+  onNavigateTab,
+  onOpenSubView,
 }: {
   accounts: AccountRecord[];
   categories: BudgetCategoryRecord[];
   visibleTxns: TransactionRecord[];
+  recurringItems: RecurringItemRecord[];
+  hiddenAccountIds: Set<string>;
   catById: Map<string, BudgetCategoryRecord>;
   acctById: Map<string, AccountRecord>;
-  onSelectTab: (tab: BudgetTab) => void;
+  onNavigateTab: (
+    tab: BudgetTab,
+    opts?: { categoryId?: string; filterMode?: "all" | "review" | "expenses" | "income" },
+  ) => void;
+  onOpenSubView: (view: BudgetSubView) => void;
 }) {
+  const [nwRange, setNwRange] = useState<NetWorthRange>("3M");
   const month = useMemo(() => monthBounds(0), []);
+  const prevMonth = useMemo(() => monthBounds(-1), []);
+
   const monthTxns = useMemo(
     () => visibleTxns.filter((t) => t.transactedAt >= month.start && t.transactedAt < month.end),
     [visibleTxns, month],
   );
+  const prevMonthSamePaceTxns = useMemo(() => {
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate() + 1).getTime();
+    return visibleTxns.filter((t) => t.transactedAt >= prevMonth.start && t.transactedAt < Math.min(cutoff, prevMonth.end));
+  }, [visibleTxns, prevMonth]);
 
-  const reviewItems = useMemo(() => visibleTxns.filter((t) => t.needsReview), [visibleTxns]);
+  const reviewItems = useMemo(() => {
+    const start = reviewWindowStart();
+    return visibleTxns.filter((t) => t.needsReview && t.transactedAt >= start);
+  }, [visibleTxns]);
 
-  const { earned, spent, plannedIncome, plannedExpenses } = useMemo(() => {
-    let earnedSum = 0;
-    let spentSum = 0;
-    for (const t of monthTxns) {
-      const cat = t.categoryId ? catById.get(t.categoryId) : undefined;
-      if (t.isTransfer || cat?.isTransfer) continue;
-      if (cat?.isIncome) {
-        if (t.amount > 0) earnedSum += t.amount;
-      } else if (t.amount < 0) {
-        spentSum += Math.abs(t.amount);
+  const { earned, spent, plannedExpenses, prevEarned, prevSpent } = useMemo(() => {
+    const tally = (list: TransactionRecord[]) => {
+      let inc = 0;
+      let spd = 0;
+      for (const t of list) {
+        const cat = t.categoryId ? catById.get(t.categoryId) : undefined;
+        if (t.isTransfer || cat?.isTransfer) continue;
+        if (cat) {
+          if (cat.isIncome) inc += t.amount;
+          else spd -= t.amount;
+        } else if (t.amount > 0) {
+          inc += t.amount;
+        } else {
+          spd -= t.amount;
+        }
       }
-    }
+      return { inc, spd };
+    };
+
+    const cur = tally(monthTxns);
+    const prev = tally(prevMonthSamePaceTxns);
 
     const groups = categories.filter((c) => !c.parentId && !c.isTransfer);
-    let planIn = 0;
     let planOut = 0;
     for (const g of groups) {
+      if (g.isIncome) continue;
       const children = categories.filter((c) => c.parentId === g.id);
       const target = g.monthlyTarget > 0 ? g.monthlyTarget : children.reduce((s, c) => s + c.monthlyTarget, 0);
-      if (g.isIncome) planIn += target;
-      else planOut += target;
+      planOut += target;
     }
-    return { earned: earnedSum, spent: spentSum, plannedIncome: planIn, plannedExpenses: planOut };
-  }, [monthTxns, categories, catById]);
+    return {
+      earned: cur.inc,
+      spent: cur.spd,
+      plannedExpenses: planOut,
+      prevEarned: prev.inc,
+      prevSpent: prev.spd,
+    };
+  }, [monthTxns, prevMonthSamePaceTxns, categories, catById]);
 
   const visibleAccounts = accounts.filter((a) => !a.isHidden);
-  const totalAssets = visibleAccounts
-    .filter((a) => isAssetKind(a.kindRaw))
-    .reduce((s, a) => s + a.balance, 0);
-  const totalDebts = visibleAccounts
-    .filter((a) => !isAssetKind(a.kindRaw))
-    .reduce((s, a) => s + Math.abs(a.balance), 0);
+  const totalAssets = visibleAccounts.filter((a) => isAssetKind(a.kindRaw)).reduce((s, a) => s + a.balance, 0);
+  const totalDebts = visibleAccounts.filter((a) => !isAssetKind(a.kindRaw)).reduce((s, a) => s + Math.abs(a.balance), 0);
   const netWorth = totalAssets - totalDebts;
 
-  // Daily cumulative spending for sparkline
+  // Daily cumulative spending for interactive pace chart
+  const [nowTs] = useState(() => Date.now());
+  const { daysInMonth, todayDate, currentYear } = useMemo(() => {
+    const d = new Date(nowTs);
+    return {
+      daysInMonth: new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(),
+      todayDate: d.getDate(),
+      currentYear: d.getFullYear(),
+    };
+  }, [nowTs]);
+  const paceFraction = todayDate / Math.max(1, daysInMonth);
+
   const dailyCumulative = useMemo(() => {
-    const now = new Date();
-    const todayDate = now.getDate();
     const daily = new Array(todayDate).fill(0);
     for (const t of monthTxns) {
       const cat = t.categoryId ? catById.get(t.categoryId) : undefined;
-      if (t.isTransfer || cat?.isTransfer || cat?.isIncome) continue;
-      if (t.amount < 0) {
-        const dayIdx = new Date(t.transactedAt).getDate() - 1;
-        if (dayIdx >= 0 && dayIdx < todayDate) daily[dayIdx] += Math.abs(t.amount);
+      if (t.isTransfer || cat?.isTransfer) continue;
+      const isSpending = cat ? !cat.isIncome : t.amount < 0;
+      if (!isSpending) continue;
+      const dayIdx = new Date(t.transactedAt).getDate() - 1;
+      if (dayIdx >= 0 && dayIdx < todayDate) daily[dayIdx] -= t.amount;
+    }
+    const cumulative: number[] = [];
+    let running = 0;
+    for (const v of daily) {
+      running += v;
+      cumulative.push(running);
+    }
+    return cumulative;
+  }, [monthTxns, catById, todayDate]);
+
+  // Net worth history reconstructed backwards from current netWorth via transaction cashflows
+  const nwSeries = useMemo(() => {
+    const endTs = nowTs;
+    let startTs = endTs - 90 * 86400000;
+    if (nwRange === "1W") startTs = endTs - 7 * 86400000;
+    else if (nwRange === "1M") startTs = endTs - 30 * 86400000;
+    else if (nwRange === "YTD") startTs = new Date(currentYear, 0, 1).getTime();
+    else if (nwRange === "1Y") startTs = endTs - 365 * 86400000;
+    else if (nwRange === "ALL") {
+      const oldest = visibleTxns[visibleTxns.length - 1]?.transactedAt;
+      startTs = oldest ? Math.min(oldest, endTs - 30 * 86400000) : endTs - 180 * 86400000;
+    }
+
+    const buckets = 18;
+    const step = Math.max(1, (endTs - startTs) / buckets);
+    const pts: Array<{ ts: number; label: string; value: number }> = [];
+    for (let i = 0; i <= buckets; i++) {
+      const tCut = startTs + step * i;
+      const deltaAfter = visibleTxns
+        .filter((t) => t.transactedAt > tCut)
+        .reduce((s, t) => s + t.amount, 0);
+      pts.push({
+        ts: tCut,
+        label: formatShortDate(tCut),
+        value: netWorth - deltaAfter,
+      });
+    }
+    return pts;
+  }, [nwRange, netWorth, visibleTxns, nowTs, currentYear]);
+
+  const nwDelta = nwSeries.length >= 2 ? nwSeries[nwSeries.length - 1].value - nwSeries[0].value : 0;
+
+  // Top Categories capsule bars
+  const topCategories = useMemo(() => {
+    const spentByCat = new Map<string, number>();
+    for (const t of monthTxns) {
+      const cat = t.categoryId ? catById.get(t.categoryId) : undefined;
+      if (t.isTransfer || cat?.isTransfer) continue;
+      if (cat && !cat.isIncome) {
+        spentByCat.set(cat.id, (spentByCat.get(cat.id) ?? 0) - t.amount);
       }
     }
-    let running = 0;
-    return daily.map((v) => {
-      running += v;
-      return running;
-    });
+    return Array.from(spentByCat.entries())
+      .map(([id, actual]) => {
+        const cat = catById.get(id)!;
+        return { cat, actual, target: cat.monthlyTarget };
+      })
+      .filter((r) => r.actual > 0)
+      .sort((a, b) => b.actual - a.actual)
+      .slice(0, 5);
   }, [monthTxns, catById]);
 
-  const recent = visibleTxns.slice(0, 6);
+  // Next Two Weeks recurring
+  const nextTwoWeeks = useMemo(() => {
+    const cutoff = nowTs + 14 * 86400000;
+    return recurringItems
+      .filter((r) => r.isActive && r.amount < 0 && !hiddenAccountIds.has(r.accountId) && r.nextDate <= cutoff)
+      .sort((a, b) => a.nextDate - b.nextDate)
+      .slice(0, 4);
+  }, [recurringItems, hiddenAccountIds, nowTs]);
+
+  const recent = visibleTxns.slice(0, 5);
+  const spentDelta = spent - prevSpent;
+  const paceExpected = plannedExpenses > 0 ? plannedExpenses * paceFraction : prevSpent;
+  const paceDelta = spent - paceExpected;
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-      <header style={{ marginBottom: 18 }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-source-serif), Georgia, serif",
-            fontSize: 28,
-            fontWeight: 800,
-            margin: "0 0 2px",
-            color: "var(--ink, #0f1b33)",
-          }}
-        >
-          Dashboard
-        </h1>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2, #475877)" }}>{month.label}</p>
+    <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: "var(--space-12)",
+          marginBottom: "var(--space-20)",
+        }}
+      >
+        <div>
+          <p style={sectionEyebrowStyle}>{month.label}</p>
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 30,
+              fontWeight: 600,
+              margin: 0,
+              color: "var(--ink-primary)",
+            }}
+          >
+            Budget Dashboard
+          </h1>
+        </div>
+        <div style={{ display: "flex", gap: "var(--space-8)", flexWrap: "wrap" }}>
+          <Pill size="sm" variant="outline" onClick={() => onOpenSubView("reports")}>
+            Cash Flow Reports →
+          </Pill>
+          <Pill size="sm" variant="outline" onClick={() => onOpenSubView("forecast")}>
+            Runway Forecast →
+          </Pill>
+        </div>
       </header>
 
+      {/* 2-Col Bento Grid */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+          gap: "var(--space-16)",
           alignItems: "start",
         }}
       >
-        {/* Left Column: To Review, Budget Summary, Recent Transactions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {reviewItems.length > 0 && (
-            <div style={cardStyle}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f1b33)" }}>
-                  To Review ({reviewItems.length})
+        {/* Left Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
+          {/* What changed? Bento */}
+          <Card eyebrow="What changed?" title="Month-over-Month Pace" variant="tinted">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-12)" }}>
+              <div
+                style={{
+                  padding: "var(--space-12)",
+                  borderRadius: "var(--radius-s)",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-hairline)",
+                }}
+              >
+                <div style={{ fontSize: 11.5, color: "var(--ink-tertiary)", marginBottom: 4 }}>
+                  Spending vs. last mo (day {todayDate})
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onSelectTab("transactions")}
-                  style={linkBtnStyle}
-                >
-                  Review all
-                </button>
+                <div style={{ fontSize: 20, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
+                  {money(spent)}
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  <Badge tone={spentDelta <= 0 ? "income" : "expense"}>
+                    {spentDelta <= 0 ? `${money(Math.abs(spentDelta))} less` : `${money(spentDelta)} more`}
+                  </Badge>
+                </div>
               </div>
+              <div
+                style={{
+                  padding: "var(--space-12)",
+                  borderRadius: "var(--radius-s)",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-hairline)",
+                }}
+              >
+                <div style={{ fontSize: 11.5, color: "var(--ink-tertiary)", marginBottom: 4 }}>
+                  Income vs. last mo
+                </div>
+                <div
+                  style={{
+                    fontSize: 20,
+                    fontWeight: "var(--weight-semibold)",
+                    color: "var(--income)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {money(earned)}
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  <Badge tone={earned >= prevEarned ? "income" : "neutral"}>
+                    {earned >= prevEarned
+                      ? `+${money(earned - prevEarned)}`
+                      : `−${money(prevEarned - earned)}`}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* To Review */}
+          {reviewItems.length > 0 && (
+            <Card
+              eyebrow="Needs Attention"
+              title={`To Review (${reviewItems.length})`}
+              actions={
+                <Pill size="sm" variant="soft" onClick={() => onNavigateTab("transactions", { filterMode: "review" })}>
+                  Inspect all
+                </Pill>
+              }
+            >
               {reviewItems.slice(0, 4).map((tx, idx) => (
                 <div
                   key={tx.id}
@@ -278,56 +582,121 @@ function BudgetDashboard({
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "8px 0",
-                    borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                    padding: "var(--space-8) 0",
+                    borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                   }}
                 >
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink, #0f1b33)" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: "var(--weight-medium)", color: "var(--ink-primary)" }}>
                       {tx.customTitle || tx.payee || tx.description}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
-                      {formatShortDate(tx.transactedAt)} · {acctById.get(tx.accountId)?.nickname || acctById.get(tx.accountId)?.name || "Account"}
+                    <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
+                      {formatShortDate(tx.transactedAt)} ·{" "}
+                      {acctById.get(tx.accountId)?.nickname || acctById.get(tx.accountId)?.name || "Account"}
                     </div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: 14, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
                     {signedMoney(tx.amount)}
                   </div>
                 </div>
               ))}
-            </div>
+            </Card>
           )}
 
-          {/* Budget Summary Card */}
-          <div style={cardStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f1b33)" }}>Budget</div>
-              <button type="button" onClick={() => onSelectTab("plan")} style={linkBtnStyle}>
+          {/* Top Categories capsule bars */}
+          <Card
+            eyebrow="Top Categories"
+            title="Where spending is going"
+            actions={
+              <Pill size="sm" onClick={() => onNavigateTab("plan")}>
                 See plan
-              </button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <PlanSummaryBar label="Income" actual={earned} planned={plannedIncome} tint="#15803d" verb="earned" />
-              <PlanSummaryBar
-                label="Expenses"
-                actual={spent}
-                planned={plannedExpenses}
-                tint={plannedExpenses > 0 && spent > plannedExpenses ? "#b91c1c" : "var(--brand, #2563eb)"}
-                verb="spent"
-              />
-            </div>
-          </div>
+              </Pill>
+            }
+          >
+            {topCategories.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: "var(--ink-tertiary)" }}>No categorized spending this month.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+                {topCategories.map(({ cat, actual, target }) => {
+                  const maxBase = target > 0 ? target : Math.max(actual, spent * 0.35, 1);
+                  const pct = Math.min(100, Math.round((actual / maxBase) * 100));
+                  const pacePct = Math.round(paceFraction * 100);
+                  const over = target > 0 && actual > target;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => onNavigateTab("transactions", { categoryId: cat.id })}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        background: "transparent",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 4 }}>
+                        <span style={{ fontWeight: "var(--weight-medium)", color: "var(--ink-primary)" }}>
+                          {cat.icon} {cat.name}
+                        </span>
+                        <span style={{ fontVariantNumeric: "tabular-nums", color: "var(--ink-secondary)" }}>
+                          {money(actual)}
+                          {target > 0 ? ` / ${money(target)}` : ""}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          position: "relative",
+                          height: 8,
+                          borderRadius: "var(--radius-full)",
+                          background: "var(--track)",
+                          overflow: "visible",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${pct}%`,
+                            height: "100%",
+                            borderRadius: "var(--radius-full)",
+                            background: over ? "var(--expense)" : "var(--brand)",
+                          }}
+                        />
+                        {target > 0 && (
+                          <span
+                            title="Month pace"
+                            style={{
+                              position: "absolute",
+                              left: `${pacePct}%`,
+                              top: -2,
+                              bottom: -2,
+                              width: 2,
+                              background: "var(--ink-primary)",
+                              opacity: 0.45,
+                              borderRadius: 1,
+                            }}
+                          />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
 
           {/* Recent Transactions */}
-          <div style={cardStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f1b33)" }}>Transactions</div>
-              <button type="button" onClick={() => onSelectTab("transactions")} style={linkBtnStyle}>
+          <Card
+            eyebrow="Activity"
+            title="Recent Transactions"
+            actions={
+              <Pill size="sm" onClick={() => onNavigateTab("transactions")}>
                 See all
-              </button>
-            </div>
+              </Pill>
+            }
+          >
             {recent.length === 0 ? (
-              <p style={{ margin: "12px 0", fontSize: 13, color: "var(--ink-2, #475877)" }}>No transactions yet</p>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--ink-tertiary)" }}>No transactions yet.</p>
             ) : (
               recent.map((tx, idx) => {
                 const cat = tx.categoryId ? catById.get(tx.categoryId) : undefined;
@@ -337,21 +706,22 @@ function BudgetDashboard({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 10,
-                      padding: "9px 0",
-                      borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                      gap: "var(--space-12)",
+                      padding: "var(--space-8) 0",
+                      borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                     }}
                   >
                     <span
                       style={{
                         width: 32,
                         height: 32,
-                        borderRadius: 8,
-                        background: "var(--paper, #eef3fa)",
+                        borderRadius: "var(--radius-s)",
+                        background: "var(--bg-paper-soft)",
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: 16,
+                        fontSize: 15,
+                        flexShrink: 0,
                       }}
                     >
                       {cat?.icon || "•"}
@@ -360,8 +730,8 @@ function BudgetDashboard({
                       <div
                         style={{
                           fontSize: 14,
-                          fontWeight: 600,
-                          color: "var(--ink, #0f1b33)",
+                          fontWeight: "var(--weight-medium)",
+                          color: "var(--ink-primary)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -369,16 +739,16 @@ function BudgetDashboard({
                       >
                         {tx.customTitle || tx.payee || tx.description}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
+                      <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
                         {cat?.name || "Uncategorized"} · {formatShortDate(tx.transactedAt)}
                       </div>
                     </div>
                     <div
                       style={{
                         fontSize: 14,
-                        fontWeight: 600,
+                        fontWeight: "var(--weight-semibold)",
                         fontVariantNumeric: "tabular-nums",
-                        color: tx.amount > 0 ? "#15803d" : "var(--ink, #0f1b33)",
+                        color: tx.amount > 0 ? "var(--income)" : "var(--ink-primary)",
                       }}
                     >
                       {signedMoney(tx.amount)}
@@ -387,102 +757,234 @@ function BudgetDashboard({
                 );
               })
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Right Column: Spending Pace + Net Worth */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={cardStyle}>
-            <div style={sectionLabelStyle}>Spending this month</div>
-            <div
-              style={{
-                fontSize: 30,
-                fontWeight: 700,
-                fontVariantNumeric: "tabular-nums",
-                color: "var(--ink, #0f1b33)",
-                marginBottom: 4,
-              }}
-            >
-              {money(spent)}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--ink-2, #475877)", marginBottom: 14 }}>
-              {plannedExpenses > 0
+        {/* Right Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
+          {/* Monthly Spending vs Pace */}
+          <ChartCard
+            eyebrow="Monthly Spending"
+            title="Spending vs. Pace"
+            metric={money(spent)}
+            delta={
+              plannedExpenses > 0
+                ? {
+                    label: paceDelta <= 0 ? `${money(Math.abs(paceDelta))} under pace` : `${money(paceDelta)} over pace`,
+                    tone: paceDelta <= 0 ? "income" : "expense",
+                  }
+                : undefined
+            }
+            subtitle={
+              plannedExpenses > 0
                 ? `${money(plannedExpenses)} planned · ${spent <= plannedExpenses ? `${money(plannedExpenses - spent)} left` : `${money(spent - plannedExpenses)} over`}`
-                : `${monthTxns.filter((t) => t.amount < 0 && !t.isTransfer).length} charges this month`}
-            </div>
-            <SpendingSparkline values={dailyCumulative} target={plannedExpenses} />
-          </div>
+                : `${monthTxns.filter((t) => t.amount < 0 && !t.isTransfer).length} charges this month`
+            }
+            legend={[
+              { label: "This month", color: "var(--brand)" },
+              { label: "Linear pace", color: "var(--last-month)", dashed: true },
+            ]}
+          >
+            <InteractivePaceChart
+              values={dailyCumulative}
+              target={plannedExpenses}
+              daysInMonth={daysInMonth}
+            />
+          </ChartCard>
 
-          <div style={cardStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={sectionLabelStyle}>Net Worth</div>
-              <button type="button" onClick={() => onSelectTab("accounts")} style={linkBtnStyle}>
+          {/* Net Worth 1W-ALL */}
+          <ChartCard
+            eyebrow="Balance Sheet"
+            title="Net Worth"
+            metric={money(netWorth)}
+            delta={{
+              label: `${nwDelta >= 0 ? "+" : ""}${money(nwDelta)} (${nwRange})`,
+              tone: nwDelta >= 0 ? "income" : "expense",
+            }}
+            ranges={["1W", "1M", "3M", "YTD", "1Y", "ALL"]}
+            activeRange={nwRange}
+            onRangeChange={(r) => setNwRange(r as NetWorthRange)}
+            actions={
+              <Pill size="sm" onClick={() => onNavigateTab("accounts")}>
                 Accounts
-              </button>
-            </div>
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 700,
-                fontVariantNumeric: "tabular-nums",
-                color: "var(--ink, #0f1b33)",
-                marginBottom: 12,
-              }}
+              </Pill>
+            }
+            footer={
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-12)" }}>
+                <div style={{ padding: "var(--space-8) var(--space-12)", borderRadius: "var(--radius-s)", background: "var(--bg-paper-soft)" }}>
+                  <div style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>Assets</div>
+                  <div style={{ fontSize: 16, fontWeight: "var(--weight-semibold)", color: "var(--income)", fontVariantNumeric: "tabular-nums" }}>
+                    {money(totalAssets)}
+                  </div>
+                </div>
+                <div style={{ padding: "var(--space-8) var(--space-12)", borderRadius: "var(--radius-s)", background: "var(--bg-paper-soft)" }}>
+                  <div style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>Debts</div>
+                  <div style={{ fontSize: 16, fontWeight: "var(--weight-semibold)", color: "var(--expense)", fontVariantNumeric: "tabular-nums" }}>
+                    {money(totalDebts)}
+                  </div>
+                </div>
+              </div>
+            }
+          >
+            <InteractiveNetWorthChart points={nwSeries} />
+          </ChartCard>
+
+          {/* Next Two Weeks Recurring */}
+          {nextTwoWeeks.length > 0 && (
+            <Card
+              eyebrow="Upcoming Bills"
+              title="Next Two Weeks"
+              actions={
+                <Pill size="sm" onClick={() => onNavigateTab("recurring")}>
+                  All recurring
+                </Pill>
+              }
             >
-              {money(netWorth)}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div style={{ padding: 10, borderRadius: 10, background: "var(--paper, #eef3fa)" }}>
-                <div style={{ fontSize: 11, color: "var(--ink-2, #475877)" }}>Assets</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#15803d", fontVariantNumeric: "tabular-nums" }}>
-                  {money(totalAssets)}
+              {nextTwoWeeks.map((r, idx) => (
+                <div
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "var(--space-8) 0",
+                    borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: "var(--weight-medium)" }}>{r.title || r.merchant}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
+                      Due {formatShortDate(r.nextDate)} · {formatCadenceLabel(r.cadenceRaw)}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
+                    {signedMoney(r.amount)}
+                  </div>
                 </div>
-              </div>
-              <div style={{ padding: 10, borderRadius: 10, background: "var(--paper, #eef3fa)" }}>
-                <div style={{ fontSize: 11, color: "var(--ink-2, #475877)" }}>Debts</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#b91c1c", fontVariantNumeric: "tabular-nums" }}>
-                  {money(totalDebts)}
-                </div>
-              </div>
-            </div>
-          </div>
+              ))}
+            </Card>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function SpendingSparkline({ values, target }: { values: number[]; target: number }) {
-  const maxVal = Math.max(target, values[values.length - 1] ?? 0, 1);
-  const w = 320;
-  const h = 88;
+function InteractivePaceChart({
+  values,
+  target,
+  daysInMonth,
+}: {
+  values: number[];
+  target: number;
+  daysInMonth: number;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const w = 360;
+  const h = 110;
   if (values.length === 0) return null;
 
-  const pts = values
-    .map((v, i) => {
-      const x = values.length === 1 ? w : (i / (values.length - 1)) * w;
-      const y = h - (v / maxVal) * (h - 10) - 4;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  const targetY = target > 0 ? h - (target / maxVal) * (h - 10) - 4 : null;
+  const maxVal = Math.max(target, values[values.length - 1] ?? 0, 1);
+  const pts = values.map((v, i) => {
+    const x = (i / Math.max(1, daysInMonth - 1)) * w;
+    const y = h - 12 - (v / maxVal) * (h - 24);
+    return { x, y, v, day: i + 1 };
+  });
+  const linePts = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const targetY = target > 0 ? h - 12 - (target / maxVal) * (h - 24) : null;
+  const active = hoverIdx !== null ? pts[hoverIdx] : null;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 90, display: "block" }}>
-      {targetY !== null && (
-        <line
-          x1="0"
-          y1={targetY}
-          x2={w}
-          y2={targetY}
-          stroke="var(--line, #cbd5e1)"
-          strokeWidth="1.5"
-          strokeDasharray="4 4"
-        />
+    <div>
+      {active && (
+        <div style={{ fontSize: 12, color: "var(--ink-secondary)", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
+          Day {active.day}: <strong>{money(active.v)}</strong> spent
+          {target > 0 && ` (pace ${money((target * active.day) / daysInMonth)})`}
+        </div>
       )}
-      <polyline fill="none" stroke="var(--brand, #2563eb)" strokeWidth="2.5" strokeLinecap="round" points={pts} />
-    </svg>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 112, display: "block" }}>
+        {targetY !== null && (
+          <>
+            <line
+              x1="0"
+              y1={targetY}
+              x2={w}
+              y2={targetY}
+              stroke="var(--border-strong)"
+              strokeWidth="1"
+              strokeDasharray="4 4"
+            />
+            <line
+              x1="0"
+              y1={h - 12}
+              x2={w}
+              y2={targetY}
+              stroke="var(--last-month)"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+            />
+          </>
+        )}
+        <polyline fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" points={linePts} />
+        {pts.map((p, i) => (
+          <circle
+            key={p.day}
+            cx={p.x}
+            cy={p.y}
+            r={hoverIdx === i ? 4.5 : 2.5}
+            fill={hoverIdx === i ? "var(--brand-dark)" : "var(--brand)"}
+            style={{ cursor: "pointer" }}
+            onMouseEnter={() => setHoverIdx(i)}
+            onMouseLeave={() => setHoverIdx(null)}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function InteractiveNetWorthChart({ points }: { points: Array<{ ts: number; label: string; value: number }> }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const w = 360;
+  const h = 110;
+  if (points.length === 0) return null;
+
+  const vals = points.map((p) => p.value);
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const span = Math.max(1, maxV - minV);
+
+  const coords = points.map((p, i) => {
+    const x = (i / Math.max(1, points.length - 1)) * w;
+    const y = h - 14 - ((p.value - minV) / span) * (h - 28);
+    return { ...p, x, y };
+  });
+  const linePts = coords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const active = hoverIdx !== null ? coords[hoverIdx] : null;
+
+  return (
+    <div>
+      {active && (
+        <div style={{ fontSize: 12, color: "var(--ink-secondary)", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
+          {active.label}: <strong>{money(active.value)}</strong>
+        </div>
+      )}
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 112, display: "block" }}>
+        <polyline fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" points={linePts} />
+        {coords.map((p, i) => (
+          <circle
+            key={p.ts}
+            cx={p.x}
+            cy={p.y}
+            r={hoverIdx === i ? 4.5 : 2.5}
+            fill={hoverIdx === i ? "var(--brand-dark)" : "var(--brand)"}
+            style={{ cursor: "pointer" }}
+            onMouseEnter={() => setHoverIdx(i)}
+            onMouseLeave={() => setHoverIdx(null)}
+          />
+        ))}
+      </svg>
+    </div>
   );
 }
 
@@ -511,30 +1013,31 @@ function BudgetAccounts({ accounts }: { accounts: AccountRecord[] }) {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
-      <header style={{ marginBottom: 18 }}>
-        <div style={sectionLabelStyle}>Net Worth</div>
+      <header style={{ marginBottom: "var(--space-20)" }}>
+        <p style={sectionEyebrowStyle}>Net Worth</p>
         <h1
           style={{
+            fontFamily: "var(--font-display)",
             fontSize: 34,
-            fontWeight: 700,
+            fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
-            margin: "0 0 4px",
-            color: "var(--ink, #0f1b33)",
+            margin: "0 0 var(--space-4)",
+            color: "var(--ink-primary)",
           }}
         >
           {money(netWorth, true)}
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2, #475877)" }}>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-tertiary)" }}>
           {money(totalAssets)} assets · {money(totalDebts)} liabilities
         </p>
       </header>
 
       {accounts.length === 0 ? (
-        <div style={cardStyle}>
-          <p style={{ margin: 0, color: "var(--ink-2, #475877)" }}>No accounts synced from iCloud yet.</p>
-        </div>
+        <Card>
+          <p style={{ margin: 0, color: "var(--ink-tertiary)" }}>No accounts synced from iCloud yet.</p>
+        </Card>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
           {groups.map((groupName) => {
             const members = visible.filter((a) => accountGroupFor(a.kindRaw) === groupName);
             if (members.length === 0) return null;
@@ -544,15 +1047,23 @@ function BudgetAccounts({ accounts }: { accounts: AccountRecord[] }) {
             const pct = shareBase > 0 ? Math.round((Math.abs(total) / shareBase) * 100) : 0;
 
             return (
-              <div key={groupName} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-                <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line, #d8e2f0)" }}>
+              <Card key={groupName} padding="none" style={{ overflow: "hidden" }}>
+                <div
+                  style={{
+                    padding: "var(--space-16) var(--space-20)",
+                    borderBottom: "1px solid var(--border-hairline)",
+                    background: "var(--bg-paper-soft)",
+                  }}
+                >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ink, #0f1b33)" }}>{groupName}</span>
-                    <span style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600 }}>
+                      {groupName}
+                    </span>
+                    <span style={{ fontSize: 18, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
                       {money(total, true)}
                     </span>
                   </div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-2, #475877)", marginTop: 2 }}>
+                  <div style={{ fontSize: 12.5, color: "var(--ink-tertiary)", marginTop: 2 }}>
                     {pct}% of {isAsset ? "assets" : "liabilities"}
                   </div>
                 </div>
@@ -563,50 +1074,52 @@ function BudgetAccounts({ accounts }: { accounts: AccountRecord[] }) {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "13px 20px",
-                      borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                      padding: "var(--space-12) var(--space-20)",
+                      borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink, #0f1b33)" }}>
+                      <div style={{ fontSize: 15, fontWeight: "var(--weight-medium)", color: "var(--ink-primary)" }}>
                         {acct.nickname || acct.name}
                       </div>
-                      <div style={{ fontSize: 12.5, color: "var(--ink-2, #475877)" }}>
+                      <div style={{ fontSize: 12.5, color: "var(--ink-tertiary)" }}>
                         {acct.institutionName ? `${acct.institutionName} · ` : ""}
                         {acct.kindRaw}
                       </div>
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                    <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
                       {money(acct.balance, true)}
                     </div>
                   </div>
                 ))}
-              </div>
+              </Card>
             );
           })}
 
           {hidden.length > 0 && (
             <div>
-              <button type="button" onClick={() => setShowHidden((v) => !v)} style={linkBtnStyle}>
-                {showHidden ? "Hide hidden accounts" : `Show ${hidden.length} hidden account${hidden.length === 1 ? "" : "s"}`}
-              </button>
+              <Pill size="sm" onClick={() => setShowHidden((v) => !v)}>
+                {showHidden
+                  ? "Hide hidden accounts"
+                  : `Show ${hidden.length} hidden account${hidden.length === 1 ? "" : "s"}`}
+              </Pill>
               {showHidden && (
-                <div style={{ ...cardStyle, marginTop: 10, padding: 0, opacity: 0.65 }}>
+                <Card padding="none" style={{ marginTop: "var(--space-12)", opacity: 0.7, overflow: "hidden" }}>
                   {hidden.map((acct, idx) => (
                     <div
                       key={acct.id}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        padding: "12px 20px",
-                        borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                        padding: "var(--space-12) var(--space-20)",
+                        borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                       }}
                     >
                       <span>{acct.nickname || acct.name}</span>
                       <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(acct.balance, true)}</span>
                     </div>
                   ))}
-                </div>
+                </Card>
               )}
             </div>
           )}
@@ -617,34 +1130,85 @@ function BudgetAccounts({ accounts }: { accounts: AccountRecord[] }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 3. Transactions                                                            */
+/* 3. Transactions (Copilot borderless list + popovers + Inspector + Summary) */
 /* -------------------------------------------------------------------------- */
+
+type DatePreset = "all" | "thisMonth" | "lastMonth" | "30d" | "90d" | "ytd";
+
+const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
+  { id: "all", label: "All dates" },
+  { id: "thisMonth", label: "This month" },
+  { id: "lastMonth", label: "Last month" },
+  { id: "30d", label: "Last 30 days" },
+  { id: "90d", label: "Last 90 days" },
+  { id: "ytd", label: "Year to date" },
+];
 
 function BudgetTransactions({
   accounts,
+  categories,
   visibleTxns,
   catById,
   acctById,
+  initialCatFilter = "all",
+  initialTypeFilter = "all",
 }: {
   accounts: AccountRecord[];
+  categories: BudgetCategoryRecord[];
   visibleTxns: TransactionRecord[];
   catById: Map<string, BudgetCategoryRecord>;
   acctById: Map<string, AccountRecord>;
+  initialCatFilter?: string;
+  initialTypeFilter?: "all" | "review" | "expenses" | "income";
 }) {
   const [search, setSearch] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "review" | "expenses" | "income">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "review" | "expenses" | "income">(initialTypeFilter);
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
   const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>(initialCatFilter);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openPopover, setOpenPopover] = useState<"date" | "filters" | null>(null);
+  const popoverAreaRef = useRef<HTMLDivElement | null>(null);
 
-  const reviewCount = useMemo(() => visibleTxns.filter((t) => t.needsReview).length, [visibleTxns]);
+  useEffect(() => {
+    if (!openPopover) return;
+    const onDown = (e: MouseEvent) => {
+      if (popoverAreaRef.current && !popoverAreaRef.current.contains(e.target as Node)) {
+        setOpenPopover(null);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [openPopover]);
+
+  const reviewCount = useMemo(() => {
+    const start = reviewWindowStart();
+    return visibleTxns.filter((t) => t.needsReview && t.transactedAt >= start).length;
+  }, [visibleTxns]);
+
+  const [nowTs] = useState(() => Date.now());
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const reviewStart = reviewWindowStart();
+    const now = new Date(nowTs);
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+
     return visibleTxns.filter((tx) => {
+      if (datePreset === "thisMonth" && tx.transactedAt < thisMonthStart) return false;
+      if (datePreset === "lastMonth" && (tx.transactedAt < lastMonthStart || tx.transactedAt >= thisMonthStart)) return false;
+      if (datePreset === "30d" && tx.transactedAt < nowTs - 30 * 86400000) return false;
+      if (datePreset === "90d" && tx.transactedAt < nowTs - 90 * 86400000) return false;
+      if (datePreset === "ytd" && tx.transactedAt < new Date(now.getFullYear(), 0, 1).getTime()) return false;
+
       if (accountFilter !== "all" && tx.accountId !== accountFilter) return false;
-      if (filterMode === "review" && !tx.needsReview) return false;
-      if (filterMode === "expenses" && (tx.amount >= 0 || tx.isTransfer)) return false;
-      if (filterMode === "income" && (tx.amount <= 0 || tx.isTransfer)) return false;
+      if (categoryFilter !== "all" && (tx.categoryId ?? "__uncat__") !== categoryFilter) return false;
+      if (filterMode === "review" && (!tx.needsReview || tx.transactedAt < reviewStart)) return false;
+      const txCat = tx.categoryId ? catById.get(tx.categoryId) : undefined;
+      const isXfer = tx.isTransfer || Boolean(txCat?.isTransfer);
+      if (filterMode === "expenses" && (tx.amount >= 0 || isXfer)) return false;
+      if (filterMode === "income" && (tx.amount <= 0 || isXfer)) return false;
       if (!q) return true;
       const catName = (tx.categoryId ? catById.get(tx.categoryId)?.name : "")?.toLowerCase() ?? "";
       return (
@@ -654,290 +1218,537 @@ function BudgetTransactions({
         catName.includes(q)
       );
     });
-  }, [visibleTxns, search, filterMode, accountFilter, catById]);
+  }, [visibleTxns, search, filterMode, datePreset, accountFilter, categoryFilter, catById, nowTs]);
 
-  const { spentTotal, incomeTotal } = useMemo(() => {
+  const { spentTotal, incomeTotal, topCatSummary } = useMemo(() => {
     let s = 0;
     let inc = 0;
+    const catTotals = new Map<string, { name: string; amount: number }>();
     for (const t of filtered) {
       const cat = t.categoryId ? catById.get(t.categoryId) : undefined;
       if (t.isTransfer || cat?.isTransfer) continue;
-      if (t.amount < 0) s += Math.abs(t.amount);
-      else inc += t.amount;
+      if (t.amount < 0) {
+        s += Math.abs(t.amount);
+        const key = cat?.id ?? "__uncat__";
+        const cur = catTotals.get(key) ?? { name: cat?.name ?? "Uncategorized", amount: 0 };
+        cur.amount += Math.abs(t.amount);
+        catTotals.set(key, cur);
+      } else {
+        inc += t.amount;
+      }
     }
-    return { spentTotal: s, incomeTotal: inc };
+    const top = Array.from(catTotals.values()).sort((a, b) => b.amount - a.amount).slice(0, 3);
+    return { spentTotal: s, incomeTotal: inc, topCatSummary: top };
   }, [filtered, catById]);
 
+  const displayList = useMemo(() => filtered.slice(0, 250), [filtered]);
   const groupedByDay = useMemo(() => {
     const map = new Map<string, TransactionRecord[]>();
-    for (const tx of filtered.slice(0, 250)) {
+    for (const tx of displayList) {
       const key = dayKeyFromTs(tx.transactedAt);
       const arr = map.get(key) ?? [];
       arr.push(tx);
       map.set(key, arr);
     }
     return Array.from(map.entries());
-  }, [filtered]);
+  }, [displayList]);
 
-  const selectedTxn = useMemo(
-    () => (selectedId ? filtered.find((t) => t.id === selectedId) ?? null : null),
-    [selectedId, filtered],
+  const selectedIndex = useMemo(
+    () => (selectedId ? displayList.findIndex((t) => t.id === selectedId) : -1),
+    [selectedId, displayList],
+  );
+  const selectedTxn = selectedIndex >= 0 ? displayList[selectedIndex] : null;
+
+  const stepSelected = useCallback(
+    (delta: -1 | 1) => {
+      if (displayList.length === 0) return;
+      if (selectedIndex < 0) {
+        setSelectedId(displayList[0].id);
+        return;
+      }
+      const next = Math.max(0, Math.min(displayList.length - 1, selectedIndex + delta));
+      setSelectedId(displayList[next].id);
+    },
+    [displayList, selectedIndex],
   );
 
+  useEffect(() => {
+    if (!selectedTxn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        stepSelected(1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        stepSelected(-1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedTxn, stepSelected]);
+
+  const activeFilterCount =
+    (filterMode !== "all" ? 1 : 0) + (accountFilter !== "all" ? 1 : 0) + (categoryFilter !== "all" ? 1 : 0);
+
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-      <header style={{ marginBottom: 14 }}>
-        <h1
+    <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+      <header style={{ marginBottom: "var(--space-16)" }} ref={popoverAreaRef}>
+        <div
           style={{
-            fontFamily: "var(--font-source-serif), Georgia, serif",
-            fontSize: 28,
-            fontWeight: 800,
-            margin: "0 0 10px",
-            color: "var(--ink, #0f1b33)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+            gap: "var(--space-12)",
+            marginBottom: "var(--space-12)",
           }}
         >
-          Transactions
-        </h1>
+          <div>
+            <p style={sectionEyebrowStyle}>Read-only Ledger</p>
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 28,
+                fontWeight: 600,
+                margin: 0,
+                color: "var(--ink-primary)",
+              }}
+            >
+              Transactions
+            </h1>
+          </div>
+          {reviewCount > 0 && (
+            <Pill
+              size="sm"
+              active={filterMode === "review"}
+              onClick={() => setFilterMode((m) => (m === "review" ? "all" : "review"))}
+              count={reviewCount}
+            >
+              Needs Review
+            </Pill>
+          )}
+        </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        {/* Search + Inline Date & Filters Popovers */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-8)", alignItems: "center", position: "relative" }}>
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search transactions"
+            placeholder="Search merchants, categories, descriptions…"
             style={{
-              flex: "1 1 220px",
+              flex: "1 1 240px",
               padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid var(--line, #cbd5e1)",
-              background: "var(--card, #ffffff)",
-              fontSize: 14,
-              color: "var(--ink, #0f1b33)",
+              borderRadius: "var(--radius-s)",
+              border: "1px solid var(--border-hairline)",
+              background: "var(--bg-card)",
+              fontSize: 13.5,
+              color: "var(--ink-primary)",
             }}
           />
-          <select
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 10,
-              border: "1px solid var(--line, #cbd5e1)",
-              background: "var(--card, #ffffff)",
-              fontSize: 13,
-              color: "var(--ink, #0f1b33)",
-            }}
-          >
-            <option value="all">All accounts</option>
-            {accounts
-              .filter((a) => !a.isHidden)
-              .map((a) => (
-                <option key={a.providerAccountId} value={a.providerAccountId}>
-                  {a.nickname || a.name}
-                </option>
-              ))}
-          </select>
-        </div>
 
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-          {(
-            [
-              ["all", "All"],
-              ["review", `Needs Review (${reviewCount})`],
-              ["expenses", "Expenses"],
-              ["income", "Income"],
-            ] as const
-          ).map(([key, label]) => {
-            const active = filterMode === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFilterMode(key)}
+          <div style={{ position: "relative" }}>
+            <Pill
+              size="md"
+              active={datePreset !== "all" || openPopover === "date"}
+              onClick={() => setOpenPopover((p) => (p === "date" ? null : "date"))}
+            >
+              {DATE_PRESETS.find((d) => d.id === datePreset)?.label ?? "Date"} ▾
+            </Pill>
+            {openPopover === "date" && (
+              <Card
+                padding="sm"
                 style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: `1px solid ${active ? "var(--brand, #2563eb)" : "var(--line, #cbd5e1)"}`,
-                  background: active ? "var(--brand, #2563eb)" : "var(--card, #ffffff)",
-                  color: active ? "#ffffff" : "var(--ink, #0f1b33)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  width: 200,
+                  zIndex: 30,
+                  boxShadow: "var(--shadow-elevated)",
                 }}
               >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+                  {DATE_PRESETS.map((p) => (
+                    <Pill
+                      key={p.id}
+                      size="sm"
+                      active={datePreset === p.id}
+                      style={{ justifyContent: "flex-start" }}
+                      onClick={() => {
+                        setDatePreset(p.id);
+                        setOpenPopover(null);
+                      }}
+                    >
+                      {p.label}
+                    </Pill>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
 
-        <div style={{ fontSize: 12.5, color: "var(--ink-2, #475877)", marginTop: 10 }}>
-          <strong>{filtered.length}</strong> transactions · {money(spentTotal, true)} spent ·{" "}
-          <span style={{ color: "#15803d" }}>{money(incomeTotal, true)} income</span>
+          <div style={{ position: "relative" }}>
+            <Pill
+              size="md"
+              active={activeFilterCount > 0 || openPopover === "filters"}
+              count={activeFilterCount > 0 ? activeFilterCount : undefined}
+              onClick={() => setOpenPopover((p) => (p === "filters" ? null : "filters"))}
+            >
+              Filters ▾
+            </Pill>
+            {openPopover === "filters" && (
+              <Card
+                padding="md"
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  width: 300,
+                  zIndex: 30,
+                  boxShadow: "var(--shadow-elevated)",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+                  <div>
+                    <div style={sectionEyebrowStyle}>Type</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
+                      {(
+                        [
+                          ["all", "All"],
+                          ["review", "Review"],
+                          ["expenses", "Expenses"],
+                          ["income", "Income"],
+                        ] as const
+                      ).map(([k, lbl]) => (
+                        <Pill key={k} size="sm" active={filterMode === k} onClick={() => setFilterMode(k)}>
+                          {lbl}
+                        </Pill>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={sectionEyebrowStyle}>Account</div>
+                    <select
+                      value={accountFilter}
+                      onChange={(e) => setAccountFilter(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "7px 10px",
+                        borderRadius: "var(--radius-s)",
+                        border: "1px solid var(--border-hairline)",
+                        background: "var(--bg-paper)",
+                        fontSize: 13,
+                        color: "var(--ink-primary)",
+                      }}
+                    >
+                      <option value="all">All accounts</option>
+                      {accounts
+                        .filter((a) => !a.isHidden)
+                        .map((a) => (
+                          <option key={a.providerAccountId} value={a.providerAccountId}>
+                            {a.nickname || a.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={sectionEyebrowStyle}>Category</div>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "7px 10px",
+                        borderRadius: "var(--radius-s)",
+                        border: "1px solid var(--border-hairline)",
+                        background: "var(--bg-paper)",
+                        fontSize: 13,
+                        color: "var(--ink-primary)",
+                      }}
+                    >
+                      <option value="all">All categories</option>
+                      {categories
+                        .filter((c) => !c.isTransfer)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.icon} {c.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  {activeFilterCount > 0 && (
+                    <Pill
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setFilterMode("all");
+                        setAccountFilter("all");
+                        setCategoryFilter("all");
+                      }}
+                    >
+                      Clear filters
+                    </Pill>
+                  )}
+                </div>
+              </Card>
+            )}
+          </div>
         </div>
       </header>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: selectedTxn ? "minmax(0, 1.4fr) minmax(260px, 1fr)" : "1fr",
-          gap: 16,
-          alignItems: "start",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Borderless Chronological List + Sticky Summary / Inspector */}
+      <div className="ds-inspector-layout">
+        <div style={{ flex: 1, minWidth: 0 }}>
           {groupedByDay.length === 0 ? (
-            <div style={cardStyle}>
-              <p style={{ margin: 0, color: "var(--ink-2, #475877)" }}>No matching transactions.</p>
-            </div>
+            <Card>
+              <p style={{ margin: 0, color: "var(--ink-tertiary)" }}>No matching transactions.</p>
+            </Card>
           ) : (
-            groupedByDay.map(([dayKey, items]) => {
-              const dayNet = items
-                .filter((t) => !t.isTransfer)
-                .reduce((s, t) => s + t.amount, 0);
-              return (
-                <div key={dayKey} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "9px 16px",
-                      background: "var(--paper, #eef3fa)",
-                      borderBottom: "1px solid var(--line, #d8e2f0)",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "var(--ink-2, #475877)",
-                    }}
-                  >
-                    <span>{formatDayHeader(dayKey)}</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{signedMoney(dayNet, true)}</span>
-                  </div>
-                  {items.map((tx, idx) => {
-                    const cat = tx.categoryId ? catById.get(tx.categoryId) : undefined;
-                    const acct = acctById.get(tx.accountId);
-                    const isSelected = tx.id === selectedId;
-                    return (
-                      <button
-                        key={tx.id}
-                        type="button"
-                        onClick={() => setSelectedId(isSelected ? null : tx.id)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "11px 16px",
-                          border: "none",
-                          borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
-                          background: isSelected ? "rgba(37, 99, 235, 0.08)" : "transparent",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: 9,
-                            background: "var(--paper, #eef3fa)",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 16,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {cat?.icon || "•"}
-                        </span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
+              {groupedByDay.map(([dayKey, items]) => {
+                const dayNet = items.filter((t) => !t.isTransfer).reduce((s, t) => s + t.amount, 0);
+                return (
+                  <section key={dayKey}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        padding: "0 var(--space-8) var(--space-8)",
+                        borderBottom: "1px solid var(--border-hairline)",
+                        fontSize: 12,
+                        fontWeight: "var(--weight-semibold)",
+                        color: "var(--ink-tertiary)",
+                      }}
+                    >
+                      <span>{formatDayHeader(dayKey)}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{signedMoney(dayNet, true)}</span>
+                    </div>
+                    <div>
+                      {items.map((tx) => {
+                        const cat = tx.categoryId ? catById.get(tx.categoryId) : undefined;
+                        const acct = acctById.get(tx.accountId);
+                        const isSelected = tx.id === selectedId;
+                        return (
+                          <button
+                            key={tx.id}
+                            type="button"
+                            onClick={() => setSelectedId(isSelected ? null : tx.id)}
                             style={{
-                              fontSize: 14,
-                              fontWeight: 600,
-                              color: "var(--ink, #0f1b33)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
+                              width: "100%",
+                              textAlign: "left",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "var(--space-12)",
+                              padding: "var(--space-12) var(--space-8)",
+                              border: "none",
+                              borderRadius: "var(--radius-s)",
+                              background: isSelected ? "var(--brand-soft)" : "transparent",
+                              cursor: "pointer",
                             }}
                           >
-                            {tx.customTitle || tx.payee || tx.description}
-                          </div>
-                          <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
-                            {cat?.name || "Uncategorized"} · {acct?.nickname || acct?.name || "Account"}
-                            {tx.needsReview && (
-                              <span
+                            <span
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: "var(--radius-s)",
+                                background: "var(--bg-paper-soft)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 16,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {cat?.icon || "•"}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
                                 style={{
-                                  marginLeft: 6,
-                                  padding: "1px 6px",
-                                  borderRadius: 999,
-                                  background: "#fff4dc",
-                                  color: "#b45309",
-                                  fontWeight: 600,
-                                  fontSize: 11,
+                                  fontSize: 14,
+                                  fontWeight: "var(--weight-medium)",
+                                  color: "var(--ink-primary)",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
                               >
-                                Review
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 600,
-                            fontVariantNumeric: "tabular-nums",
-                            color: tx.amount > 0 ? "#15803d" : "var(--ink, #0f1b33)",
-                          }}
-                        >
-                          {signedMoney(tx.amount)}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })
+                                {tx.customTitle || tx.payee || tx.description}
+                              </div>
+                              <div style={{ fontSize: 12, color: "var(--ink-tertiary)", display: "flex", gap: 6, alignItems: "center" }}>
+                                <span>
+                                  {cat?.name || "Uncategorized"} · {acct?.nickname || acct?.name || "Account"}
+                                </span>
+                                {tx.needsReview && <Badge tone="pending">Review</Badge>}
+                                {tx.isPending && <Badge tone="neutral">Pending</Badge>}
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 14,
+                                fontWeight: "var(--weight-semibold)",
+                                fontVariantNumeric: "tabular-nums",
+                                color: tx.amount > 0 ? "var(--income)" : "var(--ink-primary)",
+                              }}
+                            >
+                              {signedMoney(tx.amount)}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {selectedTxn && (
-          <aside style={{ ...cardStyle, position: "sticky", top: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={sectionLabelStyle}>Transaction Details</div>
-              <button type="button" onClick={() => setSelectedId(null)} style={linkBtnStyle}>
-                Close
-              </button>
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginBottom: 4 }}>
+        {selectedTxn ? (
+          <InspectorDrawer
+            open
+            onClose={() => setSelectedId(null)}
+            eyebrow={`Transaction ${selectedIndex + 1} of ${displayList.length}`}
+            title={selectedTxn.customTitle || selectedTxn.payee || selectedTxn.description}
+            subtitle={formatShortDate(selectedTxn.transactedAt)}
+            headerExtra={
+              <div style={{ display: "inline-flex", gap: 4 }}>
+                <button
+                  type="button"
+                  className="ds-inspector-close"
+                  onClick={() => stepSelected(-1)}
+                  disabled={selectedIndex <= 0}
+                  aria-label="Previous transaction"
+                  title="Previous (↑)"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  className="ds-inspector-close"
+                  onClick={() => stepSelected(1)}
+                  disabled={selectedIndex >= displayList.length - 1}
+                  aria-label="Next transaction"
+                  title="Next (↓)"
+                >
+                  ▼
+                </button>
+              </div>
+            }
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 28,
+                fontWeight: 600,
+                fontVariantNumeric: "tabular-nums",
+                color: selectedTxn.amount > 0 ? "var(--income)" : "var(--ink-primary)",
+                marginBottom: "var(--space-12)",
+              }}
+            >
               {signedMoney(selectedTxn.amount)}
             </div>
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>
-              {selectedTxn.customTitle || selectedTxn.payee || selectedTxn.description}
+            <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", marginBottom: "var(--space-16)" }}>
+              {selectedTxn.needsReview && <Badge tone="pending">Needs Review</Badge>}
+              {selectedTxn.isPending && <Badge tone="neutral">Pending</Badge>}
+              {selectedTxn.isTransfer && <Badge tone="brand">Transfer</Badge>}
+              {!selectedTxn.needsReview && !selectedTxn.isPending && !selectedTxn.isTransfer && (
+                <Badge tone="income">Reviewed</Badge>
+              )}
             </div>
-            <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", fontSize: 13 }}>
-              <dt style={{ color: "var(--ink-2, #475877)" }}>Date</dt>
+            <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 14px", fontSize: 13 }}>
+              <dt style={{ color: "var(--ink-tertiary)" }}>Date</dt>
               <dd style={{ margin: 0 }}>{new Date(selectedTxn.transactedAt).toLocaleString("en-US")}</dd>
-              <dt style={{ color: "var(--ink-2, #475877)" }}>Account</dt>
+              <dt style={{ color: "var(--ink-tertiary)" }}>Account</dt>
               <dd style={{ margin: 0 }}>
                 {acctById.get(selectedTxn.accountId)?.nickname ||
                   acctById.get(selectedTxn.accountId)?.name ||
                   selectedTxn.accountId}
               </dd>
-              <dt style={{ color: "var(--ink-2, #475877)" }}>Category</dt>
+              <dt style={{ color: "var(--ink-tertiary)" }}>Category</dt>
               <dd style={{ margin: 0 }}>
                 {selectedTxn.categoryId
                   ? `${catById.get(selectedTxn.categoryId)?.icon ?? ""} ${catById.get(selectedTxn.categoryId)?.name ?? selectedTxn.categoryId}`
                   : "Uncategorized"}
               </dd>
-              <dt style={{ color: "var(--ink-2, #475877)" }}>Description</dt>
+              <dt style={{ color: "var(--ink-tertiary)" }}>Description</dt>
               <dd style={{ margin: 0, wordBreak: "break-word" }}>{selectedTxn.description}</dd>
-              {selectedTxn.isTransfer && (
+              {selectedTxn.note && (
                 <>
-                  <dt style={{ color: "var(--ink-2, #475877)" }}>Type</dt>
-                  <dd style={{ margin: 0 }}>Transfer</dd>
+                  <dt style={{ color: "var(--ink-tertiary)" }}>Note</dt>
+                  <dd style={{ margin: 0 }}>{selectedTxn.note}</dd>
                 </>
               )}
             </dl>
-          </aside>
+          </InspectorDrawer>
+        ) : (
+          <Card
+            padding="md"
+            eyebrow="Summary"
+            title={`${filtered.length} transactions`}
+            style={{
+              width: 280,
+              flexShrink: 0,
+              position: "sticky",
+              top: "calc(var(--topbar-height) + var(--space-16))",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", fontSize: 13.5, marginBottom: "var(--space-16)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--ink-tertiary)" }}>Spent</span>
+                <span style={{ fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
+                  {money(spentTotal, true)}
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--ink-tertiary)" }}>Income</span>
+                <span style={{ fontWeight: "var(--weight-semibold)", color: "var(--income)", fontVariantNumeric: "tabular-nums" }}>
+                  {money(incomeTotal, true)}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingTop: "var(--space-8)",
+                  borderTop: "1px solid var(--border-hairline)",
+                }}
+              >
+                <span style={{ fontWeight: "var(--weight-semibold)" }}>Net</span>
+                <span
+                  style={{
+                    fontWeight: "var(--weight-semibold)",
+                    color: incomeTotal - spentTotal >= 0 ? "var(--income)" : "var(--expense)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {signedMoney(incomeTotal - spentTotal, true)}
+                </span>
+              </div>
+            </div>
+
+            {topCatSummary.length > 0 && (
+              <div style={{ marginBottom: "var(--space-16)" }}>
+                <div style={sectionEyebrowStyle}>Top Categories</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12.5 }}>
+                  {topCatSummary.map((c) => (
+                    <div key={c.name} style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--ink-secondary)" }}>{c.name}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(c.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Pill
+              variant="brand"
+              size="md"
+              style={{ width: "100%" }}
+              onClick={() => downloadCsv(filtered, catById, acctById)}
+            >
+              Download CSV
+            </Pill>
+          </Card>
         )}
       </div>
     </div>
@@ -1006,40 +1817,39 @@ function BudgetPlanView({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 18,
+          marginBottom: "var(--space-20)",
           flexWrap: "wrap",
-          gap: 10,
+          gap: "var(--space-12)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button type="button" onClick={() => setMonthOffset((m) => m - 1)} style={iconBtnStyle} aria-label="Previous Month">
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
+          <Pill size="sm" onClick={() => setMonthOffset((m) => m - 1)} aria-label="Previous Month">
             ‹
-          </button>
+          </Pill>
           <h1
             style={{
-              fontFamily: "var(--font-source-serif), Georgia, serif",
-              fontSize: 26,
-              fontWeight: 800,
+              fontFamily: "var(--font-display)",
+              fontSize: 28,
+              fontWeight: 600,
               margin: 0,
-              color: "var(--ink, #0f1b33)",
+              color: "var(--ink-primary)",
             }}
           >
             {month.label}
           </h1>
-          <button
-            type="button"
+          <Pill
+            size="sm"
             onClick={() => setMonthOffset((m) => Math.min(0, m + 1))}
             disabled={month.isCurrent}
-            style={{ ...iconBtnStyle, opacity: month.isCurrent ? 0.35 : 1 }}
             aria-label="Next Month"
           >
             ›
-          </button>
+          </Pill>
         </div>
         {!month.isCurrent && (
-          <button type="button" onClick={() => setMonthOffset(0)} style={linkBtnStyle}>
-            Today
-          </button>
+          <Pill size="sm" variant="soft" onClick={() => setMonthOffset(0)}>
+            Current month
+          </Pill>
         )}
       </header>
 
@@ -1047,30 +1857,29 @@ function BudgetPlanView({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
+          gap: "var(--space-16)",
           alignItems: "start",
         }}
       >
-        {/* Left/Top: Left to Budget Banner + Summary */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
+          <Card
+            padding="md"
             style={{
-              borderRadius: 14,
-              padding: "16px 20px",
-              background: leftToBudget < 0 ? "#b91c1c" : "#15803d",
-              color: "#ffffff",
+              background: leftToBudget < 0 ? "var(--expense)" : "var(--brand)",
+              color: "var(--on-brand)",
+              borderColor: "transparent",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
             }}
           >
-            <span style={{ fontSize: 16, fontWeight: 600 }}>Left to budget</span>
-            <span style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 16, fontWeight: "var(--weight-semibold)" }}>Left to budget</span>
+            <span style={{ fontSize: 22, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
               {money(leftToBudget)}
             </span>
-          </div>
+          </Card>
 
-          <div style={cardStyle}>
+          <Card padding="md">
             <button
               type="button"
               onClick={() => setSummaryOpen((v) => !v)}
@@ -1083,50 +1892,50 @@ function BudgetPlanView({
                 border: "none",
                 padding: 0,
                 cursor: "pointer",
-                color: "var(--ink, #0f1b33)",
+                color: "var(--ink-primary)",
                 fontSize: 16,
-                fontWeight: 700,
+                fontWeight: "var(--weight-semibold)",
               }}
             >
               <span>Summary</span>
               <span>{summaryOpen ? "▾" : "▸"}</span>
             </button>
             {summaryOpen && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
-                <PlanSummaryBar label="Income" actual={earned} planned={plannedIncome} tint="#15803d" verb="earned" />
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)", marginTop: "var(--space-16)" }}>
+                <PlanSummaryBar label="Income" actual={earned} planned={plannedIncome} tint="var(--income)" verb="earned" />
                 <PlanSummaryBar
                   label="Expenses"
                   actual={spent}
                   planned={plannedExpenses}
-                  tint={plannedExpenses > 0 && spent > plannedExpenses ? "#b91c1c" : "var(--brand, #2563eb)"}
+                  tint={plannedExpenses > 0 && spent > plannedExpenses ? "var(--expense)" : "var(--brand)"}
                   verb="spent"
                 />
               </div>
             )}
-          </div>
+          </Card>
 
           {uncategorizedSpending > 0 && (
-            <div style={cardStyle}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Card padding="sm" variant="tinted">
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-12)" }}>
                 <span style={{ fontSize: 20 }}>❓</span>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 600 }}>Uncategorized</div>
-                  <div style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>
-                    {money(uncategorizedSpending)} spent — review to budget it
+                  <div style={{ fontSize: 15, fontWeight: "var(--weight-semibold)" }}>Uncategorized</div>
+                  <div style={{ fontSize: 13, color: "var(--ink-tertiary)" }}>
+                    {money(uncategorizedSpending)} spent — review in Wooli Mac/iOS
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
         </div>
 
-        {/* Right/Main: Income & Expense Groups */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-20)" }}>
           {incomeGroups.length > 0 && (
             <PlanGroupSection
               title="Income"
               groups={incomeGroups}
               isIncome
+              isCurrentMonth={month.isCurrent}
               childrenOf={childrenOf}
               plannedForGroup={plannedForGroup}
               actualForGroup={actualForGroup}
@@ -1138,6 +1947,7 @@ function BudgetPlanView({
               title="Expenses"
               groups={expenseGroups}
               isIncome={false}
+              isCurrentMonth={month.isCurrent}
               childrenOf={childrenOf}
               plannedForGroup={plannedForGroup}
               actualForGroup={actualForGroup}
@@ -1154,6 +1964,7 @@ function PlanGroupSection({
   title,
   groups,
   isIncome,
+  isCurrentMonth,
   childrenOf,
   plannedForGroup,
   actualForGroup,
@@ -1162,6 +1973,7 @@ function PlanGroupSection({
   title: string;
   groups: BudgetCategoryRecord[];
   isIncome: boolean;
+  isCurrentMonth: boolean;
   childrenOf: (id: string) => BudgetCategoryRecord[];
   plannedForGroup: (g: BudgetCategoryRecord) => number;
   actualForGroup: (g: BudgetCategoryRecord) => number;
@@ -1169,72 +1981,110 @@ function PlanGroupSection({
 }) {
   return (
     <section>
-      <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 10px", color: "var(--ink, #0f1b33)" }}>{title}</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <h2
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 19,
+          fontWeight: 600,
+          margin: "0 0 var(--space-12)",
+          color: "var(--ink-primary)",
+        }}
+      >
+        {title}
+      </h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
         {groups.map((g) => {
           const children = childrenOf(g.id);
           const planned = plannedForGroup(g);
-          const actual = Math.abs(actualForGroup(g));
+          const actual = actualForGroup(g);
+          const groupRollover =
+            isCurrentMonth && !isIncome
+              ? g.monthlyTarget > 0
+                ? g.rolloverEnabled
+                  ? g.rolloverBalance
+                  : 0
+                : children.reduce((s, c) => s + (c.rolloverEnabled ? c.rolloverBalance : 0), 0)
+              : 0;
           return (
-            <div key={g.id} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            <Card key={g.id} padding="none" style={{ overflow: "hidden" }}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "12px 16px",
-                  background: "var(--paper, #eef3fa)",
-                  borderBottom: children.length > 0 ? "1px solid var(--line, #d8e2f0)" : "none",
+                  padding: "var(--space-12) var(--space-16)",
+                  background: "var(--bg-paper-soft)",
+                  borderBottom: children.length > 0 ? "1px solid var(--border-hairline)" : "none",
                 }}
               >
-                <span style={{ fontSize: 15, fontWeight: 700 }}>
-                  {g.icon} {g.name}
-                </span>
-                <span style={{ fontSize: 13, color: "var(--ink-2, #475877)", fontVariantNumeric: "tabular-nums" }}>
+                <div>
+                  <span style={{ fontSize: 15, fontWeight: "var(--weight-semibold)" }}>
+                    {g.icon} {g.name}
+                  </span>
+                  {groupRollover !== 0 && (
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: groupRollover > 0 ? "var(--income)" : "var(--expense)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {groupRollover > 0
+                        ? `+${money(groupRollover)} rolled over`
+                        : `${money(Math.abs(groupRollover))} overspent last month`}
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize: 13, color: "var(--ink-tertiary)", fontVariantNumeric: "tabular-nums" }}>
                   {planned > 0 ? `${money(actual)} of ${money(planned)}` : `${money(actual)} ${isIncome ? "earned" : "spent"}`}
                 </span>
               </div>
               {children.map((c, idx) => {
-                const cActual = Math.abs(actualByCat[c.id] ?? 0);
+                const cActual = actualByCat[c.id] ?? 0;
                 const cPlan = c.monthlyTarget;
-                const remaining = Math.max(cPlan, 0) - cActual;
-                const pct = cPlan > 0 ? Math.min(100, Math.round((cActual / cPlan) * 100)) : 0;
+                const cRollover = isCurrentMonth && !isIncome && c.rolloverEnabled ? c.rolloverBalance : 0;
+                const remaining = Math.max(cPlan, 0) + cRollover - cActual;
+                const pct = cPlan > 0 ? Math.min(100, Math.max(0, Math.round((cActual / cPlan) * 100))) : 0;
                 const barColor = isIncome
-                  ? "#15803d"
+                  ? "var(--income)"
                   : cActual > cPlan
-                    ? "#b91c1c"
+                    ? "var(--expense)"
                     : cActual >= cPlan * 0.85
-                      ? "#b45309"
-                      : "var(--brand, #2563eb)";
+                      ? "var(--pending)"
+                      : "var(--brand)";
                 return (
                   <div
                     key={c.id}
                     style={{
-                      padding: "10px 16px",
-                      borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                      padding: "var(--space-12) var(--space-16)",
+                      borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 14, fontWeight: 500 }}>
-                        {c.icon} {c.name}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, fontVariantNumeric: "tabular-nums" }}>
-                        <span style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>
-                          {cPlan > 0 ? `${money(cActual)} / ${money(cPlan)}` : money(cActual)}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-8)" }}>
+                      <div>
+                        <span style={{ fontSize: 14, fontWeight: "var(--weight-medium)" }}>
+                          {c.icon} {c.name}
                         </span>
-                        {cPlan > 0 && (
-                          <span
+                        {cRollover !== 0 && (
+                          <div
                             style={{
-                              fontSize: 12,
-                              fontWeight: 700,
-                              padding: "2px 8px",
-                              borderRadius: 999,
-                              background: remaining >= 0 ? "rgba(21,128,61,0.12)" : "rgba(185,28,28,0.12)",
-                              color: remaining >= 0 ? "#15803d" : "#b91c1c",
+                              fontSize: 11.5,
+                              color: cRollover > 0 ? "var(--income)" : "var(--expense)",
+                              marginTop: 1,
                             }}
                           >
-                            {money(remaining)}
-                          </span>
+                            {cRollover > 0
+                              ? `+${money(cRollover)} rolled over`
+                              : `${money(Math.abs(cRollover))} overspent last month`}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ fontSize: 13, color: "var(--ink-tertiary)" }}>
+                          {cPlan > 0 ? `${money(cActual)} / ${money(cPlan)}` : money(cActual)}
+                        </span>
+                        {(cPlan > 0 || cRollover !== 0) && (
+                          <Badge tone={remaining >= 0 ? "income" : "expense"}>{money(remaining)}</Badge>
                         )}
                       </div>
                     </div>
@@ -1242,19 +2092,19 @@ function PlanGroupSection({
                       <div
                         style={{
                           marginTop: 6,
-                          height: 5,
-                          borderRadius: 999,
-                          background: "var(--line, #e2e8f0)",
+                          height: 8,
+                          borderRadius: "var(--radius-full)",
+                          background: "var(--track)",
                           overflow: "hidden",
                         }}
                       >
-                        <div style={{ width: `${pct}%`, height: "100%", background: barColor }} />
+                        <div style={{ width: `${pct}%`, height: "100%", borderRadius: "var(--radius-full)", background: barColor }} />
                       </div>
                     )}
                   </div>
                 );
               })}
-            </div>
+            </Card>
           );
         })}
       </div>
@@ -1274,61 +2124,53 @@ function BudgetCategoriesView({ categories }: { categories: BudgetCategoryRecord
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
-      <header style={{ marginBottom: 18 }}>
+      <header style={{ marginBottom: "var(--space-20)" }}>
+        <p style={sectionEyebrowStyle}>Taxonomy</p>
         <h1
           style={{
-            fontFamily: "var(--font-source-serif), Georgia, serif",
+            fontFamily: "var(--font-display)",
             fontSize: 28,
-            fontWeight: 800,
-            margin: "0 0 4px",
-            color: "var(--ink, #0f1b33)",
+            fontWeight: 600,
+            margin: "0 0 var(--space-4)",
+            color: "var(--ink-primary)",
           }}
         >
           Categories
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2, #475877)" }}>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-tertiary)" }}>
           {groups.length} groups · {categories.length} total categories
         </p>
       </header>
 
       {groups.length === 0 ? (
-        <div style={cardStyle}>
-          <p style={{ margin: 0, color: "var(--ink-2, #475877)" }}>No categories synced yet.</p>
-        </div>
+        <Card>
+          <p style={{ margin: 0, color: "var(--ink-tertiary)" }}>No categories synced yet.</p>
+        </Card>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
           {groups.map((g) => {
             const children = categories
               .filter((c) => c.parentId === g.id)
               .sort((a, b) => a.sortOrder - b.sortOrder);
             const badgeText = g.isIncome ? "Income" : g.isTransfer ? "Transfer" : "Spending";
-            const badgeColor = g.isIncome ? "#15803d" : g.isTransfer ? "#64748b" : "#2563eb";
+            const badgeTone = g.isIncome ? "income" : g.isTransfer ? "neutral" : "brand";
             return (
-              <div key={g.id} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+              <Card key={g.id} padding="none" style={{ overflow: "hidden" }}>
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 8,
-                    padding: "12px 18px",
-                    background: "var(--paper, #eef3fa)",
-                    borderBottom: children.length > 0 ? "1px solid var(--line, #d8e2f0)" : "none",
+                    gap: "var(--space-8)",
+                    padding: "var(--space-12) var(--space-16)",
+                    background: "var(--bg-paper-soft)",
+                    borderBottom: children.length > 0 ? "1px solid var(--border-hairline)" : "none",
                   }}
                 >
                   <span style={{ fontSize: 16 }}>{g.icon}</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink, #0f1b33)" }}>{g.name}</span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: 999,
-                      background: `${badgeColor}1f`,
-                      color: badgeColor,
-                    }}
-                  >
-                    {badgeText}
+                  <span style={{ fontSize: 15, fontWeight: "var(--weight-semibold)", color: "var(--ink-primary)" }}>
+                    {g.name}
                   </span>
+                  <Badge tone={badgeTone}>{badgeText}</Badge>
                 </div>
                 {children.map((c, idx) => (
                   <div
@@ -1337,21 +2179,21 @@ function BudgetCategoriesView({ categories }: { categories: BudgetCategoryRecord
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "10px 18px",
-                      borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                      padding: "var(--space-12) var(--space-16)",
+                      borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                     }}
                   >
                     <span style={{ fontSize: 14 }}>
                       {c.icon} {c.name}
                     </span>
                     {c.monthlyTarget > 0 && (
-                      <span style={{ fontSize: 13, color: "var(--ink-2, #475877)", fontVariantNumeric: "tabular-nums" }}>
+                      <span style={{ fontSize: 13, color: "var(--ink-tertiary)", fontVariantNumeric: "tabular-nums" }}>
                         {money(c.monthlyTarget)}/mo
                       </span>
                     )}
                   </div>
                 ))}
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -1361,28 +2203,62 @@ function BudgetCategoriesView({ categories }: { categories: BudgetCategoryRecord
 }
 
 /* -------------------------------------------------------------------------- */
-/* 6. Recurring (detected from live transactions)                             */
+/* 6. Recurring                                                               */
 /* -------------------------------------------------------------------------- */
 
 interface DetectedRecurring {
   key: string;
   title: string;
   amount: number;
-  cadence: "Monthly" | "Weekly" | "Yearly";
+  cadence: string;
   lastDate: number;
   nextDate: number;
   paidThisMonth: boolean;
   categoryId?: string;
 }
 
+function formatCadenceLabel(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower === "weekly") return "Weekly";
+  if (lower === "biweekly") return "Biweekly";
+  if (lower === "yearly" || lower === "annual") return "Yearly";
+  if (lower === "monthly") return "Monthly";
+  return raw ? raw[0].toUpperCase() + raw.slice(1) : "Monthly";
+}
+
 function BudgetRecurringView({
   visibleTxns,
   catById,
+  recurringItems,
+  hiddenAccountIds,
 }: {
   visibleTxns: TransactionRecord[];
   catById: Map<string, BudgetCategoryRecord>;
+  recurringItems: RecurringItemRecord[];
+  hiddenAccountIds: Set<string>;
 }) {
   const detected = useMemo<DetectedRecurring[]>(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    const activeSynced = recurringItems.filter(
+      (r) => r.isActive && r.amount < 0 && !hiddenAccountIds.has(r.accountId),
+    );
+    if (activeSynced.length > 0) {
+      return activeSynced
+        .map((r) => ({
+          key: r.id,
+          title: r.title || r.merchant,
+          amount: r.amount,
+          cadence: formatCadenceLabel(r.cadenceRaw),
+          lastDate: r.lastDate,
+          nextDate: r.nextDate,
+          paidThisMonth: r.lastDate >= monthStart,
+          categoryId: r.categoryId,
+        }))
+        .sort((a, b) => a.nextDate - b.nextDate);
+    }
+
     const byMerchant = new Map<string, TransactionRecord[]>();
     for (const tx of visibleTxns) {
       const cat = tx.categoryId ? catById.get(tx.categoryId) : undefined;
@@ -1395,17 +2271,14 @@ function BudgetRecurringView({
       byMerchant.set(norm, arr);
     }
 
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const results: DetectedRecurring[] = [];
-
     for (const [key, list] of byMerchant.entries()) {
       if (list.length < 2) continue;
       const sorted = [...list].sort((a, b) => b.transactedAt - a.transactedAt);
       const newest = sorted[0];
       const prev = sorted[1];
       const gapDays = Math.round((newest.transactedAt - prev.transactedAt) / 86400000);
-      let cadence: DetectedRecurring["cadence"] | null = null;
+      let cadence: string | null = null;
       let cycleDays = 30;
       if (gapDays >= 25 && gapDays <= 35) {
         cadence = "Monthly";
@@ -1433,7 +2306,7 @@ function BudgetRecurringView({
     }
 
     return results.sort((a, b) => a.nextDate - b.nextDate);
-  }, [visibleTxns, catById]);
+  }, [visibleTxns, catById, recurringItems, hiddenAccountIds]);
 
   const paid = detected.filter((d) => d.paidThisMonth);
   const upcoming = detected.filter((d) => !d.paidThisMonth);
@@ -1442,59 +2315,70 @@ function BudgetRecurringView({
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
-      <header style={{ marginBottom: 18 }}>
+      <header style={{ marginBottom: "var(--space-20)" }}>
+        <p style={sectionEyebrowStyle}>Bills &amp; Subscriptions</p>
         <h1
           style={{
-            fontFamily: "var(--font-source-serif), Georgia, serif",
+            fontFamily: "var(--font-display)",
             fontSize: 28,
-            fontWeight: 800,
-            margin: "0 0 4px",
-            color: "var(--ink, #0f1b33)",
+            fontWeight: 600,
+            margin: "0 0 var(--space-4)",
+            color: "var(--ink-primary)",
           }}
         >
           Recurring
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2, #475877)" }}>
-          Bills and subscriptions spotted from repeating transactions
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-tertiary)" }}>
+          Bills and subscriptions spotted from synced recurring rules and transactions
         </p>
       </header>
 
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <div style={sectionLabelStyle}>This month</div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+      <Card padding="md" eyebrow="This month" style={{ marginBottom: "var(--space-16)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "var(--space-12)" }}>
           <div>
-            <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{money(dueTotal, true)}</div>
-            <div style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>still due</div>
+            <div style={{ fontSize: 28, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
+              {money(dueTotal, true)}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--ink-tertiary)" }}>still due</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "var(--ink-2, #475877)" }}>
+            <div style={{ fontSize: 20, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums", color: "var(--ink-secondary)" }}>
               {money(paidTotal, true)}
             </div>
-            <div style={{ fontSize: 13, color: "var(--ink-2, #475877)" }}>paid so far</div>
+            <div style={{ fontSize: 13, color: "var(--ink-tertiary)" }}>paid so far</div>
           </div>
         </div>
-        <div style={{ height: 8, borderRadius: 999, background: "var(--line, #e2e8f0)", overflow: "hidden" }}>
+        <div style={{ height: 8, borderRadius: "var(--radius-full)", background: "var(--track)", overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
               width: `${paidTotal + dueTotal > 0 ? Math.round((paidTotal / (paidTotal + dueTotal)) * 100) : 0}%`,
-              background: "var(--brand, #2563eb)",
+              borderRadius: "var(--radius-full)",
+              background: "var(--brand)",
             }}
           />
         </div>
-      </div>
+      </Card>
 
       {detected.length === 0 ? (
-        <div style={cardStyle}>
-          <p style={{ margin: 0, color: "var(--ink-2, #475877)" }}>
+        <Card>
+          <p style={{ margin: 0, color: "var(--ink-tertiary)" }}>
             No repeating bills or subscriptions detected yet from your synced transactions.
           </p>
-        </div>
+        </Card>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-16)" }}>
           {upcoming.length > 0 && (
-            <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "10px 18px", background: "var(--paper, #eef3fa)", fontSize: 12, fontWeight: 700 }}>
+            <Card padding="none" style={{ overflow: "hidden" }}>
+              <div
+                style={{
+                  padding: "var(--space-12) var(--space-16)",
+                  background: "var(--bg-paper-soft)",
+                  fontSize: 12,
+                  fontWeight: "var(--weight-semibold)",
+                  color: "var(--ink-secondary)",
+                }}
+              >
                 Upcoming ({upcoming.length})
               </div>
               {upcoming.map((item, idx) => {
@@ -1506,31 +2390,39 @@ function BudgetRecurringView({
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "11px 18px",
-                      borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                      padding: "var(--space-12) var(--space-16)",
+                      borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>
+                      <div style={{ fontSize: 14, fontWeight: "var(--weight-medium)" }}>
                         {cat?.icon ? `${cat.icon} ` : ""}
                         {item.title}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
+                      <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
                         {item.cadence} · Est. {formatShortDate(item.nextDate)}
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                    <div style={{ fontSize: 14, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums" }}>
                       {signedMoney(item.amount)}
                     </div>
                   </div>
                 );
               })}
-            </div>
+            </Card>
           )}
 
           {paid.length > 0 && (
-            <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "10px 18px", background: "var(--paper, #eef3fa)", fontSize: 12, fontWeight: 700 }}>
+            <Card padding="none" style={{ overflow: "hidden" }}>
+              <div
+                style={{
+                  padding: "var(--space-12) var(--space-16)",
+                  background: "var(--bg-paper-soft)",
+                  fontSize: 12,
+                  fontWeight: "var(--weight-semibold)",
+                  color: "var(--ink-secondary)",
+                }}
+              >
                 Paid this month ({paid.length})
               </div>
               {paid.map((item, idx) => {
@@ -1542,36 +2434,32 @@ function BudgetRecurringView({
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "11px 18px",
-                      borderTop: idx > 0 ? "1px solid var(--line, #e2e8f0)" : "none",
+                      padding: "var(--space-12) var(--space-16)",
+                      borderTop: idx > 0 ? "1px solid var(--border-hairline)" : "none",
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>
+                      <div style={{ fontSize: 14, fontWeight: "var(--weight-medium)" }}>
                         {cat?.icon ? `${cat.icon} ` : ""}
                         {item.title}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--ink-2, #475877)" }}>
+                      <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
                         {item.cadence} · Paid {formatShortDate(item.lastDate)}
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "#15803d" }}>
+                    <div style={{ fontSize: 14, fontWeight: "var(--weight-semibold)", fontVariantNumeric: "tabular-nums", color: "var(--income)" }}>
                       {signedMoney(item.amount)} ✓
                     </div>
                   </div>
                 );
               })}
-            </div>
+            </Card>
           )}
         </div>
       )}
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Shared UI helpers                                                          */
-/* -------------------------------------------------------------------------- */
 
 function PlanSummaryBar({
   label,
@@ -1589,43 +2477,18 @@ function PlanSummaryBar({
   const pct = planned > 0 ? Math.min(100, Math.round((actual / planned) * 100)) : 0;
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 5 }}>
-        <span style={{ fontWeight: 600 }}>{label}</span>
-        <span style={{ color: "var(--ink-2, #475877)", fontVariantNumeric: "tabular-nums" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 4 }}>
+        <span style={{ fontWeight: "var(--weight-semibold)" }}>{label}</span>
+        <span style={{ color: "var(--ink-tertiary)", fontVariantNumeric: "tabular-nums" }}>
           {money(actual)} {verb}
           {planned > 0 ? ` of ${money(planned)}` : ""}
         </span>
       </div>
-      <div style={{ height: 7, borderRadius: 999, background: "var(--line, #e2e8f0)", overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: tint }} />
+      <div style={{ height: 8, borderRadius: "var(--radius-full)", background: "var(--track)", overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: "var(--radius-full)", background: tint }} />
       </div>
     </div>
   );
 }
-
-const linkBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "var(--brand, #2563eb)",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-  padding: 0,
-};
-
-const iconBtnStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
-  borderRadius: 8,
-  border: "1px solid var(--line, #cbd5e1)",
-  background: "var(--card, #ffffff)",
-  color: "var(--ink, #0f1b33)",
-  fontSize: 16,
-  fontWeight: 700,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
 
 export default BudgetScreen;

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { WooliCloudSnapshot } from "@/lib/cloudkit/client";
 import type {
   AccountRecord,
@@ -10,6 +10,7 @@ import type {
   MealSentiment,
   MovieEntryRecord,
   RecipeEntryRecord,
+  RecurringItemRecord,
   SightEntryRecord,
   TransactionRecord,
   TripItemRecord,
@@ -39,6 +40,7 @@ export interface BudgetScreenProps {
   accounts: AccountRecord[];
   categories: BudgetCategoryRecord[];
   transactions: TransactionRecord[];
+  recurringItems?: RecurringItemRecord[];
 }
 
 export interface TripsScreenProps {
@@ -78,6 +80,8 @@ interface WebShellProps {
   signOutSlot: ReactNode;
 }
 
+const SIDEBAR_STORAGE_KEY = "wooli.web.sidebarCollapsed";
+
 const APP_ITEMS: Array<{ id: AppSpace; title: string; icon: string }> = [
   { id: "today", title: "Today", icon: "/apps/today.png" },
   { id: "budget", title: "Budget", icon: "/apps/budget.png" },
@@ -98,7 +102,13 @@ const BUDGET_TABS: Array<{ id: BudgetTab; label: string; section: "main" | "tool
 ];
 
 function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function reviewWindowStart(): number {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime();
 }
 
 function tripCaption(trip: TripRecord, today: string): string {
@@ -171,37 +181,70 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [tripPage, setTripPage] = useState<TripPage>("overview");
   const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [appsOpen, setAppsOpen] = useState(false);
+  const [sidebarOverride, setSidebarOverride] = useState<boolean | null>(null);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const storedCollapsed = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener("storage", onStoreChange);
+      return () => window.removeEventListener("storage", onStoreChange);
+    },
+    () => {
+      try {
+        return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+      } catch {
+        return false;
+      }
+    },
+    () => false,
+  );
+
+  const sidebarCollapsed = sidebarOverride ?? storedCollapsed;
 
   useEffect(() => {
-    if (!appsOpen) return;
-    function onPointerDown(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setAppsOpen(false);
-      }
-    }
+    if (!mobileDrawerOpen) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setAppsOpen(false);
+      if (e.key === "Escape") setMobileDrawerOpen(false);
     }
-    document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [appsOpen]);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileDrawerOpen]);
+
+  const toggleSidebarCollapsed = () => {
+    const next = !sidebarCollapsed;
+    setSidebarOverride(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   const hasSidebar = space === "budget" || space === "trips";
   const today = useMemo(() => todayKey(), []);
 
-  const reviewCount = useMemo(
-    () => snapshot.transactions.filter((t) => t.needsReview && !t.isHidden).length,
-    [snapshot.transactions],
+  const hiddenTxAccountIds = useMemo(
+    () =>
+      new Set(
+        snapshot.accounts
+          .filter((a) => a.isHidden || a.hideTransactions)
+          .map((a) => a.providerAccountId),
+      ),
+    [snapshot.accounts],
   );
+
+  const reviewCount = useMemo(() => {
+    const start = reviewWindowStart();
+    return snapshot.transactions.filter(
+      (t) =>
+        t.needsReview &&
+        !t.isHidden &&
+        !t.isSplit &&
+        !hiddenTxAccountIds.has(t.accountId) &&
+        t.transactedAt >= start,
+    ).length;
+  }, [snapshot.transactions, hiddenTxAccountIds]);
 
   const { upcomingTrips, pastTrips } = useMemo(() => {
     const upcoming = snapshot.trips
@@ -216,8 +259,12 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
   const ideaCountByTrip = useMemo(() => {
     const counts = new Map<string, number>();
     for (const trip of snapshot.trips) {
-      const items = snapshot.tripItems.filter((i) => i.tripID === trip.id);
-      const count = items.filter((i) => !i.day || (trip.startDay && i.day < trip.startDay) || (trip.endDay && i.day > trip.endDay)).length;
+      const items = snapshot.tripItems.filter(
+        (i) => i.tripID === trip.id && !i.isHiddenPlaceholder && i.extras?.status !== "cancelled",
+      );
+      const count = items.filter(
+        (i) => !i.day || (trip.startDay && i.day < trip.startDay) || (trip.endDay && i.day > trip.endDay),
+      ).length;
       counts.set(trip.id, count);
     }
     return counts;
@@ -225,16 +272,19 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
 
   const handleOpenSpace = (next: AppSpace) => {
     setSpace(next);
-    setAppsOpen(false);
-    if (next === "budget" || next === "trips") {
-      setSidebarVisible(true);
-    }
+    setMobileDrawerOpen(false);
+  };
+
+  const handleSelectBudgetTab = (tab: BudgetTab) => {
+    setBudgetTab(tab);
+    setMobileDrawerOpen(false);
   };
 
   const handleSelectTrip = (tripId: string | null, page: TripPage = "overview") => {
     setSpace("trips");
     setSelectedTripId(tripId);
     setTripPage(page);
+    setMobileDrawerOpen(false);
     if (tripId) {
       setExpandedTripId(tripId);
     }
@@ -347,12 +397,86 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
 
   return (
     <div className="ws-root">
+      <header className="ws-topbar">
+        <div className="ws-topbar-left">
+          {hasSidebar && (
+            <button
+              type="button"
+              className="ws-icon-btn is-square ws-mobile-menu-btn"
+              aria-label={mobileDrawerOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={mobileDrawerOpen}
+              onClick={() => setMobileDrawerOpen((o) => !o)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+          )}
+          <h2 className="ws-topbar-context">{currentSpaceTitle}</h2>
+        </div>
+
+        <nav className="ws-app-switcher" aria-label="Wooli apps">
+          {APP_ITEMS.map((item) => {
+            const isActive = space === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`ws-app-tab${isActive ? " is-active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => handleOpenSpace(item.id)}
+              >
+                <Image src={item.icon} alt="" width={20} height={20} className="ws-app-tab-icon" />
+                <span>{item.title}</span>
+                {item.id === "budget" && reviewCount > 0 && (
+                  <span className="ws-app-tab-badge" aria-label={`${reviewCount} to review`}>
+                    {reviewCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="ws-topbar-right">
+          <button
+            type="button"
+            className="ws-icon-btn"
+            onClick={handleSyncClick}
+            disabled={syncing}
+            title="Sync with Apple iCloud"
+          >
+            <span aria-hidden="true">☁️</span>
+            <span>{syncing ? "Syncing…" : "Sync"}</span>
+          </button>
+          <div className="ws-signout-slot">{signOutSlot}</div>
+        </div>
+      </header>
+
       <div className="ws-shell">
-        {space === "budget" && sidebarVisible && (
-          <aside className="ws-rail" aria-label="Budget navigation">
+        {hasSidebar && mobileDrawerOpen && (
+          <div
+            className="ws-drawer-backdrop"
+            onClick={() => setMobileDrawerOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {space === "budget" && (
+          <aside
+            className={`ws-rail${sidebarCollapsed ? " is-collapsed" : " is-expanded"}${mobileDrawerOpen ? " is-mobile-open" : ""}`}
+            aria-label="Budget navigation"
+          >
             <div className="ws-rail-header" title="Budget">
-              <Image src="/apps/budget.png" alt="Budget" width={28} height={28} className="ws-rail-icon" />
+              <div className="ws-rail-brand">
+                <Image src="/apps/budget.png" alt="Budget" width={28} height={28} className="ws-rail-icon" />
+                {(!sidebarCollapsed || mobileDrawerOpen) && (
+                  <span className="ws-rail-brand-title">Budget</span>
+                )}
+              </div>
             </div>
+
+            {(!sidebarCollapsed || mobileDrawerOpen) && <div className="ws-rail-section">Main</div>}
             {BUDGET_TABS.filter((t) => t.section === "main").map((t) => (
               <button
                 key={t.id}
@@ -360,13 +484,25 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
                 className={`ws-rail-btn${budgetTab === t.id ? " is-active" : ""}`}
                 title={t.label}
                 aria-label={t.label}
-                onClick={() => setBudgetTab(t.id)}
+                onClick={() => handleSelectBudgetTab(t.id)}
               >
                 <BudgetTabIcon tab={t.id} />
-                {t.id === "transactions" && reviewCount > 0 && <span className="ws-rail-dot" aria-label={`${reviewCount} to review`} />}
+                {(!sidebarCollapsed || mobileDrawerOpen) && (
+                  <>
+                    <span className="ws-rail-label">{t.label}</span>
+                    {t.id === "transactions" && reviewCount > 0 && (
+                      <span className="ws-rail-count">{reviewCount}</span>
+                    )}
+                  </>
+                )}
+                {sidebarCollapsed && !mobileDrawerOpen && t.id === "transactions" && reviewCount > 0 && (
+                  <span className="ws-rail-dot" aria-label={`${reviewCount} to review`} />
+                )}
               </button>
             ))}
+
             <div className="ws-rail-divider" />
+            {(!sidebarCollapsed || mobileDrawerOpen) && <div className="ws-rail-section">Tools</div>}
             {BUDGET_TABS.filter((t) => t.section === "tools").map((t) => (
               <button
                 key={t.id}
@@ -374,17 +510,47 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
                 className={`ws-rail-btn${budgetTab === t.id ? " is-active" : ""}`}
                 title={t.label}
                 aria-label={t.label}
-                onClick={() => setBudgetTab(t.id)}
+                onClick={() => handleSelectBudgetTab(t.id)}
               >
                 <BudgetTabIcon tab={t.id} />
+                {(!sidebarCollapsed || mobileDrawerOpen) && (
+                  <span className="ws-rail-label">{t.label}</span>
+                )}
               </button>
             ))}
+
             <div className="ws-rail-spacer" />
+
+            <button
+              type="button"
+              className="ws-rail-collapse-btn"
+              onClick={toggleSidebarCollapsed}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ transform: sidebarCollapsed ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }}
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              {!sidebarCollapsed && <span>Collapse</span>}
+            </button>
           </aside>
         )}
 
-        {space === "trips" && sidebarVisible && (
-          <aside className="ws-trips-sidebar" aria-label="Trips navigation">
+        {space === "trips" && (
+          <aside
+            className={`ws-trips-sidebar${mobileDrawerOpen ? " is-mobile-open" : ""}`}
+            aria-label="Trips navigation"
+          >
             <button
               type="button"
               className={`ws-sb-item${selectedTripId === null ? " is-active" : ""}`}
@@ -416,93 +582,8 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
         )}
 
         <div className="ws-main">
-          <header className="ws-toolbar">
-            <div className="ws-toolbar-left">
-              {hasSidebar && (
-                <button
-                  type="button"
-                  className="ws-icon-btn is-square"
-                  aria-label={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
-                  title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
-                  onClick={() => setSidebarVisible((v) => !v)}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="16" rx="2.5" />
-                    <path d="M9 4v16" />
-                  </svg>
-                </button>
-              )}
-              <h2 className="ws-toolbar-title">{currentSpaceTitle}</h2>
-            </div>
-
-            <div className="ws-toolbar-right" ref={popoverRef}>
-              <button
-                type="button"
-                className="ws-icon-btn"
-                onClick={handleSyncClick}
-                disabled={syncing}
-                title="Sync with Apple iCloud"
-              >
-                <span aria-hidden="true">☁️</span>
-                <span>{syncing ? "Syncing…" : "Sync"}</span>
-              </button>
-
-              <div className="ws-signout-slot">{signOutSlot}</div>
-
-              <button
-                type="button"
-                className="ws-icon-btn is-square"
-                aria-label="Switch apps"
-                aria-expanded={appsOpen}
-                title="Switch apps"
-                onClick={() => setAppsOpen((o) => !o)}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="3" y="3" width="4.5" height="4.5" rx="1" />
-                  <rect x="9.75" y="3" width="4.5" height="4.5" rx="1" />
-                  <rect x="16.5" y="3" width="4.5" height="4.5" rx="1" />
-                  <rect x="3" y="9.75" width="4.5" height="4.5" rx="1" />
-                  <rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1" />
-                  <rect x="16.5" y="9.75" width="4.5" height="4.5" rx="1" />
-                  <rect x="3" y="16.5" width="4.5" height="4.5" rx="1" />
-                  <rect x="9.75" y="16.5" width="4.5" height="4.5" rx="1" />
-                  <rect x="16.5" y="16.5" width="4.5" height="4.5" rx="1" />
-                </svg>
-              </button>
-
-              {appsOpen && (
-                <div className="ws-apps-popover" role="dialog" aria-label="Apps">
-                  <h3 className="ws-popover-heading">Apps</h3>
-                  <div className="ws-apps-grid">
-                    {APP_ITEMS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`ws-app-tile-btn${space === item.id ? " is-current" : ""}`}
-                        onClick={() => handleOpenSpace(item.id)}
-                      >
-                        <Image src={item.icon} alt={item.title} width={56} height={56} className="ws-app-tile-img" />
-                        {item.id === "budget" && reviewCount > 0 && (
-                          <span className="ws-app-badge">{reviewCount}</span>
-                        )}
-                        <span className="ws-app-tile-label">{item.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="ws-popover-sep" />
-                  <div className="ws-popover-more">
-                    <button type="button" className="ws-icon-btn" onClick={handleSyncClick} disabled={syncing}>
-                      <span aria-hidden="true">☁️</span>
-                      <span>{syncing ? "Syncing…" : "Sync iCloud"}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </header>
-
           <div className="ws-detail">
-            <div className={`ws-detail-inner${space === "budget" ? " is-wide" : ""}`}>
+            <div className={`ws-detail-inner${space === "budget" || space === "trips" ? " is-wide" : ""}`}>
               {space === "today" && (
                 <TodayScreen
                   snapshot={snapshot}
@@ -517,6 +598,7 @@ export default function WebShell({ snapshot, onSync, onAddCloudEat, signOutSlot 
                   accounts={snapshot.accounts}
                   categories={snapshot.categories}
                   transactions={snapshot.transactions}
+                  recurringItems={snapshot.recurringItems}
                 />
               )}
               {space === "trips" && (

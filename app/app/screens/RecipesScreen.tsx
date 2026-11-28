@@ -54,7 +54,7 @@ export function RecipesScreen({ recipes }: RecipesScreenProps) {
       if (sort === "fewest") {
         return splitLines(a.ingredientsText).length - splitLines(b.ingredientsText).length;
       }
-      return 0;
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0);
     });
   }, [recipes, mealFilter, cuisineFilter, query, sort]);
 
@@ -194,6 +194,7 @@ export function RecipesScreen({ recipes }: RecipesScreenProps) {
                   {[
                     selected.meal,
                     selected.cuisine,
+                    selected.mainIngredient,
                     selected.minutes > 0 ? `${selected.minutes} min` : "",
                   ]
                     .filter(Boolean)
@@ -250,6 +251,15 @@ export function RecipesScreen({ recipes }: RecipesScreenProps) {
                   {selected.sourceURL ? "From Instagram" : "Your kitchen"} · Notes
                 </div>
                 <p style={styles.notesText}>{selected.notes}</p>
+              </div>
+            )}
+
+            {selected.caption && (
+              <div style={styles.section}>
+                <h3 style={styles.sectionHeading}>Original Caption</h3>
+                <p style={{ ...styles.notesText, color: "var(--dm-text-2, #475877)" }}>
+                  {selected.caption}
+                </p>
               </div>
             )}
           </div>

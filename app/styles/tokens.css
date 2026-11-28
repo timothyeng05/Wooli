@@ -1,0 +1,167 @@
+/*
+ * Wooli Web Design Tokens — "Field Notes" North Star + ios/Wooli/DesignSystem/tokens.json
+ * Warm paper (#FBF9F5 / #F4F0EA) + deep forest ink (#182C23 / #2B4C3F)
+ * Fraunces + Plus Jakarta Sans, 4px grid, 16px card radii, restrained weights (400 / 500-600)
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ── Field Notes Surfaces & Ink ── */
+  --bg-paper: #fbf9f5;
+  --bg-paper-soft: #f4f0ea;
+  --bg-card: #ffffff;
+  --bg-card-tinted: #f7f4ee;
+  --bg-chrome: #f6f3ec;
+  --bg-sidebar: #f4f0ea;
+
+  --ink-primary: #182c23;
+  --ink-secondary: #2b4c3f;
+  --ink-tertiary: #5c6f66;
+
+  --border-hairline: #e4ded3;
+  --border-strong: #cfc6b8;
+  --track: #eae4d9;
+
+  /* ── Brand & Accents (Field Notes + Wooli Travel Blue) ── */
+  --brand: #2b4c3f;
+  --brand-dark: #182c23;
+  --brand-soft: #eaf1ed;
+  --on-brand: #fbf9f5;
+
+  --brand-blue: #2563eb;
+  --brand-blue-dark: #1d4ed8;
+  --brand-blue-soft: #f0f5ff;
+
+  /* ── Financial & Status Semantics (tokens.json) ── */
+  --income: #15803d;
+  --income-soft: #ecfdf3;
+  --expense: #b91c1c;
+  --expense-soft: #fef2f2;
+  --pending: #b45309;
+  --pending-soft: #fff4dc;
+
+  --last-month: #c8c1b4;
+  --this-month: var(--brand);
+
+  /* ── Ticket & Departure Board (tokens.json) ── */
+  --ticket-start: #1e3a8a;
+  --ticket-end: #2563eb;
+  --on-ticket: #ffffff;
+  --ticket-panel: rgba(15, 27, 51, 0.16);
+  --ticket-rule: rgba(255, 255, 255, 0.4);
+  --ticket-highlight: #fef3c7;
+
+  --night: #050812;
+  --board: #0f1b33;
+  --board-cell: rgba(255, 255, 255, 0.08);
+  --on-board: #fef3c7;
+  --board-muted: #b3c0d9;
+  --board-late: #f87171;
+  --stamp-fine: #0f766e;
+
+  /* ── Category & Trip Group Accents (tokens.json) ── */
+  --on-accent: #0f1b33;
+  --accent-blue: #2563eb;
+  --accent-teal: #0d9488;
+  --accent-rose: #e11d48;
+  --accent-violet: #7c3aed;
+  --accent-amber: #d97706;
+  --accent-pink: #ec4899;
+  --accent-yellow: #facc15;
+  --accent-slate: #64748b;
+
+  --group-travel: var(--accent-blue);
+  --group-food: var(--accent-yellow);
+  --group-home: var(--accent-violet);
+  --group-health: var(--accent-teal);
+  --group-fun: var(--accent-rose);
+  --group-shopping: var(--accent-pink);
+  --group-money: var(--accent-slate);
+
+  --kind-activity: var(--accent-rose);
+  --kind-meal: var(--accent-yellow);
+  --kind-transit: var(--accent-blue);
+  --kind-stay: var(--accent-violet);
+  --kind-note: var(--accent-slate);
+
+  /* ── Typography ── */
+  --font-display: var(--font-fraunces), var(--font-source-serif), ui-serif, "New York", Georgia, serif;
+  --font-sans: var(--font-jakarta), system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* ── 4px Spacing Grid ── */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+
+  /* ── Radii (16px Card North Star + tokens.json) ── */
+  --radius-xs: 6px;
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-card: 16px;
+  --radius-l: 22px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 1px 2px rgba(24, 44, 35, 0.05), 0 0 0 1px rgba(24, 44, 35, 0.04);
+  --shadow-elevated: 0 12px 30px -10px rgba(24, 44, 35, 0.16), 0 0 0 1px rgba(24, 44, 35, 0.06);
+  --shadow-ticket: 0 5px 20px rgba(37, 99, 235, 0.28);
+  --shadow-button: 0 2px 8px rgba(24, 44, 35, 0.18);
+
+  /* ── Layout ── */
+  --sidebar-width-expanded: 210px;
+  --sidebar-width-collapsed: 68px;
+  --topbar-height: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-paper: #0e1612;
+    --bg-paper-soft: #14201a;
+    --bg-card: #192821;
+    --bg-card-tinted: #1f3128;
+    --bg-chrome: #131e18;
+    --bg-sidebar: #121c17;
+
+    --ink-primary: #f4f0ea;
+    --ink-secondary: #c5d1ca;
+    --ink-tertiary: #8fa398;
+
+    --border-hairline: #283c32;
+    --border-strong: #375144;
+    --track: #23362c;
+
+    --brand: #52b788;
+    --brand-dark: #74c69d;
+    --brand-soft: #1d352a;
+    --on-brand: #0e1612;
+
+    --brand-blue: #60a5fa;
+    --brand-blue-dark: #93c5fd;
+    --brand-blue-soft: #1b2f5c;
+
+    --income: #4ade80;
+    --income-soft: #122e1f;
+    --expense: #f87171;
+    --expense-soft: #331919;
+    --pending: #fbbf24;
+    --pending-soft: #3a2606;
+
+    --last-month: #3d5247;
+    --stamp-fine: #2dd4bf;
+
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-elevated: 0 18px 40px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+}

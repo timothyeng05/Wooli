@@ -6,6 +6,7 @@ import {
   decodeEatsRecord,
   decodeMovieCD,
   decodeRecipeCD,
+  decodeRecurringCD,
   decodeSightCD,
   decodeTransactionCD,
   decodeTripItemRecord,
@@ -21,6 +22,7 @@ import {
   type EatsPlaceRecord,
   type MovieEntryRecord,
   type RecipeEntryRecord,
+  type RecurringItemRecord,
   type SightEntryRecord,
   type TransactionRecord,
   type TripItemRecord,
@@ -29,6 +31,7 @@ import {
 } from "./schema";
 
 const CLOUDKIT_JS_URL = "https://cdn.apple-cloudkit.com/ck/2/cloudkit.js";
+const MAX_FETCH_PAGES = 500;
 
 export interface WooliCloudSnapshot {
   userRecordName: string;
@@ -41,6 +44,7 @@ export interface WooliCloudSnapshot {
   accounts: AccountRecord[];
   categories: BudgetCategoryRecord[];
   transactions: TransactionRecord[];
+  recurringItems: RecurringItemRecord[];
   warnings: string[];
 }
 
@@ -70,8 +74,8 @@ interface CKDatabase {
   ): Promise<{ zones?: CKZoneChangeResult[]; hasErrors?: boolean; errors?: Array<{ reason?: string }> }>;
   performQuery(
     query: { recordType: string; zoneID?: CKZoneID },
-    options?: { zoneID?: CKZoneID },
-  ): Promise<{ records: CloudKitRecordPayload[] }>;
+    options?: { zoneID?: CKZoneID; continuationMarker?: string },
+  ): Promise<{ records: CloudKitRecordPayload[]; continuationMarker?: string; moreComing?: boolean }>;
   saveRecords(
     records: CloudKitRecordPayload[],
     options?: { zoneID: CKZoneID },
@@ -166,14 +170,17 @@ async function fetchAllRecordsInZone(
     try {
       const all: CloudKitRecordPayload[] = [];
       let syncToken: string | undefined;
-      for (let page = 0; page < 20; page++) {
+      for (let page = 0; page < MAX_FETCH_PAGES; page++) {
         const res = await db.fetchRecordZoneChanges([{ zoneID, ...(syncToken ? { syncToken } : {}) }]);
         const zoneRes = res.zones?.[0];
-        if (zoneRes?.records?.length) {
-          all.push(...zoneRes.records);
+        for (const rec of zoneRes?.records ?? []) {
+          if (!rec.deleted) all.push(rec);
         }
         if (zoneRes?.moreComing && zoneRes.syncToken && zoneRes.syncToken !== syncToken) {
           syncToken = zoneRes.syncToken;
+          if (page === MAX_FETCH_PAGES - 1) {
+            warnings.push(`Zone ${zoneID.zoneName} exceeded ${MAX_FETCH_PAGES} change pages; snapshot may be incomplete.`);
+          }
         } else {
           break;
         }
@@ -187,8 +194,24 @@ async function fetchAllRecordsInZone(
   const fallback: CloudKitRecordPayload[] = [];
   for (const recordType of recordTypes) {
     try {
-      const res = await db.performQuery({ recordType, zoneID }, { zoneID });
-      if (res.records?.length) fallback.push(...res.records);
+      let continuationMarker: string | undefined;
+      for (let page = 0; page < MAX_FETCH_PAGES; page++) {
+        const res = await db.performQuery(
+          { recordType, zoneID },
+          { zoneID, ...(continuationMarker ? { continuationMarker } : {}) },
+        );
+        for (const rec of res.records ?? []) {
+          if (!rec.deleted) fallback.push(rec);
+        }
+        if (res.continuationMarker && res.continuationMarker !== continuationMarker) {
+          continuationMarker = res.continuationMarker;
+          if (page === MAX_FETCH_PAGES - 1) {
+            warnings.push(`${zoneID.zoneName}/${recordType} exceeded ${MAX_FETCH_PAGES} query pages; snapshot may be incomplete.`);
+          }
+        } else {
+          break;
+        }
+      }
     } catch (err) {
       warnings.push(`${zoneID.zoneName}/${recordType}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -232,6 +255,7 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
   const accounts: AccountRecord[] = [];
   const categories: BudgetCategoryRecord[] = [];
   const transactions: TransactionRecord[] = [];
+  const recurringItems: RecurringItemRecord[] = [];
 
   await Promise.all(
     zones.map(async ({ db, rawZoneID, ref }) => {
@@ -248,7 +272,15 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
         const recs = await fetchAllRecordsInZone(
           db,
           rawZoneID,
-          ["CD_SightEntry", "CD_MovieEntry", "CD_RecipeEntry", "CD_LocalAccount", "CD_BudgetCategory", "CD_LocalTransaction"],
+          [
+            "CD_SightEntry",
+            "CD_MovieEntry",
+            "CD_RecipeEntry",
+            "CD_LocalAccount",
+            "CD_BudgetCategory",
+            "CD_LocalTransaction",
+            "CD_RecurringItem",
+          ],
           warnings,
         );
         for (const rec of recs) {
@@ -271,6 +303,9 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
             case "CD_LocalTransaction":
               transactions.push(decodeTransactionCD(rec));
               break;
+            case "CD_RecurringItem":
+              recurringItems.push(decodeRecurringCD(rec));
+              break;
           }
         }
         return;
@@ -291,7 +326,20 @@ export async function fetchWooliCloudSnapshot(container: CKContainer, userRecord
   movies.sort((a, b) => b.rank - a.rank);
   transactions.sort((a, b) => b.transactedAt - a.transactedAt);
 
-  return { userRecordName, trips, tripItems, eats, sights, movies, recipes, accounts, categories, transactions, warnings };
+  return {
+    userRecordName,
+    trips,
+    tripItems,
+    eats,
+    sights,
+    movies,
+    recipes,
+    accounts,
+    categories,
+    transactions,
+    recurringItems,
+    warnings,
+  };
 }
 
 export async function saveEatsPlaceToCloud(container: CKContainer, place: EatsPlaceRecord): Promise<EatsPlaceRecord> {

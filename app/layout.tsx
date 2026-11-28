@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { Source_Serif_4 } from "next/font/google";
+import { Fraunces, Plus_Jakarta_Sans, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
+import "./styles/tokens.css";
+import "./components/ds/ds.css";
 
-// The app's display face is New York (ui-serif on Apple devices); Source Serif 4
-// stands in everywhere else. Body text is the system face, as in the app.
+// Field Notes North Star: Fraunces display + Plus Jakarta Sans body (with Source Serif 4 fallback).
+const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 const sourceSerif = Source_Serif_4({ variable: "--font-source-serif", subsets: ["latin"], weight: ["600", "800"] });
 
 export const metadata: Metadata = {
@@ -19,7 +26,7 @@ export const viewport = { width: "device-width", initialScale: 1, viewportFit: "
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={sourceSerif.variable}>
+    <html lang="en" className={`${fraunces.variable} ${plusJakarta.variable} ${sourceSerif.variable}`}>
       <body>
         <header className="site-header">
           <Link href="/" className="wordmark">

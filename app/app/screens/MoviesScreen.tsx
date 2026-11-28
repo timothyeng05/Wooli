@@ -11,13 +11,15 @@ type MovieTab = "seen" | "wishlist";
 type SortBy = "rank" | "recent" | "year" | "name";
 
 const SENTIMENT_LABEL: Record<MealSentiment, string> = {
-  loved: "Loved",
+  mustTry: "All-time favorite",
+  loved: "All-time favorite",
   liked: "Liked",
   fine: "Fine",
   disliked: "Disliked",
 };
 
 const SENTIMENT_STYLE: Record<MealSentiment, { bg: string; color: string }> = {
+  mustTry: { bg: "#fef3c7", color: "#b45309" },
   loved: { bg: "#dcfce7", color: "#15803d" },
   liked: { bg: "#dbeafe", color: "#1d4ed8" },
   fine: { bg: "#ccfbf1", color: "#0f766e" },
@@ -29,7 +31,7 @@ function computeMovieScores(
 ): Map<string, { score: number; rankPos: number }> {
   const result = new Map<string, { score: number; rankPos: number }>();
   const bands: { sentiments: MealSentiment[]; min: number; max: number }[] = [
-    { sentiments: ["loved", "liked"], min: 7.0, max: 10.0 },
+    { sentiments: ["mustTry", "loved", "liked"], min: 7.0, max: 10.0 },
     { sentiments: ["fine"], min: 4.0, max: 6.9 },
     { sentiments: ["disliked"], min: 0.0, max: 3.9 },
   ];
@@ -93,11 +95,14 @@ export function MoviesScreen({ movies }: MoviesScreenProps) {
     return [...filtered].sort((a, b) => {
       if (sort === "name") return a.title.localeCompare(b.title);
       if (sort === "year") return (b.year || "").localeCompare(a.year || "");
-      if (sort === "recent") return (b.watchedDay || "").localeCompare(a.watchedDay || "");
+      if (sort === "recent") {
+        if (tab === "wishlist") return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+        return (b.watchedDay || "").localeCompare(a.watchedDay || "") || (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      }
       if (tab === "seen") {
         return (scores.get(a.id)?.rankPos ?? 999999) - (scores.get(b.id)?.rankPos ?? 999999);
       }
-      return a.title.localeCompare(b.title);
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0) || a.title.localeCompare(b.title);
     });
   }, [pool, tab, sentimentFilter, genreFilter, query, sort, scores]);
 
@@ -136,7 +141,7 @@ export function MoviesScreen({ movies }: MoviesScreenProps) {
                 setTab("wishlist");
                 setSentimentFilter("");
                 setGenreFilter("");
-                if (sort === "rank") setSort("year");
+                if (sort === "rank") setSort("recent");
               }}
               style={tab === "wishlist" ? styles.tabActive : styles.tab}
             >
@@ -160,6 +165,7 @@ export function MoviesScreen({ movies }: MoviesScreenProps) {
                 aria-label="Filter by feeling"
               >
                 <option value="">All feelings</option>
+                <option value="mustTry">All-time favorite</option>
                 <option value="loved">Loved</option>
                 <option value="liked">Liked</option>
                 <option value="fine">Fine</option>
@@ -224,7 +230,18 @@ export function MoviesScreen({ movies }: MoviesScreenProps) {
                     background: isSelected ? "var(--dm-brand-soft, #f0f5ff)" : "transparent",
                   }}
                 >
-                  <div style={styles.posterStub}>🎬</div>
+                  {movie.posterURL ? (
+                    <img
+                      src={movie.posterURL}
+                      alt=""
+                      style={{
+                        ...styles.posterStub,
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <div style={styles.posterStub}>🎬</div>
+                  )}
                   <div style={styles.rowMain}>
                     <div style={styles.rowName}>{movie.title || "Untitled Film"}</div>
                     <div style={styles.rowMeta}>{byline || "Film"}</div>
@@ -259,16 +276,32 @@ export function MoviesScreen({ movies }: MoviesScreenProps) {
         {selected ? (
           <div style={styles.detailCard}>
             <div style={styles.detailHeader}>
-              <div>
-                <div style={styles.eyebrow}>
-                  {selected.isWishlist
-                    ? "Want to see"
-                    : `Ranked #${scores.get(selected.id)?.rankPos ?? "—"} of ${seenMovies.length}`}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 16, minWidth: 0 }}>
+                {selected.posterURL && (
+                  <img
+                    src={selected.posterURL}
+                    alt={`${selected.title} poster`}
+                    style={{
+                      width: 72,
+                      height: 108,
+                      borderRadius: 10,
+                      objectFit: "cover",
+                      flexShrink: 0,
+                      border: "1px solid var(--dm-border, #d8e2f0)",
+                    }}
+                  />
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <div style={styles.eyebrow}>
+                    {selected.isWishlist
+                      ? "Want to see"
+                      : `Ranked #${scores.get(selected.id)?.rankPos ?? "—"} of ${seenMovies.length}`}
+                  </div>
+                  <h2 style={styles.detailTitle}>{selected.title}</h2>
+                  <p style={styles.detailByline}>
+                    {[selected.year, selected.director].filter(Boolean).join(" · ") || "Film"}
+                  </p>
                 </div>
-                <h2 style={styles.detailTitle}>{selected.title}</h2>
-                <p style={styles.detailByline}>
-                  {[selected.year, selected.director].filter(Boolean).join(" · ") || "Film"}
-                </p>
               </div>
               {!selected.isWishlist && scores.get(selected.id) && (
                 <div style={styles.bigScoreBox}>
@@ -297,6 +330,13 @@ export function MoviesScreen({ movies }: MoviesScreenProps) {
                 <span style={styles.metaChip}>Watched {selected.watchedDay}</span>
               )}
             </div>
+
+            {selected.synopsis && (
+              <div style={styles.notesSection}>
+                <h3 style={styles.sectionHeading}>Synopsis</h3>
+                <p style={styles.notesText}>{selected.synopsis}</p>
+              </div>
+            )}
 
             <div style={styles.notesSection}>
               <h3 style={styles.sectionHeading}>Notes</h3>

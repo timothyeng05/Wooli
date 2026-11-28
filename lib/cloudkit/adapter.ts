@@ -21,7 +21,7 @@ function formatClock(minutes?: number): string {
 export function toDemoTrips(trips: TripRecord[], items: TripItemRecord[]): Trip[] {
   return trips.map((t) => {
     const tItems = items
-      .filter((i) => i.tripID === t.id)
+      .filter((i) => i.tripID === t.id && !i.isHiddenPlaceholder && i.extras?.status !== "cancelled")
       .sort((a, b) => (a.day ?? "").localeCompare(b.day ?? "") || (a.time ?? 9999) - (b.time ?? 9999));
 
     const firstFlight = tItems.find((i) => i.kind === "transit" && i.transport?.mode === "flight");
@@ -102,6 +102,7 @@ export function toDemoTrips(trips: TripRecord[], items: TripItemRecord[]): Trip[
 }
 
 const SENTIMENT_EMOJI: Record<EatsPlaceRecord["sentiment"], string> = {
+  mustTry: "⭐️",
   loved: "😍",
   liked: "😋",
   fine: "🙂",
@@ -123,7 +124,7 @@ export function toDemoEats(eats: EatsPlaceRecord[]): Place[] {
       visits: p.visits.map((v) => ({
         date: v.day,
         who: p.scope === "shared" ? "shared list" : "you",
-        ate: v.notes ?? "",
+        ate: v.note ?? v.notes ?? "",
       })),
     };
   });
@@ -191,8 +192,8 @@ export function toDemoCategories(categories: BudgetCategoryRecord[], txns: Trans
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const spentByCat: Record<string, number> = {};
   for (const t of txns) {
-    if (!t.isHidden && !t.isTransfer && !t.isSplit && t.transactedAt >= monthStart && t.categoryId && t.amount < 0) {
-      spentByCat[t.categoryId] = (spentByCat[t.categoryId] ?? 0) + Math.abs(t.amount);
+    if (!t.isHidden && !t.isTransfer && !t.isSplit && t.transactedAt >= monthStart && t.categoryId) {
+      spentByCat[t.categoryId] = (spentByCat[t.categoryId] ?? 0) - t.amount;
     }
   }
   return categories

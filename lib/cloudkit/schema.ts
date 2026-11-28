@@ -24,15 +24,17 @@ export interface CloudKitRecordPayload {
   recordName: string;
   recordType: string;
   recordChangeTag?: string;
+  deleted?: boolean;
   created?: { timestamp: number };
   fields: Record<string, CloudKitFieldValue>;
 }
 
-export type MealSentiment = "loved" | "liked" | "fine" | "disliked";
+export type MealSentiment = "mustTry" | "loved" | "liked" | "fine" | "disliked";
 
 export interface EatsVisit {
   id?: string;
   day: string;
+  note?: string;
   notes?: string;
 }
 
@@ -65,6 +67,27 @@ export interface TripLeg {
   startDay: string;
   endDay: string;
   isHome: boolean;
+  latitude?: number;
+  longitude?: number;
+  timeZoneID?: string;
+  countryCode?: string;
+  mapItemID?: string;
+}
+
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  done: boolean;
+  group: string;
+}
+
+export interface TripExtras {
+  budget?: number;
+  budgetCurrency?: string;
+  fxRates?: Record<string, number>;
+  fxUpdatedAt?: number | string;
+  travelers?: number;
+  checklist?: ChecklistItem[];
 }
 
 export interface TripRecord {
@@ -80,9 +103,19 @@ export interface TripRecord {
   notes: string;
   dayTitles: Record<string, string>;
   legs: TripLeg[];
+  extras?: TripExtras;
 }
 
 export type TripItemKind = "activity" | "meal" | "transit" | "stay" | "note";
+export type BookingStatus = "idea" | "planned" | "booked" | "cancelled";
+
+export interface TripStationPlace {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  mapItemID?: string;
+}
 
 export interface TripTransport {
   mode: "flight" | "train";
@@ -90,8 +123,25 @@ export interface TripTransport {
   airline?: string;
   fromAirport?: string;
   toAirport?: string;
+  departTerminal?: string;
+  arriveTerminal?: string;
+  cabin?: string;
+  fromStation?: TripStationPlace;
+  toStation?: TripStationPlace;
+  arriveTime?: number;
+  arriveDayOffset?: number;
   seats?: string;
   confirmation?: string;
+}
+
+export interface ItemExtras {
+  status?: BookingStatus;
+  endTime?: number;
+  url?: string;
+  source?: string;
+  attachmentIDs?: string[];
+  ignoredWarnings?: string[];
+  paidBy?: string;
 }
 
 export interface TripItemRecord {
@@ -109,6 +159,7 @@ export interface TripItemRecord {
   placeAddress?: string;
   latitude?: number;
   longitude?: number;
+  mapItemID?: string;
   checkOutDay?: string;
   order?: number;
   cost?: number;
@@ -116,6 +167,8 @@ export interface TripItemRecord {
   points?: number;
   pointsProgram?: string;
   transport?: TripTransport;
+  extras?: ItemExtras;
+  isHiddenPlaceholder: boolean;
   createdAt: number;
 }
 
@@ -141,6 +194,13 @@ function parseJson<T>(raw: string | undefined, fallback: T): T {
   }
 }
 
+function parseSentiment(raw: string | undefined): MealSentiment {
+  if (raw === "mustTry" || raw === "loved" || raw === "liked" || raw === "fine" || raw === "disliked") {
+    return raw;
+  }
+  return "liked";
+}
+
 export function decodeEatsRecord(rec: CloudKitRecordPayload, zone: ZoneRef): EatsPlaceRecord {
   const f = rec.fields ?? {};
   const visitedDay = field<string>(f, "visitedDay") ?? "";
@@ -148,11 +208,7 @@ export function decodeEatsRecord(rec: CloudKitRecordPayload, zone: ZoneRef): Eat
   if (visits.length === 0 && visitedDay) {
     visits = [{ day: visitedDay }];
   }
-  const sentimentRaw = field<string>(f, "sentiment");
-  const sentiment: MealSentiment =
-    sentimentRaw === "loved" || sentimentRaw === "liked" || sentimentRaw === "fine" || sentimentRaw === "disliked"
-      ? sentimentRaw
-      : "liked";
+  const sentiment = parseSentiment(field<string>(f, "sentiment"));
 
   return {
     id: rec.recordName,
@@ -202,6 +258,8 @@ export function encodeEatsRecord(place: EatsPlaceRecord): CloudKitRecordPayload 
   };
 }
 
+const MEAL_PLACEHOLDER_SLOTS = new Set(["Breakfast", "Lunch", "Dinner"]);
+
 export function decodeTripRecord(rec: CloudKitRecordPayload, zone: ZoneRef): TripRecord {
   const f = rec.fields ?? {};
   return {
@@ -217,6 +275,7 @@ export function decodeTripRecord(rec: CloudKitRecordPayload, zone: ZoneRef): Tri
     notes: field<string>(f, "notes") ?? "",
     dayTitles: parseJson<Record<string, string>>(field<string>(f, "dayTitles"), {}),
     legs: parseJson<TripLeg[]>(field<string>(f, "legs"), []),
+    extras: parseJson<TripExtras | undefined>(field<string>(f, "extras") ?? field<string>(f, "extrasJson"), undefined),
   };
 }
 
@@ -227,6 +286,14 @@ export function decodeTripItemRecord(rec: CloudKitRecordPayload, zone: ZoneRef, 
     kindRaw === "activity" || kindRaw === "meal" || kindRaw === "transit" || kindRaw === "stay" || kindRaw === "note"
       ? kindRaw
       : "activity";
+  const title = field<string>(f, "title") ?? "";
+  const notes = field<string>(f, "notes") ?? "";
+  const placeName = field<string>(f, "placeName");
+  const latitude = field<number>(f, "latitude");
+  const longitude = field<number>(f, "longitude");
+  const extras = parseJson<ItemExtras | undefined>(field<string>(f, "extras"), undefined);
+  const hasPlace = Boolean(placeName && typeof latitude === "number" && typeof longitude === "number");
+  const isMealPlaceholder = kind === "meal" && !hasPlace && !notes && MEAL_PLACEHOLDER_SLOTS.has(title);
 
   return {
     id: rec.recordName,
@@ -236,13 +303,14 @@ export function decodeTripItemRecord(rec: CloudKitRecordPayload, zone: ZoneRef, 
     ownerRecordName: zone.ownerRecordName,
     day: field<string>(f, "day"),
     kind,
-    title: field<string>(f, "title") ?? "",
+    title,
     time: field<number>(f, "time"),
-    notes: field<string>(f, "notes") ?? "",
-    placeName: field<string>(f, "placeName"),
+    notes,
+    placeName,
     placeAddress: field<string>(f, "placeAddress"),
-    latitude: field<number>(f, "latitude"),
-    longitude: field<number>(f, "longitude"),
+    latitude,
+    longitude,
+    mapItemID: field<string>(f, "mapItemID"),
     checkOutDay: field<string>(f, "checkOutDay"),
     order: field<number>(f, "order"),
     cost: field<number>(f, "cost"),
@@ -250,6 +318,8 @@ export function decodeTripItemRecord(rec: CloudKitRecordPayload, zone: ZoneRef, 
     points: field<number>(f, "points"),
     pointsProgram: field<string>(f, "pointsProgram"),
     transport: parseJson<TripTransport | undefined>(field<string>(f, "transport"), undefined),
+    extras,
+    isHiddenPlaceholder: isMealPlaceholder && extras?.source !== "slot",
     createdAt: field<number>(f, "createdAt") ?? rec.created?.timestamp ?? Date.now(),
   };
 }
@@ -260,8 +330,10 @@ export interface SightEntryRecord {
   address: string;
   latitude?: number;
   longitude?: number;
+  mapItemID?: string;
   visitedDay: string;
   notes: string;
+  createdAt?: number;
 }
 
 export interface MovieEntryRecord {
@@ -270,11 +342,15 @@ export interface MovieEntryRecord {
   year: string;
   director: string;
   genre: string;
+  posterURL?: string;
+  synopsis?: string;
+  appleID?: string;
   sentiment: MealSentiment;
   rank: number;
   watchedDay: string;
   notes: string;
   isWishlist: boolean;
+  createdAt?: number;
 }
 
 export interface RecipeEntryRecord {
@@ -283,33 +359,44 @@ export interface RecipeEntryRecord {
   ingredientsText: string;
   stepsText: string;
   notes: string;
+  caption?: string;
   sourceURL: string;
   meal: string;
   cuisine: string;
+  mainIngredient?: string;
   minutes: number;
+  tagVersion?: number;
+  createdAt?: number;
 }
 
 export interface AccountRecord {
   id: string;
   providerAccountId: string;
+  ownerId?: string;
   name: string;
   nickname: string;
   institutionName: string;
   currency: string;
   balance: number;
+  balanceDate?: number;
   kindRaw: string;
   isHidden: boolean;
+  hideTransactions: boolean;
 }
 
 export interface BudgetCategoryRecord {
   id: string;
   name: string;
   icon: string;
+  colorHex?: string;
   parentId?: string;
   isIncome: boolean;
   isTransfer: boolean;
   sortOrder: number;
   monthlyTarget: number;
+  rolloverEnabled: boolean;
+  rolloverBalance: number;
+  rolloverThrough?: string;
 }
 
 export interface TransactionRecord {
@@ -320,12 +407,32 @@ export interface TransactionRecord {
   description: string;
   payee?: string;
   transactedAt: number;
+  isPending: boolean;
   categoryId?: string;
   isTransfer: boolean;
   needsReview: boolean;
   isHidden: boolean;
+  normalizedMerchant: string;
+  note: string;
   customTitle: string;
   isSplit: boolean;
+  splitParentId: string;
+}
+
+export interface RecurringItemRecord {
+  id: string;
+  merchant: string;
+  title: string;
+  categoryId?: string;
+  accountId: string;
+  amount: number;
+  cadenceRaw: string;
+  lastDate: number;
+  nextDate: number;
+  lastTransactionId: string;
+  isActive: boolean;
+  isManual: boolean;
+  createdAt: number;
 }
 
 export function isCoreDataZone(zoneName: string): boolean {
@@ -340,27 +447,31 @@ export function decodeSightCD(rec: CloudKitRecordPayload): SightEntryRecord {
     address: field<string>(f, "CD_address") ?? "",
     latitude: field<number>(f, "CD_latitude"),
     longitude: field<number>(f, "CD_longitude"),
+    mapItemID: field<string>(f, "CD_mapItemID"),
     visitedDay: field<string>(f, "CD_visitedDay") ?? "",
     notes: field<string>(f, "CD_notes") ?? "",
+    createdAt: field<number>(f, "CD_createdAt") ?? rec.created?.timestamp,
   };
 }
 
 export function decodeMovieCD(rec: CloudKitRecordPayload): MovieEntryRecord {
   const f = rec.fields ?? {};
-  const s = field<string>(f, "CD_sentimentRaw");
-  const sentiment: MealSentiment =
-    s === "loved" || s === "liked" || s === "fine" || s === "disliked" ? s : "liked";
+  const sentiment = parseSentiment(field<string>(f, "CD_sentimentRaw"));
   return {
     id: field<string>(f, "CD_id") ?? rec.recordName,
     title: field<string>(f, "CD_title") ?? "",
     year: field<string>(f, "CD_year") ?? "",
     director: field<string>(f, "CD_director") ?? "",
     genre: field<string>(f, "CD_genre") ?? "",
+    posterURL: field<string>(f, "CD_posterURL"),
+    synopsis: field<string>(f, "CD_synopsis"),
+    appleID: field<string>(f, "CD_appleID"),
     sentiment,
     rank: field<number>(f, "CD_rank") ?? 0,
     watchedDay: field<string>(f, "CD_watchedDay") ?? "",
     notes: field<string>(f, "CD_notes") ?? "",
     isWishlist: Boolean(field<number | boolean>(f, "CD_isWishlist")),
+    createdAt: field<number>(f, "CD_createdAt") ?? rec.created?.timestamp,
   };
 }
 
@@ -372,10 +483,14 @@ export function decodeRecipeCD(rec: CloudKitRecordPayload): RecipeEntryRecord {
     ingredientsText: field<string>(f, "CD_ingredientsText") ?? "",
     stepsText: field<string>(f, "CD_stepsText") ?? "",
     notes: field<string>(f, "CD_notes") ?? "",
+    caption: field<string>(f, "CD_caption"),
     sourceURL: field<string>(f, "CD_sourceURL") ?? "",
     meal: field<string>(f, "CD_meal") ?? "",
     cuisine: field<string>(f, "CD_cuisine") ?? "",
+    mainIngredient: field<string>(f, "CD_mainIngredient"),
     minutes: field<number>(f, "CD_minutes") ?? 0,
+    tagVersion: field<number>(f, "CD_tagVersion"),
+    createdAt: field<number>(f, "CD_createdAt") ?? rec.created?.timestamp,
   };
 }
 
@@ -384,13 +499,16 @@ export function decodeAccountCD(rec: CloudKitRecordPayload): AccountRecord {
   return {
     id: rec.recordName,
     providerAccountId: field<string>(f, "CD_providerAccountId") ?? rec.recordName,
+    ownerId: field<string>(f, "CD_ownerId"),
     name: field<string>(f, "CD_name") ?? "",
     nickname: field<string>(f, "CD_nickname") ?? "",
     institutionName: field<string>(f, "CD_institutionName") ?? "",
     currency: field<string>(f, "CD_currency") ?? "USD",
     balance: field<number>(f, "CD_balance") ?? 0,
+    balanceDate: field<number>(f, "CD_balanceDate"),
     kindRaw: field<string>(f, "CD_kindRaw") ?? "other",
     isHidden: Boolean(field<number | boolean>(f, "CD_isHidden")),
+    hideTransactions: Boolean(field<number | boolean>(f, "CD_hideTransactions")),
   };
 }
 
@@ -400,16 +518,21 @@ export function decodeCategoryCD(rec: CloudKitRecordPayload): BudgetCategoryReco
     id: field<string>(f, "CD_id") ?? rec.recordName,
     name: field<string>(f, "CD_name") ?? "",
     icon: field<string>(f, "CD_icon") ?? "•",
+    colorHex: field<string>(f, "CD_colorHex"),
     parentId: field<string>(f, "CD_parentId"),
     isIncome: Boolean(field<number | boolean>(f, "CD_isIncome")),
     isTransfer: Boolean(field<number | boolean>(f, "CD_isTransfer")),
     sortOrder: field<number>(f, "CD_sortOrder") ?? 0,
     monthlyTarget: field<number>(f, "CD_monthlyTarget") ?? 0,
+    rolloverEnabled: Boolean(field<number | boolean>(f, "CD_rolloverEnabled")),
+    rolloverBalance: field<number>(f, "CD_rolloverBalance") ?? 0,
+    rolloverThrough: field<string>(f, "CD_rolloverThrough"),
   };
 }
 
 export function decodeTransactionCD(rec: CloudKitRecordPayload): TransactionRecord {
   const f = rec.fields ?? {};
+  const needsReviewRaw = field<number | boolean>(f, "CD_needsReview");
   return {
     id: rec.recordName,
     providerTransactionId: field<string>(f, "CD_providerTransactionId") ?? rec.recordName,
@@ -418,11 +541,35 @@ export function decodeTransactionCD(rec: CloudKitRecordPayload): TransactionReco
     description: field<string>(f, "CD_transactionDescription") ?? "",
     payee: field<string>(f, "CD_payee"),
     transactedAt: field<number>(f, "CD_transactedAt") ?? rec.created?.timestamp ?? Date.now(),
+    isPending: Boolean(field<number | boolean>(f, "CD_isPending")),
     categoryId: field<string>(f, "CD_categoryId"),
     isTransfer: Boolean(field<number | boolean>(f, "CD_isTransfer")),
-    needsReview: Boolean(field<number | boolean>(f, "CD_needsReview")),
+    needsReview: needsReviewRaw === undefined ? true : Boolean(needsReviewRaw),
     isHidden: Boolean(field<number | boolean>(f, "CD_isHidden")),
+    normalizedMerchant: field<string>(f, "CD_normalizedMerchant") ?? "",
+    note: field<string>(f, "CD_note") ?? "",
     customTitle: field<string>(f, "CD_customTitle") ?? "",
     isSplit: Boolean(field<number | boolean>(f, "CD_isSplit")),
+    splitParentId: field<string>(f, "CD_splitParentId") ?? "",
+  };
+}
+
+export function decodeRecurringCD(rec: CloudKitRecordPayload): RecurringItemRecord {
+  const f = rec.fields ?? {};
+  const isActiveRaw = field<number | boolean>(f, "CD_isActive");
+  return {
+    id: field<string>(f, "CD_id") ?? rec.recordName,
+    merchant: field<string>(f, "CD_merchant") ?? "",
+    title: field<string>(f, "CD_title") ?? "",
+    categoryId: field<string>(f, "CD_categoryId"),
+    accountId: field<string>(f, "CD_accountId") ?? "",
+    amount: field<number>(f, "CD_amount") ?? 0,
+    cadenceRaw: field<string>(f, "CD_cadenceRaw") ?? "monthly",
+    lastDate: field<number>(f, "CD_lastDate") ?? rec.created?.timestamp ?? Date.now(),
+    nextDate: field<number>(f, "CD_nextDate") ?? rec.created?.timestamp ?? Date.now(),
+    lastTransactionId: field<string>(f, "CD_lastTransactionId") ?? "",
+    isActive: isActiveRaw === undefined ? true : Boolean(isActiveRaw),
+    isManual: Boolean(field<number | boolean>(f, "CD_isManual")),
+    createdAt: field<number>(f, "CD_createdAt") ?? rec.created?.timestamp ?? Date.now(),
   };
 }

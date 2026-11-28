@@ -77,6 +77,8 @@ export function SightsScreen({ sights }: SightsScreenProps) {
       const list = map.get(city) ?? [];
       if (tab === "visited") {
         list.sort((a, b) => b.visitedDay.localeCompare(a.visitedDay));
+      } else {
+        list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
       }
       return { city, items: list };
     });
