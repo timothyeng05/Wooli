@@ -65,7 +65,6 @@ struct MacShellView: View {
     @State private var showCommandPalette = false
     @AppStorage("mac.trips.last") private var lastTrip = ""
     @AppStorage("mac.sidebar.collapsed") private var isSidebarCollapsed = false
-    @AppStorage("mac.sidebar.accountsExpanded") private var accountsExpanded = true
 
     private var selection: Binding<MacSection?> {
         Binding {
@@ -350,7 +349,7 @@ struct MacShellView: View {
         }
     }
 
-    // MARK: Budget Sidebar + Copilot-Style MY ACCOUNTS Tree
+    // MARK: Budget Sidebar
 
     private var budgetSidebarContent: some View {
         VStack(alignment: isSidebarCollapsed ? .center : .leading, spacing: Space.m) {
@@ -378,74 +377,6 @@ struct MacShellView: View {
                 sidebarRow(.tool(.rules), "Rules", "wand.and.stars")
                 sidebarRow(.tool(.recurring), "Recurring", "arrow.triangle.2.circlepath")
             }
-
-            if !isSidebarCollapsed && !visibleAccounts.isEmpty {
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Button {
-                        withAnimation(.snappy(duration: 0.18)) {
-                            accountsExpanded.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("MY ACCOUNTS")
-                                .font(.system(size: 10.5, weight: .bold))
-                                .tracking(0.8)
-                                .foregroundStyle(ShellPalette.muted)
-                            Spacer()
-                            Image(systemName: accountsExpanded ? "chevron.down" : "chevron.right")
-                                .font(.system(size: 9.5, weight: .semibold))
-                                .foregroundStyle(ShellPalette.muted)
-                        }
-                        .padding(.horizontal, Space.s)
-                        .padding(.top, Space.s)
-                        .padding(.bottom, 2)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-
-                    if accountsExpanded {
-                        VStack(spacing: 2) {
-                            ForEach(visibleAccounts) { account in
-                                Button {
-                                    selection.wrappedValue = .budget(.accounts)
-                                } label: {
-                                    HStack(spacing: Space.s) {
-                                        Circle()
-                                            .fill(accountDotColor(account.kind))
-                                            .frame(width: 7, height: 7)
-                                        Text(account.displayName)
-                                            .font(.system(size: 12.5, weight: .regular))
-                                            .foregroundStyle(ShellPalette.ink)
-                                            .lineLimit(1)
-                                        Spacer(minLength: 4)
-                                        Text(account.balance.currency(account.currency))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .monospacedDigit()
-                                            .foregroundStyle(account.balance < 0 ? Theme.expense : ShellPalette.muted)
-                                            .lineLimit(1)
-                                    }
-                                    .padding(.horizontal, Space.s)
-                                    .padding(.vertical, 5)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .help("\(account.displayName) · \(account.institutionName)")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func accountDotColor(_ kind: AccountKind) -> Color {
-        switch kind {
-        case .checking: ShellPalette.forest
-        case .savings: Theme.accentTeal
-        case .credit: Theme.accentAmber
-        case .investment: Theme.accentViolet
-        case .loan: Theme.accentRose
-        case .other: Theme.accentSlate
         }
     }
 
