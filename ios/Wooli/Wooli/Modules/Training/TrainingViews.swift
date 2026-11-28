@@ -98,21 +98,12 @@ private struct TrainingDashboard: View {
 
     // MARK: Hero — today's call
 
-    private var verdict: (title: String, symbol: String) {
-        switch ins.readiness {
-        case "ready": ("Ready to train", "checkmark.seal.fill")
-        case "easy": ("Go easy today", "tortoise.fill")
-        case "recover": ("Recovery day", "bed.double.fill")
-        default: ("Not enough data yet", "questionmark.circle")
-        }
-    }
-
     private var hero: some View {
         HeroCard(eyebrow: "TODAY · \(ins.location.uppercased())\(ins.raining == true ? " · RAIN" : "")") {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: Space.s) {
-                    Label(verdict.title, systemImage: verdict.symbol).font(.title.weight(.bold))
-                    Text(sessionLine).font(.title3)
+                    Label(ins.verdict.title, systemImage: ins.verdict.symbol).font(.title.weight(.bold))
+                    Text(ins.sessionLine).font(.title3)
                     ForEach(ins.today.notes, id: \.self) { Text($0).font(.subheadline).opacity(0.85) }
                 }
                 Spacer()
@@ -125,13 +116,6 @@ private struct TrainingDashboard: View {
                 }
             }
         }
-    }
-
-    private var sessionLine: String {
-        guard let label = ins.today.label else { return "Rest / mobility" }
-        guard let w = ins.today.window, w.count == 2 else { return label }
-        let mins = ins.today.minutes.map { " · \($0) min" } ?? ""
-        return "\(label) · \(w[0])–\(w[1])\(mins)"
     }
 
     private func raceCount(_ r: TrainingInsights.Race) -> String {

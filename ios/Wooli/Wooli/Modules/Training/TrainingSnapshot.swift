@@ -64,6 +64,33 @@ struct TrainingInsights: Decodable {
     struct Race: Decodable { let name: String; let date: String?; let month: String?; let days: Int?; let months: Int?; let dateTBA: Bool? }
 }
 
+extension TrainingInsights {
+    /// Today's call, in words and a symbol.
+    var verdict: (title: String, symbol: String) {
+        switch readiness {
+        case "ready": ("Ready to train", "checkmark.seal.fill")
+        case "easy": ("Go easy today", "tortoise.fill")
+        case "recover": ("Recovery day", "bed.double.fill")
+        default: ("Not enough data yet", "questionmark.circle")
+        }
+    }
+
+    /// Today's session: "Run · 07:00–08:00 · 45 min", or rest.
+    var sessionLine: String {
+        guard let label = today.label else { return "Rest / mobility" }
+        guard let w = today.window, w.count == 2 else { return label }
+        let mins = today.minutes.map { " · \($0) min" } ?? ""
+        return "\(label) · \(w[0])–\(w[1])\(mins)"
+    }
+
+    /// Share of recovery checks that met their target (0–1), for the Today ring.
+    var recoveryShare: Double {
+        let known = checks.values.compactMap(\.met)
+        guard !known.isEmpty else { return 0 }
+        return Double(known.filter { $0 }.count) / Double(known.count)
+    }
+}
+
 /// One night from an older snapshot, for the trend lines.
 struct TrainingTrendPoint: Identifiable {
     let date: Date

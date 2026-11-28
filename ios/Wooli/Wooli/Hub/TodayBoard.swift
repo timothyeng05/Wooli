@@ -12,6 +12,9 @@ struct TodayBoard: View {
     @State private var book = EatsBook.shared
     @State private var period = PeriodStore.shared
     @State private var lock = ModuleLock.shared
+    #if os(macOS)
+    @State private var training = TrainingFolder.shared
+    #endif
     @Query private var accounts: [LocalAccount]
     @Query private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
@@ -65,7 +68,12 @@ struct TodayBoard: View {
             }
         }
         .task(id: cards.contains(.period)) {
-            if cards.contains(.period) { await period.refresh(sample: app.mode == .sample) }
+            guard cards.contains(.period) else { return }
+            #if os(macOS)
+            training.reload()
+            #else
+            await period.refresh(sample: app.mode == .sample)
+            #endif
         }
     }
 
@@ -196,7 +204,38 @@ struct TodayBoard: View {
             RingTile(space: .period, value: 0, title: "Locked", detail: "Open to unlock with \(ThisDevice.biometry).") {
                 Image(systemName: "lock.fill")
             }
-        } else if period.access != .connected {
+        } else {
+            #if os(macOS)
+            // The Mac has no Apple Health, so its Health tile is Training (garmin-mcp snapshots).
+            trainingTile
+            #else
+            cycleTile
+            #endif
+        }
+    }
+
+    #if os(macOS)
+    @ViewBuilder private var trainingTile: some View {
+        switch training.state {
+        case .needsFolder:
+            RingTile(space: .period, value: 0, title: "Connect Garmin", detail: "Choose your garmin-mcp folder to see training here.") {
+                Image(systemName: "figure.run")
+            }
+        case .failed:
+            RingTile(space: .period, value: 0, title: "Can't read training", detail: "Open Health to fix the snapshot folder.") {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
+        case .loaded(let record, _):
+            let ins = record.insights
+            RingTile(space: .period, value: ins.recoveryShare, title: ins.verdict.title, detail: ins.sessionLine) {
+                Image(systemName: ins.verdict.symbol)
+            }
+        }
+    }
+    #endif
+
+    @ViewBuilder private var cycleTile: some View {
+        if period.access != .connected {
             RingTile(space: .period, value: 0, title: "Connect Apple Health", detail: "See your cycle and predictions here.") {
                 Image(systemName: "heart.fill")
             }

@@ -65,7 +65,7 @@ enum AppSpace: String, CaseIterable, Identifiable {
         case .sights: "Save landmarks, museums and parks you want to see, then add them to a trip."
         case .movies: "Rank every movie you've seen, Beli-style — a few taps each."
         case .recipes: "Share a recipe reel from Instagram; its caption becomes ingredients and steps."
-        case .period: "Your health, kept private — starting with your cycle and its predictions."
+        case .period: ThisDevice.name == "Mac" ? "Your health, kept private — training from your Garmin snapshots, and your cycle." : "Your health, kept private — starting with your cycle and its predictions."
         }
     }
 
