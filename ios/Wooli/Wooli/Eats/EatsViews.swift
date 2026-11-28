@@ -383,6 +383,7 @@ struct EatsListView: View {
     @State private var choosingNear = false
     @State private var locating = false
     @State private var wishDetail: EatsPlace?
+    @AppStorage("eats.mac.showMap") private var showMacMap = true
 
     /// Show places within 50 miles of here (you, or a city you're going to).
     struct Near: Equatable {
@@ -438,10 +439,56 @@ struct EatsListView: View {
 
         Group {
         #if os(macOS)
-        // Mac: the list beside the open place, like Mail or Notes.
+        // Mac: ~720pt scrollable left column + sticky rounded Map split, with inspector for place details.
+        let mapPlaces = tab == .been ? shown : shown
+        let selectedID = detail?.id ?? wishDetail?.id
         HSplitView {
-            browser.frame(minWidth: 360, idealWidth: 420, maxWidth: 560, maxHeight: .infinity)
-            macDetail.frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                header(pool)
+                if tab == .wantToTry && !shown.isEmpty {
+                    macWishlistGrid(shown, waiting: waiting)
+                } else {
+                    list(shown, total: pool.count, waiting: waiting, scores: scores)
+                }
+            }
+            .frame(minWidth: 460, idealWidth: 680, maxWidth: showMacMap ? 720 : .infinity, maxHeight: .infinity)
+            .background(FieldNotesSpatial.paper)
+            .overlay(alignment: .topTrailing) {
+                if !showMacMap {
+                    Button {
+                        withAnimation(.snappy) { showMacMap = true }
+                    } label: {
+                        Label("Show Map", systemImage: "map")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(FieldNotesSpatial.ink)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(FieldNotesSpatial.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+                            .shadow(color: FieldNotesSpatial.shadow, radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(Space.l)
+                }
+            }
+
+            if showMacMap {
+                EatsMap(places: mapPlaces, scores: scores, selectedID: selectedID,
+                        onCollapse: { withAnimation(.snappy) { showMacMap = false } }) { place in
+                    if tab == .been { select(place) } else { detail = nil; wishDetail = place }
+                }
+                .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                .padding(Space.l)
+                .background(FieldNotesSpatial.paper)
+            }
+        }
+        .background(FieldNotesSpatial.paper)
+        .inspector(isPresented: Binding(
+            get: { detail != nil || wishDetail != nil },
+            set: { if !$0 { detail = nil; wishDetail = nil } }
+        )) {
+            macDetail
+                .inspectorColumnWidth(min: 320, ideal: 360, max: 440)
         }
         .searchable(text: $query, placement: .toolbar, prompt: "Search your list")
         .onChange(of: tab) {
@@ -462,12 +509,8 @@ struct EatsListView: View {
                 }
             }
             ToolbarItem {
-                Picker("Show", selection: $showMap) {
-                    Label("List", systemImage: "list.bullet").tag(false)
-                    Label("Map", systemImage: "map").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .help("Show as a list or on a map")
+                Toggle("Map", systemImage: "map", isOn: $showMacMap)
+                    .help("Show or hide the map")
             }
         }
         #else
@@ -561,6 +604,27 @@ struct EatsListView: View {
     }
 
     #if os(macOS)
+    /// Airbnb Wishlists / Saves: 2-column grid of 1:1 mat/bezel saved cards with inset "Add note" fields.
+    private func macWishlistGrid(_ shown: [EatsPlace], waiting: [TripItem]) -> some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: Space.l), GridItem(.flexible(), spacing: Space.l)], spacing: Space.l) {
+                ForEach(shown) { wish in
+                    EatsWishlistMatCard(
+                        wish: wish,
+                        distanceSubtitle: withDistance(wish, "Saved \(wish.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))"),
+                        isSelected: isOpen(wish),
+                        onOpen: { detail = nil; wishDetail = wish },
+                        onMarkBeen: wish.tripPlace.map { spot in { ranking = .place(spot) } },
+                        onRemove: { book.removeFromWishlist(wish) }
+                    )
+                }
+            }
+            .padding(Space.l)
+        }
+        .scrollContentBackground(.hidden)
+        .background(FieldNotesSpatial.paper)
+    }
+
     /// The right side on the Mac: the open place, or your passport and friends.
     @ViewBuilder
     private var macDetail: some View {
@@ -697,9 +761,12 @@ struct EatsListView: View {
             #endif
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
-        .background(Theme.card)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .background(FieldNotesSpatial.paper)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(FieldNotesSpatial.hairline).frame(height: 1)
+        }
     }
 
     /// An outlined pill that turns solid once a value is picked.
@@ -874,6 +941,8 @@ struct EatsListView: View {
             #endif
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(FieldNotesSpatial.paper)
         .refreshable {
             await TripStore.shared.fetchChanges()
             await TripStore.shared.downloadPartnersList()
@@ -1143,34 +1212,208 @@ struct EatsPlaceRow: View {
     }
 }
 
-/// Places with a score pin each.
+/// Places with floating pill pins and dashed route polylines.
 struct EatsMap: View {
     let places: [EatsPlace]
     let scores: [String: Double]
+    var selectedID: String? = nil
+    var onCollapse: (() -> Void)? = nil
     var onSelect: ((EatsPlace) -> Void)? = nil
     @State private var position: MapCameraPosition = .automatic
 
+    private var coordinates: [CLLocationCoordinate2D] {
+        places.compactMap(\.coordinate)
+    }
+
     var body: some View {
         Map(position: $position) {
+            if coordinates.count > 1 {
+                MapPolyline(coordinates: coordinates)
+                    .stroke(FieldNotesSpatial.forest.opacity(0.65),
+                            style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [6, 6]))
+            }
             ForEach(places.filter { $0.coordinate != nil }) { place in
-                Annotation(place.name, coordinate: place.coordinate!) {
+                let isSelected = selectedID == place.id
+                let score = scores[place.id]
+                Annotation(place.name, coordinate: place.coordinate!, anchor: .center) {
                     Button { onSelect?(place) } label: {
-                        MealScoreBadge(score: scores[place.id] ?? 0, size: 40)
-                            .background(Circle().fill(Theme.card))
-                            .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                        HStack(spacing: 6) {
+                            if let score {
+                                MealScoreBadge(score: score, size: 22)
+                            } else {
+                                Image(systemName: "bookmark.fill")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(isSelected ? FieldNotesSpatial.ink : .white)
+                                    .frame(width: 20, height: 20)
+                                    .background(isSelected ? FieldNotesSpatial.surface : FieldNotesSpatial.forest, in: Circle())
+                            }
+                            Text(place.name)
+                                .font(.caption.weight(isSelected ? .semibold : .medium))
+                                .foregroundStyle(isSelected ? FieldNotesSpatial.surface : FieldNotesSpatial.ink)
+                                .lineLimit(1)
+                                .frame(maxWidth: 130, alignment: .leading)
+                        }
+                        .padding(.leading, 4)
+                        .padding(.trailing, 10)
+                        .padding(.vertical, 4)
+                        .background(isSelected ? FieldNotesSpatial.ink : FieldNotesSpatial.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(isSelected ? FieldNotesSpatial.ink : FieldNotesSpatial.hairline, lineWidth: 1))
+                        .shadow(color: FieldNotesSpatial.shadow, radius: isSelected ? 8 : 4, y: 2)
                     }
+                    .buttonStyle(.plain)
                     .disabled(onSelect == nil)
                 }
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .overlay(alignment: .topTrailing) { RecenterButton(position: $position) }
+        .clipShape(RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous)
+                .strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1)
+        )
+        .shadow(color: FieldNotesSpatial.shadow, radius: 10, y: 4)
+        .overlay(alignment: .topLeading) { RecenterButton(position: $position) }
+        .overlay(alignment: .topTrailing) {
+            if let onCollapse {
+                Button(action: onCollapse) {
+                    Label("Hide Map", systemImage: "sidebar.right")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(FieldNotesSpatial.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(FieldNotesSpatial.surface.opacity(0.95), in: Capsule())
+                        .overlay(Capsule().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+                        .shadow(color: FieldNotesSpatial.shadow, radius: 4, y: 2)
+                }
+                .buttonStyle(.plain)
+                .padding(Space.m)
+            }
+        }
         .overlay {
             if !places.contains(where: { $0.coordinate != nil }) {
                 ContentUnavailableView("No places on the map yet", systemImage: "map",
                                        description: Text("Places picked from Apple Maps show up here with their score."))
             }
         }
+    }
+}
+
+/// 1:1 mat/bezel saved card for Airbnb-style Wishlists / Saves with an inset "Add note" field.
+private struct EatsWishlistMatCard: View {
+    let wish: EatsPlace
+    let distanceSubtitle: String
+    let isSelected: Bool
+    let onOpen: () -> Void
+    let onMarkBeen: (() -> Void)?
+    let onRemove: () -> Void
+
+    @State private var noteText: String = ""
+    @FocusState private var noteFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // 1:1 mat/bezel frame
+            Button(action: onOpen) {
+                ZStack(alignment: .topTrailing) {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(FieldNotesSpatial.paperSoft)
+                        .overlay {
+                            VStack(spacing: 8) {
+                                Image(systemName: wish.reelURL != nil ? "play.rectangle.fill" : "fork.knife")
+                                    .font(.system(size: 26, weight: .medium))
+                                    .foregroundStyle(FieldNotesSpatial.forest)
+                                    .frame(width: 48, height: 48)
+                                    .background(FieldNotesSpatial.surface, in: Circle())
+                                    .overlay(Circle().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+                                if let city = wish.city, !city.isEmpty {
+                                    Text(city)
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(FieldNotesSpatial.inkSecondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .padding(12)
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+
+                    if let onMarkBeen {
+                        Button("Been", action: onMarkBeen)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(FieldNotesSpatial.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(FieldNotesSpatial.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+                            .padding(8)
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(wish.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FieldNotesSpatial.ink)
+                    .lineLimit(1)
+                Text([wish.cuisine, distanceSubtitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(FieldNotesSpatial.inkSecondary)
+                    .lineLimit(1)
+            }
+
+            // Inset "Add note" field
+            HStack(spacing: 6) {
+                Image(systemName: "note.text")
+                    .font(.caption2)
+                    .foregroundStyle(FieldNotesSpatial.inkMuted)
+                TextField("Add note", text: $noteText)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(FieldNotesSpatial.ink)
+                    .focused($noteFocused)
+                    .onSubmit(saveNote)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(FieldNotesSpatial.paperSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(noteFocused ? FieldNotesSpatial.forest : FieldNotesSpatial.hairline, lineWidth: 1)
+            )
+        }
+        .padding(12)
+        .background(FieldNotesSpatial.surface, in: RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous)
+                .strokeBorder(isSelected ? FieldNotesSpatial.forest : FieldNotesSpatial.hairline, lineWidth: isSelected ? 1.5 : 1)
+        )
+        .shadow(color: FieldNotesSpatial.shadow, radius: 6, y: 2)
+        .onAppear { noteText = wish.notes }
+        .onChange(of: wish.notes) { _, newValue in
+            if !noteFocused { noteText = newValue }
+        }
+        .onChange(of: noteFocused) { _, focused in
+            if !focused { saveNote() }
+        }
+        .contextMenu {
+            if let url = wish.tripPlace?.mapsURL {
+                Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
+            }
+            if let reel = wish.reelURL {
+                Link(destination: reel) { Label("Watch the reel", systemImage: "play.rectangle") }
+            }
+            Divider()
+            Button("Remove from Want to Try", systemImage: "trash", role: .destructive, action: onRemove)
+        }
+    }
+
+    private func saveNote() {
+        let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != wish.notes else { return }
+        var updated = wish
+        updated.notes = trimmed
+        EatsBook.shared.save(updated)
     }
 }
 

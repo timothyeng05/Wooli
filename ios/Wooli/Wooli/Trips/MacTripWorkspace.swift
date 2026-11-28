@@ -1,6 +1,24 @@
-#if os(macOS)
 import MapKit
 import SwiftUI
+
+/// Warm "Field Notes" paper + deep forest ink + Expedia/Airbnb spatial calm tokens
+/// shared across Trips & Eats spatial views.
+enum FieldNotesSpatial {
+    static let paper = Color(light: 0xFBF9F5, dark: 0x101714)
+    static let paperSoft = Color(light: 0xF4F0EA, dark: 0x17221D)
+    static let surface = Color(light: 0xFFFFFF, dark: 0x1D2B24)
+    static let ink = Color(light: 0x182C23, dark: 0xF2EFE9)
+    static let forest = Color(light: 0x2B4C3F, dark: 0x5FA88A)
+    static let forestSoft = Color(light: 0xE7EFEA, dark: 0x1E332A)
+    static let inkSecondary = Color(light: 0x4A5E54, dark: 0xB8C4BD)
+    static let inkMuted = Color(light: 0x72837A, dark: 0x8A9991)
+    static let hairline = Color(light: 0xE4DDD2, dark: 0x2B3A33)
+    static let cardRadius: CGFloat = 16
+    static let innerRadius: CGFloat = 12
+    static let shadow = Color(light: 0x182C23, dark: 0x000000, alpha: 0.06, darkAlpha: 0.35)
+}
+
+#if os(macOS)
 
 /// Which page of a trip the shell's sidebar has picked.
 enum TripPage: Hashable {
@@ -123,21 +141,48 @@ struct MacTripWorkspace: View {
                 if mode == .map {
                     fullMap(trip)
                         .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(Space.l)
+                        .background(FieldNotesSpatial.paper)
                 } else {
                     planColumn(trip)
-                        .frame(minWidth: 400, idealWidth: 520, maxWidth: mapShown ? 560 : .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 460, idealWidth: 720, maxWidth: mapShown ? 740 : .infinity, maxHeight: .infinity)
+                        .background(FieldNotesSpatial.paper)
+                        .overlay(alignment: .topTrailing) {
+                            if mode == .itinerary && !mapShown {
+                                Button {
+                                    withAnimation(.snappy) { showMap = true }
+                                } label: {
+                                    Label("Show Map", systemImage: "map")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(FieldNotesSpatial.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(FieldNotesSpatial.surface, in: Capsule())
+                                        .overlay(Capsule().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+                                        .shadow(color: FieldNotesSpatial.shadow, radius: 6, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(Space.l)
+                                .help("Show the map beside the itinerary (⇧⌘M)")
+                            }
+                        }
                     if mapShown {
                         MacTripMap(stops: mapStops(trip, selected: selected, all: all), numbered: mapIsOneDay(selected),
-                                   selection: $selection)
+                                   selection: $selection, onCollapse: { withAnimation(.snappy) { showMap = false } })
                             .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.top, Space.l)
+                            .padding(.trailing, Space.l)
+                            .padding(.bottom, Space.l)
+                            .background(FieldNotesSpatial.paper)
                     }
                 }
                 if showInspector {
                     details(trip, selected: selected, all: all)
                         .frame(minWidth: 300, idealWidth: 340, maxWidth: 420, maxHeight: .infinity)
-                        .background(Theme.card)
+                        .background(FieldNotesSpatial.surface)
                 }
             }
+            .background(FieldNotesSpatial.paper)
         }
         // The window centres other pages at a readable width; this one uses it all.
         .contentMargins(.horizontal, 0, for: .scrollContent)
@@ -1199,6 +1244,7 @@ struct MacTripMap: View {
     let stops: [TripItem]
     let numbered: Bool
     @Binding var selection: Set<String>
+    var onCollapse: (() -> Void)? = nil
     @State private var position: MapCameraPosition = .automatic
     @State private var routes: [MKRoute] = []
 
@@ -1219,27 +1265,61 @@ struct MacTripMap: View {
         return .region(MKCoordinateRegion(center: center, span: span))
     }
 
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        stops.compactMap(\.place).map(\.coordinate)
+    }
+
     var body: some View {
-        Map(position: $position, selection: Binding<String?>(
-            get: { selection.count == 1 ? selection.first : nil },
-            set: { if let id = $0 { selection = [id] } }
-        )) {
-            ForEach(routes, id: \.self) { route in
-                MapPolyline(route.polyline).stroke(Theme.brand.opacity(0.7), lineWidth: 4)
+        Map(position: $position) {
+            if !routes.isEmpty {
+                ForEach(routes, id: \.self) { route in
+                    MapPolyline(route.polyline)
+                        .stroke(FieldNotesSpatial.forest.opacity(0.85),
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 6]))
+                }
+            } else if routeCoordinates.count > 1 {
+                MapPolyline(coordinates: routeCoordinates)
+                    .stroke(FieldNotesSpatial.forest.opacity(0.7),
+                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [6, 6]))
             }
             ForEach(Array(stops.enumerated()), id: \.element.id) { index, item in
                 if let place = item.place {
-                    Group {
-                        if numbered {
-                            Marker(item.title.isEmpty ? place.name : item.title, monogram: Text("\(index + 1)"),
-                                   coordinate: place.coordinate)
-                        } else {
-                            Marker(item.title.isEmpty ? place.name : item.title, systemImage: item.kind.symbol,
-                                   coordinate: place.coordinate)
+                    let isSelected = selection.contains(item.id)
+                    let label = item.title.isEmpty ? place.name : item.title
+                    Annotation(label, coordinate: place.coordinate, anchor: .center) {
+                        Button {
+                            selection = [item.id]
+                        } label: {
+                            HStack(spacing: 6) {
+                                Group {
+                                    if numbered {
+                                        Text("\(index + 1)")
+                                            .font(.caption2.weight(.semibold))
+                                            .monospacedDigit()
+                                    } else {
+                                        Image(systemName: item.kind == .transit ? MacPlanLine.transitSymbol(item) : item.kind.symbol)
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                }
+                                .foregroundStyle(isSelected ? FieldNotesSpatial.ink : .white)
+                                .frame(width: 20, height: 20)
+                                .background(isSelected ? FieldNotesSpatial.surface : Color(hex: item.kind.colorHex), in: Circle())
+
+                                Text(label)
+                                    .font(.caption.weight(isSelected ? .semibold : .medium))
+                                    .foregroundStyle(isSelected ? FieldNotesSpatial.surface : FieldNotesSpatial.ink)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 140, alignment: .leading)
+                            }
+                            .padding(.leading, 4)
+                            .padding(.trailing, 10)
+                            .padding(.vertical, 4)
+                            .background(isSelected ? FieldNotesSpatial.ink : FieldNotesSpatial.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(isSelected ? FieldNotesSpatial.ink : FieldNotesSpatial.hairline, lineWidth: 1))
+                            .shadow(color: FieldNotesSpatial.shadow, radius: isSelected ? 8 : 4, y: 2)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .tint(Color(hex: item.kind.colorHex))
-                    .tag(item.id)
                 }
             }
         }
@@ -1248,15 +1328,39 @@ struct MacTripMap: View {
             MapZoomStepper()
             MapCompass()
         }
+        .clipShape(RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous)
+                .strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1)
+        )
+        .shadow(color: FieldNotesSpatial.shadow, radius: 10, y: 4)
         .overlay {
             if stops.isEmpty {
                 Text("No places to show")
-                    .font(.footnote.weight(.medium)).foregroundStyle(Theme.textSecondary)
+                    .font(.footnote.weight(.medium)).foregroundStyle(FieldNotesSpatial.inkSecondary)
                     .padding(.horizontal, Space.m).padding(.vertical, Space.s)
-                    .background(.regularMaterial, in: Capsule())
+                    .background(FieldNotesSpatial.surface, in: Capsule())
+                    .overlay(Capsule().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
             }
         }
         .overlay(alignment: .topLeading) { RecenterButton(position: $position) }
+        .overlay(alignment: .topTrailing) {
+            if let onCollapse {
+                Button(action: onCollapse) {
+                    Label("Hide Map", systemImage: "sidebar.right")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(FieldNotesSpatial.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(FieldNotesSpatial.surface.opacity(0.95), in: Capsule())
+                        .overlay(Capsule().strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+                        .shadow(color: FieldNotesSpatial.shadow, radius: 4, y: 2)
+                }
+                .buttonStyle(.plain)
+                .padding(Space.m)
+                .help("Collapse map (⇧⌘M)")
+            }
+        }
         .task(id: key) {
             withAnimation(.easeInOut(duration: 0.4)) { position = Self.fit(stops) }
             routes = []

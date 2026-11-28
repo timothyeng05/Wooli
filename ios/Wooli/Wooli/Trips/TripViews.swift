@@ -86,24 +86,35 @@ struct TripsListView: View {
                         .buttonStyle(.plain)
                         .contextMenu { tripMenu(next) }
                 }
-                ForEach([("Upcoming", rest), ("Past", past)], id: \.0) { title, trips in
-                    if !trips.isEmpty {
-                        VStack(alignment: .leading, spacing: Space.m) {
-                            Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: Space.l)], spacing: Space.l) {
-                                ForEach(trips) { trip in
-                                    Button { onOpen?(trip.id) } label: { TripTile(trip: trip) }
-                                        .buttonStyle(.plain)
-                                        .contextMenu { tripMenu(trip) }
-                                }
+                if !rest.isEmpty {
+                    VStack(alignment: .leading, spacing: Space.m) {
+                        Text("Upcoming").font(.title2.weight(.semibold)).foregroundStyle(FieldNotesSpatial.ink)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: Space.xl)], spacing: Space.xl) {
+                            ForEach(rest) { trip in
+                                Button { onOpen?(trip.id) } label: { TripTile(trip: trip) }
+                                    .buttonStyle(.plain)
+                                    .contextMenu { tripMenu(trip) }
+                            }
+                        }
+                    }
+                }
+                if !past.isEmpty {
+                    VStack(alignment: .leading, spacing: Space.m) {
+                        Text("Past Trips").font(.title2.weight(.semibold)).foregroundStyle(FieldNotesSpatial.ink)
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 24), GridItem(.flexible(), spacing: 24)], spacing: 24) {
+                            ForEach(past) { trip in
+                                Button { onOpen?(trip.id) } label: { PastTripPhotoCard(trip: trip) }
+                                    .buttonStyle(.plain)
+                                    .contextMenu { tripMenu(trip) }
                             }
                         }
                     }
                 }
             }
-            .padding(Space.xl)
+            .padding(Space.xxl)
         }
-        .pageBackground()
+        .scrollContentBackground(.hidden)
+        .background(FieldNotesSpatial.paper)
     }
 
     @ViewBuilder
@@ -243,7 +254,85 @@ private struct TripTile: View {
             Text(trip.dateRangeText).font(.caption).foregroundStyle(Theme.textTertiary)
         }
         .frame(maxWidth: .infinity, minHeight: 130, alignment: .leading)
-        .card()
+        .padding(Space.xl)
+        .background(FieldNotesSpatial.surface, in: RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous)
+            .strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1))
+        .shadow(color: FieldNotesSpatial.shadow, radius: 6, y: 2)
+        .contentShape(Rectangle())
+    }
+}
+
+/// 16:9 full-bleed editorial photo card with a bottom scrim for Past Trips.
+private struct PastTripPhotoCard: View {
+    let trip: Trip
+
+    private var palette: [Color] {
+        let palettes: [[Color]] = [
+            [Color(hex: "#2B4C3F"), Color(hex: "#182C23")],
+            [Color(hex: "#3A5A40"), Color(hex: "#1B3022")],
+            [Color(hex: "#4A5759"), Color(hex: "#222B2D")],
+            [Color(hex: "#584B3E"), Color(hex: "#2A221B")],
+            [Color(hex: "#2F4858"), Color(hex: "#162630")]
+        ]
+        let idx = abs(trip.id.hashValue) % palettes.count
+        return palettes[idx]
+    }
+
+    var body: some View {
+        let cities = trip.awayLegs.map(\.name).filter { !$0.isEmpty }
+        let routeText = cities.isEmpty ? trip.destination : cities.joined(separator: " → ")
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(colors: palette, startPoint: .topLeading, endPoint: .bottomTrailing)
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 84))
+                        .foregroundStyle(.white.opacity(0.08))
+                        .offset(x: 12, y: -12)
+                }
+            LinearGradient(
+                colors: [.clear, Color(hex: "#182C23").opacity(0.45), Color(hex: "#182C23").opacity(0.9)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(DayKey.date(trip.startDay).formatted(.dateTime.year()))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.white.opacity(0.18), in: Capsule())
+                    if !trip.isMine || trip.isShared {
+                        Image(systemName: "person.2.fill")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                }
+                Spacer(minLength: 0)
+                Text(trip.name.isEmpty ? "Untitled trip" : trip.name)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if !routeText.isEmpty {
+                        Text(routeText).lineLimit(1)
+                        Text("·")
+                    }
+                    Text(trip.dateRangeText).lineLimit(1)
+                }
+                .font(.caption.weight(.regular))
+                .foregroundStyle(.white.opacity(0.85))
+            }
+            .padding(Space.l)
+        }
+        .aspectRatio(16.0 / 9.0, contentMode: .fill)
+        .clipShape(RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous)
+                .strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1)
+        )
+        .shadow(color: FieldNotesSpatial.shadow, radius: 8, y: 3)
         .contentShape(Rectangle())
     }
 }
@@ -614,7 +703,8 @@ struct TripDetailView: View {
         }
         }
         .readableContentWidth()
-        .pageBackground()
+        .scrollContentBackground(.hidden)
+        .background(FieldNotesSpatial.paper)
         .navigationTitle(embedded ? "" : (trip.name.isEmpty ? "Trip" : trip.name))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.fetchChanges() }
@@ -890,53 +980,136 @@ struct TripDetailView: View {
         let date = DayKey.date(block.day).formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         let base = "Day \(block.number)"
         let title = trip.dayTitles[block.day].map { "\(base) · \($0)" } ?? base
+        let milestone = dayMilestone(block: block, plans: plans, all: all)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            CardHeader(title: title, subtitle: date) {
-                HStack(spacing: 14) {
+        return VStack(alignment: .leading, spacing: 16) {
+            if block.number > 1 {
+                Rectangle()
+                    .fill(FieldNotesSpatial.hairline)
+                    .frame(height: 1)
+                    .padding(.bottom, 4)
+            }
+            // Chronological day header
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(FieldNotesSpatial.ink)
+                    Text(date)
+                        .font(.subheadline.weight(.regular))
+                        .foregroundStyle(FieldNotesSpatial.inkSecondary)
+                }
+                Spacer()
+                HStack(spacing: 12) {
                     if plans.contains(where: { $0.place != nil }) {
-                        Button("Map", systemImage: "map") { dayMap = block.day }.labelStyle(.iconOnly)
+                        Button("Map", systemImage: "map") { dayMap = block.day }
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(FieldNotesSpatial.forest)
                     }
                     Button("Add", systemImage: "plus") {
                         if let onAdd { onAdd(block.day) } else { editingItem = TripItem(tripID: trip.id, day: block.day) }
                     }
                     .labelStyle(.iconOnly)
+                    .foregroundStyle(FieldNotesSpatial.forest)
                 }
                 .font(.body.weight(.medium))
             }
-            if entries.isEmpty {
-                Text("Nothing planned yet").font(.footnote).foregroundStyle(Theme.textTertiary)
-            }
-            ForEach(entries) { entry in
-                switch entry {
-                case .plan(let item):
-                    if item.day == block.day {
-                        draggableRow(item, trip: trip, day: block.day, plans: plans)
-                    } else {
-                        // A stay from an earlier night: it lives on its check-in day.
-                        itemRow(item, trip: trip, day: block.day)
+
+            // Vertical timeline track beside soft #F4F0EA container holding nested white booking cards
+            HStack(alignment: .top, spacing: 16) {
+                VStack(spacing: 0) {
+                    Image(systemName: milestone.symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(milestone.tint, in: Circle())
+                    Rectangle()
+                        .fill(FieldNotesSpatial.hairline)
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, 6)
+                }
+                .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    if let milestoneTitle = milestone.label {
+                        Text(milestoneTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(FieldNotesSpatial.forest)
+                            .textCase(.uppercase)
+                            .tracking(0.6)
                     }
-                case .slot(let slot):
-                    Button { openSlot(slot, trip: trip) } label: { OpenSlotRow(slot: slot) }
-                        .buttonStyle(.plain)
-                case .ticket(let home):
-                    if home {
-                        travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day,
-                                   items: block.homeTravel, all: all)
-                    } else {
-                        travelCard(trip, from: block.travelFrom, to: block.travelTo, start: block.day,
-                                   end: block.travelEnd ?? block.day, items: block.travel, meeting: block.meeting, all: all)
+                    if entries.isEmpty {
+                        Text("Nothing planned yet")
+                            .font(.footnote)
+                            .foregroundStyle(FieldNotesSpatial.inkMuted)
+                            .padding(.vertical, 4)
+                    }
+                    ForEach(entries) { entry in
+                        switch entry {
+                        case .plan(let item):
+                            Group {
+                                if item.day == block.day {
+                                    draggableRow(item, trip: trip, day: block.day, plans: plans)
+                                } else {
+                                    // A stay from an earlier night: it lives on its check-in day.
+                                    itemRow(item, trip: trip, day: block.day)
+                                }
+                            }
+                            .padding(12)
+                            .background(FieldNotesSpatial.surface, in: RoundedRectangle(cornerRadius: FieldNotesSpatial.innerRadius, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: FieldNotesSpatial.innerRadius, style: .continuous)
+                                    .strokeBorder(selection?.wrappedValue.contains(item.id) == true ? FieldNotesSpatial.forest : FieldNotesSpatial.hairline,
+                                                  lineWidth: selection?.wrappedValue.contains(item.id) == true ? 1.5 : 1)
+                            )
+                            .shadow(color: FieldNotesSpatial.shadow, radius: 3, y: 1)
+                        case .slot(let slot):
+                            Button { openSlot(slot, trip: trip) } label: { OpenSlotRow(slot: slot) }
+                                .buttonStyle(.plain)
+                                .padding(12)
+                                .background(FieldNotesSpatial.surface.opacity(0.65), in: RoundedRectangle(cornerRadius: FieldNotesSpatial.innerRadius, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: FieldNotesSpatial.innerRadius, style: .continuous)
+                                        .strokeBorder(FieldNotesSpatial.hairline, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                                )
+                        case .ticket(let home):
+                            Group {
+                                if home {
+                                    travelCard(trip, from: block.leg, to: nil, start: block.day, end: block.day,
+                                               items: block.homeTravel, all: all)
+                                } else {
+                                    travelCard(trip, from: block.travelFrom, to: block.travelTo, start: block.day,
+                                               end: block.travelEnd ?? block.day, items: block.travel, meeting: block.meeting, all: all)
+                                }
+                            }
+                            .background(FieldNotesSpatial.surface, in: RoundedRectangle(cornerRadius: FieldNotesSpatial.innerRadius, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: FieldNotesSpatial.innerRadius, style: .continuous)
+                                    .strokeBorder(FieldNotesSpatial.hairline, lineWidth: 1)
+                            )
+                        }
                     }
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(FieldNotesSpatial.paperSoft, in: RoundedRectangle(cornerRadius: FieldNotesSpatial.cardRadius, style: .continuous))
             }
         }
-        .card()
-        // The day's leg color down the left edge.
-        .overlay(alignment: .leading) {
-            if leg != nil {
-                Capsule().fill(Theme.Group.travel.color.gradient).frame(width: 4).padding(.vertical, 22)
-            }
+        .padding(.vertical, 4)
+    }
+
+    private func dayMilestone(block: TripDayBlock, plans: [TripItem], all: [TripItem]) -> (symbol: String, label: String?, tint: Color) {
+        if block.showsTicket || !block.homeTravel.isEmpty || plans.contains(where: { $0.kind == .transit }) {
+            return ("airplane", "Travel", FieldNotesSpatial.forest)
         }
+        if plans.contains(where: { $0.kind == .stay && $0.day == block.day }) {
+            return ("bed.double.fill", "Check in", FieldNotesSpatial.forest)
+        }
+        if all.contains(where: { $0.kind == .stay && $0.stayEnd == block.day }) {
+            return ("door.left.hand.open", "Check out", FieldNotesSpatial.inkSecondary)
+        }
+        return ("calendar", nil, FieldNotesSpatial.forest.opacity(0.85))
     }
 
     /// A day's plan you can drag above or below another plan, in this day or
@@ -1050,29 +1223,27 @@ struct TripDetailView: View {
     private func itemRow(_ item: TripItem, trip: Trip, day: String? = nil) -> some View {
         // A meal on your Eats list opens its Eats page; an activity or stay
         // with a place, its place page; anything else, the editor.
-        Button {
-            if embedded {
-                select(item)
-            } else if eatsEntry(item) != nil {
-                eatsMeal = item
-            } else if item.place != nil && (item.kind == .activity || item.kind == .stay) {
-                placeItem = item
-            } else {
-                editingItem = item
-            }
-        } label: {
-            TripItemRow(item: item, score: eatsScore(item), day: day)
-                .background {
-                    if selection?.wrappedValue.contains(item.id) == true {
-                        RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
-                            .fill(Theme.brand.opacity(0.1))
-                            .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
-                                .strokeBorder(Theme.brand, lineWidth: 1.5))
-                            .padding(-Space.s)
-                    }
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                if embedded {
+                    select(item)
+                } else if eatsEntry(item) != nil {
+                    eatsMeal = item
+                } else if item.place != nil && (item.kind == .activity || item.kind == .stay) {
+                    placeItem = item
+                } else {
+                    editingItem = item
                 }
-        }
+            } label: {
+                TripItemRow(item: item, score: eatsScore(item), day: day)
+            }
             .buttonStyle(.plain)
+
+            if !item.isMealPlaceholder && (day == nil || item.day == day) {
+                InlineTripNoteControl(item: item)
+                    .padding(.leading, 44)
+            }
+        }
             .contextMenu {
                 if let url = item.place?.mapsURL {
                     Link(destination: url) { Label("Open in Apple Maps", systemImage: "map") }
@@ -1155,6 +1326,79 @@ struct OpenSlotRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityHint("Adds a plan here")
+    }
+}
+
+/// Inline "+ Add a note" control inside nested white booking cards.
+private struct InlineTripNoteControl: View {
+    let item: TripItem
+    @State private var isEditing = false
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        if isEditing {
+            HStack(spacing: 8) {
+                TextField("Add a note…", text: $draft)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(FieldNotesSpatial.ink)
+                    .focused($focused)
+                    .onSubmit(save)
+                Button("Save", action: save)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(FieldNotesSpatial.forest)
+                    .buttonStyle(.plain)
+                Button("Cancel") {
+                    isEditing = false
+                    draft = item.notes
+                }
+                .font(.caption)
+                .foregroundStyle(FieldNotesSpatial.inkMuted)
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(FieldNotesSpatial.paperSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onAppear {
+                draft = item.notes
+                focused = true
+            }
+        } else if item.notes.isEmpty {
+            Button {
+                draft = ""
+                isEditing = true
+            } label: {
+                Text("+ Add a note")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(FieldNotesSpatial.forest)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                draft = item.notes
+                isEditing = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "note.text")
+                        .font(.caption2)
+                        .foregroundStyle(FieldNotesSpatial.inkMuted)
+                    Text(item.notes)
+                        .font(.caption)
+                        .foregroundStyle(FieldNotesSpatial.inkSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func save() {
+        var updated = item
+        updated.notes = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        TripStore.shared.save(updated)
+        isEditing = false
     }
 }
 
