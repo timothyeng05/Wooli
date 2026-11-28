@@ -48,7 +48,7 @@ struct AccountsView: View {
                             .contentTransition(.numericText())
                         ChangeLabel(change: netWorth - (series.first?.value ?? netWorth), base: series.first?.value,
                                     period: range.periodLabel)
-                        NetWorthChart(points: series, tint: Color(hex: "#0891b2"))
+                        NetWorthChart(points: series, tint: FieldNotes.forest)
                             .frame(height: 200)
                             .padding(.vertical, 8)
                         RangePicker(selection: $range)
@@ -93,7 +93,8 @@ struct AccountsView: View {
                 }
                 .padding(16)
             }
-            .pageBackground()
+            .scrollContentBackground(.hidden)
+            .background(FieldNotes.paper)
             
             .navigationTitle("Accounts")
             .refreshable { await app.sync(context: context) }

@@ -56,7 +56,7 @@ struct TransactionEditor: View {
     let suggestions: [BudgetCategory]
     let allCategories: [BudgetCategory]
     @State private var showPicker = false
-    /// Set when the user overrides an AI suggestion: offer a one-tap rule.
+    /// Set when the user overrides or assigns a category: offer a non-blocking "Create a rule" toast.
     @State private var teachCategory: BudgetCategory?
     @State private var customizeRule = false
     @Environment(\.modelContext) private var context
@@ -84,7 +84,7 @@ struct TransactionEditor: View {
         let byId = Dictionary(allCategories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         RuleEngine.applyToExisting(rule, transactions: all, categories: byId)
         try? context.save()
-        withAnimation { teachCategory = nil }
+        withAnimation(.snappy) { teachCategory = nil }
     }
 
     var body: some View {
@@ -96,7 +96,7 @@ struct TransactionEditor: View {
                 SectionLabel("Original Statement")
                 Text(transaction.transactionDescription)
                     .font(.callout)
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(FieldNotes.inkSecondary)
                     .textSelection(.enabled)
             }
 
@@ -112,18 +112,11 @@ struct TransactionEditor: View {
                 }
                 if transaction.aiSuggested && transaction.needsReview {
                     Label("Suggested by Apple Intelligence. Check it's right.", systemImage: "sparkles")
-                        .font(.footnote).foregroundStyle(Theme.brand)
-                }
-                if let teachCategory {
-                    TeachWooliCard(merchant: RuleEngine.statementPrefix(transaction.transactionDescription), category: teachCategory,
-                                   onCreate: createRule, onCustomize: { customizeRule = true }) {
-                        withAnimation { self.teachCategory = nil }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                        .font(.footnote).foregroundStyle(FieldNotes.forest)
                 }
                 if transaction.isTransfer {
                     Label("Transfers aren't counted as income or spending.", systemImage: "arrow.left.arrow.right")
-                        .font(.footnote).foregroundStyle(Theme.textSecondary)
+                        .font(.footnote).foregroundStyle(FieldNotes.inkSecondary)
                 }
             }
 
@@ -134,19 +127,19 @@ struct TransactionEditor: View {
                 TextField("Add notes…", text: $transaction.note, axis: .vertical)
                     .lineLimit(1...5)
                     .padding(14)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+                    .background(FieldNotes.paper, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(FieldNotes.border))
             }
 
             Toggle(isOn: $transaction.isHidden) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Hide transaction").foregroundStyle(Theme.text)
+                    Text("Hide transaction").foregroundStyle(FieldNotes.ink)
                     Text("Keep it in the list but leave it out of budgets and totals")
-                        .font(.footnote).foregroundStyle(Theme.textTertiary)
+                        .font(.footnote).foregroundStyle(FieldNotes.inkTertiary)
                 }
             }
             .padding(14)
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(FieldNotes.border))
 
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Actions")
@@ -157,8 +150,27 @@ struct TransactionEditor: View {
                         .font(.subheadline.weight(.medium))
                 }
                 MarkRecurringButton(transaction: transaction)
-                SplitButton(transaction: transaction)
+                SplitModeButton(transaction: transaction)
             }
+        }
+        .overlay(alignment: .bottom) {
+            if let teachCategory {
+                CreateRuleToast(
+                    merchant: RuleEngine.statementPrefix(transaction.transactionDescription),
+                    category: teachCategory,
+                    onCreate: createRule,
+                    onCustomize: { customizeRule = true },
+                    onDismiss: { withAnimation(.snappy) { self.teachCategory = nil } }
+                )
+                .padding(.top, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .task(id: teachCategory?.id) {
+            guard teachCategory != nil else { return }
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.snappy) { teachCategory = nil }
         }
         .sheet(isPresented: $customizeRule, onDismiss: { teachCategory = nil }) {
             RuleEditor(rule: nil, prefill: prefill, source: transaction)
@@ -258,6 +270,8 @@ enum CategorySuggestions {
 
 struct TransactionDetailView: View {
     @Bindable var transaction: LocalTransaction
+    var onStepPrevious: (() -> Void)? = nil
+    var onStepNext: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -278,19 +292,42 @@ struct TransactionDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 TransactionHeader(transaction: transaction, category: category, account: account,
                                   sameMerchantCount: sameMerchant.count) { showSameMerchant = true }
-                Divider()
+                Divider().overlay(FieldNotes.border)
                 TransactionEditor(transaction: transaction,
                                   suggestions: CategorySuggestions.suggest(for: transaction, rules: rules,
                                                                            categories: categories, history: transactions),
                                   allCategories: categories)
             }
-            .card()
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(FieldNotes.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(FieldNotes.border))
             .padding(16)
         }
-        .pageBackground()
+        .scrollContentBackground(.hidden)
+        .background(FieldNotes.paperAlt)
         .navigationTitle("Transaction")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if onStepPrevious != nil || onStepNext != nil {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        onStepPrevious?()
+                    } label: {
+                        Image(systemName: "chevron.up")
+                    }
+                    .disabled(onStepPrevious == nil)
+                    .help("Previous transaction (↑)")
+
+                    Button {
+                        onStepNext?()
+                    } label: {
+                        Image(systemName: "chevron.down")
+                    }
+                    .disabled(onStepNext == nil)
+                    .help("Next transaction (↓)")
+                }
+            }
             // Only typed-in transactions can be deleted; bank ones would come back on the next sync.
             if transaction.isManual {
                 ToolbarItem(placement: .destructiveAction) {
@@ -486,5 +523,310 @@ struct CategoryPickerView: View {
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
         .navigationTitle("Category")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Non-blocking floating toast offering a 1-click rule creation after picking a category.
+private struct CreateRuleToast: View {
+    let merchant: String
+    let category: BudgetCategory
+    let onCreate: () -> Void
+    let onCustomize: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wand.and.stars")
+                .foregroundStyle(FieldNotes.paper)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Create a rule?")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(FieldNotes.paper)
+                Text("Always \(category.icon) \(category.name) for \(merchant)")
+                    .font(.caption2)
+                    .foregroundStyle(FieldNotes.paper.opacity(0.82))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            Button("Create", action: onCreate)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(FieldNotes.forest, in: Capsule())
+                .foregroundStyle(.white)
+                .buttonStyle(.plain)
+            Button("Edit", action: onCustomize)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(FieldNotes.paper.opacity(0.9))
+                .buttonStyle(.plain)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(FieldNotes.paper.opacity(0.75))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(FieldNotes.ink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
+    }
+}
+
+/// Split button + editor supporting By Amount ($) and By Percent (%) validation.
+private struct SplitModeButton: View {
+    let transaction: LocalTransaction
+    @Environment(\.modelContext) private var context
+    @State private var editing: LocalTransaction?
+
+    var body: some View {
+        let original = transaction.splitParentId.isEmpty ? transaction : SplitService.original(of: transaction, context: context)
+        Group {
+            if let original {
+                Button {
+                    editing = original
+                } label: {
+                    Label(transaction.splitParentId.isEmpty ? "Split transaction" : "Edit split (\(original.amount.signedCurrency()) total)",
+                          systemImage: "arrow.triangle.branch")
+                        .font(.subheadline.weight(.medium))
+                }
+                .disabled(transaction.isPending)
+            }
+        }
+        .sheet(item: $editing) { SplitModeEditor(original: $0) }
+    }
+}
+
+private struct SplitModeEditor: View {
+    enum Mode: String, CaseIterable, Identifiable {
+        case amount = "By Amount ($)"
+        case percent = "By Percent (%)"
+        var id: String { rawValue }
+    }
+
+    let original: LocalTransaction
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @State private var mode: Mode = .amount
+    @State private var parts: [SplitService.Part] = []
+    @State private var percents: [UUID: Double] = [:]
+    @State private var pickingFor: UUID?
+    @State private var loaded = false
+    @State private var confirmUnsplit = false
+
+    private var total: Double { abs(original.amount) }
+    private var assignedAmount: Double { parts.reduce(0) { $0 + abs($1.amount) } }
+    private var remainingAmount: Double { ((total - assignedAmount) * 100).rounded() / 100 }
+    private var assignedPercent: Double { parts.reduce(0) { $0 + (percents[$1.id] ?? 0) } }
+    private var remainingPercent: Double { ((100.0 - assignedPercent) * 10).rounded() / 10 }
+
+    private var isValid: Bool {
+        guard parts.count >= 2 && parts.allSatisfy({ $0.amount > 0 }) else { return false }
+        switch mode {
+        case .amount: return abs(remainingAmount) < 0.005
+        case .percent: return abs(remainingPercent) < 0.1
+        }
+    }
+
+    var body: some View {
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(original.title).font(.headline).foregroundStyle(FieldNotes.ink)
+                            Text(original.transactedAt.formatted(date: .abbreviated, time: .omitted))
+                                .font(.footnote).foregroundStyle(FieldNotes.inkTertiary)
+                        }
+                        Spacer()
+                        Text(original.amount.signedCurrency()).font(.title3.weight(.bold)).monospacedDigit()
+                    }
+                    Picker("Split Mode", selection: $mode) {
+                        ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section {
+                    ForEach($parts) { $part in
+                        HStack(spacing: 12) {
+                            Button {
+                                pickingFor = part.id
+                            } label: {
+                                HStack(spacing: 10) {
+                                    CategoryTile(category: part.categoryId.flatMap { byId[$0] }, size: 32)
+                                    Text(part.categoryId.flatMap { byId[$0]?.name } ?? "Choose category")
+                                        .foregroundStyle(part.categoryId == nil ? Theme.pending : FieldNotes.ink)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            Spacer(minLength: 8)
+                            if mode == .amount {
+                                TextField("$0.00", value: amountBinding(for: part.id), format: .currency(code: "USD"))
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(.body.monospacedDigit())
+                                    .frame(width: 110)
+                            } else {
+                                HStack(spacing: 6) {
+                                    TextField("0%", value: percentBinding(for: part.id), format: .number.precision(.fractionLength(0...1)))
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .font(.body.monospacedDigit())
+                                        .frame(width: 64)
+                                    Text("%").foregroundStyle(FieldNotes.inkSecondary)
+                                    Text(part.amount.currency())
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(FieldNotes.inkTertiary)
+                                        .frame(width: 72, alignment: .trailing)
+                                }
+                            }
+                        }
+                    }
+                    .onDelete { offsets in
+                        for idx in offsets { percents.removeValue(forKey: parts[idx].id) }
+                        parts.remove(atOffsets: offsets)
+                    }
+
+                    Button("Add a part", systemImage: "plus") {
+                        let newPart = SplitService.Part(categoryId: nil, amount: max(remainingAmount, 0))
+                        parts.append(newPart)
+                        percents[newPart.id] = max(remainingPercent, 0)
+                    }
+                } header: {
+                    Text("Parts")
+                } footer: {
+                    HStack {
+                        if mode == .amount {
+                            if abs(remainingAmount) < 0.005 {
+                                Label("Adds up to \(total.currency())", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(Theme.income)
+                            } else if remainingAmount > 0 {
+                                Text("\(remainingAmount.currency()) left to assign").foregroundStyle(Theme.pending)
+                            } else {
+                                Text("\(abs(remainingAmount).currency()) over total").foregroundStyle(Theme.expense)
+                            }
+                        } else {
+                            if abs(remainingPercent) < 0.1 {
+                                Label("100% assigned (\(total.currency()))", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(Theme.income)
+                            } else if remainingPercent > 0 {
+                                Text("\(remainingPercent.formatted(.number.precision(.fractionLength(0...1))))% left to assign")
+                                    .foregroundStyle(Theme.pending)
+                            } else {
+                                Text("\(abs(remainingPercent).formatted(.number.precision(.fractionLength(0...1))))% over 100%")
+                                    .foregroundStyle(Theme.expense)
+                            }
+                        }
+                        Spacer()
+                        if parts.count >= 2 {
+                            Button("Split evenly") { splitEvenly() }.font(.footnote.weight(.semibold))
+                        }
+                    }
+                }
+
+                if original.isSplit {
+                    Section {
+                        Button("Undo split", role: .destructive) { confirmUnsplit = true }
+                    } footer: {
+                        Text("Brings back the original transaction as one line.")
+                    }
+                }
+            }
+            .navigationTitle(original.isSplit ? "Edit split" : "Split transaction")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        SplitService.split(original, into: parts, categories: categories, context: context)
+                        dismiss()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+            .sheet(isPresented: Binding(get: { pickingFor != nil }, set: { if !$0 { pickingFor = nil } })) {
+                NavigationStack {
+                    CategoryPickerView(selectedId: parts.first { $0.id == pickingFor }?.categoryId) { picked in
+                        if let i = parts.firstIndex(where: { $0.id == pickingFor }) { parts[i].categoryId = picked?.id }
+                        pickingFor = nil
+                    }
+                }
+            }
+            .confirmationDialog("Undo this split?", isPresented: $confirmUnsplit, titleVisibility: .visible) {
+                Button("Undo split", role: .destructive) {
+                    SplitService.unsplit(original, context: context)
+                    dismiss()
+                }
+            }
+        }
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        guard !loaded else { return }
+        loaded = true
+        let existing = SplitService.parts(of: original, context: context)
+        if existing.isEmpty {
+            let half = (total / 2 * 100).rounded() / 100
+            parts = [.init(categoryId: original.categoryId, amount: total - half), .init(categoryId: nil, amount: half)]
+        } else {
+            parts = existing.map { .init(categoryId: $0.categoryId, amount: abs($0.amount)) }
+        }
+        syncPercentsFromAmounts()
+    }
+
+    private func syncPercentsFromAmounts() {
+        guard total > 0 else { return }
+        for part in parts {
+            percents[part.id] = ((part.amount / total * 100) * 10).rounded() / 10
+        }
+    }
+
+    private func amountBinding(for id: UUID) -> Binding<Double> {
+        Binding(
+            get: { parts.first { $0.id == id }?.amount ?? 0 },
+            set: { newValue in
+                guard let i = parts.firstIndex(where: { $0.id == id }) else { return }
+                parts[i].amount = newValue
+                if let j = parts.indices.last(where: { $0 != i }) {
+                    let others = parts.indices.filter { $0 != j }.reduce(0) { $0 + parts[$1].amount }
+                    parts[j].amount = max(((total - others) * 100).rounded() / 100, 0)
+                }
+                syncPercentsFromAmounts()
+            }
+        )
+    }
+
+    private func percentBinding(for id: UUID) -> Binding<Double> {
+        Binding(
+            get: { percents[id] ?? 0 },
+            set: { newPct in
+                let clamped = max(0, min(100, newPct))
+                percents[id] = clamped
+                guard let i = parts.firstIndex(where: { $0.id == id }) else { return }
+                parts[i].amount = ((total * clamped / 100.0) * 100).rounded() / 100
+                if let j = parts.indices.last(where: { $0 != i }) {
+                    let otherPct = parts.indices.filter { $0 != j }.reduce(0.0) { $0 + (percents[parts[$1].id] ?? 0) }
+                    let remPct = max(((100.0 - otherPct) * 10).rounded() / 10, 0)
+                    percents[parts[j].id] = remPct
+                    let others = parts.indices.filter { $0 != j }.reduce(0) { $0 + parts[$1].amount }
+                    parts[j].amount = max(((total - others) * 100).rounded() / 100, 0)
+                }
+            }
+        )
+    }
+
+    private func splitEvenly() {
+        let cents = Int((total * 100).rounded())
+        let each = cents / parts.count
+        for i in parts.indices {
+            parts[i].amount = Double(each + (i == 0 ? cents - each * parts.count : 0)) / 100
+        }
+        syncPercentsFromAmounts()
     }
 }

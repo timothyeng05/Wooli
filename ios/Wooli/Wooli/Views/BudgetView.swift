@@ -74,7 +74,8 @@ struct BudgetView: View {
             }
             .padding(16)
         }
-        .pageBackground()
+        .scrollContentBackground(.hidden)
+        .background(FieldNotes.paper)
         .scrollDismissesKeyboard(.interactively)
         
             .navigationTitle(month.start.formatted(.dateTime.month(.wide).year()))
@@ -313,29 +314,51 @@ private struct CategoryBudgetRow: View {
         // The bar below already shows progress against the plan, so the
         // amount caption would just repeat it — only show one or the other.
         let showsBar = showsField && planned > 0
-        ItemRow(title: category.name, subtitle: subtitle(carried: carried, actual: actual, showsBar: showsBar), leading: {
-            NavigationLink {
-                CategoryBudgetView(group: category, month: month)
-            } label: {
-                CategoryTile(category: category, size: 40, groupTint: tint)
-            }
-            .buttonStyle(.plain)
-        }, trailing: {
-            if showsField {
-                HStack(spacing: Space.s) {
-                    PlannedField(value: $category.monthlyTarget, id: category.id, editing: editing)
-                    RemainingPill(planned: planned + carried, actual: actual, isIncome: isIncome)
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.m) {
+                NavigationLink {
+                    CategoryBudgetView(group: category, month: month)
+                } label: {
+                    HStack(spacing: Space.m) {
+                        CategoryTile(category: category, size: 40, groupTint: tint)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(category.name)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(Theme.text)
+                                .lineLimit(1)
+                            if let sub = subtitle(carried: carried, actual: actual, showsBar: showsBar) {
+                                sub.font(.footnote)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
-            } else {
-                Text(abs(actual).currency(cents: false)).font(.subheadline).monospacedDigit()
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 80, alignment: .trailing)
+                .buttonStyle(.plain)
+
+                if showsField {
+                    HStack(spacing: Space.s) {
+                        PlannedField(value: $category.monthlyTarget, id: category.id, editing: editing)
+                        RemainingPill(planned: planned + carried, actual: actual, isIncome: isIncome)
+                    }
+                } else {
+                    Text(abs(actual).currency(cents: false)).font(.subheadline).monospacedDigit()
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 80, alignment: .trailing)
+                }
             }
-        }, below: {
             if showsBar {
-                BarGauge(value: max(actual, 0), total: planned, tint: barTint(planned: planned, actual: actual))
+                PaceCapsuleBar(
+                    value: max(actual, 0),
+                    total: planned,
+                    tint: barTint(planned: planned, actual: actual),
+                    paceFraction: isIncome || !plan.isCurrentMonth ? nil : monthPaceFraction(for: month)
+                )
+                .padding(.leading, 52)
             }
-        })
+        }
+        .padding(.vertical, Space.m)
     }
 
     private func subtitle(carried: Double, actual: Double, showsBar: Bool) -> Text? {
@@ -527,8 +550,12 @@ struct CategoryBudgetView: View {
                     Text(actual.currency())
                         .font(.system(size: 32, weight: .bold)).monospacedDigit().foregroundStyle(Theme.text)
                     if group.monthlyTarget > 0 {
-                        BarGauge(value: actual, total: group.monthlyTarget,
-                                 tint: group.isIncome ? Theme.income : (actual > group.monthlyTarget ? Theme.expense : Color(hex: group.colorHex)))
+                        PaceCapsuleBar(
+                            value: actual,
+                            total: group.monthlyTarget,
+                            tint: group.isIncome ? Theme.income : (actual > group.monthlyTarget ? Theme.expense : Color(hex: group.colorHex)),
+                            paceFraction: group.isIncome || !month.contains(.now) ? nil : monthPaceFraction(for: month)
+                        )
                     }
                     Divider().padding(.vertical, 4)
                     LabeledContent("Planned each month") {
@@ -567,9 +594,17 @@ struct CategoryBudgetView: View {
                             .foregroundStyle(entry.start == month.start ? Color(hex: group.colorHex) : Color(hex: group.colorHex).opacity(0.3))
                             .cornerRadius(4)
                         if group.monthlyTarget > 0 {
-                            RuleMark(y: .value("Planned", group.monthlyTarget))
-                                .foregroundStyle(Theme.textTertiary)
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                            RuleMark(y: .value("Budget Threshold", group.monthlyTarget))
+                                .foregroundStyle(FieldNotes.forest)
+                                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                                .annotation(position: .top, alignment: .trailing) {
+                                    Text("Budget \(group.monthlyTarget.currency(cents: false))")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(FieldNotes.forest)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(FieldNotes.forestSoft, in: Capsule())
+                                }
                         }
                     }
                     .chartXSelection(value: $pickedDate)
@@ -653,9 +688,47 @@ struct CategoryBudgetView: View {
             }
             .padding(16)
         }
-        .pageBackground()
+        .scrollContentBackground(.hidden)
+        .background(FieldNotes.paper)
         
             .navigationTitle("\(group.icon) \(group.name)")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private func monthPaceFraction(for month: DateInterval) -> Double {
+    let cal = Calendar.current
+    let totalDays = max(cal.range(of: .day, in: .month, for: month.start)?.count ?? 30, 1)
+    let day = cal.component(.day, from: .now)
+    return min(max(Double(day) / Double(totalDays), 0), 1)
+}
+
+/// Thin 6pt capsule progress bar with an optional vertical pace tick mark.
+private struct PaceCapsuleBar: View {
+    let value: Double
+    let total: Double
+    let tint: Color
+    var paceFraction: Double? = nil
+
+    var body: some View {
+        GeometryReader { geo in
+            let fraction = total > 0 ? min(max(value / total, 0), 1) : 0
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(FieldNotes.pillBg)
+                    .frame(height: 6)
+                Capsule()
+                    .fill(tint)
+                    .frame(width: max(0, geo.size.width * fraction), height: 6)
+                if let paceFraction {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(FieldNotes.ink.opacity(0.65))
+                        .frame(width: 2, height: 12)
+                        .offset(x: max(0, min(geo.size.width - 2, geo.size.width * paceFraction - 1)))
+                }
+            }
+            .frame(height: 12)
+        }
+        .frame(height: 12)
     }
 }

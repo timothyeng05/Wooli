@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.modelContext) private var context
     @Query private var accounts: [LocalAccount]
+    @Query private var snapshots: [BalanceSnapshot]
     @Query(sort: \LocalTransaction.transactedAt, order: .reverse) private var transactions: [LocalTransaction]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     @Query(sort: \Person.name) private var people: [Person]
@@ -17,9 +18,7 @@ struct DashboardView: View {
     @State private var showSettings = false
     @State private var showCustomize = false
 
-    /// Visible cards in the user's chosen order. Any card not yet represented
-    /// in `layoutRows` (a fresh install, or a card added in a later update)
-    /// is appended at the end rather than silently disappearing.
+    /// Visible cards in the user's chosen order.
     private var orderedCards: [DashboardCard] {
         let visible = layoutRows.filter { !$0.isHidden }.compactMap { DashboardCard(rawValue: $0.cardId) }
         let known = Set(layoutRows.map(\.cardId))
@@ -36,10 +35,8 @@ struct DashboardView: View {
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let thisMonth = DateInterval.month(containing: .now)
-        let visibleAccounts = Set(accounts.filter { $0.counts(forPerson: selectedPersonId) }.map(\.providerAccountId))
-        // Every card here looks at most seven months back (the pace line averages
-        // up to six full months), so slice once instead of each card walking five
-        // years of history. `transactions` is sorted newest first.
+        let visibleAccountsList = accounts.filter { !$0.isHidden && $0.counts(forPerson: selectedPersonId) }
+        let visibleAccounts = Set(visibleAccountsList.map(\.providerAccountId))
         let cutoff = Calendar.current.date(byAdding: .month, value: -(SpendingPace.averageMonths.upperBound + 1),
                                            to: thisMonth.start) ?? thisMonth.start
         let relevantTransactions = transactions.prefix { $0.transactedAt >= cutoff }
@@ -50,58 +47,85 @@ struct DashboardView: View {
         let plannedIncome = plan.plannedIncome
         let plannedExpenses = plan.plannedExpenses
         let reviewItems = ledger.reviewQueue(relevantTransactions)
+        let visibleRecurring = recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) }
 
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    if !people.isEmpty {
-                        Picker("Person", selection: $selectedPersonId) {
-                            Text("Everyone").tag(String?.none)
-                            ForEach(people) { person in
-                                Text("\(person.name)").tag(String?.some(person.id))
-                            }
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("WHAT CHANGED?")
+                                .font(.caption.weight(.bold))
+                                .tracking(1.1)
+                                .foregroundStyle(FieldNotes.inkTertiary)
+                            Text(greeting)
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(FieldNotes.ink)
                         }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, 4)
+                        Spacer()
+                        if !people.isEmpty {
+                            Picker("Person", selection: $selectedPersonId) {
+                                Text("Everyone").tag(String?.none)
+                                ForEach(people) { person in
+                                    Text("\(person.name)").tag(String?.some(person.id))
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 260)
+                        }
                     }
 
                     if StatusBanner.isVisible(app) { StatusBanner().card(padding: 14) }
-
                     SyncStatusLine()
 
-                    let spending = SpendingCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth, target: plannedExpenses,
-                                                recurring: recurringItems.filter { selectedPersonId == nil || visibleAccounts.contains($0.accountId) })
+                    let spending = SpendingCard(transactions: relevantTransactions, ledger: ledger, month: thisMonth,
+                                                target: plannedExpenses, recurring: visibleRecurring)
                     let cards = orderedCards.filter { $0 != .review }
 
                     #if os(macOS)
-                    // Wide window: Budget and Transactions down the left, Spending and Recurring beside them.
-                    WideColumns(sideWidth: 440) {
-                        if !reviewItems.isEmpty { ReviewPreviewCard(items: reviewItems, ledger: ledger) }
-                        ForEach(cards.filter { $0 != .recurring }) { card in
-                            cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
-                                    plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
-                                    reviewItems: reviewItems, relevantTransactions: relevantTransactions)
+                    // 2-column Bento "What changed?" layout
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(spacing: 16) {
+                            spending
+                            TopCategoriesBentoCard(summary: month, ledger: ledger)
+                            ForEach(cards.filter { $0 == .budget || $0 == .transactions }) { card in
+                                cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
+                                         plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
+                                         reviewItems: reviewItems, relevantTransactions: relevantTransactions)
+                            }
                         }
-                    } side: {
-                        spending
-                        if cards.contains(.recurring) { RecurringCard() }
+                        .frame(maxWidth: .infinity)
+
+                        VStack(spacing: 16) {
+                            NetWorthBentoCard(accounts: visibleAccountsList, snapshots: snapshots)
+                            if !reviewItems.isEmpty {
+                                ReviewPreviewCard(items: reviewItems, ledger: ledger)
+                            }
+                            if cards.contains(.recurring) {
+                                NextTwoWeeksCard(items: visibleRecurring, categories: ledger.categoriesById)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                     #else
                     if !reviewItems.isEmpty {
                         ReviewPreviewCard(items: reviewItems, ledger: ledger)
                     }
                     spending
-                    ForEach(cards) { card in
+                    NetWorthBentoCard(accounts: visibleAccountsList, snapshots: snapshots)
+                    TopCategoriesBentoCard(summary: month, ledger: ledger)
+                    NextTwoWeeksCard(items: visibleRecurring, categories: ledger.categoriesById)
+                    ForEach(cards.filter { $0 != .recurring }) { card in
                         cardView(for: card, ledger: ledger, thisMonth: thisMonth, month: month,
-                                plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
-                                reviewItems: reviewItems, relevantTransactions: relevantTransactions)
+                                 plan: plan, plannedIncome: plannedIncome, plannedExpenses: plannedExpenses,
+                                 reviewItems: reviewItems, relevantTransactions: relevantTransactions)
                     }
                     #endif
                 }
-                .padding(16)
+                .padding(20)
             }
-            .pageBackground()
-
+            .scrollContentBackground(.hidden)
+            .background(FieldNotes.paper)
             .navigationTitle(greeting)
             .refreshable { await app.sync(context: context) }
             .toolbar {
@@ -493,29 +517,246 @@ struct SpendingCard: View {
     }
 }
 
-/// A few transactions waiting on a category, with a way into the review queue.
-/// No bulk "mark all as reviewed": each one gets confirmed on its own.
+/// A few transactions waiting on a category, with a way into the review queue
+/// and a quick "Mark all reviewed" for categorized items.
 struct ReviewPreviewCard: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.modelContext) private var context
+    @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
     let items: [LocalTransaction]
     let ledger: Ledger
 
     var body: some View {
+        let readyToConfirm = items.filter { $0.categoryId != nil }
         VStack(spacing: Space.s) {
-            SectionBand(title: "Needs review", summary: "Transactions waiting for a category",
+            SectionBand(title: "Transactions to review", summary: "\(items.count) waiting",
                         badge: .number(items.count))
             VStack(spacing: 0) {
                 ForEach(Array(items.prefix(4).enumerated()), id: \.element.id) { index, tx in
                     if index > 0 { ItemRowDivider() }
                     TransactionRow(transaction: tx, category: ledger.category(for: tx), quickEdit: false)
                 }
-                Button("Review all") { app.showReview = true }
-                    .buttonStyle(.wooliPrimary)
-                    .padding(.top, Space.s)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 10) {
+                    Button("Review all") { app.showReview = true }
+                        .buttonStyle(.wooliPrimary)
+                    if !readyToConfirm.isEmpty {
+                        Button("Mark all reviewed (\(readyToConfirm.count))") {
+                            withAnimation(.snappy) {
+                                for tx in readyToConfirm {
+                                    _ = Categorizer.confirm(tx, categories: categories, context: context)
+                                }
+                            }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(FieldNotes.forestSoft, in: Capsule())
+                        .foregroundStyle(FieldNotes.forest)
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
+                }
+                .padding(.top, Space.s)
             }
-            .card()
+            .padding(16)
+            .background(FieldNotes.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(FieldNotes.border))
         }
+    }
+}
+
+/// Net Worth card with 1W - ALL pills.
+private struct NetWorthBentoCard: View {
+    enum RangeOption: String, CaseIterable, Identifiable {
+        case week1 = "1W", month1 = "1M", month3 = "3M", month6 = "6M", ytd = "YTD", year1 = "1Y", all = "ALL"
+        var id: String { rawValue }
+
+        var periodLabel: String {
+            switch self {
+            case .week1: "1 week"
+            case .month1: "1 month"
+            case .month3: "3 months"
+            case .month6: "6 months"
+            case .ytd: "this year"
+            case .year1: "1 year"
+            case .all: "all time"
+            }
+        }
+
+        func startDate(earliest: Date?) -> Date {
+            let cal = Calendar.current
+            let today = cal.startOfDay(for: .now)
+            switch self {
+            case .week1: return cal.date(byAdding: .day, value: -7, to: today)!
+            case .month1: return cal.date(byAdding: .month, value: -1, to: today)!
+            case .month3: return cal.date(byAdding: .month, value: -3, to: today)!
+            case .month6: return cal.date(byAdding: .month, value: -6, to: today)!
+            case .ytd: return cal.dateInterval(of: .year, for: today)!.start
+            case .year1: return cal.date(byAdding: .year, value: -1, to: today)!
+            case .all: return earliest.map { cal.startOfDay(for: $0) } ?? cal.date(byAdding: .month, value: -1, to: today)!
+            }
+        }
+    }
+
+    let accounts: [LocalAccount]
+    let snapshots: [BalanceSnapshot]
+    @State private var range: RangeOption = .month1
+
+    var body: some View {
+        let netWorth = accounts.reduce(0) { $0 + $1.netWorthValue }
+        let history = BalanceHistory(snapshots: snapshots)
+        let series = history.series(for: accounts, from: range.startDate(earliest: history.earliest)) { a, b in
+            a.kind.isAsset ? b : -abs(b)
+        }
+        let change = netWorth - (series.first?.value ?? netWorth)
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Net Worth")
+                    .font(.headline)
+                    .foregroundStyle(FieldNotes.ink)
+                Spacer()
+                Text(range.periodLabel)
+                    .font(.caption)
+                    .foregroundStyle(FieldNotes.inkTertiary)
+            }
+
+            Text(netWorth.currency(cents: false))
+                .font(.system(size: 28, weight: .bold).monospacedDigit())
+                .foregroundStyle(FieldNotes.ink)
+                .contentTransition(.numericText())
+
+            ChangeLabel(change: change, base: series.first?.value, period: range.periodLabel)
+
+            NetWorthChart(points: series, tint: FieldNotes.forest)
+                .frame(height: 130)
+                .padding(.vertical, 4)
+
+            HStack(spacing: 4) {
+                ForEach(RangeOption.allCases) { option in
+                    Button {
+                        withAnimation(.snappy) { range = option }
+                    } label: {
+                        Text(option.rawValue)
+                            .font(.caption2.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(range == option ? FieldNotes.ink : FieldNotes.pillBg, in: Capsule())
+                            .foregroundStyle(range == option ? FieldNotes.paper : FieldNotes.inkSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(20)
+        .background(FieldNotes.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(FieldNotes.border))
+    }
+}
+
+/// Top Categories card with thin capsule bars.
+private struct TopCategoriesBentoCard: View {
+    let summary: MonthSummary
+    let ledger: Ledger
+
+    var body: some View {
+        let ranked = summary.spendingByCategory
+            .filter { $0.value > 0 }
+            .sorted { $0.value > $1.value }
+            .prefix(5)
+            .compactMap { id, amount -> (BudgetCategory, Double)? in
+                guard let cat = ledger.categoriesById[id] else { return nil }
+                return (cat, amount)
+            }
+        let maxVal = max(ranked.first?.1 ?? 1, 1)
+
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: "Top Categories", subtitle: "This month")
+            if ranked.isEmpty {
+                Text("No categorized spending yet this month.")
+                    .font(.subheadline)
+                    .foregroundStyle(FieldNotes.inkTertiary)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(ranked, id: \.0.id) { cat, amount in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text("\(cat.icon) \(cat.name)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(FieldNotes.ink)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(amount.currency(cents: false))
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(FieldNotes.ink)
+                        }
+                        BarGauge(value: amount, total: maxVal, tint: Color(hex: cat.colorHex), height: 5)
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .background(FieldNotes.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(FieldNotes.border))
+    }
+}
+
+/// Next Two Weeks recurring bills & income card.
+private struct NextTwoWeeksCard: View {
+    let items: [RecurringItem]
+    let categories: [String: BudgetCategory]
+
+    var body: some View {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let twoWeeksOut = cal.date(byAdding: .day, value: 14, to: today)!
+        let upcoming = items
+            .filter { $0.isActive && $0.nextDate >= today && $0.nextDate <= twoWeeksOut }
+            .sorted { $0.nextDate < $1.nextDate }
+        let totalDue = upcoming.filter { $0.amount < 0 }.reduce(0) { $0 + abs($1.amount) }
+
+        NavigationLink {
+            RecurringView()
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                CardHeader(title: "Next Two Weeks",
+                           subtitle: totalDue > 0 ? "\(totalDue.currency(cents: false)) in upcoming bills" : "Recurring schedule") {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(FieldNotes.inkTertiary)
+                }
+                if upcoming.isEmpty {
+                    Text("No bills or paychecks due in the next 14 days.")
+                        .font(.footnote)
+                        .foregroundStyle(FieldNotes.inkTertiary)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(upcoming.prefix(5)) { item in
+                            HStack(spacing: 10) {
+                                CategoryTile(category: item.categoryId.flatMap { categories[$0] }, size: 30)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.title)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(FieldNotes.ink)
+                                        .lineLimit(1)
+                                    Text(item.nextDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                                        .font(.caption)
+                                        .foregroundStyle(FieldNotes.inkTertiary)
+                                }
+                                Spacer()
+                                Text(item.amount.signedCurrency())
+                                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(item.amount > 0 ? Theme.income : FieldNotes.ink)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            .background(FieldNotes.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(FieldNotes.border))
+        }
+        .buttonStyle(.plain)
     }
 }
 

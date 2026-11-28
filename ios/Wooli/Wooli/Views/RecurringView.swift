@@ -7,6 +7,7 @@ struct RecurringView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \RecurringItem.nextDate) private var allItems: [RecurringItem]
     @Query(sort: \BudgetCategory.sortOrder) private var categories: [BudgetCategory]
+    @Query(sort: \TransactionRule.createdAt, order: .reverse) private var rules: [TransactionRule]
     @Query private var accounts: [LocalAccount]
     @State private var editing: RecurringItem?
     @State private var showStopped = false
@@ -18,10 +19,12 @@ struct RecurringView: View {
 
     var body: some View {
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let accountNames = Dictionary(accounts.map { ($0.providerAccountId, $0.displayName) }, uniquingKeysWith: { a, _ in a })
         let month = RecurringMonth(items: items)
         let stopped = items.filter { !$0.isActive }
         let monthlyTotal = items.filter { $0.isActive && $0.amount < 0 }
             .reduce(0) { $0 + abs($1.amount) * (30.4 / $1.cadence.days) }
+        let activeRules = rules.filter(\.isEnabled)
 
         List {
             Section {
@@ -99,12 +102,20 @@ struct RecurringView: View {
                         ForEach(stopped) { item in
                             Button { editing = item } label: {
                                 HStack {
-                                    Text(item.title).foregroundStyle(Theme.textSecondary)
+                                    Text(item.title).foregroundStyle(FieldNotes.inkSecondary)
                                     Spacer()
-                                    Text(abs(item.amount).currency()).monospacedDigit().foregroundStyle(Theme.textTertiary)
+                                    Text(abs(item.amount).currency()).monospacedDigit().foregroundStyle(FieldNotes.inkTertiary)
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            if !activeRules.isEmpty {
+                Section("Rules") {
+                    ForEach(activeRules.prefix(6)) { rule in
+                        NaturalLanguageRuleRow(rule: rule, categories: byId, accounts: accountNames)
                     }
                 }
             }
@@ -116,9 +127,10 @@ struct RecurringView: View {
                 }
             }
         }
-        
-            .navigationTitle("Recurring")
-        .sheet(item: $editing) { RecurringEditor(item: $0) }
+        .scrollContentBackground(.hidden)
+        .background(FieldNotes.paper)
+        .navigationTitle("Recurring")
+        .macInspector($editing) { RecurringEditor(item: $0) }
     }
 
     private func dueText(_ date: Date) -> String {
@@ -134,20 +146,26 @@ struct RecurringView: View {
 
     private func row(_ item: RecurringItem, date: Date, byId: [String: BudgetCategory], note: String, paid: Bool = false) -> some View {
         Button { editing = item } label: {
-            HStack(spacing: 12) {
-                CategoryTile(category: item.categoryId.flatMap { byId[$0] }, size: 38)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(.body.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
-                    Text("\(item.cadence.label) · \(note)").font(.footnote).foregroundStyle(Theme.textTertiary).lineLimit(1)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    CategoryTile(category: item.categoryId.flatMap { byId[$0] }, size: 38)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).font(.body.weight(.medium)).foregroundStyle(FieldNotes.ink).lineLimit(1)
+                        Text("\(item.cadence.label) · \(note)").font(.footnote).foregroundStyle(FieldNotes.inkTertiary).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    HStack(spacing: 6) {
+                        Text(item.amount.signedCurrency()).font(.body.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(item.amount > 0 ? Theme.income : (paid ? FieldNotes.inkSecondary : FieldNotes.ink))
+                        if paid { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.income) }
+                    }
                 }
-                Spacer(minLength: 8)
-                HStack(spacing: 6) {
-                    Text(item.amount.signedCurrency()).font(.body.weight(.semibold)).monospacedDigit()
-                        .foregroundStyle(item.amount > 0 ? Theme.income : (paid ? Theme.textSecondary : Theme.text))
-                    if paid { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.income) }
-                }
+                TwelveMonthDotTimeline(item: item)
+                    .padding(.leading, 50)
             }
+            .padding(.vertical, 4)
         }
+        .buttonStyle(.plain)
         .swipeActions {
             Button("Stop tracking", systemImage: "xmark.circle") {
                 withAnimation { item.isActive = false }
@@ -323,5 +341,110 @@ extension RecurringMonth {
             DepartureRow(date: $0.lastDate, title: $0.title, amount: $0.amount.signedCurrency(), status: .paid)
         }
         return Array(rows.sorted { $0.date < $1.date }.prefix(limit))
+    }
+}
+
+/// 12-month horizontal dot timeline (JAN–DEC) for a recurring item's annual cadence.
+private struct TwelveMonthDotTimeline: View {
+    let item: RecurringItem
+
+    private static let monthLabels = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+
+    var body: some View {
+        let cal = Calendar.current
+        let now = Date.now
+        let currentMonth = cal.component(.month, from: now)
+        let currentYear = cal.component(.year, from: now)
+        let activeMonths = scheduledMonths(year: currentYear, calendar: cal)
+        let lastPaidMonth = cal.component(.year, from: item.lastDate) == currentYear ? cal.component(.month, from: item.lastDate) : 0
+
+        HStack(spacing: 6) {
+            ForEach(1...12, id: \.self) { m in
+                let isExpected = activeMonths.contains(m)
+                let isPaid = isExpected && (m < currentMonth || (m == currentMonth && lastPaidMonth == currentMonth))
+                let isCurrent = m == currentMonth
+
+                VStack(spacing: 3) {
+                    Circle()
+                        .fill(dotFill(expected: isExpected, paid: isPaid))
+                        .overlay(
+                            Circle().strokeBorder(
+                                isExpected ? FieldNotes.forest : FieldNotes.border,
+                                lineWidth: isCurrent ? 1.5 : 1
+                            )
+                        )
+                        .frame(width: 8, height: 8)
+                    Text(Self.monthLabels[m - 1])
+                        .font(.system(size: 8, weight: isCurrent ? .bold : .medium))
+                        .foregroundStyle(isCurrent ? FieldNotes.ink : FieldNotes.inkTertiary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func dotFill(expected: Bool, paid: Bool) -> Color {
+        if !expected { return .clear }
+        return paid ? FieldNotes.forest : FieldNotes.forestSoft
+    }
+
+    private func scheduledMonths(year: Int, calendar: Calendar) -> Set<Int> {
+        var result = Set<Int>()
+        guard let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+              let yearEnd = calendar.date(from: DateComponents(year: year, month: 12, day: 31)) else {
+            return result
+        }
+        var d = item.lastDate
+        while d > yearStart {
+            let prev = item.cadence.previous(before: d)
+            if prev >= d { break }
+            d = prev
+        }
+        while d <= yearEnd {
+            if calendar.component(.year, from: d) == year {
+                result.insert(calendar.component(.month, from: d))
+            }
+            let next = item.cadence.next(after: d)
+            if next <= d { break }
+            d = next
+        }
+        return result
+    }
+}
+
+/// Natural-language pill-token representation of a `TransactionRule`.
+private struct NaturalLanguageRuleRow: View {
+    let rule: TransactionRule
+    let categories: [String: BudgetCategory]
+    let accounts: [String: String]
+
+    var body: some View {
+        let conditions = RuleEngine.conditionLines(rule, categories: categories, accounts: accounts)
+        let actions = RuleEngine.actionLines(rule, categories: categories)
+
+        FlowLayout(spacing: 6) {
+            Text("If")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(FieldNotes.inkTertiary)
+            ForEach(conditions, id: \.self) { cond in
+                pillToken(cond, background: FieldNotes.pillBg, foreground: FieldNotes.ink)
+            }
+            Text("then")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(FieldNotes.inkTertiary)
+            ForEach(actions, id: \.self) { act in
+                pillToken(act, background: FieldNotes.forestSoft, foreground: FieldNotes.forest)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func pillToken(_ text: String, background: Color, foreground: Color) -> some View {
+        Text(text)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(background, in: Capsule())
+            .foregroundStyle(foreground)
     }
 }

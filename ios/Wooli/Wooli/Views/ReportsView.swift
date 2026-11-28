@@ -3,6 +3,14 @@ import SwiftData
 import Charts
 
 struct ReportsView: View {
+    enum ReportTab: String, CaseIterable, Identifiable {
+        case cashFlow = "Cash Flow"
+        case spending = "Spending"
+        case income = "Income"
+        case forecast = "Forecast"
+        var id: String { rawValue }
+    }
+
     enum Period: String, CaseIterable, Identifiable {
         case thisMonth = "This month", lastMonth = "Last month", last3 = "Last 3 months",
              last6 = "Last 6 months", thisYear = "This year"
@@ -29,55 +37,116 @@ struct ReportsView: View {
     @Query private var accounts: [LocalAccount]
     @Query(sort: \Person.name) private var people: [Person]
     @State private var selectedPersonId: String? = nil
-
+    @State private var tab: ReportTab = .cashFlow
     @State private var period: Period = .thisMonth
 
     var body: some View {
         let ledger = Ledger(categories: categories, accounts: accounts)
         let visibleAccountIds = Set(accounts.filter { $0.counts(forPerson: selectedPersonId) }.map(\.providerAccountId))
-        let relevantTransactions = transactions.filter { visibleAccountIds.contains($0.accountId) }
+        let relevantTransactions = transactions.filter { visibleAccountIds.contains($0.accountId) && !$0.isSplit }
         let summary = MonthSummary(transactions: relevantTransactions, in: period.interval,
                                    categories: ledger.categoriesById, hiddenAccounts: ledger.hiddenAccounts)
+        let periodTransactions = relevantTransactions.filter {
+            period.interval.contains($0.transactedAt) && !$0.isHidden && !$0.isTransfer && ledger.isVisible($0)
+        }
 
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    if !people.isEmpty {
-                        Picker("Person", selection: $selectedPersonId) {
-                            Text("Everyone").tag(String?.none)
-                            ForEach(people) { person in
-                                Text("\(person.name)").tag(String?.some(person.id))
+            VStack(spacing: 0) {
+                // Sub-tabs header
+                HStack(spacing: 10) {
+                    HStack(spacing: 4) {
+                        ForEach(ReportTab.allCases) { item in
+                            Button {
+                                withAnimation(.snappy) { tab = item }
+                            } label: {
+                                Text(item.rawValue)
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 6)
+                                    .background(tab == item ? FieldNotes.ink : FieldNotes.pillBg, in: Capsule())
+                                    .foregroundStyle(tab == item ? FieldNotes.paper : FieldNotes.inkSecondary)
                             }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Spacer()
+                    if tab != .forecast {
+                        if !people.isEmpty {
+                            Picker("Person", selection: $selectedPersonId) {
+                                Text("Everyone").tag(String?.none)
+                                ForEach(people) { person in
+                                    Text("\(person.name)").tag(String?.some(person.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 140)
+                        }
+                        Picker("Period", selection: $period) {
+                            ForEach(Period.allCases) { Text($0.rawValue).tag($0) }
                         }
                         .pickerStyle(.menu)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    Picker("Period", selection: $period) {
-                        ForEach(Period.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    HStack(spacing: 12) {
-                        StatTile(label: "Income", value: summary.income, tint: Theme.income)
-                        StatTile(label: "Spending", value: summary.spending, tint: Theme.expense)
-                        StatTile(label: "Saved", value: summary.net, tint: summary.net >= 0 ? Theme.brand : Theme.expense)
-                    }
-
-                    // Wide Mac window: the breakdown beside the cash-flow chart, like Monarch's Reports.
-                    WideColumns(sideWidth: 460) {
-                        CashFlowCard(transactions: relevantTransactions, ledger: ledger)
-                        SpendingBreakdownCard(summary: summary, ledger: ledger, interval: period.interval)
-                    } side: {
-                        TopMerchantsCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
-                        TagsReportCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                        .frame(maxWidth: 160)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(FieldNotes.paperAlt)
+
+                Divider().overlay(FieldNotes.border)
+
+                if tab == .forecast {
+                    ForecastView()
+                } else {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            HStack(spacing: 12) {
+                                StatTile(label: "Income", value: summary.income, tint: Theme.income)
+                                StatTile(label: "Spending", value: summary.spending, tint: Theme.expense)
+                                StatTile(label: "Saved", value: summary.net, tint: summary.net >= 0 ? FieldNotes.forest : Theme.expense)
+                            }
+
+                            switch tab {
+                            case .cashFlow:
+                                CashFlowCard(transactions: relevantTransactions, ledger: ledger)
+                                ReportsSummarySection(summary: summary, transactions: periodTransactions)
+                                EmbeddedFilteredTransactionsCard(
+                                    title: "Transactions · \(period.rawValue)",
+                                    transactions: periodTransactions,
+                                    ledger: ledger
+                                )
+                            case .spending:
+                                let spendingTxs = periodTransactions.filter { $0.amount < 0 }
+                                WideColumns(sideWidth: 420) {
+                                    SpendingBreakdownCard(summary: summary, ledger: ledger, interval: period.interval)
+                                } side: {
+                                    TopMerchantsCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                                    TagsReportCard(transactions: relevantTransactions, interval: period.interval, ledger: ledger)
+                                }
+                                ReportsSummarySection(summary: summary, transactions: spendingTxs)
+                                EmbeddedFilteredTransactionsCard(
+                                    title: "Spending Transactions · \(period.rawValue)",
+                                    transactions: spendingTxs,
+                                    ledger: ledger
+                                )
+                            case .income:
+                                let incomeTxs = periodTransactions.filter { $0.amount > 0 }
+                                IncomeBreakdownCard(transactions: incomeTxs, ledger: ledger)
+                                ReportsSummarySection(summary: summary, transactions: incomeTxs)
+                                EmbeddedFilteredTransactionsCard(
+                                    title: "Income Transactions · \(period.rawValue)",
+                                    transactions: incomeTxs,
+                                    ledger: ledger
+                                )
+                            case .forecast:
+                                EmptyView()
+                            }
+                        }
+                        .padding(16)
+                    }
+                    .scrollContentBackground(.hidden)
+                    .background(FieldNotes.paper)
+                }
             }
-            .pageBackground()
-            
             .navigationTitle("Reports")
             .refreshable { await app.sync(context: context) }
             .toolbar {
@@ -276,11 +345,121 @@ private struct TopMerchantsCard: View {
                 HStack(spacing: 12) {
                     CategoryTile(category: m.category, size: 36)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(m.name).font(.subheadline.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
-                        Text("\(m.count) transaction\(m.count == 1 ? "" : "s")").font(.caption).foregroundStyle(Theme.textTertiary)
+                        Text(m.name).font(.subheadline.weight(.medium)).foregroundStyle(FieldNotes.ink).lineLimit(1)
+                        Text("\(m.count) transaction\(m.count == 1 ? "" : "s")").font(.caption).foregroundStyle(FieldNotes.inkTertiary)
                     }
                     Spacer()
                     Text(m.total.currency()).font(.subheadline.weight(.semibold)).monospacedDigit()
+                }
+            }
+        }
+        .card()
+    }
+}
+
+private struct IncomeBreakdownCard: View {
+    let transactions: [LocalTransaction]
+    let ledger: Ledger
+
+    var body: some View {
+        let byCategory = Dictionary(grouping: transactions) { $0.categoryId ?? "uncategorized" }
+            .map { id, items in
+                (id: id, category: ledger.categoriesById[id], total: items.reduce(0) { $0 + $1.amount }, count: items.count)
+            }
+            .sorted { $0.total > $1.total }
+        let maxVal = max(byCategory.first?.total ?? 1, 1)
+
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: "Income by category")
+            if byCategory.isEmpty {
+                Text("No income in this period").font(.subheadline).foregroundStyle(FieldNotes.inkTertiary)
+            } else {
+                ForEach(byCategory, id: \.id) { entry in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text("\(entry.category?.icon ?? "💵") \(entry.category?.name ?? "Uncategorized")")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(FieldNotes.ink)
+                            Spacer()
+                            Text("\(entry.count) tx")
+                                .font(.caption)
+                                .foregroundStyle(FieldNotes.inkTertiary)
+                            Text(entry.total.currency(cents: false))
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(Theme.income)
+                        }
+                        BarGauge(value: entry.total, total: maxVal, tint: Theme.income, height: 6)
+                    }
+                }
+            }
+        }
+        .card()
+    }
+}
+
+private struct ReportsSummarySection: View {
+    let summary: MonthSummary
+    let transactions: [LocalTransaction]
+
+    var body: some View {
+        let count = transactions.count
+        let avgSize = count > 0 ? transactions.reduce(0) { $0 + abs($1.amount) } / Double(count) : 0
+        let savingsRate = summary.income > 0 ? summary.net / summary.income : 0
+
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: "Summary")
+            HStack(spacing: 16) {
+                summaryMetric("Transactions", "\(count)")
+                Divider().frame(height: 32)
+                summaryMetric("Avg transaction", avgSize.currency(cents: false))
+                Divider().frame(height: 32)
+                summaryMetric("Net cash flow", summary.net.signedCurrency())
+                Divider().frame(height: 32)
+                summaryMetric("Savings rate", summary.income > 0 ? savingsRate.formatted(.percent.precision(.fractionLength(0))) : "—")
+            }
+        }
+        .card()
+    }
+
+    private func summaryMetric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.bold))
+                .tracking(0.8)
+                .foregroundStyle(FieldNotes.inkTertiary)
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(FieldNotes.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct EmbeddedFilteredTransactionsCard: View {
+    let title: String
+    let transactions: [LocalTransaction]
+    let ledger: Ledger
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: title, subtitle: "\(transactions.count) matching")
+            if transactions.isEmpty {
+                Text("No transactions in this period")
+                    .font(.subheadline)
+                    .foregroundStyle(FieldNotes.inkTertiary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(transactions.prefix(25).enumerated()), id: \.element.id) { idx, tx in
+                        if idx > 0 { Divider().overlay(FieldNotes.border) }
+                        NavigationLink {
+                            TransactionDetailView(transaction: tx)
+                        } label: {
+                            TransactionRow(transaction: tx, category: ledger.category(for: tx),
+                                           accountName: ledger.accountNames[tx.accountId], quickEdit: false)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
