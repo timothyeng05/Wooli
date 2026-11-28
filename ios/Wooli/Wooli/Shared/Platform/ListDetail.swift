@@ -24,15 +24,47 @@ extension View {
                         .id(value.id)
                         .environment(\.isSideDetail, true)
                         .environment(\.closeSideDetail) { item.wrappedValue = nil }
+                        .onKeyPress(.escape) {
+                            item.wrappedValue = nil
+                            return .handled
+                        }
                 } else {
                     empty()
                 }
             }
             .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.card)
+            .background(Color(light: 0xFBF9F5, dark: 0x161D1A))
         }
         #else
         sheet(item: item, content: detail)
+        #endif
+    }
+
+    /// Presents `item` in a native macOS `.inspector(isPresented:)` trailing pane
+    /// (with Escape to dismiss), falling back to a sheet on iPhone/iPad.
+    func macInspector<Item: Identifiable, Inspector: View>(
+        _ item: Binding<Item?>,
+        @ViewBuilder content: @escaping (Item) -> Inspector
+    ) -> some View {
+        #if os(macOS)
+        inspector(isPresented: Binding(
+            get: { item.wrappedValue != nil },
+            set: { if !$0 { item.wrappedValue = nil } }
+        )) {
+            if let value = item.wrappedValue {
+                content(value)
+                    .id(value.id)
+                    .environment(\.isSideDetail, true)
+                    .environment(\.closeSideDetail) { item.wrappedValue = nil }
+                    .onKeyPress(.escape) {
+                        item.wrappedValue = nil
+                        return .handled
+                    }
+                    .inspectorColumnWidth(min: 300, ideal: 360, max: 440)
+            }
+        }
+        #else
+        sheet(item: item, content: content)
         #endif
     }
 }
@@ -44,7 +76,9 @@ struct SideDetailPlaceholder: View {
 
     var body: some View {
         ContentUnavailableView(text, systemImage: systemImage)
-            .foregroundStyle(Theme.textSecondary)
+            .foregroundStyle(Color(light: 0x5A6B62, dark: 0x9BA9A1))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(light: 0xFBF9F5, dark: 0x161D1A))
     }
 }
 

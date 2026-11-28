@@ -5,6 +5,16 @@ import SwiftUI
 // The Mac build shares every view with the iPhone app. These stand-ins let
 // iPhone-only modifiers compile on macOS, where they do nothing (or the
 // nearest Mac equivalent), so views don't need `#if os(iOS)` at each call.
+//
+// Audit (UI Parity Plan Phase 1):
+// - Intentional no-ops: `keyboardType`, `textInputAutocapitalization`,
+//   `navigationBarTitleDisplayMode`, `listSectionSpacing`, `EditButton`, `editMode`,
+//   `DatePickerStyle.wheel`, `PickerStyle.navigationLink`, `SearchFieldPlacement.navigationBarDrawer`.
+// - Placement aliases: `topBarTrailing -> .primaryAction`, `topBarLeading -> .navigation`,
+//   `bottomBar -> .automatic`, `navigationBar -> .windowToolbar`.
+// - Native desktop presentations: `fullScreenCover` falls back to `.sheet` only for
+//   truly full-context modals; entry/detail editors (`AccountDetailView`, `RecurringEditor`)
+//   use `listDetail` or `macInspector(item:)` (`.inspector(isPresented:)` on macOS).
 
 enum MacKeyboardType { case decimalPad, numberPad, numbersAndPunctuation, phonePad, emailAddress, URL, asciiCapable }
 enum MacAutocapitalization { case never, characters, words, sentences }
@@ -71,7 +81,7 @@ struct NavigationStack<Root: View>: View {
 
     var body: some View {
         SwiftUI.NavigationStack { root }
-            .frame(minWidth: 480, idealWidth: 620, minHeight: 420, idealHeight: 680)
+            .frame(minWidth: 400, idealWidth: 600, minHeight: 400, idealHeight: 660)
     }
 }
 

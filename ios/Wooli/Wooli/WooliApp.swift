@@ -67,6 +67,7 @@ struct WooliApp: App {
         .modelContainer(container)
         #if os(macOS)
         .defaultSize(width: 1240, height: 820)
+        .windowStyle(.hiddenTitleBar)
         .commands { WooliCommands(app: app, container: container) }
         #endif
 
