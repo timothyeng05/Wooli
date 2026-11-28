@@ -14,6 +14,18 @@ struct TrainingSnapshot: Decodable {
     let date: String
     let lastSynced: String?
     let today: Markers
+    let activities: [Activity]?
+
+    struct Activity: Decodable, Identifiable {
+        let id: Int
+        let date: String
+        let start: String?
+        let name: String?
+        let sport: String?
+        let durationMinutes: Double?
+        let distanceKm: Double?
+        let avgHeartRate: Double?
+    }
 
     struct Markers: Decodable {
         let sleep: Sleep?
@@ -91,6 +103,12 @@ extension TrainingInsights {
     }
 }
 
+/// A saved GPS route (`tracks/<activity id>.json`): [lat, lon] pairs.
+struct TrainingRoute: Decodable {
+    let activityId: Int
+    let points: [[Double]]
+}
+
 /// One night from an older snapshot, for the trend lines.
 struct TrainingTrendPoint: Identifiable {
     let date: Date
@@ -103,6 +121,7 @@ struct TrainingTrendPoint: Identifiable {
 
 #if os(macOS)
 import AppKit
+import CoreLocation
 
 /// Finds and reads the snapshot folder. Mac only: the folder is chosen once in an open panel
 /// and remembered as a security-scoped bookmark in local UserDefaults (never synced).
@@ -112,6 +131,8 @@ final class TrainingFolder {
 
     enum State { case needsFolder, loaded(TrainingRecord, [TrainingTrendPoint]), failed(String) }
     private(set) var state: State = .needsFolder
+    /// GPS routes by activity id, from `tracks/`. Activities without GPS aren't in here.
+    private(set) var routes: [Int: [CLLocationCoordinate2D]] = [:]
 
     private let bookmarkKey = "training.snapshotFolderBookmark"
 
@@ -163,12 +184,24 @@ final class TrainingFolder {
         do {
             let latest = try Data(contentsOf: url.appending(path: "latest.json"))
             let record = try JSONDecoder().decode(TrainingRecord.self, from: latest)
+            routes = Self.routes(in: url.appending(path: "tracks"), for: record.snapshot.activities ?? [])
             state = .loaded(record, Self.trend(in: url.appending(path: "snapshots")))
         } catch CocoaError.fileReadNoSuchFile {
             state = .failed("No latest.json in that folder yet. Run the garmin-mcp snapshot job once, then refresh.")
         } catch {
             state = .failed("Wooli couldn't read latest.json: \(error.localizedDescription)")
         }
+    }
+
+    private static func routes(in folder: URL, for activities: [TrainingSnapshot.Activity]) -> [Int: [CLLocationCoordinate2D]] {
+        var out: [Int: [CLLocationCoordinate2D]] = [:]
+        for a in activities {
+            guard let data = try? Data(contentsOf: folder.appending(path: "\(a.id).json")),
+                  let route = try? JSONDecoder().decode(TrainingRoute.self, from: data) else { continue }
+            let coords = route.points.compactMap { $0.count == 2 ? CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1]) : nil }
+            if coords.count > 1 { out[a.id] = coords }
+        }
+        return out
     }
 
     private static func trend(in folder: URL, days: Int = 30) -> [TrainingTrendPoint] {
