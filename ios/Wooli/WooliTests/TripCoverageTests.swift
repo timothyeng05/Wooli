@@ -151,6 +151,21 @@ struct TripExtrasTests {
         #expect(item.notes == "~2 h")
     }
 
+    @Test func onlyTravelAndStaysDrawAsUnbookedAndShowAStatus() {
+        var flight = TripItem(tripID: "t", kind: .transit)
+        flight.notes = "Not booked yet"
+        #expect(flight.drawsAsUnbooked && flight.showsStatus)
+        flight.setStatus(.booked)
+        #expect(!flight.drawsAsUnbooked)
+
+        var dinner = TripItem(tripID: "t", kind: .activity)
+        #expect(!dinner.showsStatus && !dinner.drawsAsUnbooked)
+        dinner.setStatus(.booked)   // a reservation
+        #expect(dinner.showsStatus && !dinner.drawsAsUnbooked)
+        dinner.setStatus(nil)
+        #expect(!dinner.showsStatus && dinner.extras == nil)
+    }
+
     @Test func cancelledPlansDropOutOfCostsAndCoverage() {
         var flight = TripItem(tripID: "t", day: "2027-04-01", kind: .transit, title: "Flight")
         flight.cost = 500
@@ -341,5 +356,43 @@ struct TripUndoTests {
         step(um) { store.save(trip) }
         um.undo()
         #expect(store.trip(trip.id)?.name == "Undo")
+    }
+}
+
+// Edit Trip: plans move with their city (TripSetup.remap).
+
+struct TripEditRemapTests {
+    private func date(_ s: String) -> Date { DayKey.date(s) }
+    private func city(_ id: String, _ nights: Int) -> SetupCity {
+        var c = SetupCity(name: id); c.id = id; c.nights = nights; return c
+    }
+    private func plan(_ id: String, _ day: String?) -> TripItem {
+        var item = TripItem(tripID: "t", day: day, kind: .activity, title: id); item.id = id; return item
+    }
+
+    @Test func aPlanStaysOnItsCitysDayWhenAnEarlierCityGrows() {
+        let old = TripSetup.legs(start: date("2026-12-24"), home: nil, cities: [city("M", 2), city("S", 2)])
+        let new = TripSetup.legs(start: date("2026-12-24"), home: nil, cities: [city("M", 4), city("S", 2)])
+        let days = Trip(name: "T", startDay: "2026-12-24", endDay: new.endDay).days
+        // Seville's day 2 was Dec 27; with Madrid longer it's Dec 29.
+        let moves = TripSetup.remap(items: [plan("a", "2026-12-27")], oldLegs: old.legs, newLegs: new.legs, newDays: days)
+        #expect(moves["a"] == .some("2026-12-29"))
+    }
+
+    @Test func shorteningACityMovesTheExtraPlansToIdeasNotAwayForever() {
+        let old = TripSetup.legs(start: date("2026-12-24"), home: nil, cities: [city("M", 4)])
+        let new = TripSetup.legs(start: date("2026-12-24"), home: nil, cities: [city("M", 2)])
+        let days = Trip(name: "T", startDay: "2026-12-24", endDay: new.endDay).days
+        let moves = TripSetup.remap(items: [plan("keep", "2026-12-25"), plan("drop", "2026-12-27"), plan("idea", nil)],
+                                    oldLegs: old.legs, newLegs: new.legs, newDays: days)
+        #expect(moves["keep"] == nil)
+        #expect(moves["drop"] == .some(nil))
+        #expect(moves["idea"] == nil)
+    }
+
+    @Test func aSavedCityComesBackWithItsNightsAndId() {
+        let legs = TripSetup.legs(start: date("2026-12-24"), home: nil, cities: [city("M", 3)]).legs
+        let back = SetupCity(leg: legs[0])
+        #expect(back.id == "M" && back.nights == 3)
     }
 }

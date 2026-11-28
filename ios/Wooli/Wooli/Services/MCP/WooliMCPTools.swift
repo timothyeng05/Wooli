@@ -108,6 +108,52 @@ final class WooliMCPTools {
             ],
             "annotations": ["readOnlyHint": false, "destructiveHint": false, "openWorldHint": true],
         ],
+        tool("wooli_forecast",
+             "Forecast scenarios (the Mac app's retirement and net-worth plans). Without `scenario`, lists them. With `scenario`, returns that plan as JSON: people (birth year, retirement age), incomes (with pay changes and career path), accounts, expenses, events and assumptions. Use these field names and ids with wooli_edit_forecast.",
+             ["scenario": ["type": "string", "description": "Scenario id or text in its name."]]),
+        [
+            "name": "wooli_edit_forecast",
+            "description": """
+            Change a forecast scenario with a JSON merge patch on the plan from wooli_forecast. Objects merge key by key and null clears a value. \
+            `people`, `incomes`, `accounts` and `events` merge item by item on `id`: give an existing id to change it, a new item without an id to add it, or `"_delete": true` to remove one. Other arrays are replaced whole. \
+            Money is today's dollars per year; rates are fractions (0.24 = 24%). \
+            An income's `career` is {levels: [{name, base, bonusRate, years, yearlyIncrease}], nextPromotionYear, promotionMonth}: levels[0] is the level held now, each later level lasts `years`, the last one holds. \
+            An income's `steps` are [{year, amount, label}]. Set `beforeTaxRaw: true` for salary before tax. \
+            With `as_new_scenario`, saves the result as a new scenario instead. The running Mac app saves it within a few seconds and it syncs to the user's devices. Only make changes the user asked for.
+            """,
+            "inputSchema": [
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["scenario", "patch"],
+                "properties": [
+                    "scenario": ["type": "string", "description": "Scenario id or text in its name."],
+                    "patch": ["type": "object", "description": "JSON merge patch on the plan."],
+                    "as_new_scenario": ["type": "string", "description": "Name for a new scenario to save the result as."],
+                ],
+            ],
+            "annotations": ["readOnlyHint": false, "destructiveHint": false, "openWorldHint": false],
+        ],
+        [
+            "name": "wooli_categorize",
+            "description": "Change transactions' categories, as if the user picked them in Review. Get transaction ids from wooli_transactions and category names from wooli_spending_by_category. By default Wooli also remembers the choice for that merchant (and fills its other unreviewed transactions), and leaves the transaction in Review; set `confirm` to mark it reviewed. The running Mac app applies changes within a few seconds, then syncs them. Only make changes the user asked for.",
+            "inputSchema": [
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["changes"],
+                "properties": [
+                    "changes": ["type": "array", "items": [
+                        "type": "object", "additionalProperties": false, "required": ["id", "category"],
+                        "properties": [
+                            "id": ["type": "string", "description": "Transaction id from wooli_transactions."],
+                            "category": ["type": "string", "description": "Category name (exact, case-insensitive)."],
+                            "confirm": ["type": "boolean", "description": "Mark it reviewed. Default false."],
+                            "remember": ["type": "boolean", "description": "Remember for this merchant. Default true."],
+                        ],
+                    ]],
+                ],
+            ],
+            "annotations": ["readOnlyHint": false, "destructiveHint": false, "openWorldHint": false],
+        ],
         tool("wooli_lists",
              "The user's ranked and saved lists: Eats (places they've eaten, scored 1–10, and their want-to-try list), Movies (films ranked, and a watchlist), Recipes, and Sights.",
              [
@@ -138,6 +184,9 @@ final class WooliMCPTools {
         case "wooli_trips": return try trips(matching: arguments["trip"] as? String)
         case "wooli_lists": return try lists(arguments["list"] as? String ?? "", search: arguments["search"] as? String)
         case "wooli_edit_trip": return try editTrip(arguments)
+        case "wooli_forecast": return try forecast(arguments["scenario"] as? String)
+        case "wooli_categorize": return try categorize(arguments)
+        case "wooli_edit_forecast": return try editForecast(arguments)
         default: throw ToolError(message: "Unknown tool: \(name)")
         }
     }
@@ -251,6 +300,7 @@ final class WooliMCPTools {
             matched += 1
             if rows.count < limit {
                 var r: [String: Any] = [
+                    "id": tx.providerTransactionId,
                     "date": dayString(tx.transactedAt),
                     "title": tx.title,
                     "amount": money(tx.amount),
@@ -492,6 +542,79 @@ final class WooliMCPTools {
         return [
             "queued": summary,
             "next": "Quit and reopen Wooli on this Mac (or open it if it's closed) to apply these. They then sync to the user's other devices.",
+        ]
+    }
+
+    // MARK: Categories
+
+    private func categorize(_ args: [String: Any]) throws -> Any {
+        let s = try snapshot()
+        let items = args["changes"] as? [[String: Any]] ?? []
+        guard !items.isEmpty else { throw ToolError(message: "Nothing to change.") }
+        var changes = [CategoryEdits.Change]()
+        var summary = [String]()
+        for item in items {
+            let id = item["id"] as? String ?? ""
+            let name = item["category"] as? String ?? ""
+            // Groups and their categories can share a name ("Shopping"): pick the category.
+            let named = s.categories.filter { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+            guard let category = named.first(where: { $0.parentId != nil }) ?? named.first else {
+                throw ToolError(message: "No category named \(name). Categories: \(s.categories.map(\.name).joined(separator: ", "))")
+            }
+            guard let tx = try context.fetch(FetchDescriptor<LocalTransaction>(predicate: #Predicate { $0.providerTransactionId == id })).first else {
+                throw ToolError(message: "No transaction with id \(id).")
+            }
+            changes.append(.init(transactionId: id, categoryId: category.id,
+                                 confirm: item["confirm"] as? Bool ?? false, remember: item["remember"] as? Bool ?? true))
+            summary.append("\(dayString(tx.transactedAt)) \(tx.title) \(money(tx.amount)) → \(category.name)")
+        }
+        try CategoryEdits.queue(changes)
+        return ["queued": summary, "next": "Wooli applies these within a few seconds while it's open (or when it next opens)."]
+    }
+
+    // MARK: Forecast
+
+    private func scenario(_ text: String) throws -> ForecastScenario {
+        let all = try context.fetch(FetchDescriptor<ForecastScenario>(sortBy: [SortDescriptor(\.createdAt)]))
+        if let s = all.first(where: { $0.id == text }) ?? all.first(where: { $0.plan.name.localizedCaseInsensitiveContains(text) }) {
+            return s
+        }
+        throw ToolError(message: all.isEmpty ? "No forecast yet. Set one up in Wooli → Forecast first."
+                                             : "No scenario matches \(text). Scenarios: \(all.map(\.plan.name).joined(separator: ", ")).")
+    }
+
+    private func forecast(_ text: String?) throws -> Any {
+        guard let text, !text.isEmpty else {
+            let all = try context.fetch(FetchDescriptor<ForecastScenario>(sortBy: [SortDescriptor(\.createdAt)]))
+            return ["scenarios": all.map { ["id": $0.id, "name": $0.plan.name, "updated": ISO8601DateFormatter().string(from: $0.updatedAt)] }]
+        }
+        let s = try scenario(text)
+        let plan = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(s.plan))) ?? [:]
+        let now = Calendar.current.component(.year, from: .now)
+        let pay: [[String: Any]] = s.plan.incomes.map { inc in
+            ["income": inc.name, "by_year": (now...(now + 15)).map { ["year": $0, "pay": money(inc.amount(in: $0, startYear: now))] }]
+        }
+        return ["id": s.id, "plan": plan, "pay_by_year_todays_dollars": pay]
+    }
+
+    private func editForecast(_ args: [String: Any]) throws -> Any {
+        let s = try scenario(args["scenario"] as? String ?? "")
+        guard let patch = args["patch"] as? [String: Any], !patch.isEmpty else { throw ToolError(message: "Nothing to change.") }
+        var plan: ForecastPlan
+        do { plan = try ForecastEdits.merge(s.plan, patch: patch) } catch let e as ForecastEdits.PatchError {
+            throw ToolError(message: e.message)
+        }
+        let newName = (args["as_new_scenario"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        if let newName { plan.name = newName }
+        let summary = "Changed \(patch.keys.sorted().joined(separator: ", ")) in \(s.plan.name)"
+        try ForecastEdits.queue(.init(scenarioId: newName == nil ? s.id : nil, plan: plan, summary: summary))
+        let now = Calendar.current.component(.year, from: .now)
+        return [
+            "queued": newName.map { "New scenario \($0)" } ?? summary,
+            "pay_by_year_todays_dollars": plan.incomes.map { inc in
+                ["income": inc.name, "by_year": (now...(now + 15)).map { ["year": $0, "pay": money(inc.amount(in: $0, startYear: now))] }]
+            },
+            "next": "Wooli saves this within a few seconds while it's open (or when it next opens), then syncs it.",
         ]
     }
 

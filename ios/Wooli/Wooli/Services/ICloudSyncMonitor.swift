@@ -40,6 +40,7 @@ final class ICloudSyncMonitor {
     }
 
     func checkAccountStatus() async {
+        guard !LaunchFlags.localStore else { return }
         state = .checking
         let container = CKContainer(identifier: containerIdentifier)
         do {

@@ -6,13 +6,32 @@ import SwiftUI
 /// from Apple Maps with a nights stepper each. One page, all keyboard.
 struct NewTripSheet: View {
     var onCreated: (String) -> Void = { _ in }
+    /// Set for Edit Trip…: the same sheet, filled in from this trip.
+    let editing: Trip?
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var start = Calendar.current.startOfDay(for: .now)
-    @State private var home: SetupCity? = TripSetup.savedHome
-    @State private var cities: [SetupCity] = []
+    @State private var name: String
+    @State private var start: Date
+    @State private var home: SetupCity?
+    @State private var cities: [SetupCity]
     @State private var creating = false
+    @State private var confirmMove: Int?
     @FocusState private var nameFocused: Bool
+
+    init(editing: Trip? = nil, onCreated: @escaping (String) -> Void = { _ in }) {
+        self.editing = editing
+        self.onCreated = onCreated
+        if let trip = editing {
+            _name = State(initialValue: trip.name)
+            _start = State(initialValue: DayKey.date(trip.startDay))
+            _home = State(initialValue: trip.legs.first(where: \.isHome).map(SetupCity.init(leg:)))
+            _cities = State(initialValue: trip.legs.filter { !$0.isHome }.map(SetupCity.init(leg:)))
+        } else {
+            _name = State(initialValue: "")
+            _start = State(initialValue: Calendar.current.startOfDay(for: .now))
+            _home = State(initialValue: TripSetup.savedHome)
+            _cities = State(initialValue: [])
+        }
+    }
 
     private var suggestion: String { TripSetup.name(for: cities) }
     private var finalName: String { name.trimmingCharacters(in: .whitespaces).isEmpty ? suggestion : name }
@@ -20,7 +39,7 @@ struct NewTripSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.l) {
-            Text("New trip").font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
+            Text(editing == nil ? "New trip" : "Edit trip").font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
 
             VStack(alignment: .leading, spacing: Space.s) {
                 TextField("Trip name", text: $name, prompt: Text(suggestion.isEmpty ? "e.g. Japan in spring" : suggestion))
@@ -65,7 +84,7 @@ struct NewTripSheet: View {
                 Text(summary).font(.callout).foregroundStyle(Theme.textSecondary)
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Create") { create() }
+                Button(editing == nil ? "Create" : "Save") { create() }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
                     .disabled(finalName.trimmingCharacters(in: .whitespaces).isEmpty || creating)
@@ -75,6 +94,13 @@ struct NewTripSheet: View {
         .frame(width: 540)
         .background(Theme.card)
         .onAppear { nameFocused = true }
+        .confirmationDialog("\(confirmMove ?? 0) plan\(confirmMove == 1 ? "" : "s") will move to Ideas", isPresented: Binding(
+            get: { confirmMove != nil }, set: { if !$0 { confirmMove = nil } }), titleVisibility: .visible) {
+            Button("Save and Move to Ideas") { confirmMove = nil; save(editing!) }
+            Button("Cancel", role: .cancel) { confirmMove = nil }
+        } message: {
+            Text("Their days no longer exist. Nothing is deleted.")
+        }
     }
 
     private func cityRow(_ city: Binding<SetupCity>) -> some View {
@@ -108,9 +134,46 @@ struct NewTripSheet: View {
     }
 
     private func create() {
+        if let editing {
+            let changes = changes(for: editing)
+            let toIdeas = changes.values.filter { $0 == nil }.count
+            if toIdeas > 0 { confirmMove = toIdeas } else { save(editing) }
+            return
+        }
         creating = true
         let trip = TripSetup.trip(name: finalName, start: start, home: home, cities: cities)
         TripStore.shared.save(trip)
+        TripSetup.savedHome = home
+        onCreated(trip.id)
+        dismiss()
+    }
+}
+
+extension NewTripSheet {
+    /// Which plans change day when the cities or nights change.
+    fileprivate func changes(for trip: Trip) -> [String: String?] {
+        let new = TripSetup.trip(name: trip.name, start: start, home: home, cities: cities)
+        return TripSetup.remap(items: TripStore.shared.items(in: trip.id), oldLegs: trip.legs, newLegs: new.legs, newDays: new.days)
+    }
+
+    /// Saves the trip with its new cities and dates, and moves each plan with its city.
+    fileprivate func save(_ trip: Trip) {
+        var updated = TripSetup.trip(name: finalName, start: start, home: home, cities: cities)
+        let moves = TripSetup.remap(items: TripStore.shared.items(in: trip.id), oldLegs: trip.legs, newLegs: updated.legs, newDays: updated.days)
+        // Keep everything else about the trip (notes, extras, sharing, ids).
+        var merged = trip
+        merged.name = updated.name
+        merged.startDay = updated.startDay
+        merged.endDay = updated.endDay
+        merged.legs = updated.legs
+        if !updated.destination.isEmpty { merged.destination = updated.destination }
+        updated = merged
+        TripStore.shared.save(updated)
+        for var item in TripStore.shared.items(in: trip.id) {
+            guard let change = moves[item.id] else { continue }
+            item.day = change
+            TripStore.shared.save(item)
+        }
         TripSetup.savedHome = home
         onCreated(trip.id)
         dismiss()

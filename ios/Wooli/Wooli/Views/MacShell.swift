@@ -7,6 +7,8 @@ enum MacSection: Hashable {
     case space(AppSpace)
     case budget(AppTab)
     case tool(SidebarDestination)
+    /// Budget's long-range Forecast (Mac only).
+    case forecast
     /// Trips' gallery, and one page (overview, a city, ideas) of one trip.
     case allTrips
     case trip(String, TripPage)
@@ -20,13 +22,14 @@ private enum TripSelectionStore {
         case .overview: return "\(id)|overview"
         case .city(let leg): return "\(id)|city:\(leg)"
         case .ideas: return "\(id)|ideas"
+        case .bookings: return "\(id)|bookings"
         }
     }
 
     static func decode(_ text: String) -> MacSection {
         let parts = text.split(separator: "|", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return .allTrips }
-        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
+        let page: TripPage = parts[1] == "ideas" ? .ideas : parts[1] == "bookings" ? .bookings : parts[1].hasPrefix("city:") ? .city(String(parts[1].dropFirst(5))) : .overview
         return .trip(parts[0], page)
     }
 }
@@ -40,6 +43,8 @@ struct MacShellView: View {
     @Environment(\.openSettings) private var openSettings
     @State private var lineup = AppLineup.shared
     @State private var tool: SidebarDestination?
+    @State private var showsForecast = false
+    @Environment(\.modelContext) private var inboxContext
     /// Held here so the sidebar button (and ⌃⌘S) always folds the sidebar,
     /// whatever the screen beside it puts in the toolbar.
     @State private var columns: NavigationSplitViewVisibility = .all
@@ -52,9 +57,42 @@ struct MacShellView: View {
     @State private var showNewTrip = false
     @AppStorage("mac.trips.last") private var lastTrip = ""
 
+    /// What ⌘K can reach: trips and their cities, apps, Budget pages, and a few commands.
+    private var paletteEntries: [CommandPalette.Entry] {
+        var list: [CommandPalette.Entry] = []
+        for trip in trips.trips {
+            list.append(.init(id: "trip-\(trip.id)", title: trip.name.isEmpty ? "Trip" : trip.name, subtitle: "Trip · \(trip.dateRangeText)",
+                              symbol: "suitcase.rolling") { selection.wrappedValue = .trip(trip.id, .overview) })
+            for leg in trip.legs where !leg.isHome && !leg.name.isEmpty {
+                list.append(.init(id: "leg-\(leg.id)", title: leg.name, subtitle: "City in \(trip.name)", symbol: "mappin.and.ellipse") {
+                    selection.wrappedValue = .trip(trip.id, .city(leg.id))
+                })
+            }
+        }
+        list.append(.init(id: "cmd-newtrip", title: "New Trip…", subtitle: "Command", symbol: "plus") { showNewTrip = true })
+        for space in AppSpace.allCases where space != .budget {
+            list.append(.init(id: "space-\(space.rawValue)", title: space.title, subtitle: "App", symbol: space.systemImage) {
+                selection.wrappedValue = .space(space)
+            })
+        }
+        let pages: [(String, AppTab)] = [("Dashboard", .dashboard), ("Accounts", .accounts), ("Transactions", .transactions),
+                                         ("Reports", .reports), ("Plan", .budget)]
+        list.append(.init(id: "tab-Forecast", title: "Forecast", subtitle: "Budget", symbol: "chart.line.uptrend.xyaxis") {
+            selection.wrappedValue = .forecast
+        })
+        for (name, tab) in pages {
+            list.append(.init(id: "tab-\(name)", title: name, subtitle: "Budget", symbol: "chart.pie") {
+                app.selectedTab = tab
+                selection.wrappedValue = .budget(tab)
+            })
+        }
+        return list
+    }
+
     private var selection: Binding<MacSection?> {
         Binding {
             if let tool { return .tool(tool) }
+            if showsForecast, app.space == .budget { return .forecast }
             let space = lineup.isEnabled(app.space) ? app.space : .today
             if space == .trips {
                 // A trip that was deleted or left falls back to the gallery.
@@ -63,11 +101,13 @@ struct MacShellView: View {
             }
             return space == .budget ? .budget(app.selectedTab) : .space(space)
         } set: { section in
+            showsForecast = section == .forecast
             switch section {
             case .allTrips, .trip: tool = nil; app.space = .trips; tripSelection = section ?? .allTrips
             case .space(let space): tool = nil; app.space = space
             case .budget(let tab): tool = nil; app.space = .budget; app.selectedTab = tab
             case .tool(let destination): tool = destination; app.space = .budget
+            case .forecast: tool = nil; app.space = .budget
             case nil: break
             }
         }
@@ -78,8 +118,7 @@ struct MacShellView: View {
             Group {
                 if showsTripsSidebar { tripsSidebar } else { sidebar }
             }
-            .navigationSplitViewColumnWidth(min: showsTripsSidebar ? 200 : 68, ideal: showsTripsSidebar ? 230 : 68,
-                                            max: showsTripsSidebar ? 300 : 68)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             // Scroll views stay window-wide (scroll bar at the edge, background
@@ -114,7 +153,21 @@ struct MacShellView: View {
         .sheet(isPresented: $showNewTrip) {
             NewTripSheet { selection.wrappedValue = .trip($0, .overview) }
         }
+        .sheet(item: Binding(get: { trips.tripFilePreview }, set: { trips.tripFilePreview = $0 })) { preview in
+            TripFilePreviewSheet(preview: preview) { selection.wrappedValue = .trip($0, .overview) }
+        }
+        .sheet(isPresented: Binding(get: { app.showPalette }, set: { app.showPalette = $0 })) {
+            CommandPalette(entries: paletteEntries, onClose: { app.showPalette = false })
+        }
         // File → New Trip… and the toolbar's + both come through here.
+        .task {
+            // Changes Claude queued through the MCP server (forecast, categories).
+            while !Task.isCancelled {
+                ForecastEdits.apply(in: inboxContext)
+                CategoryEdits.apply(in: inboxContext)
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
         .task(id: trips.newTripRequested) {
             if trips.newTripRequested { trips.newTripRequested = false; showNewTrip = true }
         }
@@ -142,7 +195,7 @@ struct MacShellView: View {
     /// Only Budget has pages of its own to list.
     private var hasSidebar: Bool {
         switch selection.wrappedValue {
-        case .budget, .tool, .allTrips, .trip: true
+        case .budget, .tool, .forecast, .allTrips, .trip: true
         default: false
         }
     }
@@ -164,10 +217,10 @@ struct MacShellView: View {
     /// Budget's pages lay out in columns, so they get more room than a list.
     private var wideSelection: Bool {
         if case .budget = selection.wrappedValue { return true }
-        return false
+        return selection.wrappedValue == .forecast
     }
 
-    /// An icon-only rail, like Muse: names show as tooltips, so the page gets the room.
+    /// Labeled rows, like Monarch's: icon and name, with the review count as a badge.
     private var sidebar: some View {
         List(selection: selection) {
             Section {
@@ -176,11 +229,13 @@ struct MacShellView: View {
                 row(.budget(.transactions), "Transactions", "creditcard", badge: reviewCount)
                 row(.budget(.reports), "Reports", "chart.pie")
                 row(.budget(.budget), "Plan", "map")
+                row(.forecast, "Forecast", "chart.line.uptrend.xyaxis")
             } header: {
-                AppIconTile(.budget, size: 28)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, Space.xs)
-                    .help(AppSpace.budget.title)
+                HStack(spacing: Space.s) {
+                    AppIconTile(.budget, size: 24)
+                    Text(AppSpace.budget.title).font(.headline).foregroundStyle(Theme.text)
+                }
+                .padding(.bottom, Space.xs)
             }
             Section {
                 row(.tool(.categories), "Categories", "square.grid.2x2")
@@ -190,17 +245,16 @@ struct MacShellView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: Space.m) {
+            HStack {
+                Button("Settings", systemImage: "gearshape") { openSettings() }
+                    .buttonStyle(.borderless)
+                    .help("Settings (⌘,)")
+                Spacer()
                 SyncButton()
                     .buttonStyle(.borderless)
                     .labelStyle(.iconOnly)
-                Button("Settings", systemImage: "gearshape") { openSettings() }
-                    .buttonStyle(.borderless)
-                    .labelStyle(.iconOnly)
-                    .help("Settings (⌘,)")
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Space.m)
+            .padding(Space.m)
         }
     }
 
@@ -236,6 +290,18 @@ struct MacShellView: View {
             ForEach(trip.legs.filter { !$0.isHome }.sorted { $0.startDay < $1.startDay }) { leg in
                 cityRow(leg, trip: trip).tag(MacSection.trip(trip.id, .city(leg.id)))
             }
+            HStack {
+                Label("Bookings", systemImage: "ticket")
+                Spacer()
+                let count = BookingsList.notBookedCount(trip: trip, items: trips.items(in: trip.id))
+                if count > 0 {
+                    Text("\(count)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Theme.expense, in: Capsule())
+                        .help("\(count) not booked yet")
+                }
+            }
+            .tag(MacSection.trip(trip.id, .bookings))
             HStack {
                 Label("Ideas", systemImage: "lightbulb")
                 Spacer()
@@ -290,16 +356,13 @@ struct MacShellView: View {
         return trip.endDay >= today ? "now" : trip.dateRangeText
     }
 
-    /// Icon only; the name is the tooltip and VoiceOver label. A red dot stands in for the count.
+    /// Icon and name; a count shows as a small red badge on the right.
     private func row(_ section: MacSection, _ title: String, _ systemImage: String, badge: Int = 0) -> some View {
         Label(title, systemImage: systemImage)
-            .labelStyle(.iconOnly)
-            .font(.title3)
-            .frame(maxWidth: .infinity, minHeight: 30)
-            .overlay(alignment: .topTrailing) {
-                if badge > 0 { Circle().fill(Theme.expense).frame(width: 8, height: 8).offset(x: -4, y: 2) }
-            }
-            .help(title)
+            .font(.body)
+            .badge(badge > 0 ? Text("\(badge)").foregroundStyle(.white) : nil)
+            .badgeProminence(.increased)
+            .frame(minHeight: 26)
             .tag(section)
     }
 
@@ -321,6 +384,8 @@ struct MacShellView: View {
                 }
             }
             .appGuide(.budget)
+        case .forecast:
+            ForecastView().appGuide(.budget)
         case .allTrips:
             NavigationStack { TripsListView { selection.wrappedValue = .trip($0, .overview) } }
         case .trip(let id, let page):
@@ -415,6 +480,7 @@ struct WooliCommands: Commands {
     let app: AppModel
     let container: ModelContainer
     @FocusedValue(\.tripActions) private var trip
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("trip.mac.view") private var tripView: TripWorkspaceMode = .itinerary
     @AppStorage("trip.mac.showMap") private var showMap = true
     @AppStorage("trip.mac.showInspector") private var showInspector = false
@@ -431,12 +497,40 @@ struct WooliCommands: Commands {
             Button("New Plan") { trip?.newPlan() }
                 .keyboardShortcut("n")
                 .disabled(trip == nil)
+            Button("Open Trip File…") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [.init(filenameExtension: TripExport.fileExtension) ?? .json]
+                panel.message = "Choose a Wooli trip file (.woolitrip)."
+                if panel.runModal() == .OK, let url = panel.url { app.space = .trips; TripStore.shared.previewTripFile(at: url) }
+            }
+            Button("Import Confirmation…") { trip?.importBooking() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(trip == nil)
             Divider()
             Button("Sync Bank") { Task { await app.sync(context: container.mainContext) } }
                 .keyboardShortcut("r")
                 .disabled(app.mode != .live || app.isSyncing)
         }
-        CommandGroup(after: .pasteboard) {
+        CommandGroup(replacing: .printItem) {
+            Button("Print Itinerary…") { trip?.printTrip() }
+                .keyboardShortcut("p")
+                .disabled(trip == nil)
+        }
+        CommandGroup(replacing: .pasteboard) {
+            // In a text field the standard Cut/Copy/Paste keep working; plans only take ⌘C/⌘V
+            // when the outline (not a field) has focus, which `trip` being set reflects.
+            Button("Cut") { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }.keyboardShortcut("x")
+            Button("Copy") {
+                if NSApp.keyWindow?.firstResponder is NSText { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+                else if trip?.hasSelection == true { trip?.copy() }
+                else { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+            }.keyboardShortcut("c")
+            Button("Paste") {
+                if NSApp.keyWindow?.firstResponder is NSText || trip == nil { NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil) }
+                else { trip?.paste() }
+            }.keyboardShortcut("v")
+            Button("Select All") { NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil) }.keyboardShortcut("a")
+            Divider()
             Button("Duplicate") { trip?.duplicate() }
                 .keyboardShortcut("d")
                 .disabled(trip?.hasSelection != true)
@@ -448,10 +542,30 @@ struct WooliCommands: Commands {
             Button("Move Down") { trip?.moveDown() }
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(trip?.hasSelection != true)
+            Button("Move to Previous Day") { trip?.moveDay(-1) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(trip?.hasSelection != true)
+            Button("Move to Next Day") { trip?.moveDay(1) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(trip?.hasSelection != true)
+            Button("Move to Ideas") { trip?.moveToIdeas() }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                .disabled(trip?.hasSelection != true)
             Divider()
-            Button("Mark as Booked") { trip?.markBooked() }
+            Button("Toggle Booked") { trip?.markBooked() }
                 .keyboardShortcut("b")
                 .disabled(trip?.hasSelection != true)
+            Menu("Set Type") {
+                ForEach(TripItem.Kind.picker(for: .activity)) { kind in
+                    Button(kind.label, systemImage: kind.symbol) { trip?.setKind(kind) }
+                }
+            }
+            .disabled(trip?.hasSelection != true)
+            Button("Open in Maps") { trip?.openInMaps() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(trip?.hasPlace != true)
+            Button("Edit Ticket…") { trip?.editTicket() }
+                .disabled(trip?.hasTicket != true)
         }
         CommandGroup(before: .sidebar) {
             if app.space == .trips {
@@ -482,12 +596,24 @@ struct WooliCommands: Commands {
                 Button("Reports") { app.space = .budget; app.selectedTab = .reports }.keyboardShortcut("4")
                 Button("Plan") { app.space = .budget; app.selectedTab = .budget }.keyboardShortcut("5")
             }
+            Button("Go to…") { app.showPalette = true }.keyboardShortcut("k")
             Button("Trips") { app.space = .trips }.keyboardShortcut("t", modifiers: [.command, .shift])
+            if app.space == .trips {
+                Divider()
+                Button("Next City") { trip?.stepCity(1) }.keyboardShortcut("]").disabled(trip == nil)
+                Button("Previous City") { trip?.stepCity(-1) }.keyboardShortcut("[").disabled(trip == nil)
+            }
             Divider()
             Button("Review Transactions") { app.showReview = true }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .help) {
+            Button("Wooli Help") {
+                if let url = URL(string: "https://wooliapp.com/support") { NSWorkspace.shared.open(url) }
+            }
+            Button("Keyboard Shortcuts") { openWindow(id: "shortcuts") }
+                .keyboardShortcut("/", modifiers: .command)
+            Divider()
             Button("Send Feedback…") {
                 if let url = URL(string: "mailto:support@wooliapp.com?subject=Wooli%20Beta%20Feedback") {
                     NSWorkspace.shared.open(url)

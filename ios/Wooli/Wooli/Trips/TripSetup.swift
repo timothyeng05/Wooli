@@ -19,13 +19,28 @@ struct SetupCity: Identifiable, Codable, Hashable {
     }
 
     func leg(start: String, end: String, isHome: Bool = false) -> TripLeg {
-        var leg = TripLeg(name: name, emoji: isHome ? "🏠" : "", startDay: start, endDay: end, isHome: isHome)
+        var leg = TripLeg(id: id, name: name, emoji: isHome ? "🏠" : "", startDay: start, endDay: end, isHome: isHome)
         leg.latitude = latitude
         leg.longitude = longitude
         leg.timeZoneID = timeZoneID
         leg.countryCode = countryCode
         leg.mapItemID = mapItemID
         return leg
+    }
+}
+
+extension SetupCity {
+    /// A city as it was saved on a trip, for the Edit Trip sheet. Nights are the days between its dates.
+    init(leg: TripLeg) {
+        id = leg.id
+        name = leg.name
+        latitude = leg.latitude
+        longitude = leg.longitude
+        timeZoneID = leg.timeZoneID
+        countryCode = leg.countryCode
+        mapItemID = leg.mapItemID
+        let days = Calendar.current.dateComponents([.day], from: DayKey.date(leg.startDay), to: DayKey.date(leg.endDay)).day ?? 1
+        nights = max(days, 1)
     }
 }
 
@@ -51,6 +66,29 @@ enum TripSetup {
             legs.append(back.leg(start: DayKey.key(cursor), end: DayKey.key(cursor), isHome: true))
         }
         return (legs, DayKey.key(cursor))
+    }
+
+    /// Where each plan goes when a trip's cities change: it keeps its city and its
+    /// position inside the city (Seville's day 2 stays Seville's day 2). A plan whose
+    /// day no longer exists goes to Ideas (`nil`). Returns only the plans that change.
+    static func remap(items: [TripItem], oldLegs: [TripLeg], newLegs: [TripLeg], newDays: [String]) -> [String: String?] {
+        let cal = Calendar.current
+        var changes: [String: String?] = [:]
+        for item in items {
+            guard let day = item.day else { continue }
+            var target: String? = newDays.contains(day) ? day : nil
+            // The first city containing the day wins (a travel day belongs to the city you leave).
+            if let old = oldLegs.first(where: { !$0.isHome && $0.contains(day) }),
+               let new = newLegs.first(where: { $0.id == old.id }) {
+                let offset = cal.dateComponents([.day], from: DayKey.date(old.startDay), to: DayKey.date(day)).day ?? 0
+                if let moved = cal.date(byAdding: .day, value: offset, to: DayKey.date(new.startDay)) {
+                    let key = DayKey.key(moved)
+                    target = key <= new.endDay && newDays.contains(key) ? key : nil
+                } else { target = nil }
+            }
+            if target != day { changes[item.id] = target }
+        }
+        return changes
     }
 
     /// "Madrid, Seville & Barcelona"; more than three become "Madrid, Seville + 2 more".

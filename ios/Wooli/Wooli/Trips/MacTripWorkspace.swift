@@ -7,6 +7,7 @@ enum TripPage: Hashable {
     case overview
     case city(String)
     case ideas
+    case bookings
 
     var legID: String? {
         if case .city(let id) = self { id } else { nil }
@@ -42,7 +43,19 @@ struct TripActions {
     var moveDown: () -> Void
     var duplicate: () -> Void
     var markBooked: () -> Void
+    var moveDay: (Int) -> Void
+    var moveToIdeas: () -> Void
+    var openInMaps: () -> Void
+    var setKind: (TripItem.Kind) -> Void
+    var editTicket: () -> Void
+    var stepCity: (Int) -> Void
+    var copy: () -> Void
+    var paste: () -> Void
+    var importBooking: () -> Void
+    var printTrip: () -> Void
     var hasSelection: Bool
+    var hasPlace: Bool
+    var hasTicket: Bool
 }
 
 private struct TripActionsKey: FocusedValueKey { typealias Value = TripActions }
@@ -83,6 +96,8 @@ struct MacTripWorkspace: View {
     @State private var scrollTarget: String?
     @State private var editingTicket: TripItem?
     @State private var editingTrip: Trip?
+    @State private var importing = false
+    @State private var importText = ""
     /// What was just deleted, shown for a few seconds with an Undo button.
     @State private var deletedNote: String?
     @Environment(\.undoManager) private var undoManager
@@ -112,7 +127,7 @@ struct MacTripWorkspace: View {
         GeometryReader { geo in
             // Narrow windows give the map's place to the inspector while it's open.
             let narrow = geo.size.width < 1180
-            let mapShown = mode == .itinerary && showMap && !(narrow && showInspector)
+            let mapShown = mode == .itinerary && showMap && !(narrow && showInspector) && page != .bookings
             let all = store.items(in: trip.id)
             let selected = all.filter { selection.contains($0.id) }
             HSplitView {
@@ -120,7 +135,7 @@ struct MacTripWorkspace: View {
                     sideColumn(trip)
                         .frame(minWidth: 190, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
                 }
-                if mode == .map {
+                if mode == .map && page != .bookings {
                     fullMap(trip)
                         .frame(minWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -141,6 +156,7 @@ struct MacTripWorkspace: View {
         }
         // The window centres other pages at a readable width; this one uses it all.
         .contentMargins(.horizontal, 0, for: .scrollContent)
+        .tripWorkspaceGuide()
         .navigationTitle(trip.name.isEmpty ? "Trip" : trip.name)
         .navigationSubtitle(trip.dateRangeText)
         .toolbar { toolbar(trip) }
@@ -151,9 +167,37 @@ struct MacTripWorkspace: View {
             moveDown: { nudge(1, trip: trip) },
             duplicate: { duplicate(selection, trip: trip) },
             markBooked: { markBooked(trip) },
-            hasSelection: !selection.isEmpty))
+            moveDay: { moveSelectedDays($0, trip: trip) },
+            moveToIdeas: { place(Array(selection), on: nil, before: nil, trip: trip) },
+            openInMaps: { openSelectedInMaps() },
+            setKind: { setKind($0, trip: trip) },
+            editTicket: { editSelectedTicket() },
+            stepCity: { stepCity($0, trip: trip) },
+            copy: { copyPlans(trip: trip) },
+            paste: { pastePlans(trip: trip) },
+            importBooking: { importText = ""; importing = true },
+            printTrip: { printItinerary(trip) },
+            hasSelection: !selection.isEmpty,
+            hasPlace: selectedItems(trip).contains { $0.place?.mapsURL != nil },
+            hasTicket: selectedItems(trip).count == 1 && selectedItems(trip).first?.kind == .transit))
         .sheet(item: $editingTicket) { TripItemEditor(item: $0, trip: trip) }
-        .sheet(item: $editingTrip) { TripEditor(trip: $0) }
+        .dropDestination(for: URL.self) { urls, _ in
+            let texts = urls.filter { BookingFiles.types.contains($0.pathExtension.lowercased()) }.compactMap(BookingFiles.text(from:))
+            guard !texts.isEmpty else { return false }
+            importText = texts.joined(separator: "\n\n")
+            importing = true
+            return true
+        }
+        .sheet(isPresented: $importing) {
+            MacBookingImportSheet(trip: trip, initialText: importText) { ids in
+                selection = Set(ids)
+                if let first = ids.first { scrollTarget = first }
+            }
+        }
+        .sheet(item: $editingTrip) { editing in
+            // Trips with cities get the same sheet as New Trip; older city-less ones keep the form.
+            if editing.legs.contains(where: { !$0.isHome }) { NewTripSheet(editing: editing) } else { TripEditor(trip: editing) }
+        }
         .confirmationDialog("Remove empty meal slots?", isPresented: $confirmRemoveSlots, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { store.removeEmptyMealSlots(tripID: trip.id) }
         } message: {
@@ -213,6 +257,9 @@ struct MacTripWorkspace: View {
                 .help("Show or hide the selected plan, or the trip summary (⌥⌘I)")
         }
         ToolbarItem(placement: .primaryAction) {
+            codesMenu(trip)
+        }
+        ToolbarItem(placement: .primaryAction) {
             Toggle("Open Slots", systemImage: "square.dashed", isOn: $showOpenSlots)
                 .help("Show or hide the empty meals and nights (⇧⌘O)")
         }
@@ -232,6 +279,13 @@ struct MacTripWorkspace: View {
                 if !store.hiddenPlaceholders(in: trip.id).isEmpty {
                     Button("Remove Empty Meal Slots…", systemImage: "square.dashed") { confirmRemoveSlots = true }
                 }
+                Button("Export Trip File…", systemImage: "square.and.arrow.up") { exportTripFile(trip) }
+                Button("Print Itinerary…", systemImage: "printer") { printItinerary(trip) }
+                Button("Export Calendar File…", systemImage: "calendar.badge.plus") { exportCalendar(trip) }
+                Menu("Copy Itinerary", systemImage: "doc.on.clipboard") {
+                    Button("As Text") { copyItinerary(trip, markdown: false) }
+                    Button("As Markdown") { copyItinerary(trip, markdown: true) }
+                }
                 if !inOwnWindow {
                     Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(id: "trip", value: trip.id) }
                 }
@@ -240,6 +294,25 @@ struct MacTripWorkspace: View {
                        role: .destructive) { confirmDeleteTrip = true }
             }
         }
+    }
+
+    /// Two clicks to any confirmation code: this menu, then the booking.
+    private func codesMenu(_ trip: Trip) -> some View {
+        let rows = BookingsList.withCodes(BookingsList.rows(trip: trip, items: store.items(in: trip.id)))
+        return Menu("Codes", systemImage: "number.square") {
+            if rows.isEmpty {
+                Text("No confirmation codes yet")
+            } else {
+                ForEach(rows) { row in
+                    Button("\(row.what) · \(row.confirmation)") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(row.confirmation, forType: .string)
+                    }
+                }
+            }
+        }
+        .help("Copy a confirmation code")
+        .disabled(rows.isEmpty)
     }
 
     // MARK: Left: cities and ideas
@@ -385,7 +458,7 @@ struct MacTripWorkspace: View {
     private func planColumn(_ trip: Trip) -> some View {
         VStack(spacing: 0) {
             if store.isSample(trip.id) { sampleBanner(trip) }
-            QuickAddBar(trip: trip, day: quickAddDay(trip), focus: $quickAddFocused,
+            if page != .bookings { QuickAddBar(trip: trip, day: quickAddDay(trip), focus: $quickAddFocused,
                         onFlight: { editingTicket = $0 },
                         onAdded: { id, openInspector in
                             selection = [id]
@@ -394,9 +467,11 @@ struct MacTripWorkspace: View {
                                 showInspector = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocused = true }
                             }
-                        })
+                        }) }
             Group {
                 switch mode {
+                case _ where page == .bookings:
+                    MacBookingsTable(trip: trip, selection: $selection, onOpen: { editingTicket = $0 })
                 case _ where page == .ideas:
                     ideasPage(trip)
                 case .calendar:
@@ -591,6 +666,10 @@ struct MacTripWorkspace: View {
     /// What the map shows: the selected plan's day in order, the selected
     /// plans, the ideas, the picked city, or the whole trip.
     private func mapStops(_ trip: Trip, selected: [TripItem], all: [TripItem]) -> [TripItem] {
+        mapStopsIncludingCancelled(trip, selected: selected, all: all).filter { !$0.isCancelled }
+    }
+
+    private func mapStopsIncludingCancelled(_ trip: Trip, selected: [TripItem], all: [TripItem]) -> [TripItem] {
         if selected.count == 1, let item = selected.first {
             if let day = item.day, trip.days.contains(day) {
                 return store.items(in: trip.id, day: day).filter { $0.place != nil }
@@ -753,12 +832,124 @@ struct MacTripWorkspace: View {
         }
     }
 
-    /// ⌘B: the selected plans are booked.
+    /// ⌘B: the selected plans are booked; if they all already are, they go back to not booked.
     private func markBooked(_ trip: Trip) {
-        for var item in store.items(in: trip.id) where selection.contains(item.id) {
-            item.setStatus(.booked)
+        let chosen = store.items(in: trip.id).filter { selection.contains($0.id) }
+        let allBooked = !chosen.isEmpty && chosen.allSatisfy { $0.bookingStatus == .booked }
+        for var item in chosen {
+            item.setStatus(allBooked ? (item.needsBooking ? .planned : nil) : .booked)
             store.save(item)
         }
+    }
+
+    // MARK: Menu actions (Plan, Go and Edit menus)
+
+    private func selectedItems(_ trip: Trip) -> [TripItem] {
+        store.items(in: trip.id).filter { selection.contains($0.id) }
+    }
+
+    /// ⌥⌘↑ / ⌥⌘↓: the selected plans go to the end of the day before or after.
+    private func moveSelectedDays(_ direction: Int, trip: Trip) {
+        let days = trip.days
+        for item in selectedItems(trip) {
+            guard let day = item.day, let i = days.firstIndex(of: day) else { continue }
+            let target = i + direction
+            guard days.indices.contains(target) else { continue }
+            place([item.id], on: days[target], before: nil, trip: trip)
+        }
+    }
+
+    /// ⌘⏎: opens the first selected plan that has a place in Apple Maps.
+    private func openSelectedInMaps() {
+        guard let url = store.items.first(where: { selection.contains($0.id) && $0.place?.mapsURL != nil })?.place?.mapsURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func setKind(_ kind: TripItem.Kind, trip: Trip) {
+        for var item in selectedItems(trip) where item.kind != kind {
+            item.kind = kind
+            store.save(item)
+        }
+    }
+
+    private func editSelectedTicket() {
+        guard selection.count == 1, let item = store.items.first(where: { $0.id == selection.first }), item.kind == .transit else { return }
+        editingTicket = item
+    }
+
+    /// ⌘] / ⌘[: scroll to the next or previous city's first day.
+    private func stepCity(_ direction: Int, trip: Trip) {
+        let legs = trip.legs
+        guard !legs.isEmpty else { return }
+        let here: Int
+        if let id = focusLeg, let i = legs.firstIndex(where: { $0.id == id }) {
+            here = i
+        } else if let day = currentDay(trip), let leg = trip.leg(for: day), let i = legs.firstIndex(where: { $0.id == leg.id }) {
+            here = i
+        } else {
+            here = direction > 0 ? -1 : legs.count
+        }
+        let next = here + direction
+        guard legs.indices.contains(next) else { return }
+        if page == nil { ownFocusLeg = legs[next].id }
+        if let day = trip.days.first(where: { legs[next].contains($0) }) { scrollTarget = day }
+    }
+
+    /// ⌘C: the plans as Wooli plans (to paste into a trip) and as readable text (for Notes or Messages).
+    private func copyPlans(trip: Trip) {
+        let chosen = selectedItems(trip).sorted { ($0.day ?? "", $0.sortKey) < ($1.day ?? "", $1.sortKey) }
+        guard !chosen.isEmpty else { return }
+        let text = chosen.map { item -> String in
+            let name = item.title.isEmpty ? (item.place?.name ?? item.kind.label) : item.title
+            return [name, item.place?.name == name ? nil : item.place?.name, item.place?.address]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        }.joined(separator: "\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        if let data = try? JSONEncoder().encode(chosen) { pb.setData(data, forType: Self.plansType) }
+    }
+
+    static let plansType = NSPasteboard.PasteboardType("com.timothyeng.wooli.trip-plans")
+
+    /// ⌘V: copies of the plans go on the selected day; plain text becomes one plan per line.
+    private func pastePlans(trip: Trip) {
+        let day = currentDay(trip)
+        let pb = NSPasteboard.general
+        var added: [String] = []
+        if let data = pb.data(forType: Self.plansType), let plans = try? JSONDecoder().decode([TripItem].self, from: data) {
+            for var copy in plans {
+                copy.id = UUID().uuidString
+                copy.tripID = trip.id
+                copy.systemFields = nil
+                copy.createdAt = .now
+                copy.day = day
+                if copy.time == nil, let day, let last = store.items(in: trip.id, day: day).last(where: { $0.sortKey < TripItem.untimedKey }) {
+                    copy.order = last.sortKey + 15
+                }
+                store.save(copy)
+                added.append(copy.id)
+            }
+        } else if let text = pb.string(forType: .string), text.count > 80, !BookingImport.read(text, defaultYear: Int(trip.startDay.prefix(4))).isEmpty {
+            // A confirmation email, not a list of places: read it and let the user check it.
+            importText = text
+            importing = true
+        } else if let text = pb.string(forType: .string) {
+            for line in text.split(whereSeparator: \.isNewline).map({ $0.trimmingCharacters(in: .whitespaces) }) where !line.isEmpty {
+                let request = QuickAddParser.parse(line)
+                let title = request.query.isEmpty ? line : request.query
+                var item = TripItem(tripID: trip.id, day: day, kind: request.kind ?? .activity, title: title)
+                item.time = request.time
+                var extras = ItemExtras(); extras.source = "paste"
+                item.extras = extras
+                if item.time == nil, let day, let last = store.items(in: trip.id, day: day).last(where: { $0.sortKey < TripItem.untimedKey }) {
+                    item.order = last.sortKey + 15
+                }
+                store.save(item)
+                added.append(item.id)
+            }
+        }
+        if !added.isEmpty { selection = Set(added) }
     }
 
     private func duplicate(_ ids: Set<String>, trip: Trip) {
@@ -898,6 +1089,46 @@ struct MacTripWorkspace: View {
             let ids = ids(in: texts)
             if !ids.isEmpty { perform(ids) }
         }
+    }
+
+    /// A `.woolitrip` file: the whole trip, to back up or hand to someone outside iCloud sharing.
+    private func exportTripFile(_ trip: Trip) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.init(filenameExtension: TripExport.fileExtension) ?? .json]
+        panel.nameFieldStringValue = TripExport.title(trip) + "." + TripExport.fileExtension
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = TripExport.tripFile(trip: trip, items: store.items(in: trip.id)) else {
+            store.lastError = "Couldn't write the trip file."
+            return
+        }
+        do { try data.write(to: url, options: .atomic) } catch {
+            store.lastError = "Couldn't save the trip file: \(error.localizedDescription)"
+        }
+    }
+
+    /// The system print panel (its PDF menu is Export as PDF), costs off, notes on.
+    private func printItinerary(_ trip: Trip) {
+        TripPrinter.printItinerary(trip: trip, items: store.items(in: trip.id), options: ExportOptions())
+    }
+
+    /// Saves the trip's bookings and timed plans as an .ics file any calendar app opens.
+    private func exportCalendar(_ trip: Trip) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.init(filenameExtension: "ics") ?? .data]
+        panel.nameFieldStringValue = TripExport.title(trip) + ".ics"
+        panel.message = "Flights, trains, stays and timed plans, ready for Calendar."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let text = TripExport.calendar(trip: trip, items: store.items(in: trip.id))
+        do { try text.write(to: url, atomically: true, encoding: .utf8) } catch {
+            store.lastError = "Couldn't save the calendar file: \(error.localizedDescription)"
+        }
+    }
+
+    /// Plain or Markdown day-by-day text for Messages, Notes or email.
+    private func copyItinerary(_ trip: Trip, markdown: Bool) {
+        let text = TripExport.itinerary(trip: trip, items: store.items(in: trip.id), options: ExportOptions(markdown: markdown))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private func invite(_ trip: Trip) {
@@ -1340,6 +1571,7 @@ struct MacPlanInspector: View {
                         Label(kind.label, systemImage: kind.symbol).tag(kind)
                     }
                 }
+                BookingStatusPicker(item: item)
                 if item.wrappedValue.kind == .transit {
                     LabeledContent("Ticket") {
                         Button(item.wrappedValue.transport == nil ? "Add Flight or Train…" : "Edit Ticket…") {

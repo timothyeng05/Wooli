@@ -19,6 +19,22 @@ struct AppGuide {
         tips = Self.tips(for: space)
     }
 
+    /// A guide with its own tips, for a screen inside an app (the Mac trip workspace).
+    init(_ space: AppSpace, tips: [Tip]) {
+        self.space = space
+        self.tips = tips
+    }
+
+    /// Shown the first time a trip opens on the Mac: where to type, the map, and Invite.
+    static let tripWorkspace = AppGuide(.trips, tips: [
+        Tip(symbol: "text.cursor", title: "Type a place, press Return",
+            detail: "The field at the bottom adds plans. Try \"Lunch at Casa Lucio 2pm\" or \"hotel Seville\"; Wooli finds the place."),
+        Tip(symbol: "map", title: "The map follows you",
+            detail: "Select a plan or a day to see it on the map. ⇧⌘M hides it, ⌥⌘I opens the inspector."),
+        Tip(symbol: "person.crop.circle.badge.plus", title: "Plan together",
+            detail: "Invite in the toolbar shares the trip. They join with their own Apple Account and edit with you."),
+    ])
+
     private static func tips(for space: AppSpace) -> [Tip] {
         switch space {
         case .today: [
@@ -100,11 +116,14 @@ struct AppGuide {
 
     private static func seenKey(_ space: AppSpace) -> String { "guide.\(space.rawValue).seen" }
 
+    static let tripWorkspaceKey = "guide.tripWorkspace.seen"
+
     static func hasSeen(_ space: AppSpace) -> Bool { UserDefaults.standard.bool(forKey: seenKey(space)) }
 
     static func markSeen(_ space: AppSpace) { UserDefaults.standard.set(true, forKey: seenKey(space)) }
 
     static func resetAll() {
+        UserDefaults.standard.removeObject(forKey: tripWorkspaceKey)
         for space in AppSpace.allCases { UserDefaults.standard.removeObject(forKey: seenKey(space)) }
     }
 }
@@ -114,6 +133,29 @@ extension View {
     /// `ready` is true.
     func appGuide(_ space: AppSpace, ready: Bool = true) -> some View {
         modifier(AppGuidePresenter(space: space, ready: ready))
+    }
+}
+
+extension View {
+    /// The trip workspace's three pointers, once, the first time any trip opens.
+    func tripWorkspaceGuide() -> some View { modifier(TripGuidePresenter()) }
+}
+
+private struct TripGuidePresenter: ViewModifier {
+    @AppStorage(AppGuide.tripWorkspaceKey) private var seen = false
+    @State private var showing = false
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                guard !seen, !ProcessInfo.processInfo.arguments.contains("-skipGuides") else { return }
+                try? await Task.sleep(for: .milliseconds(700))
+                guard !Task.isCancelled else { return }
+                showing = true
+            }
+            .sheet(isPresented: $showing, onDismiss: { seen = true }) {
+                AppGuideSheet(guide: .tripWorkspace)
+            }
     }
 }
 

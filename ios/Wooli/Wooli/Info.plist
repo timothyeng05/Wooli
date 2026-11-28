@@ -13,6 +13,41 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Wooli Trip</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.timothyeng.wooli.trip</string>
+			</array>
+		</dict>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Wooli Trip</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.timothyeng.wooli.trip</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>woolitrip</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>CKSharingSupported</key>
 	<true/>
 	<key>GooglePlacesAPIKey</key>

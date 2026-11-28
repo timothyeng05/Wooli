@@ -16,7 +16,18 @@ final class TripStore: CKSyncEngineDelegate {
     static let containerID = "iCloud.com.timothyeng.wooli"
 
     private(set) var trips: [Trip] = []
-    private(set) var items: [TripItem] = []
+    private(set) var items: [TripItem] = [] { didSet { itemIndex = nil } }
+    /// Items grouped by trip, built on first use after any change, so a trip's
+    /// lists don't each scan every plan of every trip (M1-10).
+    @ObservationIgnored private var itemIndex: [String: [TripItem]]?
+    private var itemsByTrip: [String: [TripItem]] {
+        // Read `items` first either way, so a view using the cache still observes changes.
+        let current = items
+        if let itemIndex { return itemIndex }
+        let built = Dictionary(grouping: current.filter { !$0.isHiddenPlaceholder }, by: \.tripID)
+        itemIndex = built
+        return built
+    }
     /// False when no iCloud account is signed in: trips stay on this iPhone.
     private(set) var iCloudAvailable = true
     var lastError: String?
@@ -25,9 +36,33 @@ final class TripStore: CKSyncEngineDelegate {
     /// File → New Trip… on the Mac asks the trips list to open its sheet.
     var newTripRequested = false
 
+    /// A trip file waiting for the user to confirm importing it (see `TripFilePreviewSheet`).
+    var tripFilePreview: TripFilePreview?
+
+    /// Reads a `.woolitrip` file and queues its preview; nothing is saved until the user confirms.
+    @discardableResult
+    func previewTripFile(at url: URL) -> Bool {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), let parsed = TripExport.newTrip(fromFile: data) else {
+            lastError = "That file isn't a Wooli trip."
+            return false
+        }
+        tripFilePreview = TripFilePreview(trip: parsed.trip, items: parsed.items)
+        return true
+    }
+
+    /// Saves a previewed trip file as a new trip and returns its id.
+    func importPreview(_ preview: TripFilePreview) -> String {
+        save(preview.trip)
+        for item in preview.items { save(item) }
+        tripFilePreview = nil
+        return preview.trip.id
+    }
+
     /// The window's undo stack (set by the Mac trip page); nil on the iPhone.
     @ObservationIgnored weak var undoManager: UndoManager?
-    @ObservationIgnored let container = CKContainer(identifier: containerID)
+    @ObservationIgnored lazy var container = CKContainer(identifier: Self.containerID)
     @ObservationIgnored private var privateEngine: CKSyncEngine?
     @ObservationIgnored private var sharedEngine: CKSyncEngine?
     /// Saves per trip/item since launch, and the count each record had when it
@@ -87,6 +122,7 @@ final class TripStore: CKSyncEngineDelegate {
     func start() {
         guard privateEngine == nil else { return }
         load()
+        if LaunchFlags.localStore { return }
         startEngines()
         EatsBook.shared.start()
         if needsFullUpload { uploadEverythingMine() }
@@ -232,7 +268,7 @@ final class TripStore: CKSyncEngineDelegate {
 
     func trip(_ id: String) -> Trip? { trips.first { $0.id == id } }
 
-    func items(in tripID: String) -> [TripItem] { items.filter { $0.tripID == tripID && !$0.isHiddenPlaceholder } }
+    func items(in tripID: String) -> [TripItem] { itemsByTrip[tripID] ?? [] }
 
     /// Old empty Breakfast / Lunch / Dinner records, hidden from every list.
     func hiddenPlaceholders(in tripID: String) -> [TripItem] {
@@ -242,7 +278,7 @@ final class TripStore: CKSyncEngineDelegate {
     /// A day's items: by where they were dragged or their time, then the
     /// rest in the order added.
     func items(in tripID: String, day: String?) -> [TripItem] {
-        items.filter { $0.tripID == tripID && $0.day == day && !$0.isHiddenPlaceholder }.sorted(by: TripItem.dayOrder)
+        items(in: tripID).filter { $0.day == day }.sorted(by: TripItem.dayOrder)
     }
 
     // MARK: - Open slots
@@ -836,4 +872,12 @@ final class TripStore: CKSyncEngineDelegate {
             break
         }
     }
+}
+
+
+/// A trip read from a file, shown for a yes or no before it's added.
+struct TripFilePreview: Identifiable {
+    let id = UUID()
+    let trip: Trip
+    let items: [TripItem]
 }
